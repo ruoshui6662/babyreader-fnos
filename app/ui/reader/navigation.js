@@ -181,9 +181,12 @@ function navigateEpubTarget(target, sourceChapter = null) {
     return false;
   }
 
+  const chapters = [...document.querySelectorAll('#article .epub-chapter')];
+  const targetChapter = chapter || node.closest?.('.epub-chapter') || null;
+  const chapterIndex = chapters.indexOf(targetChapter);
   navigateToSemanticTarget(node);
   setCurrentTocTarget(target);
-  requestAnimationFrame(updateReadingProgress);
+  requestAnimationFrame(() => updateReadingProgress({ chapterIndexHint: chapterIndex >= 0 ? chapterIndex : null }));
   return true;
 }
 

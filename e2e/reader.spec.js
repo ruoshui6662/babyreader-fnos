@@ -72,10 +72,16 @@ test('settings drawer changes theme and typography in a real browser', async ({ 
   await expect(page.locator('body')).toHaveClass(/theme-sepia/);
 
   await page.locator('#settingFontFamily').selectOption('songti');
+  const settingsSaved = page.waitForResponse((response) =>
+    response.url().endsWith('/api/settings')
+      && response.request().method() === 'PUT'
+      && response.ok()
+  );
   await page.locator('#settingTextIndent').evaluate((element) => {
     element.value = '1.5';
     element.dispatchEvent(new Event('input', { bubbles: true }));
   });
+  await settingsSaved;
 
   await expect(page.locator('html')).toHaveCSS(
     '--reader-font-family',
@@ -85,6 +91,29 @@ test('settings drawer changes theme and typography in a real browser', async ({ 
 
   await page.locator('#btnCloseSettings').click();
   await expect(page.locator('#readerDrawer')).toBeHidden();
+
+  await page.reload();
+  await expect(page.locator('.library-view h1')).toHaveText('书库');
+  await page.locator('.library-book').filter({ hasText: 'E2E Markdown' }).click();
+  await page.locator('#btnSettings').click();
+  await expect(page.locator('#settingTheme')).toHaveValue('sepia');
+  await expect(page.locator('#settingFontFamily')).toHaveValue('songti');
+  await expect(page.locator('#settingTextIndent')).toHaveValue('1.5');
+  await expect(page.locator('body')).toHaveClass(/theme-sepia/);
+});
+
+test('EPUB TOC navigates between chapters and updates semantic reading state', async ({ page }) => {
+  await openEpubFixture(page);
+
+  await page.locator('#btnToc').click();
+  await expect(page.locator('#readerDrawer')).toBeVisible();
+  const tocLinks = page.locator('#tocList a[data-target]');
+  await expect(tocLinks).toHaveCount(2);
+  await expect(tocLinks.nth(1)).toHaveText('第二章');
+
+  await tocLinks.nth(1).click();
+  await expect(tocLinks.nth(1)).toHaveAttribute('aria-current', 'location');
+  await expect(page.locator('#readingProgress')).toContainText('2/2');
 });
 
 test('reader shell has unique IDs, reserved actions disabled, and restores Drawer focus', async ({ page }) => {

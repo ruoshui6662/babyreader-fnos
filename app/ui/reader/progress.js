@@ -87,7 +87,7 @@ function findTextContextNode(context) {
     .find((node) => normalizeTextContext(node.textContent).includes(needle));
 }
 
-function updateReadingProgress() {
+function updateReadingProgress(options = {}) {
   const reader = document.getElementById('reader');
   const progress = document.getElementById('readingProgress');
   if (!reader || !progress || state.contentType !== 'epub') return;
@@ -106,18 +106,23 @@ function updateReadingProgress() {
   const viewportTop = visibleRect.top + 8;
   const viewportLeft = visibleRect.left + 8;
   const viewportRight = visibleRect.right - 8;
-  let chapterIndex = 0;
-  for (let index = 0; index < chapters.length; index += 1) {
-    const rect = chapters[index].getBoundingClientRect();
-    if (paged) {
-      if (rect.right >= viewportLeft && rect.left <= viewportRight) {
+  const chapterIndexHint = typeof options === 'object' && Number.isInteger(options?.chapterIndexHint)
+    ? Math.max(0, Math.min(chapters.length - 1, options.chapterIndexHint))
+    : null;
+  let chapterIndex = chapterIndexHint ?? 0;
+  if (chapterIndexHint === null) {
+    for (let index = 0; index < chapters.length; index += 1) {
+      const rect = chapters[index].getBoundingClientRect();
+      if (paged) {
+        if (rect.right >= viewportLeft && rect.left <= viewportRight) {
+          chapterIndex = index;
+          break;
+        }
+      } else if (rect.top <= viewportTop) {
         chapterIndex = index;
+      } else {
         break;
       }
-    } else if (rect.top <= viewportTop) {
-      chapterIndex = index;
-    } else {
-      break;
     }
   }
   state.currentChapterIndex = chapterIndex;
@@ -150,7 +155,7 @@ function navigateChapter(delta) {
 
   state.currentChapterIndex = targetIndex;
   navigateToSemanticTarget(chapters[targetIndex]);
-  requestAnimationFrame(updateReadingProgress);
+  requestAnimationFrame(() => updateReadingProgress({ chapterIndexHint: targetIndex }));
   return true;
 }
 

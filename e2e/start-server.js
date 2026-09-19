@@ -53,15 +53,20 @@ const epub = zipSync({
   <manifest>
     <item id="nav" href="nav.xhtml" media-type="application/xhtml+xml" properties="nav"/>
     <item id="chapter1" href="chapter1.xhtml" media-type="application/xhtml+xml"/>
+    <item id="chapter2" href="chapter2.xhtml" media-type="application/xhtml+xml"/>
   </manifest>
   <spine>
     <itemref idref="chapter1"/>
+    <itemref idref="chapter2"/>
   </spine>
 </package>`),
   'OEBPS/nav.xhtml': strToU8(`<!doctype html>
 <html xmlns="http://www.w3.org/1999/xhtml" xmlns:epub="http://www.idpf.org/2007/ops">
 <head><title>TOC</title></head>
-<body><nav epub:type="toc"><ol><li><a href="chapter1.xhtml">第一章</a></li></ol></nav></body>
+<body><nav epub:type="toc"><ol>
+  <li><a href="chapter1.xhtml">第一章</a></li>
+  <li><a href="chapter2.xhtml">第二章</a></li>
+</ol></nav></body>
 </html>`),
   'OEBPS/chapter1.xhtml': strToU8(`<!doctype html>
 <html xmlns="http://www.w3.org/1999/xhtml">
@@ -70,6 +75,14 @@ const epub = zipSync({
   <h1>E2E EPUB Chapter</h1>
   <p>这是 Playwright 使用真实 Chromium 打开的 EPUB 内容。</p>
   <p>第二段用于验证移动端工具栏、目录和阅读器脚本协作。</p>
+</body>
+</html>`),
+  'OEBPS/chapter2.xhtml': strToU8(`<!doctype html>
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head><title>第二章</title></head>
+<body>
+  <h1>E2E EPUB Second Chapter</h1>
+  <p>第二章用于验证目录跨章节跳转、阅读进度和状态恢复。</p>
 </body>
 </html>`)
 });
