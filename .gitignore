@@ -1,0 +1,11 @@
+# Dependencies and generated runtime/build output
+node_modules/
+.build/
+.runtime/
+.gui-test/
+gui-test-screenshots/
+dist/
+
+# Packaged artifacts and logs
+*.fpk
+*.log

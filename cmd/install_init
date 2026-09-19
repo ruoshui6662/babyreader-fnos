@@ -1,0 +1,7 @@
+#!/bin/sh
+
+set -eu
+
+# install_init runs before application files, the package user, and resource directories are fully prepared.
+# Do not create or modify TRIM_PKGVAR, TRIM_PKGETC, or TRIM_PKGTMP during this stage.
+exit 0

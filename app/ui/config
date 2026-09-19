@@ -1,0 +1,14 @@
+{
+  ".url": {
+    "babyreader-fnos.main": {
+      "title": "BabyReader",
+      "icon": "assets/cat-logo.png",
+      "type": "url",
+      "protocol": "",
+      "gatewayPrefix": "/app/babyreader-fnos",
+      "gatewaySocket": "app.sock",
+      "url": "/app/babyreader-fnos/",
+      "allUsers": true
+    }
+  }
+}

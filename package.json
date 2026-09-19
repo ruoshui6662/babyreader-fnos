@@ -1,0 +1,27 @@
+{
+  "name": "babyreader-fnos",
+  "version": "1.0.0",
+  "description": "BabyReader EPUB, Markdown and TXT reader for fnOS",
+  "main": "app/server/index.js",
+  "directories": {
+    "doc": "docs",
+    "test": "tests"
+  },
+  "scripts": {
+    "dev": "node app/server/index.js",
+    "test": "node --test tests/*.test.js",
+    "check": "node scripts/validate-structure.js",
+    "build:fpk": "bash scripts/build-fpk.sh"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "fflate": "^0.8.3",
+    "sanitize-html": "^2.17.7"
+  },
+  "devDependencies": {
+    "happy-dom": "^20.14.5"
+  }
+}

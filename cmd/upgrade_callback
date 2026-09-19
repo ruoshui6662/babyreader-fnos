@@ -1,0 +1,15 @@
+#!/bin/sh
+
+set -eu
+
+APP_DEST="${TRIM_APPDEST:-$(cd "$(dirname "$0")/.." && pwd)}"
+
+if [ -x "$APP_DEST/cmd/install_init" ]; then
+  "$APP_DEST/cmd/install_init"
+fi
+
+if [ -x "$APP_DEST/cmd/main" ]; then
+  "$APP_DEST/cmd/main" start
+fi
+
+exit 0

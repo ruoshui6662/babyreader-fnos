@@ -1,0 +1,32 @@
+#!/bin/sh
+
+set -eu
+
+export PATH="/var/apps/nodejs_v22/target/bin:${PATH:-/usr/bin:/bin}"
+
+APP_DEST="${TRIM_APPDEST:-$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)}"
+PKG_ETC="${TRIM_PKGETC:-$APP_DEST/etc}"
+
+mkdir -p "$PKG_ETC"
+chmod 700 "$PKG_ETC" 2>/dev/null || true
+
+if [ ! -f "$PKG_ETC/settings.json" ]; then
+  printf '%s\n' '{"libraryRoots":[]}' > "$PKG_ETC/settings.json"
+fi
+
+NODE_BIN=$(command -v node 2>/dev/null) || {
+  MESSAGE="未找到 Node.js 运行时，请确认依赖 nodejs_v22 已安装。"
+  [ -n "${TRIM_TEMP_LOGFILE:-}" ] && printf '%s\n' "$MESSAGE" > "$TRIM_TEMP_LOGFILE"
+  printf '%s\n' "$MESSAGE" >&2
+  exit 1
+}
+
+"$NODE_BIN" -e 'const fs=require("node:fs"); if (Number(process.versions.node.split(".")[0]) < 22) process.exit(2); const file=process.argv[1]; const value=JSON.parse(fs.readFileSync(file,"utf8")); if (!Array.isArray(value.libraryRoots) || value.libraryRoots.some((item) => typeof item !== "string" || !item)) process.exit(1);' "$PKG_ETC/settings.json" || {
+  MESSAGE="书库配置无效或 Node.js 版本低于 22：libraryRoots 必须是非空路径字符串数组。"
+  [ -n "${TRIM_TEMP_LOGFILE:-}" ] && printf '%s\n' "$MESSAGE" > "$TRIM_TEMP_LOGFILE"
+  printf '%s\n' "$MESSAGE" >&2
+  exit 1
+}
+
+chmod 600 "$PKG_ETC/settings.json" 2>/dev/null || true
+exit 0

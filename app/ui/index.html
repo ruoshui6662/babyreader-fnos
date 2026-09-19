@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>BabyReader</title>
+  <link rel="stylesheet" href="styles.css?v=12">
+</head>
+<body class="is-welcome">
+  <!-- Reader Shell: low-distraction navigation with stable legacy IDs -->
+  <header class="topbar reader-shell-nav" id="topbar">
+    <div class="topbar-left">
+      <button class="reader-nav-button" id="btnBackToLibrary" type="button" hidden data-reader-action="backToLibrary" aria-label="返回书架" title="返回书架">书架</button>
+      <span class="app-name">BabyReader</span>
+      <span class="file-name" id="fileName"></span>
+    </div>
+    <div class="reader-status" aria-label="阅读状态">
+      <span class="pagination-status" id="paginationStatus" hidden aria-live="polite"></span>
+      <span class="reading-progress" id="readingProgress" hidden aria-live="polite"></span>
+    </div>
+    <div class="topbar-right">
+      <button class="reader-nav-button chapter-nav-btn" id="btnPreviousChapter" type="button" hidden data-reader-action="previousChapter" aria-label="上一章" title="上一章">上一章</button>
+      <button class="reader-nav-button page-nav-btn" id="btnPreviousPage" type="button" hidden data-reader-action="previousPage" aria-label="上一页" title="上一页">上一页</button>
+      <button class="reader-nav-button page-nav-btn" id="btnNextPage" type="button" hidden data-reader-action="nextPage" aria-label="下一页" title="下一页">下一页</button>
+      <button class="reader-nav-button chapter-nav-btn" id="btnNextChapter" type="button" hidden data-reader-action="nextChapter" aria-label="下一章" title="下一章">下一章</button>
+    </div>
+  </header>
+
+  <nav class="reader-floating-toolbar" id="readerFloatingToolbar" hidden aria-label="阅读工具">
+    <button class="toc-toggle" id="btnToc" type="button" hidden data-reader-action="openToc" data-reader-panel="toc" aria-controls="readerDrawer" aria-expanded="false" aria-label="打开目录" title="打开目录"></button>
+    <button class="reader-tool-btn" id="btnHighlight" type="button" hidden data-reader-action="highlight" aria-label="划线" title="划线"></button>
+    <button class="reader-tool-btn" id="btnExportHighlights" type="button" hidden data-reader-action="exportHighlights" aria-label="导出划线" title="导出划线"></button>
+    <button class="reader-tool-btn" id="btnSearch" type="button" data-reader-action="openSearch" data-reader-panel="search" data-reader-status="reserved" aria-controls="readerDrawer" aria-expanded="false" aria-label="搜索，预留功能，当前不可用" title="搜索，预留功能，当前不可用" disabled></button>
+    <button class="reader-tool-btn" id="btnBookmarks" type="button" data-reader-action="openBookmarks" data-reader-panel="bookmarks" data-reader-status="reserved" aria-controls="readerDrawer" aria-expanded="false" aria-label="书签，预留功能，当前不可用" title="书签，预留功能，当前不可用" disabled></button>
+    <button class="reader-tool-btn" id="btnNotes" type="button" data-reader-action="openNotes" data-reader-panel="notes" data-reader-status="reserved" aria-controls="readerDrawer" aria-expanded="false" aria-label="笔记，预留功能，当前不可用" title="笔记，预留功能，当前不可用" disabled></button>
+    <button class="reader-tool-btn" id="btnAi" type="button" data-reader-action="openAi" data-reader-panel="ai" data-reader-status="reserved" aria-controls="readerDrawer" aria-expanded="false" aria-label="AI，预留功能，当前不可用" title="AI，预留功能，当前不可用" disabled></button>
+    <button class="theme-btn" id="btnTheme" type="button" data-reader-action="toggleTheme" aria-label="切换浅色模式" title="切换浅色模式"></button>
+    <button class="reader-tool-btn" id="btnSettings" type="button" data-reader-action="openSettings" data-reader-panel="settings" aria-controls="readerDrawer" aria-expanded="false" aria-label="打开显示设置" title="打开显示设置"></button>
+  </nav>
+
+  <div class="reader-drawer-backdrop" id="readerDrawerBackdrop" hidden></div>
+  <aside class="reader-drawer settings-panel" id="readerDrawer" hidden aria-label="阅读面板" aria-modal="false">
+    <div class="settings-header reader-drawer-header">
+      <h2 id="readerDrawerTitle">阅读设置</h2>
+      <button type="button" id="btnCloseSettings" data-reader-action="closePanel" aria-label="关闭面板">关闭</button>
+    </div>
+    <div class="reader-drawer-tabs" role="tablist" aria-label="阅读面板切换">
+      <button type="button" id="drawerTabToc" role="tab" data-reader-panel-target="toc" aria-controls="readerPanelToc">目录</button>
+      <button type="button" id="drawerTabSettings" role="tab" data-reader-panel-target="settings" aria-controls="readerPanelSettings">显示</button>
+    </div>
+    <section class="reader-panel" id="readerPanelToc" data-reader-panel-name="toc" role="tabpanel" hidden>
+      <div class="toc" id="toc">
+        <div class="toc-title">目录</div>
+        <ol id="tocList"></ol>
+      </div>
+      <p class="reader-panel-empty" id="tocEmptyState">当前内容没有可用目录。</p>
+    </section>
+    <section class="reader-panel" id="readerPanelSettings" data-reader-panel-name="settings" role="tabpanel">
+      <div id="settingsPanel" class="settings-panel-content">
+      <label class="settings-field">
+        <span>背景</span>
+        <select id="settingTheme">
+          <option value="dark">深色</option>
+          <option value="light">浅色</option>
+          <option value="sepia">护眼米黄</option>
+        </select>
+      </label>
+      <label class="settings-field">
+        <span>正文字体</span>
+        <select id="settingFontFamily">
+          <option value="sans">系统黑体</option>
+          <option value="songti">宋体</option>
+          <option value="source-serif">思源宋体</option>
+        </select>
+      </label>
+      <label class="settings-field">
+        <span>首行缩进</span>
+        <input id="settingTextIndent" type="range" min="0" max="4" step="0.5" value="2">
+        <output id="settingTextIndentValue">2 字</output>
+      </label>
+      <label class="settings-field">
+        <span>段间距</span>
+        <input id="settingParagraphSpacing" type="range" min="0.4" max="3" step="0.1" value="1.1">
+        <output id="settingParagraphSpacingValue">1.1 em</output>
+      </label>
+      <label class="settings-field">
+        <span>字号</span>
+        <input id="settingFontSize" type="range" min="60" max="200" step="10" value="100">
+        <output id="settingFontSizeValue">100%</output>
+      </label>
+      <label class="settings-field">
+        <span>行高</span>
+        <input id="settingLineHeight" type="range" min="1.2" max="2.6" step="0.1" value="1.9">
+        <output id="settingLineHeightValue">1.9</output>
+      </label>
+      <label class="settings-field">
+        <span>页边距</span>
+        <input id="settingPageMargin" type="range" min="8" max="96" step="4" value="40">
+        <output id="settingPageMarginValue">40px</output>
+      </label>
+      <label class="settings-field">
+        <span>划线颜色</span>
+        <select id="settingHighlightColor">
+          <option value="yellow">黄色</option>
+          <option value="green">绿色</option>
+          <option value="blue">蓝色</option>
+          <option value="pink">粉色</option>
+        </select>
+      </label>
+      <label class="settings-field">
+        <span>阅读模式</span>
+        <select id="settingReadingMode">
+          <option value="scroll">连续滚动</option>
+          <option value="double">双页分页</option>
+        </select>
+      </label>
+      <label class="settings-field settings-checkbox">
+        <input id="settingTocOpen" type="checkbox" checked>
+        <span>默认展开 EPUB 目录</span>
+      </label>
+      <p class="settings-user" id="settingsUser"></p>
+      </div>
+    </section>
+    <section class="reader-panel reader-panel-placeholder" id="readerPanelSearch" data-reader-panel-name="search" role="tabpanel" hidden><h3>搜索</h3><p>接口预留，当前版本尚未实现。</p></section>
+    <section class="reader-panel reader-panel-placeholder" id="readerPanelBookmarks" data-reader-panel-name="bookmarks" role="tabpanel" hidden><h3>书签</h3><p>接口预留，当前版本尚未实现。</p></section>
+    <section class="reader-panel reader-panel-placeholder" id="readerPanelNotes" data-reader-panel-name="notes" role="tabpanel" hidden><h3>笔记</h3><p>接口预留，当前版本尚未实现。</p></section>
+    <section class="reader-panel reader-panel-placeholder" id="readerPanelAi" data-reader-panel-name="ai" role="tabpanel" hidden><h3>AI</h3><p>接口预留，当前版本尚未实现。</p></section>
+  </aside>
+
+  <section class="highlight-editor" id="highlightEditor" hidden role="dialog" aria-modal="true" aria-labelledby="highlightEditorTitle">
+    <div class="highlight-editor-header">
+      <h2 id="highlightEditorTitle">划线详情</h2>
+      <button type="button" id="btnCloseHighlightEditor" aria-label="关闭划线详情">关闭</button>
+    </div>
+    <blockquote class="highlight-editor-text" id="highlightEditorText"></blockquote>
+    <label class="highlight-editor-field">
+      <span>颜色</span>
+      <select id="highlightEditorColor">
+        <option value="yellow">黄色</option>
+        <option value="green">绿色</option>
+        <option value="blue">蓝色</option>
+        <option value="pink">粉色</option>
+      </select>
+    </label>
+    <label class="highlight-editor-field">
+      <span>备注</span>
+      <textarea id="highlightEditorNote" rows="4" maxlength="4000" placeholder="添加备注"></textarea>
+    </label>
+    <div class="highlight-editor-actions">
+      <button type="button" id="btnDeleteHighlight" class="danger-button">删除划线</button>
+      <button type="button" id="btnSaveHighlight">保存</button>
+    </div>
+  </section>
+
+  <nav class="mobile-reader-toolbar" id="mobileReaderToolbar" hidden aria-label="移动端阅读工具栏">
+    <button type="button" id="btnMobileBackToLibrary" aria-label="返回书架">书架</button>
+    <button type="button" id="btnMobilePreviousChapter" aria-label="上一章">上一章</button>
+    <button type="button" id="btnMobilePreviousPage" aria-label="上一页">上一页</button>
+    <button type="button" id="btnMobileToc" data-reader-action="openToc" data-reader-panel="toc" aria-controls="readerDrawer" aria-expanded="false" aria-label="打开目录">目录</button>
+    <button type="button" id="btnMobileHighlight" aria-label="创建或编辑划线">划线</button>
+    <button type="button" id="btnMobileSettings" data-reader-action="openSettings" data-reader-panel="settings" aria-controls="readerDrawer" aria-expanded="false" aria-label="打开显示设置">设置</button>
+    <button type="button" id="btnMobileNextPage" aria-label="下一页">下一页</button>
+    <button type="button" id="btnMobileNextChapter" aria-label="下一章">下一章</button>
+  </nav>
+
+  <!-- Reader view -->
+  <div class="reader is-welcome" id="reader">
+    <div class="article" id="article">
+      <!-- Welcome state -->
+      <div class="welcome" id="welcome">
+        <h1>BabyReader</h1>
+        <p class="welcome-quote-en">To acquire the habit of reading is to construct for yourself<br>a refuge from almost all the miseries of life.</p>
+        <p class="welcome-quote-zh">阅读是一座随身携带的避难所。</p>
+        <p class="hint">⌘O 打开文件 · 支持 .md .txt .epub · 双击直接阅读</p>
+        <p class="credit">by <a href="https://x.com/KingJing001" target="_blank">@一龙小包子</a></p>
+      </div>
+    </div>
+    <div class="epub-shell" id="epubShell" style="display:none">
+      <div class="epub-viewer" id="epubViewer"></div>
+    </div>
+  </div>
+
+  <!-- Editor view (hidden by default) -->
+  <div class="editor-container" id="editorContainer" style="display:none">
+    <div class="editor-pane">
+      <textarea class="editor" id="editor" spellcheck="false"></textarea>
+    </div>
+    <div class="preview-pane">
+      <div class="article" id="preview"></div>
+    </div>
+  </div>
+
+  <script src="lib/jszip.min.js"></script>
+  <script src="lib/epub.min.js"></script>
+  <script src="lib/marked.min.js"></script>
+  <script src="app.js?v=12"></script>
+</body>
+</html>

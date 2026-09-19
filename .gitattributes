@@ -1,0 +1,18 @@
+* text=auto
+
+# fnOS/POSIX lifecycle and build scripts must always keep LF line endings.
+.gitattributes text eol=lf
+.gitignore text eol=lf
+cmd/* text eol=lf
+scripts/*.sh text eol=lf
+
+# Keep source/configuration files deterministic across Windows and fnOS.
+*.js text eol=lf
+*.json text eol=lf
+*.md text eol=lf
+*.html text eol=lf
+*.css text eol=lf
+manifest text eol=lf
+UPSTREAM_BASELINES text eol=lf
+app/ui/config text eol=lf
+config/* text eol=lf

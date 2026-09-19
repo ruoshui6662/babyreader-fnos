@@ -1,0 +1,11 @@
+#!/bin/sh
+
+set -eu
+
+APP_DEST="${TRIM_APPDEST:-$(cd "$(dirname "$0")/.." && pwd)}"
+
+if [ -x "$APP_DEST/cmd/main" ]; then
+  "$APP_DEST/cmd/main" stop || true
+fi
+
+exit 0

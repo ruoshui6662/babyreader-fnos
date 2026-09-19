@@ -1,0 +1,1877 @@
+/* ============================================================
+   BabyReader — Dark Theme Stylesheet
+   ============================================================ */
+
+/* --- Custom Properties --- */
+:root {
+  color-scheme: dark;
+  --bg:          #1e1e1e;
+  --surface:     #262626;
+  --surface-alt: #232323;
+  --surface-code:#1a1a1a;
+  --text:        #e8e0d4;
+  --text-muted:  #9a918a;
+  --text-dim:    #6a6360;
+  --text-strong: #f0e8dc;
+  --accent:      #DA7756;
+  --border:      #333333;
+  --topbar-bg:   rgba(30, 30, 30, 0.85);
+  --toc-bg:      rgba(35, 35, 35, 0.82);
+  --hover-bg:    rgba(255, 255, 255, 0.06);
+  --selection-bg:rgba(218, 119, 86, 0.3);
+  --highlight-bg:rgba(218, 119, 86, 0.18);
+  --button-text: #ffffff;
+  --code-text:   #c4886a;
+  --pre-text:    #b8c0c8;
+  --table-row:   rgba(255,255,255,0.02);
+  --welcome-hint:#504945;
+  --topbar-h:    52px;
+  --reader-line-height: 1.9;
+  --reader-page-margin: 40px;
+
+  --font-serif:  "Noto Serif SC", "Source Han Serif CN", "SimSun", "Songti SC", Georgia, serif;
+  --font-sans:   -apple-system, "PingFang SC", "Helvetica Neue", "Noto Sans SC", sans-serif;
+  --font-mono:   "SF Mono", "JetBrains Mono", Menlo, "Courier New", monospace;
+
+  /* Reading typography, all user-overridable from the settings drawer.
+     Defaults keep the historical look (no indent, 1.1em gaps, sans body):
+     existing users see no change until they opt in. */
+  --reader-text-indent: 0em;
+  --reader-para-spacing: 1.1em;
+  --reader-font-family: var(--font-sans);
+}
+
+/* 护眼纸张背景：暖米色底 + 深墨色文字，长时阅读对比度更柔和 */
+body.theme-sepia {
+  color-scheme: light;
+  --bg:          #EFE5CF;
+  --surface:     #E8DCC2;
+  --surface-alt: #F2E9D6;
+  --surface-code:#E4D7BC;
+  --text:        #3D3427;
+  --text-muted:  #7A6E5B;
+  --text-dim:    #94876F;
+  --text-strong: #221C12;
+  --accent:      #A85E2E;
+  --border:      #CDBCA0;
+  --topbar-bg:   rgba(239, 229, 207, 0.92);
+  --toc-bg:      rgba(232, 220, 194, 0.92);
+  --hover-bg:    rgba(61, 52, 39, 0.07);
+  --selection-bg:rgba(168, 94, 46, 0.26);
+  --highlight-bg:rgba(168, 94, 46, 0.18);
+  --button-text: #3D3427;
+  --code-text:   #7C4A22;
+  --pre-text:    #4A4234;
+  --table-row:   rgba(61, 52, 39, 0.03);
+  --welcome-hint:#94876F;
+}
+
+body.theme-light {
+  color-scheme: light;
+  --bg:          #FCF8F1;
+  --surface:     #F4EDE3;
+  --surface-alt: #FBF7EF;
+  --surface-code:#F3EFE8;
+  --text:        #3A342E;
+  --text-muted:  #8B8378;
+  --text-dim:    #A89B8C;
+  --text-strong: #161513;
+  --accent:      #C8A26C;
+  --border:      #DAD0C3;
+  --topbar-bg:   rgba(252, 248, 241, 0.92);
+  --toc-bg:      rgba(238, 234, 226, 0.92);
+  --hover-bg:    rgba(58, 52, 46, 0.06);
+  --selection-bg:rgba(200, 162, 108, 0.28);
+  --highlight-bg:rgba(200, 162, 108, 0.22);
+  --button-text: #3A342E;
+  --code-text:   #7F5A2F;
+  --pre-text:    #4A433A;
+  --table-row:   rgba(58, 52, 46, 0.025);
+  --welcome-hint:#A89B8C;
+}
+
+/* --- Reset & Base --- */
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html {
+  font-size: 16px;
+  scroll-behavior: smooth;
+  height: 100%;
+}
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+  height: 100%;
+  overflow: hidden;
+}
+
+/* --- Selection --- */
+::selection {
+  background: var(--selection-bg);
+  color: var(--text);
+}
+
+/* --- Scrollbar --- */
+.editor::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+.editor::-webkit-scrollbar-track {
+  background: transparent;
+}
+.editor::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 3px;
+}
+.editor::-webkit-scrollbar-thumb:hover {
+  background: var(--text-dim);
+}
+
+/* ============================================================
+   Topbar
+   ============================================================ */
+.topbar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: var(--topbar-h);
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  box-sizing: border-box;
+  padding: 4px 20px 0 76px;
+  background: var(--topbar-bg);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  -webkit-app-region: drag; /* allow window drag in native app */
+}
+
+.topbar-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex: 1;
+  min-width: 0;
+}
+
+.topbar-right {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  flex-shrink: 0;
+  -webkit-app-region: no-drag;
+}
+
+.app-name {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text);
+  letter-spacing: 0.01em;
+  flex-shrink: 0;
+}
+
+.file-name {
+  display: block;
+  min-width: 0;
+  font-size: 14px;
+  color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Mode toggle buttons */
+.mode-btn {
+  -webkit-app-region: no-drag;
+  background: transparent;
+  border: 1px solid transparent;
+  color: var(--text-muted);
+  font-family: var(--font-sans);
+  font-size: 13px;
+  padding: 4px 12px;
+  border-radius: 20px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  outline: none;
+}
+
+.mode-btn:hover {
+  color: var(--text);
+  background: var(--hover-bg);
+}
+
+.mode-btn.active {
+  background: var(--accent);
+  color: var(--button-text);
+  font-weight: 600;
+  border-color: var(--accent);
+}
+
+.theme-btn,
+.reader-tool-btn {
+  -webkit-app-region: no-drag;
+  width: 32px;
+  height: 32px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: none;
+  border-radius: 8px;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: color 0.15s ease, background 0.15s ease;
+}
+
+/* P0: icon-only toolbar, slightly larger */
+.reader-floating-toolbar .theme-btn svg,
+.reader-floating-toolbar .reader-tool-btn svg {
+  width: 20px;
+  height: 20px;
+  display: block;
+  stroke: currentColor;
+}
+
+/* Disabled reserved buttons are subtle muted icons */
+.reader-floating-toolbar .reader-tool-btn:disabled svg {
+  opacity: 0.28;
+}
+
+.theme-btn:hover,
+.reader-tool-btn:hover {
+  color: var(--accent);
+  background: var(--hover-bg);
+}
+
+.toc-toggle {
+  -webkit-app-region: no-drag;
+  width: 32px;
+  height: 32px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: none;
+  border-radius: 8px;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: color 0.15s ease, background 0.15s ease;
+}
+
+.toc-toggle svg {
+  width: 20px;
+  height: 20px;
+  display: block;
+  stroke: currentColor;
+  fill: none;
+}
+
+.toc-toggle:hover {
+  color: var(--accent);
+  background: var(--hover-bg);
+}
+
+.toc-toggle[hidden],
+.reader-tool-btn[hidden],
+body.is-epub .mode-btn {
+  display: none;
+}
+
+body.is-welcome .mode-btn,
+body.is-welcome .file-name {
+  display: none;
+}
+
+body.is-welcome .app-name {
+  display: none;
+}
+
+.file-name:not(:empty)::before {
+  content: "·";
+  margin-right: 12px;
+  color: var(--text-dim);
+}
+
+/* ============================================================
+   Reader (read mode)
+   ============================================================ */
+.reader {
+  position: fixed;
+  top: var(--topbar-h);
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: auto;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+body.has-toc.toc-open .reader {
+  padding-left: 260px;
+}
+
+.reader.is-welcome {
+  overflow-y: hidden;
+}
+
+.reader .article {
+  position: relative;
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 48px var(--reader-page-margin) 120px;
+}
+
+.epub-shell {
+  display: none;
+  height: 100%;
+  padding: var(--topbar-h) 0 0;
+}
+
+.epub-viewer {
+  width: 100%;
+  height: calc(100vh - var(--topbar-h));
+  background: var(--bg);
+  color: var(--text);
+}
+
+.epub-viewer iframe {
+  background: var(--bg) !important;
+}
+
+.reader.is-welcome .article {
+  height: 100%;
+  max-width: none;
+  padding: 0 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* ============================================================
+   Article Typography
+   ============================================================ */
+.article {
+  color: var(--text);
+}
+
+/* Headings */
+.article h1 {
+  font-family: var(--font-serif);
+  font-size: 2rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1.25;
+  color: var(--text);
+  margin-bottom: 16px;
+  margin-top: 0;
+}
+
+.article h2 {
+  font-family: var(--font-sans);
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: var(--text);
+  margin-top: 48px;
+  margin-bottom: 20px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid rgba(218, 119, 86, 0.35);
+  line-height: 1.35;
+}
+
+.article h3 {
+  font-family: var(--font-sans);
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: var(--text);
+  margin-top: 36px;
+  margin-bottom: 14px;
+  line-height: 1.4;
+}
+
+.article h4 {
+  font-family: var(--font-sans);
+  font-size: 17px;
+  font-weight: 600;
+  color: var(--text);
+  margin-top: 28px;
+  margin-bottom: 10px;
+}
+
+/* Paragraphs */
+.article p {
+  font-size: 1.125rem;
+  line-height: 1.9;
+  color: var(--text);
+  margin-bottom: 20px;
+}
+
+.article .epub-chapter,
+.article .epub-chapter * {
+  color: inherit !important;
+  font-family: var(--reader-font-family, -apple-system, "PingFang SC", "Helvetica Neue", sans-serif) !important;
+  letter-spacing: 0 !important;
+  box-sizing: border-box !important;
+}
+
+/* --- Reading typography (P0): indent, paragraph rhythm, font family --- */
+.article .epub-chapter {
+  font-size: 1.1875rem !important;
+  font-weight: 400 !important;
+  line-height: var(--reader-line-height) !important;
+  position: relative;
+  z-index: 1;
+}
+
+.article .epub-chapter p,
+.article .epub-chapter li,
+.article .epub-chapter div,
+.article .epub-chapter section,
+.article .epub-chapter article {
+  font-size: 1em !important;
+  font-weight: 400 !important;
+  line-height: var(--reader-line-height) !important;
+}
+
+.article .epub-chapter p,
+.article .epub-chapter li {
+  text-align: justify;
+  /* Chinese book convention: every body paragraph opens with a 2-character
+     indent (user-adjustable 0~4 chars). The first paragraph after a heading is
+     indented too, matching WeChat Reading / legado. */
+  text-indent: var(--reader-text-indent, 2em);
+  margin-bottom: var(--reader-para-spacing, 1.1em);
+}
+
+/* Keep list items / blockquotes / centered lines unindented */
+.article .epub-chapter li,
+.article .epub-chapter li p,
+.article .epub-chapter blockquote p,
+.article .epub-chapter p[style*="center"],
+.article .epub-chapter p[align="center"],
+.article .epub-chapter p.no-indent {
+  text-indent: 0;
+}
+
+.article .epub-chapter h1,
+.article .epub-chapter h2,
+.article .epub-chapter h3,
+.article .epub-chapter h4,
+.article .epub-chapter h5,
+.article .epub-chapter h6 {
+  /* Headings follow the reader font stack (sans / songti / source-serif),
+     matching legado's single-font philosophy; the 700 weight still separates
+     them from body text inside a serif family. */
+  font-family: var(--reader-font-family) !important;
+  color: var(--text-strong);
+  font-weight: 700;
+  line-height: 1.35;
+  margin: 1.6em 0 0.75em;
+  padding-bottom: 0;
+  border-bottom: none;
+  text-align: left;
+}
+
+/* WeChat-reading style chapter header underline (like 引子) */
+.article .epub-chapter h1 {
+  font-size: 1.65em;
+  padding-bottom: 0.4em;
+  margin-bottom: 1em;
+  border-bottom: 1px solid var(--border);
+}
+
+.article .epub-chapter h2 {
+  font-size: 1.35em;
+}
+
+.article .epub-chapter h3,
+.article .epub-chapter h4,
+.article .epub-chapter h5,
+.article .epub-chapter h6 {
+  font-size: 1.12em;
+}
+
+.article .epub-chapter strong,
+.article .epub-chapter b {
+  color: var(--text-strong);
+  font-weight: 650;
+}
+
+.article .highlight-layer {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+}
+
+.article .br-highlight-box {
+  position: absolute;
+  display: block;
+  background: var(--highlight-bg);
+  border-radius: 2px;
+}
+
+/* Links */
+.article a {
+  color: var(--accent);
+  text-decoration: none;
+  border-bottom: 1px solid transparent;
+  transition: border-color 0.15s ease;
+}
+
+.article a:hover {
+  border-bottom-color: var(--accent);
+}
+
+/* Bold */
+.article strong {
+  font-weight: 700;
+  color: var(--text-strong); /* slightly brighter than body */
+}
+
+/* Italic */
+.article em {
+  font-style: italic;
+  color: var(--text);
+}
+
+/* Inline code */
+.article code {
+  font-family: var(--font-mono);
+  font-size: 0.9375rem;
+  background: var(--surface-code);
+  color: var(--code-text);
+  padding: 2px 6px;
+  border-radius: 4px;
+  border: 1px solid rgba(255,255,255,0.06);
+}
+
+/* Code blocks */
+.article pre {
+  background: var(--surface-code);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 20px;
+  margin: 24px 0;
+  overflow-x: auto;
+}
+
+.article pre code {
+  font-family: var(--font-mono);
+  font-size: 0.875rem;
+  background: none;
+  color: var(--pre-text);
+  padding: 0;
+  border: none;
+  border-radius: 0;
+  line-height: 1.65;
+}
+
+/* Blockquotes */
+.article blockquote,
+.article .block-quote {
+  background: var(--surface-alt);
+  border-left: 3px solid var(--accent);
+  border-radius: 0 8px 8px 0;
+  padding: 20px 24px;
+  margin: 24px 0;
+  color: var(--text-muted);
+  font-size: 1.0625rem;
+  line-height: 1.75;
+}
+
+.article blockquote p,
+.article .block-quote p {
+  font-size: 1.0625rem;
+  color: var(--text-muted);
+  margin-bottom: 10px;
+}
+
+.article blockquote p:last-child,
+.article .block-quote p:last-child {
+  margin-bottom: 0;
+}
+
+/* Lists */
+.article ul,
+.article ol {
+  font-size: 1.125rem;
+  line-height: 1.8;
+  color: var(--text);
+  margin: 16px 0 20px 0;
+  padding-left: 28px;
+}
+
+.article li {
+  margin-bottom: 6px;
+}
+
+.article li:last-child {
+  margin-bottom: 0;
+}
+
+.article ul li::marker {
+  color: var(--accent);
+}
+
+/* Tables */
+.article table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 24px 0;
+  font-size: 0.9375rem;
+}
+
+.article th {
+  background: var(--surface-code);
+  color: var(--text);
+  font-weight: 600;
+  padding: 10px 14px;
+  border: 1px solid var(--border);
+  text-align: left;
+}
+
+.article td {
+  padding: 9px 14px;
+  border: 1px solid var(--border);
+  color: var(--text);
+}
+
+.article tr:nth-child(even) td {
+  background: var(--table-row);
+}
+
+/* Images */
+.article img {
+  max-width: 100%;
+  height: auto;
+  border-radius: 8px;
+  display: block;
+  margin: 24px auto;
+}
+
+.article svg,
+.article .epub-svg {
+  max-width: 100%;
+  height: auto;
+  display: block;
+  margin: 24px auto;
+}
+
+/* Horizontal rule */
+.article hr {
+  display: none;
+}
+
+.article .epub-chapter {
+  scroll-margin-top: 76px;
+}
+
+/* ============================================================
+   EPUB Table of Contents
+   ============================================================ */
+.toc {
+  position: fixed;
+  top: var(--topbar-h);
+  left: 0;
+  bottom: 0;
+  z-index: 50;
+  width: 260px;
+  overflow-y: auto;
+  padding: 24px 16px 40px 20px;
+  background: var(--toc-bg);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+
+body:not(.toc-open) .toc {
+  display: none !important;
+}
+
+.toc-title {
+  margin-bottom: 14px;
+  color: var(--text-muted);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.toc ol {
+  list-style: none;
+}
+
+.toc li {
+  margin: 0;
+}
+
+.toc .toc-depth-1 a {
+  padding-left: 16px;
+}
+
+.toc .toc-depth-2 a {
+  padding-left: 28px;
+}
+
+.toc .toc-depth-3 a {
+  padding-left: 40px;
+}
+
+.toc a {
+  display: block;
+  padding: 7px 4px;
+  color: var(--text-muted);
+  border-bottom: none;
+  border-radius: 4px;
+  font-size: 13px;
+  line-height: 1.35;
+  text-decoration: none;
+}
+
+.toc a:hover {
+  color: var(--text);
+  background: var(--hover-bg);
+}
+
+/* ============================================================
+   Custom Block Styles
+   ============================================================ */
+
+/* TITLE block — also applied to first h1 */
+.article .block-title,
+.article h1.is-title {
+  font-family: var(--font-serif);
+  font-size: 2rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1.25;
+  color: var(--text);
+  margin-top: 20px;
+  margin-bottom: 16px;
+}
+
+/* SUBTITLE block */
+.article .block-subtitle {
+  font-family: var(--font-sans);
+  font-size: 1.125rem;
+  color: var(--text-muted);
+  line-height: 1.6;
+  margin-bottom: 32px;
+  margin-top: 0;
+}
+
+/* LEDE block — pull quote / opening paragraph */
+.article .block-lede {
+  background: var(--surface);
+  border-left: 3px solid var(--accent);
+  border-radius: 0 8px 8px 0;
+  padding: 24px 28px;
+  margin: 28px 0;
+  font-size: 1.1875rem;
+  line-height: 1.85;
+  color: var(--text);
+}
+
+.article .block-lede p {
+  font-size: 1.1875rem;
+  line-height: 1.85;
+  color: var(--text);
+  margin-bottom: 14px;
+}
+
+.article .block-lede p:last-child {
+  margin-bottom: 0;
+}
+
+/* META block — metadata / byline */
+.article .block-meta {
+  font-size: 0.875rem;
+  color: var(--text-muted);
+  background: var(--surface-alt);
+  border-radius: 8px;
+  padding: 16px 20px;
+  margin: 20px 0;
+  line-height: 1.7;
+  font-family: var(--font-sans);
+}
+
+/* HEADING block */
+.article .block-heading {
+  font-family: var(--font-sans);
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: var(--text);
+  margin-top: 48px;
+  margin-bottom: 0;
+  padding-bottom: 12px;
+  border-bottom: 2px solid var(--accent);
+  line-height: 1.35;
+}
+
+/* SIGN block — author sign-off */
+.article .block-sign {
+  text-align: right;
+  font-size: 0.9375rem;
+  color: var(--text-muted);
+  margin-top: 8px;
+  margin-bottom: 24px;
+  font-style: normal;
+}
+
+/* When SIGN follows a blockquote, tighten the gap */
+.article blockquote + .block-sign,
+.article .block-quote + .block-sign {
+  margin-top: -16px;
+}
+
+/* BREAK block — visual separator */
+.article .block-break,
+.article hr.block-break {
+  display: block;
+  border: none;
+  border-top: none;
+  margin: 40px auto;
+  width: 80px;
+  height: 2px;
+  background: var(--accent);
+  opacity: 0.5;
+  border-radius: 1px;
+}
+
+/* ============================================================
+   Welcome State
+   ============================================================ */
+.welcome {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: calc(100vh - 200px);
+  text-align: center;
+  gap: 0;
+}
+
+.reader.is-welcome .welcome {
+  min-height: auto;
+}
+
+.welcome h1 {
+  font-family: var(--font-serif);
+  font-size: 36px;
+  font-weight: 700;
+  color: var(--text-muted);
+  letter-spacing: -0.02em;
+  margin-bottom: 32px;
+}
+
+/* Quote block: EN + ZH stay close together */
+.welcome-quote-en {
+  font-family: var(--font-serif);
+  font-size: 15px;
+  font-style: italic;
+  color: var(--text-dim);
+  line-height: 1.7;
+  max-width: 480px;
+  margin-bottom: 6px;
+}
+
+.welcome-quote-zh {
+  font-family: "Songti SC", "STSong", Georgia, serif;
+  font-size: 15px;
+  color: var(--text-dim);
+  letter-spacing: 0.06em;
+  margin-bottom: 36px; /* gap before info block */
+}
+
+/* Info block: hint + credit stay close together */
+.welcome .hint {
+  font-size: 13px;
+  color: var(--welcome-hint);
+  margin-bottom: 8px;
+}
+
+.welcome .credit {
+  font-size: 13px;
+  color: var(--text-dim);
+}
+
+.welcome .credit a {
+  color: var(--accent);
+  text-decoration: none;
+}
+
+/* ============================================================
+   Editor Mode
+   ============================================================ */
+.editor-container {
+  display: flex;
+  height: 100vh;
+  padding-top: var(--topbar-h);
+}
+
+.editor-pane {
+  flex: 1;
+  display: flex;
+  overflow: hidden;
+}
+
+.editor {
+  flex: 1;
+  width: 100%;
+  height: 100%;
+  background: var(--surface-code);
+  color: var(--text);
+  font-family: var(--font-mono);
+  font-size: 15px;
+  line-height: 1.7;
+  padding: 40px 36px;
+  border: none;
+  outline: none;
+  resize: none;
+  overflow-y: auto;
+  tab-size: 2;
+}
+
+.editor::placeholder {
+  color: var(--text-dim);
+}
+
+.preview-pane {
+  flex: 1;
+  overflow-y: auto;
+  border-left: 1px solid var(--border);
+}
+
+.preview-pane .article {
+  padding: 40px 40px 80px;
+  max-width: none;
+}
+
+/* ============================================================
+   Transitions
+   ============================================================ */
+.reader,
+.editor-container {
+  transition: opacity 0.15s ease;
+}
+
+/* ============================================================
+   Responsive
+   ============================================================ */
+@media (max-width: 800px) {
+  body.has-toc.toc-open .reader {
+    padding-left: 0;
+  }
+
+  .toc {
+    display: none !important;
+  }
+
+  .reader .article {
+    padding: 32px var(--reader-page-margin) calc(96px + env(safe-area-inset-bottom));
+  }
+
+  .epub-shell {
+    padding: var(--topbar-h) 0 0;
+  }
+
+  .article h1,
+  .article .block-title {
+    font-size: 26px;
+  }
+
+  .article p,
+  .article ul,
+  .article ol {
+    font-size: 17px;
+  }
+
+  .article .block-lede,
+  .article .block-lede p {
+    font-size: 17px;
+  }
+
+  .topbar {
+    padding-left: 20px; /* non-macOS or small screen */
+  }
+}
+
+/* ============================================================
+   Highlight Pill
+   ============================================================ */
+.highlight-pill {
+  position: fixed;
+  z-index: 200;
+  background: var(--surface);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  font-family: var(--font-sans);
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text);
+  padding: 6px 16px;
+  cursor: pointer;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.15s ease;
+  user-select: none;
+  -webkit-user-select: none;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.12);
+}
+
+.highlight-pill.visible {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.highlight-pill:hover {
+  background: var(--surface-alt);
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+/* ============================================================
+   Library and Settings
+   ============================================================ */
+.library-view {
+  width: min(1080px, 100%);
+  margin: 0 auto;
+}
+
+.library-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 28px;
+}
+
+.library-header h1 {
+  margin: 0;
+}
+
+.library-empty {
+  max-width: 680px;
+  padding: 28px;
+  border: 1px dashed var(--border);
+  border-radius: 14px;
+  background: var(--surface-alt);
+  color: var(--text-muted);
+  line-height: 1.8;
+}
+
+.library-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: 20px;
+}
+
+.library-book {
+  min-width: 0;
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 8px;
+  background: var(--surface-alt);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  cursor: pointer;
+  text-align: left;
+  transition: transform 0.15s ease, border-color 0.15s ease, background 0.15s ease;
+}
+
+.library-book:hover,
+.library-book:focus-visible {
+  transform: translateY(-2px);
+  border-color: var(--accent);
+  background: var(--surface);
+  outline: none;
+}
+
+.library-book img {
+  width: 100%;
+  aspect-ratio: 2 / 3;
+  object-fit: cover;
+  margin: 0 0 4px;
+  border-radius: 9px;
+  background: var(--surface-code);
+}
+
+.library-book strong,
+.library-book span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.library-book strong {
+  font-size: 15px;
+  line-height: 1.4;
+  white-space: nowrap;
+}
+
+.library-book span {
+  color: var(--text-muted);
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+.settings-panel {
+  position: fixed;
+  top: calc(var(--topbar-h) + 10px);
+  right: 18px;
+  z-index: 180;
+  width: min(340px, calc(100vw - 36px));
+  padding: 20px;
+  background: var(--surface);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.28);
+}
+
+.settings-panel[hidden] {
+  display: none;
+}
+
+.settings-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 18px;
+}
+
+.settings-header h2 {
+  font-size: 18px;
+}
+
+.settings-header button {
+  padding: 5px 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+
+.settings-field {
+  display: grid;
+  grid-template-columns: 76px 1fr auto;
+  align-items: center;
+  gap: 10px;
+  min-height: 44px;
+  color: var(--text-muted);
+  font-size: 14px;
+}
+
+.settings-field select,
+.settings-field input[type="range"] {
+  width: 100%;
+}
+
+.settings-field select {
+  grid-column: 2 / 4;
+  padding: 7px 9px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface-alt);
+  color: var(--text);
+}
+
+.settings-checkbox {
+  grid-template-columns: auto 1fr;
+}
+
+.settings-checkbox input {
+  accent-color: var(--accent);
+}
+
+.settings-user {
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1px solid var(--border);
+  color: var(--text-dim);
+  font-size: 12px;
+}
+
+/* Pagination layout lives in the single "Deterministic pagination geometry"
+   section at the end of this file. Do not add a second multicol rule here:
+   two competing column-width/width rules is what produced extra visible
+   columns and half-page remainders. */
+
+body.paged-reading .epub-chapter {
+  min-height: 0;
+  break-before: column;
+}
+
+body.paged-reading .epub-chapter:first-of-type {
+  break-before: auto;
+}
+
+.pagination-status,
+.reading-progress {
+  min-width: 72px;
+  color: var(--text-muted);
+  font-size: 12px;
+  text-align: center;
+}
+
+.reader-tool-btn.page-nav-btn {
+  width: auto;
+  min-width: 32px;
+  padding: 0 10px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html,
+  .reader,
+  .reader-tool-btn,
+  .mode-btn,
+  .highlight-pill,
+  .library-book {
+    scroll-behavior: auto !important;
+    transition: none !important;
+    animation: none !important;
+  }
+}
+
+/* ============================================================
+   Highlight editor and mobile reader controls
+   ============================================================ */
+.reader-tool-btn.chapter-nav-btn,
+#btnBackToLibrary,
+#btnSettings {
+  width: auto;
+  min-width: 32px;
+  padding: 0 10px;
+}
+
+.reader-tool-btn:focus-visible,
+.theme-btn:focus-visible,
+.toc-toggle:focus-visible,
+.mobile-reader-toolbar button:focus-visible,
+.highlight-editor button:focus-visible,
+.highlight-editor select:focus-visible,
+.highlight-editor textarea:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.article .br-highlight-box {
+  pointer-events: auto;
+  border: 0;
+  cursor: pointer;
+}
+
+.article .br-highlight-box[data-highlight-color="yellow"] {
+  background: rgba(245, 196, 66, 0.35);
+}
+
+.article .br-highlight-box[data-highlight-color="green"] {
+  background: rgba(91, 190, 125, 0.32);
+}
+
+.article .br-highlight-box[data-highlight-color="blue"] {
+  background: rgba(79, 146, 230, 0.32);
+}
+
+.article .br-highlight-box[data-highlight-color="pink"] {
+  background: rgba(225, 105, 155, 0.32);
+}
+
+.highlight-editor {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  z-index: 240;
+  width: min(460px, calc(100vw - 32px));
+  max-height: calc(100vh - 32px);
+  overflow-y: auto;
+  transform: translate(-50%, -50%);
+  padding: 22px;
+  background: var(--surface);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  box-shadow: 0 20px 64px rgba(0, 0, 0, 0.42);
+}
+
+.highlight-editor[hidden],
+.mobile-reader-toolbar[hidden] {
+  display: none !important;
+}
+
+.highlight-editor-header,
+.highlight-editor-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.highlight-editor-header {
+  margin-bottom: 16px;
+}
+
+.highlight-editor-header h2 {
+  font-size: 18px;
+}
+
+.highlight-editor-text {
+  margin: 0 0 18px;
+  padding: 14px 16px;
+  color: var(--text);
+  background: var(--surface-alt);
+  border-left: 3px solid var(--accent);
+  border-radius: 0 10px 10px 0;
+  line-height: 1.7;
+}
+
+.highlight-editor-field {
+  display: grid;
+  gap: 7px;
+  margin-bottom: 16px;
+  color: var(--text-muted);
+  font-size: 14px;
+}
+
+.highlight-editor select,
+.highlight-editor textarea,
+.highlight-editor button {
+  font: inherit;
+}
+
+.highlight-editor select,
+.highlight-editor textarea {
+  width: 100%;
+  padding: 9px 10px;
+  color: var(--text);
+  background: var(--surface-alt);
+  border: 1px solid var(--border);
+  border-radius: 9px;
+}
+
+.highlight-editor textarea {
+  resize: vertical;
+  line-height: 1.55;
+}
+
+.highlight-editor button,
+.mobile-reader-toolbar button {
+  min-height: 40px;
+  padding: 8px 13px;
+  color: var(--text);
+  background: var(--surface-alt);
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  cursor: pointer;
+}
+
+.highlight-editor-actions {
+  justify-content: flex-end;
+}
+
+.highlight-editor-actions .danger-button {
+  margin-right: auto;
+  color: #d96262;
+}
+
+#btnSaveHighlight {
+  color: var(--button-text);
+  background: var(--accent);
+  border-color: var(--accent);
+}
+
+.mobile-reader-toolbar {
+  display: none;
+}
+
+@media (max-width: 800px) {
+  body.is-epub .reader {
+    bottom: calc(104px + env(safe-area-inset-bottom));
+  }
+
+  body.is-epub .topbar-right .chapter-nav-btn,
+  body.is-epub .topbar-right #btnHighlight,
+  body.is-epub .topbar-right #btnBackToLibrary,
+  body.is-epub .topbar-right .reading-progress {
+    display: none;
+  }
+
+  .mobile-reader-toolbar {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 190;
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 4px;
+    min-height: 104px;
+    padding: 6px 8px calc(6px + env(safe-area-inset-bottom));
+    background: var(--topbar-bg);
+    border-top: 1px solid color-mix(in srgb, var(--border) 60%, transparent);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+  }
+
+  .mobile-reader-toolbar button {
+    min-width: 0;
+    min-height: 40px;
+    padding: 6px 4px;
+    font-size: 12px;
+  }
+
+  .mobile-reader-toolbar button:disabled {
+    opacity: 0.4;
+    cursor: default;
+  }
+
+  .reader .article {
+    padding-right: var(--reader-page-margin);
+    padding-left: var(--reader-page-margin);
+  }
+}
+
+/* ============================================================
+   Reader Shell, paper surface, floating toolbar and single Drawer
+   ============================================================ */
+.reader-shell-nav {
+  border-bottom: 1px solid color-mix(in srgb, var(--border) 72%, transparent);
+  box-shadow: 0 1px 18px rgba(0, 0, 0, 0.08);
+}
+
+.reader-status {
+  position: absolute;
+  left: 50%;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  transform: translateX(-50%);
+  pointer-events: none;
+}
+
+.reader-nav-button {
+  min-height: 32px;
+  padding: 0 10px;
+  color: var(--text-muted);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+  -webkit-app-region: no-drag;
+}
+
+.reader-nav-button:hover,
+.reader-nav-button:focus-visible {
+  color: var(--text);
+  background: var(--hover-bg);
+}
+
+.reader-nav-button:disabled,
+.reader-tool-btn:disabled {
+  opacity: 0.38;
+  cursor: default;
+}
+
+body.is-epub .reader {
+  padding: 24px clamp(16px, 4vw, 72px) 48px;
+  background: var(--surface-code);
+}
+
+body.is-epub .reader .article {
+  width: min(860px, 100%);
+  max-width: 860px;
+  min-height: calc(100% - 48px);
+  padding: 56px var(--reader-page-margin) 120px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.16);
+}
+
+.reader-floating-toolbar {
+  position: fixed;
+  top: 50%;
+  right: 18px;
+  z-index: 170;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 6px;
+  width: 56px;
+  padding: 8px;
+  transform: translateY(-50%);
+  background: var(--topbar-bg);
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  box-shadow: 0 14px 42px rgba(0, 0, 0, 0.22);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+}
+
+body.is-epub .reader-floating-toolbar {
+  display: flex;
+}
+
+.reader-floating-toolbar[hidden],
+.reader-drawer[hidden],
+.reader-drawer-backdrop[hidden],
+.reader-panel[hidden] {
+  display: none !important;
+}
+
+.reader-floating-toolbar .reader-tool-btn,
+.reader-floating-toolbar .theme-btn,
+.reader-floating-toolbar .toc-toggle {
+  width: 40px;       /* P0: slightly larger for better touch target */
+  min-width: 40px;
+  height: 40px;
+  padding: 0;
+  font-size: 12px;   /* slight bump for SVG fit */
+}
+
+.reader-drawer-backdrop {
+  position: fixed;
+  inset: var(--topbar-h) 0 0;
+  z-index: 175;
+  background: rgba(0, 0, 0, 0.2);
+}
+
+.settings-panel.reader-drawer {
+  position: fixed;
+  top: var(--topbar-h);
+  right: 0;
+  bottom: 0;
+  z-index: 180;
+  width: min(380px, calc(100vw - 28px));
+  max-height: none;
+  overflow-y: auto;
+  padding: 20px;
+  background: var(--surface);
+  border: 0;
+  border-left: 1px solid var(--border);
+  border-radius: 0;
+  box-shadow: -18px 0 52px rgba(0, 0, 0, 0.28);
+}
+
+.reader-drawer-tabs {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+  margin-bottom: 18px;
+  padding: 4px;
+  background: var(--surface-alt);
+  border-radius: 10px;
+}
+
+.reader-drawer-tabs button {
+  min-height: 36px;
+  color: var(--text-muted);
+  background: transparent;
+  border: 0;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.reader-drawer-tabs button[aria-selected="true"] {
+  color: var(--text);
+  background: var(--bg);
+  box-shadow: 0 1px 6px rgba(0, 0, 0, 0.12);
+}
+
+.reader-panel {
+  outline: none;
+}
+
+.reader-panel-placeholder {
+  padding: 24px 4px;
+  color: var(--text-muted);
+  line-height: 1.7;
+}
+
+.reader-panel-placeholder h3 {
+  margin-bottom: 8px;
+  color: var(--text);
+}
+
+.reader-panel-empty {
+  padding: 20px 4px;
+  color: var(--text-muted);
+  font-size: 14px;
+}
+
+.reader-drawer .toc {
+  position: static;
+  width: auto;
+  max-height: none;
+  overflow: visible;
+  padding: 0;
+  background: transparent;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+body:not(.toc-open) .reader-drawer .toc {
+  display: block !important;
+}
+
+body.has-toc.toc-open .reader {
+  padding-left: clamp(16px, 4vw, 72px);
+}
+
+@media (max-width: 1050px) {
+  .reader-status {
+    position: static;
+    transform: none;
+  }
+
+  .topbar {
+    padding-left: 18px;
+  }
+
+  .topbar-right .chapter-nav-btn {
+    display: none;
+  }
+}
+
+@media (max-width: 800px) {
+  body.is-epub .reader {
+    padding: 0;
+  }
+
+  body.is-epub .reader .article {
+    width: 100%;
+    max-width: none;
+    min-height: 100%;
+    padding-top: 32px;
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
+  }
+
+  .reader-floating-toolbar {
+    top: auto;
+    right: 10px;
+    bottom: calc(66px + env(safe-area-inset-bottom));
+    flex-direction: row;
+    width: auto;
+    max-width: calc(100vw - 20px);
+    overflow-x: auto;
+    transform: none;
+  }
+
+  .reader-status,
+  .topbar-right .page-nav-btn {
+    display: none;
+  }
+
+  .settings-panel.reader-drawer {
+    top: auto;
+    left: 0;
+    width: 100%;
+    max-height: min(78vh, 680px);
+    border-top: 1px solid var(--border);
+    border-left: 0;
+    border-radius: 18px 18px 0 0;
+  }
+
+  .reader-drawer-backdrop {
+    inset: 0;
+  }
+}
+
+@media (max-width: 520px) {
+  .topbar-right .mode-btn,
+  .reader-floating-toolbar #btnSearch,
+  .reader-floating-toolbar #btnBookmarks,
+  .reader-floating-toolbar #btnNotes,
+  .reader-floating-toolbar #btnAi {
+    display: none;
+  }
+
+  .file-name {
+    max-width: 42vw;
+  }
+}
+
+/* ============================================================
+   Immersive full-screen mode — topbar hidden
+   ============================================================ */
+body.immersive .topbar {
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.25s ease;
+}
+
+body.immersive .reader .article {
+  padding-top: 56px; /* reduced top padding without topbar */
+}
+
+/* ============================================================
+   Deterministic pagination geometry
+   Keep this final so Reader Shell and responsive rules cannot
+   reintroduce padding, width, or overflow into the page viewport.
+   ============================================================ */
+body.is-epub.paged-reading .reader {
+  width: 100%;
+  /* WeChat-reading vertical rhythm: a top band and a fixed breath under the
+     card, so the paper never touches the window edges. The article's
+     height:100% resolves against the reader's content box, which already
+     excludes this padding. */
+  padding-top: var(--reader-band-top, 0px) !important;
+  padding-bottom: var(--reader-band-bottom, 0px) !important;
+  /* Horizontal inset lives on the viewport, never on the multicol box.
+     Padding on a multicol container applies once to the whole flow, not per
+     column, so it makes column k start at x = padding + k*(width+gap) and
+     breaks spread alignment. */
+  padding-left: var(--reader-inset-left, 0px) !important;
+  padding-right: var(--reader-inset-right, 0px) !important;
+  overflow-x: hidden;
+  overflow-y: hidden;
+  overscroll-behavior-x: none;
+  scrollbar-gutter: auto;
+  scrollbar-width: none;
+  scroll-behavior: auto;
+  box-sizing: border-box;
+}
+
+body.is-epub.paged-reading .reader::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+body.is-epub.paged-reading .reader .article {
+  box-sizing: border-box;
+  /* The article box IS the paper card: capped width, centred, with an inner
+     text inset. The browser lays out exactly `columns` per row and every
+     following page group starts at k * (spreadWidth + columnGap). */
+  width: var(--reader-paper-width) !important;
+  min-width: var(--reader-paper-width) !important;
+  max-width: none !important;
+  height: 100% !important;
+  min-height: 0 !important;
+  /* Centre the capped paper: symmetric, WeChat-reading-like margins on both
+     sides instead of butting against the window edges. */
+  margin-inline: auto !important;
+  /* Asymmetric vertical inset matches the measured baseline: 84px above the
+     first line (room for the chapter header), 70px under the last one. */
+  padding-top: var(--reader-paper-padding-top, 84px) !important;
+  padding-bottom: var(--reader-paper-padding-bottom, 70px) !important;
+  padding-left: var(--reader-paper-padding, 70px) !important;
+  padding-right: var(--reader-paper-padding, 70px) !important;
+  /* The multicol box must be the scroll container. The extra page columns it
+     generates belong to ITS scrollable overflow by definition, so scrolling
+     it is spec-guaranteed; relying on the overflow propagating into the
+     parent's scroll area is not, and silently dead-ends page turning. */
+  overflow-x: hidden;
+  overflow-y: hidden;
+  overscroll-behavior-x: none;
+  scrollbar-width: none;
+  column-width: var(--reader-column-width) !important;
+  column-gap: var(--reader-column-gap) !important;
+  column-fill: auto !important;
+  column-rule: 0 solid transparent;
+  contain: layout style;
+  /* Paper look. No border: a border would shrink the content box by 1px and
+     break the exact column fit the pagination maths depends on. The card sits
+     one step darker than the stage, with a soft shadow and a 16px radius
+     matching the measured baseline. */
+  border: 0 !important;
+  border-radius: 16px;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.14);
+  /* The paper must be its own surface: without this the stage background shows
+     through and only the shadow hints at the card edge. */
+  background-color: var(--surface);
+  background-clip: padding-box;
+}
+
+/* On sepia the stage and the sheet share the same warm tone, so the card is
+   told apart by its shadow only — same choice WeChat makes on paper themes. */
+body.theme-sepia.is-epub.paged-reading .reader .article {
+  background-color: var(--surface-alt);
+  box-shadow: 0 12px 40px rgba(61, 52, 39, 0.10);
+}
+
+body.is-epub.paged-reading .reader .article::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+body.is-epub.double-page-reading .reader .article {
+  /* No column rule: with a continuous multicol track the rules of the
+     previous/next columns also paint inside this spread's padding strip,
+     which read as three stray vertical lines at the paper edges and centre.
+     The 98px gap is the seam. */
+  column-rule: 0 solid transparent;
+}
+
+body.is-epub.single-page-reading .reader .article {
+  column-gap: 0;
+  column-rule: 0;
+}
+
+body.paged-reading .article .epub-chapter,
+body.paged-reading .article .epub-chapter * {
+  box-sizing: border-box !important;
+  min-width: 0;
+  max-width: 100%;
+}
+
+body.paged-reading .article img,
+body.paged-reading .article svg,
+body.paged-reading .article video,
+body.paged-reading .article canvas,
+body.paged-reading .article table,
+body.paged-reading .article pre,
+body.paged-reading .article blockquote {
+  max-width: 100% !important;
+  max-height: var(--reader-page-height);
+  break-inside: avoid-column;
+  page-break-inside: avoid;
+}
+
+body.paged-reading .article img,
+body.paged-reading .article svg,
+body.paged-reading .article video,
+body.paged-reading .article canvas {
+  object-fit: contain;
+}
+
+body.paged-reading .article table,
+body.paged-reading .article pre {
+  display: block;
+  width: 100%;
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+
+body.paged-reading .article p,
+body.paged-reading .article li,
+body.paged-reading .article code,
+body.paged-reading .article td,
+body.paged-reading .article th {
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+body.paged-reading .article::before,
+body.paged-reading .article::after {
+  content: none !important;
+  display: none !important;
+}

@@ -1,0 +1,16 @@
+appname=babyreader-fnos
+version=1.0.0
+display_name=BabyReader
+desc=适用于飞牛 fnOS 的 EPUB、Markdown 和 TXT 阅读器，支持授权书库扫描、阅读进度与划线持久化。
+source=thirdparty
+platform=all
+install_dep_apps=nodejs_v22
+os_min_version=1.1.3100
+maintainer=BabyReader fnOS Port
+maintainer_url=https://github.com/KingJing1/babyreader
+desktop_uidir=ui
+desktop_applaunchname=babyreader-fnos.main
+ctl_stop=true
+checkport=false
+disable_authorization_path=false
+changelog=首个 fnOS 版本，新增统一网关、授权书库和按用户隔离的阅读数据。

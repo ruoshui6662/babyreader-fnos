@@ -1,0 +1,198 @@
+#!/bin/sh
+
+set -u
+
+export PATH="/var/apps/nodejs_v22/target/bin:${PATH:-/usr/bin:/bin}"
+
+APP_DEST="${TRIM_APPDEST:-$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)}"
+PKG_VAR="${TRIM_PKGVAR:-$APP_DEST/var}"
+PKG_ETC="${TRIM_PKGETC:-$APP_DEST/etc}"
+PKG_TMP="${TRIM_PKGTMP:-$APP_DEST/tmp}"
+PID_FILE="$PKG_TMP/babyreader-fnos.pid"
+LOG_FILE="$PKG_VAR/babyreader-fnos.log"
+SOCKET_FILE="$APP_DEST/app.sock"
+SERVER_FILE="$APP_DEST/server/index.js"
+NODEJS_DIR="/var/apps/nodejs_v22/target/bin"
+
+report_error() {
+  MESSAGE=$1
+  if [ -n "${TRIM_TEMP_LOGFILE:-}" ]; then
+    printf '%s\n' "$MESSAGE" > "$TRIM_TEMP_LOGFILE" 2>/dev/null || true
+  fi
+  printf '%s\n' "$MESSAGE" >&2
+}
+
+find_node() {
+  if [ -x "$NODEJS_DIR/node" ]; then
+    NODE_BIN="$NODEJS_DIR/node"
+  elif [ -x "$APP_DEST/bin/node" ]; then
+    NODE_BIN="$APP_DEST/bin/node"
+  else
+    NODE_BIN=$(command -v node 2>/dev/null) || return 1
+  fi
+
+  [ -x "$NODE_BIN" ] || return 1
+  "$NODE_BIN" -e 'process.exit(Number(process.versions.node.split(".")[0]) >= 22 ? 0 : 1)' >/dev/null 2>&1 || return 1
+  printf '%s\n' "$NODE_BIN"
+}
+
+read_pid() {
+  [ -r "$PID_FILE" ] || return 1
+  IFS= read -r PID < "$PID_FILE" || return 1
+  case "$PID" in
+    ''|*[!0-9]*) return 1 ;;
+  esac
+  [ "$PID" -gt 1 ] 2>/dev/null || return 1
+  return 0
+}
+
+is_running() {
+  read_pid || return 1
+  kill -0 "$PID" 2>/dev/null || return 1
+
+  if [ -r "/proc/$PID/cmdline" ]; then
+    tr '\000' '\n' < "/proc/$PID/cmdline" 2>/dev/null | grep -Fqx "$SERVER_FILE" || return 1
+  fi
+  return 0
+}
+
+remove_stale_state() {
+  rm -f "$PID_FILE" "$SOCKET_FILE"
+}
+
+start_service() {
+  if is_running; then
+    [ -S "$SOCKET_FILE" ] && return 0
+    report_error "BabyReader 进程正在运行，但 Unix Socket 不存在：$SOCKET_FILE"
+    return 1
+  fi
+
+  remove_stale_state
+
+  NODE_BIN=$(find_node) || {
+    report_error "未找到可用的 Node.js 22 运行时。请确认依赖 nodejs_v22 已安装且 $NODEJS_DIR/node 可执行。"
+    return 1
+  }
+
+  if [ ! -f "$SERVER_FILE" ]; then
+    report_error "BabyReader 服务文件不存在：$SERVER_FILE"
+    return 1
+  fi
+
+  mkdir -p "$PKG_VAR" "$PKG_ETC" "$PKG_TMP" || {
+    report_error "无法创建 BabyReader 运行目录。"
+    return 1
+  }
+  chmod 700 "$PKG_VAR" "$PKG_ETC" "$PKG_TMP" 2>/dev/null || true
+
+  : >> "$LOG_FILE" || {
+    report_error "无法写入 BabyReader 日志：$LOG_FILE"
+    return 1
+  }
+
+  TRIM_APPDEST="$APP_DEST" \
+  TRIM_PKGVAR="$PKG_VAR" \
+  TRIM_PKGETC="$PKG_ETC" \
+  TRIM_PKGTMP="$PKG_TMP" \
+  BABYREADER_SOCKET="$SOCKET_FILE" \
+  NODE_ENV=production \
+    nohup "$NODE_BIN" "$SERVER_FILE" >> "$LOG_FILE" 2>&1 </dev/null &
+
+  PID=$!
+  case "$PID" in
+    ''|*[!0-9]*)
+      report_error "BabyReader 启动后未获得有效 PID。"
+      remove_stale_state
+      return 1
+      ;;
+  esac
+
+  if ! printf '%s\n' "$PID" > "$PID_FILE"; then
+    kill "$PID" 2>/dev/null || true
+    report_error "无法写入 BabyReader PID 文件：$PID_FILE"
+    remove_stale_state
+    return 1
+  fi
+  chmod 600 "$PID_FILE" 2>/dev/null || true
+
+  ATTEMPTS=0
+  while [ "$ATTEMPTS" -lt 100 ]; do
+    if ! kill -0 "$PID" 2>/dev/null; then
+      wait "$PID" 2>/dev/null || true
+      remove_stale_state
+      report_error "BabyReader 服务启动失败，请检查日志：$LOG_FILE"
+      return 1
+    fi
+    if [ -S "$SOCKET_FILE" ]; then
+      return 0
+    fi
+    ATTEMPTS=$((ATTEMPTS + 1))
+    sleep 0.1
+  done
+
+  kill "$PID" 2>/dev/null || true
+  ATTEMPTS=0
+  while kill -0 "$PID" 2>/dev/null && [ "$ATTEMPTS" -lt 50 ]; do
+    ATTEMPTS=$((ATTEMPTS + 1))
+    sleep 0.1
+  done
+  kill -9 "$PID" 2>/dev/null || true
+  remove_stale_state
+  report_error "BabyReader Unix Socket 未在预期时间内创建：$SOCKET_FILE"
+  return 1
+}
+
+stop_service() {
+  if ! is_running; then
+    remove_stale_state
+    return 0
+  fi
+
+  STOP_PID=$PID
+  if ! kill "$STOP_PID" 2>/dev/null; then
+    report_error "无法停止 BabyReader 进程：$STOP_PID"
+    return 1
+  fi
+
+  ATTEMPTS=0
+  while kill -0 "$STOP_PID" 2>/dev/null && [ "$ATTEMPTS" -lt 100 ]; do
+    ATTEMPTS=$((ATTEMPTS + 1))
+    sleep 0.1
+  done
+
+  if kill -0 "$STOP_PID" 2>/dev/null; then
+    kill -9 "$STOP_PID" 2>/dev/null || {
+      report_error "无法强制停止 BabyReader 进程：$STOP_PID"
+      return 1
+    }
+  fi
+
+  remove_stale_state
+  return 0
+}
+
+status_service() {
+  if is_running && [ -S "$SOCKET_FILE" ]; then
+    return 0
+  fi
+  return 3
+}
+
+case "${1:-}" in
+  start)
+    start_service
+    ;;
+  stop)
+    stop_service
+    ;;
+  restart)
+    stop_service && start_service
+    ;;
+  status)
+    status_service
+    ;;
+  *)
+    printf 'Usage: %s {start|stop|restart|status}\n' "$0" >&2
+    exit 2
+    ;;
+esac

@@ -1,0 +1,7 @@
+#!/bin/sh
+
+set -eu
+
+# 安装回调只完成安装阶段收尾。服务由 fnOS 在安装成功后通过 cmd/main start 启动，
+# 避免安装事务中提前创建进程、PID、日志或 Unix Socket。
+exit 0
