@@ -203,6 +203,20 @@ git tag -a v1.0.0-baseline -m "Verified pre-handoff baseline"
 
 在 Task 2 完成后，以干净 clone 重建并比较内层应用文件哈希；将结果补入发布记录。
 
+## 2026-09-19 工程化实施状态
+
+按“验证链先于功能扩展”的顺序，当前在短生命周期分支 `work/engineering-baseline` 实施；`main` 继续保持 `v1.0.0` 稳定发布线，真机门禁完成前不合并。
+
+| 工作项 | 状态 | 已取得的证据 |
+| --- | --- | --- |
+| Windows `npm run check` 的 `sh ENOENT` | 已完成 | 默认 Windows 进入 portable 校验，不调用 `sh`；`npm run check`、`check:portable` 和结构测试通过。 |
+| Linux CI + FPK 可追溯构建 | 已完成 | GitHub Actions Windows/Linux、POSIX 生命周期、Chromium E2E、FPK job 已通过；Node 22、fnpack 1.2.3 与 fnpack SHA-256 固定，构件记录 Git SHA、FPK SHA-256 与包内关键文件哈希。 |
+| x86_64 / ARM64 真机、Gateway、ACL、升级、Socket | 验收工具完成，真实设备待验 | `scripts/fnos-device-acceptance.sh` 与 `docs/FNOS_DEVICE_ACCEPTANCE.md` 已覆盖架构、Node、生命周期、Socket、Gateway 身份、ACL、升级前后状态快照；当前环境没有可连接的两类 fnOS 设备，因此不得标记通过。 |
+| 拆分前端单体 | 已完成 | `app/ui/app.js` 已由约 3848 行降至约 189 行，职责拆到 `core/`、`reader/`、`shell/`、`library/`；49 项 Node 回归测试在 Windows 为 46 通过、0 失败、3 个平台条件跳过。 |
+| Playwright Chromium E2E | 已完成并增强 | 已覆盖模块加载、设置与真实持久化、TOC 跨章节、Drawer 焦点、移动端；本地 5/5 通过，Linux CI Chromium job 通过。新增测试实际发现并修复了 TOC 跳转后章节进度仍显示上一章的问题。 |
+
+第一性原理上的发布门禁保持不变：自动化只能证明源码/构建/浏览器契约，不能替代 fnOS Gateway、真实 ACL、应用中心升级和双架构宿主行为。Task 4 两列真机证据未完成前，不进入 `main`、不创建新稳定 tag。
+
 ### Task 2: 使结构校验跨平台且不降低 POSIX 严格度（P0）
 
 **Files:**
