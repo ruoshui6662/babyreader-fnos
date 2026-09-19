@@ -131,8 +131,7 @@ fnOS 桌面（url 入口）
 **当前开发线（2026-09-19）：**
 
 - 开发分支：`work/engineering-baseline`
-- 当前本地/远端 HEAD：`7c46337`（`docs: record engineering gate status`）
-- 最近一次包含产品代码改动的提交：`0cd2150`（`test: expand Chromium reader regression coverage`）
+- 最近一次自动验收与 FPK 打包源码基线：`5e0f233`（`docs: maintain realtime development progress`）；其运行时代码仍以 `0cd2150` 为最近一次产品代码改动。
 - 稳定发布线：`main` → `v1.0.0`
 - Windows 本地目录：`D:\AI编程\reader\babyreader-fnos`
 - 工作区状态：本地改动已保存并提交，分支已与 `origin/work/engineering-baseline` 同步。
@@ -140,7 +139,7 @@ fnOS 桌面（url 入口）
 | 工作项 | 当前状态 | 已验证证据 | 下一门禁 |
 | --- | --- | --- | --- |
 | Task 2：Windows `sh ENOENT` / 跨平台结构校验 | **完成** | Windows `npm run check`、`check:portable` 通过；Linux `check:posix`、POSIX 生命周期测试已在 GitHub Actions 通过；Shell 文件 executable bit 已修正为 `100755`。 | 继续作为所有后续提交的 CI 门禁。 |
-| Task 3：Linux CI + FPK 可追溯构建 | **完成** | GitHub Actions 已验证 Windows、Ubuntu、Chromium E2E、FPK 构建；固定 Node 22、fnpack 1.2.3；fnpack SHA-256 固定为 `54b97fa7b70968c4d05c79840f5daeff508957d0bb2062fdb0376d00d9615c93`；构件记录 Git SHA、FPK SHA-256 与包内关键文件哈希。代码提交 `0cd2150` 的 Actions run `35432505583` 已完成且结论为 success。 | 正式发布时从 tagged commit 重新构建并保存 Release 构件。 |
+| Task 3：Linux CI + FPK 可追溯构建 | **完成** | GitHub Actions 已验证 Windows、Ubuntu、Chromium E2E、FPK 构建；固定 Node 22、fnpack 1.2.3；fnpack SHA-256 固定为 `54b97fa7b70968c4d05c79840f5daeff508957d0bb2062fdb0376d00d9615c93`；构件记录 Git SHA、FPK SHA-256 与包内关键文件哈希。当前源码基线 `5e0f233` 的 Actions run `35433053667` 已完成且结论为 success。Windows 本地同时成功生成验收包 `dist/babyreader-fnos.fpk`，SHA-256 `9a470d66faa0314c823195d8b5085f926bbadab7c4e5b846e1bfb1556d7bfabb`。 | 正式发布仍以 CI 的 Node 22 + 固定 fnpack 构件为权威；本地包仅作为安装/真机验收候选。 |
 | Task 4：真实 fnOS x86_64 / ARM64、Gateway、ACL、升级、Socket | **验收工具完成，真机待验** | `scripts/fnos-device-acceptance.sh` 与 `docs/FNOS_DEVICE_ACCEPTANCE.md` 已覆盖架构、Node、生命周期、Socket、Gateway 身份、ACL、多用户隔离与升级快照。 | 至少一台 x86_64 + 一台 ARM64 真实 fnOS 完成全部矩阵并保留原始证据。未完成前不得合并 `main`。 |
 | Task 5：拆分 3848 行 `app.js` | **完成** | `app/ui/app.js` 已降至约 189 行；行为拆入 `core/`、`reader/`、`shell/`、`library/`；Node 回归测试当前 49 项，Windows 为 46 pass / 0 fail / 3 平台条件 skip；Linux CI 通过。 | 真机阅读行为纳入 Task 4 验收。 |
 | Task 6：Playwright Chromium E2E | **完成并增强** | 本地 Chromium 5/5 通过；Linux CI Chromium job 通过；覆盖模块加载、设置真实持久化、EPUB TOC 跨章节、Drawer 焦点、移动端。新增 E2E 曾发现并修复 TOC 跳转后章节进度仍显示上一章的问题。 | 后续补划线 CRUD/导出、性能与更完整 accessibility 基线。 |
@@ -164,6 +163,7 @@ fnOS 桌面（url 入口）
 | 2026-09-19 | `work/engineering-baseline` / `cd2e0de` | 固定 fnpack 供应链哈希 | fnpack 1.2.3 Linux amd64 SHA-256 校验加入 CI/provenance。 | 扩充浏览器回归。 |
 | 2026-09-19 | `work/engineering-baseline` / `0cd2150` | 扩展 Playwright E2E 并修复 TOC 章节状态 | 本地 Chromium 5/5；GitHub Actions run `35432505583` success；生成 FPK 与 Playwright artifacts。 | 进入真实 fnOS 双架构验收。 |
 | 2026-09-19 | `work/engineering-baseline` / `7c46337` | 写入工程门禁状态 | plan 同步当前自动化与真机门禁事实。 | 保持实时记录，等待 Task 4 真机证据。 |
+| 2026-09-19 | `work/engineering-baseline` / `5e0f233` | 执行发布候选自动验收并打包最新 FPK | Windows：`npm test` 49 项 / 46 pass / 0 fail / 3 条件 skip；`npm run check` pass；Chromium E2E 5/5；`npm audit --omit=dev --audit-level=high` 0 vulnerabilities。GitHub Actions run `35433053667` success。Windows 本地生成 `dist/babyreader-fnos.fpk` 与 `dist/babyreader-fnos-5e0f233.fpk`，4,160,269 bytes，SHA-256 `9a470d66faa0314c823195d8b5085f926bbadab7c4e5b846e1bfb1556d7bfabb`；外层 `manifest`、`cmd/main`、`app.tgz` 完整。 | 使用该包进入真实 fnOS x86_64/ARM64、Gateway、ACL、升级和 Socket 验收；本地构建使用 Node v24，因此正式 Release 仍取 CI Node 22 构件。 |
 
 ## 实施任务
 
