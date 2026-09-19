@@ -139,6 +139,7 @@ def main():
             "npm": command_output(["npm", "--version"]),
             "python": platform.python_version(),
             "fnpack_declared_version": os.environ.get("FNPACK_VERSION", "unversioned-local"),
+            "fnpack_expected_sha256": os.environ.get("FNPACK_SHA256", "unverified-local"),
             "fnpack_path": fnpack_path,
             "fnpack_sha256": sha256_file(fnpack_path) if os.path.isfile(fnpack_path) else "unknown",
             "platform": platform.platform(),
