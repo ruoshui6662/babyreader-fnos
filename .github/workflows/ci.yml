@@ -29,7 +29,10 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
-      - run: npm test
+      - name: Cross-platform core tests
+        run: npm run test:core
+      - name: fnOS lifecycle tests
+        run: npm run test:lifecycle
       - name: Production dependency audit
         if: runner.os == 'Linux'
         run: npm audit --omit=dev --audit-level=high

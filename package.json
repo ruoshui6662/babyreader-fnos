@@ -10,6 +10,8 @@
   "scripts": {
     "dev": "node app/server/index.js",
     "test": "node --test tests/*.test.js",
+    "test:core": "node --test tests/dom-regression.test.js tests/reader-core.test.js tests/security.test.js tests/structure-validation.test.js",
+    "test:lifecycle": "node --test tests/fnos-lifecycle.test.js",
     "check": "node scripts/validate-structure.js",
     "check:portable": "node scripts/validate-structure.js --portable",
     "check:posix": "node scripts/validate-structure.js --posix",
