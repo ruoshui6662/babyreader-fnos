@@ -1,0 +1,108 @@
+name: BabyReader fnOS CI
+
+on:
+  push:
+    branches:
+      - main
+      - "work/**"
+    tags:
+      - "v*"
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: Test (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - ubuntu-latest
+          - windows-latest
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm test
+      - name: Production dependency audit
+        if: runner.os == 'Linux'
+        run: npm audit --omit=dev --audit-level=high
+      - name: Portable structure validation
+        run: npm run check:portable
+      - name: POSIX structure validation
+        if: runner.os == 'Linux'
+        run: npm run check:posix
+      - name: Shell script syntax
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          sh -n scripts/fnos-device-acceptance.sh
+          bash -n scripts/build-fpk.sh
+
+  e2e:
+    name: Chromium E2E
+    runs-on: ubuntu-latest
+    needs: test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - run: npm run test:e2e
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: playwright-report-${{ github.sha }}
+          path: playwright-report/
+          if-no-files-found: ignore
+
+  build-fpk:
+    name: Build traceable FPK
+    runs-on: ubuntu-latest
+    needs:
+      - test
+      - e2e
+    env:
+      FNPACK_VERSION: "1.2.3"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Install pinned fnpack
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fsSLo "$RUNNER_TEMP/fnpack" \
+            "https://static2.fnnas.com/fnpack/fnpack-${FNPACK_VERSION}-linux-amd64"
+          chmod +x "$RUNNER_TEMP/fnpack"
+          echo "$RUNNER_TEMP" >> "$GITHUB_PATH"
+          "$RUNNER_TEMP/fnpack" --help >/dev/null
+      - name: Build FPK and provenance
+        run: npm run build:fpk
+      - name: Verify provenance is bound to this commit
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(node -p "require('./dist/build-provenance.json').source.git_commit")" = "$GITHUB_SHA"
+          test -n "$(find dist -maxdepth 1 -name '*.fpk' -print -quit)"
+          test -n "$(find dist -maxdepth 1 -name '*.fpk.sha256' -print -quit)"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: babyreader-fnos-${{ github.sha }}
+          path: |
+            dist/*.fpk
+            dist/*.fpk.sha256
+            dist/build-provenance.json
+          if-no-files-found: error

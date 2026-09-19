@@ -209,7 +209,28 @@ test('server exposes health, diagnostics, scan status, error log, and shared sca
 });
 
 test('frontend restores server state and wires library, settings, EPUB TOC, and continuous scrolling', async () => {
-  const source = await fs.readFile(path.resolve(__dirname, '../app/ui/app.js'), 'utf8');
+  const sourceFiles = [
+    '../app/ui/core/state.js',
+    '../app/ui/core/utils.js',
+    '../app/ui/core/api.js',
+    '../app/ui/core/user-state.js',
+    '../app/ui/reader/epub.js',
+    '../app/ui/reader/document.js',
+    '../app/ui/reader/editor.js',
+    '../app/ui/reader/highlights.js',
+    '../app/ui/reader/actions.js',
+    '../app/ui/reader/progress.js',
+    '../app/ui/reader/pagination.js',
+    '../app/ui/reader/settings.js',
+    '../app/ui/reader/navigation.js',
+    '../app/ui/reader/lifecycle.js',
+    '../app/ui/shell/drawer.js',
+    '../app/ui/library/view.js',
+    '../app/ui/app.js'
+  ];
+  const source = (await Promise.all(
+    sourceFiles.map((relative) => fs.readFile(path.resolve(__dirname, relative), 'utf8'))
+  )).join('\n');
   const html = await fs.readFile(path.resolve(__dirname, '../app/ui/index.html'), 'utf8');
   const css = await fs.readFile(path.resolve(__dirname, '../app/ui/styles.css'), 'utf8');
 

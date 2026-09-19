@@ -124,6 +124,25 @@ fnOS 桌面（url 入口）
 
 ---
 
+## 2026-09-19 执行状态
+
+> 本节记录本轮实际执行结果；下方“审计快照/实施任务”保留 2026-09-18 的历史计划语义。只有取得对应环境证据的项目才标记为完成。
+
+| 项目 | 当前状态 | 已取得证据 | 尚缺证据 |
+| --- | --- | --- | --- |
+| Task 2：跨平台结构校验 | 本地完成 | Windows `npm run check` 与 `check:portable` 已通过；portable/POSIX 模式已分离；新增结构校验回归测试 | Linux CI 的 `check:posix` 首次远端通过记录 |
+| Task 3：Linux CI + FPK 溯源 | 已实现，待远端验证 | `.github/workflows/ci.yml`、固定 Node 22/fnpack 1.2.3、生产依赖 audit、FPK SHA-256 与 `build-provenance.json`；本地 Python 语法与旧 FPK 解析已验证 | 工作分支 GitHub Actions 的 Linux 构建、构件上传与 commit 绑定结果 |
+| Task 4：真实 fnOS 验收 | 验收资产完成，设备执行待办 | 新增 `scripts/fnos-device-acceptance.sh` 与 `docs/FNOS_DEVICE_ACCEPTANCE.md`，覆盖 x86/ARM、Socket、Gateway、ACL、升级快照与多用户 | 至少一台 x86_64 与一台 ARM64 真实 fnOS 的安装/升级/Gateway/ACL/Socket 原始证据 |
+| Task 5：前端单体拆分 | 本地完成 | `app.js` 从 3848 行降至约 190 行；拆为 core/reader/shell/library 职责模块；原 46 项测试保持 0 fail | Linux CI 与真实 fnOS 浏览器再验证 |
+| Task 6：Chromium E2E | 本地完成 | Playwright 1.63.0；隔离临时书库；真实 Node server；Markdown/TXT/EPUB fixture；桌面/移动端 Chromium 场景通过 | Linux CI E2E 通过记录；真机性能/无障碍扩展基线仍可继续完善 |
+
+### 本轮执行原则
+
+1. 先建立验证能力，再进行结构性重构；任何后续功能扩展必须建立在 `npm test + portable/POSIX check + Chromium E2E` 的组合门禁上。
+2. `main` 继续代表最新稳定发布版本。本轮改动先留在 `work/engineering-baseline`，Linux CI 与真实 fnOS 发布条件未满足前不直接升级正式 tag。
+3. GitHub CI 只能证明 Linux、Chromium 和 FPK 构建链；它不能代替 fnOS Gateway/ACL/升级/Socket 的宿主契约。
+4. 真机验收没有设备连接时必须保持“待验”，不得用本地 Unix/Linux 模拟结果冒充真实 fnOS 结论。
+
 ## 实施任务
 
 ### Task 1: 冻结可追溯基线（P0）
