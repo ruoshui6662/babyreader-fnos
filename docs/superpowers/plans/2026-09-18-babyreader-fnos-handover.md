@@ -140,7 +140,7 @@ fnOS 桌面（url 入口）
 | --- | --- | --- | --- |
 | Task 2：Windows `sh ENOENT` / 跨平台结构校验 | **完成** | Windows `npm run check`、`check:portable` 通过；Linux `check:posix`、POSIX 生命周期测试已在 GitHub Actions 通过；Shell 文件 executable bit 已修正为 `100755`。 | 继续作为所有后续提交的 CI 门禁。 |
 | Task 3：Linux CI + FPK 可追溯构建 | **完成** | GitHub Actions 已验证 Windows、Ubuntu、Chromium E2E、FPK 构建；固定 Node 22、fnpack 1.2.3；fnpack SHA-256 固定为 `54b97fa7b70968c4d05c79840f5daeff508957d0bb2062fdb0376d00d9615c93`；构件记录 Git SHA、FPK SHA-256 与包内关键文件哈希。当前源码基线 `5e0f233` 的 Actions run `35433053667` 已完成且结论为 success。Windows 本地同时成功生成验收包 `dist/babyreader-fnos.fpk`，SHA-256 `9a470d66faa0314c823195d8b5085f926bbadab7c4e5b846e1bfb1556d7bfabb`。 | 正式发布仍以 CI 的 Node 22 + 固定 fnpack 构件为权威；本地包仅作为安装/真机验收候选。 |
-| Task 4：真实 fnOS x86_64 / ARM64、Gateway、ACL、升级、Socket | **验收工具完成，真机待验** | `scripts/fnos-device-acceptance.sh` 与 `docs/FNOS_DEVICE_ACCEPTANCE.md` 已覆盖架构、Node、生命周期、Socket、Gateway 身份、ACL、多用户隔离与升级快照。 | 至少一台 x86_64 + 一台 ARM64 真实 fnOS 完成全部矩阵并保留原始证据。未完成前不得合并 `main`。 |
+| Task 4：真实 fnOS x86_64 / ARM64、Gateway、ACL、升级、Socket | **真机验收进行中** | `scripts/fnos-device-acceptance.sh` 与 `docs/FNOS_DEVICE_ACCEPTANCE.md` 已覆盖架构、Node、生命周期、Socket、Gateway 身份、ACL、多用户隔离与升级快照；用户已确认当前验收包在真实 fnOS 上**安装测试正常**。设备架构本轮尚未记录，因此只确认“安装通过”，不把 x86_64/ARM64 任一列标记为完整通过。 | 继续记录该设备架构，并完成启动/status、Socket、Gateway、ACL、多用户、升级保留；另一架构也需完整验收。 |
 | Task 5：拆分 3848 行 `app.js` | **完成** | `app/ui/app.js` 已降至约 189 行；行为拆入 `core/`、`reader/`、`shell/`、`library/`；Node 回归测试当前 49 项，Windows 为 46 pass / 0 fail / 3 平台条件 skip；Linux CI 通过。 | 真机阅读行为纳入 Task 4 验收。 |
 | Task 6：Playwright Chromium E2E | **完成并增强** | 本地 Chromium 5/5 通过；Linux CI Chromium job 通过；覆盖模块加载、设置真实持久化、EPUB TOC 跨章节、Drawer 焦点、移动端。新增 E2E 曾发现并修复 TOC 跳转后章节进度仍显示上一章的问题。 | 后续补划线 CRUD/导出、性能与更完整 accessibility 基线。 |
 
@@ -164,6 +164,7 @@ fnOS 桌面（url 入口）
 | 2026-09-19 | `work/engineering-baseline` / `0cd2150` | 扩展 Playwright E2E 并修复 TOC 章节状态 | 本地 Chromium 5/5；GitHub Actions run `35432505583` success；生成 FPK 与 Playwright artifacts。 | 进入真实 fnOS 双架构验收。 |
 | 2026-09-19 | `work/engineering-baseline` / `7c46337` | 写入工程门禁状态 | plan 同步当前自动化与真机门禁事实。 | 保持实时记录，等待 Task 4 真机证据。 |
 | 2026-09-19 | `work/engineering-baseline` / `5e0f233` | 执行发布候选自动验收并打包最新 FPK | Windows：`npm test` 49 项 / 46 pass / 0 fail / 3 条件 skip；`npm run check` pass；Chromium E2E 5/5；`npm audit --omit=dev --audit-level=high` 0 vulnerabilities。GitHub Actions run `35433053667` success。Windows 本地生成 `dist/babyreader-fnos.fpk` 与 `dist/babyreader-fnos-5e0f233.fpk`，4,160,269 bytes，SHA-256 `9a470d66faa0314c823195d8b5085f926bbadab7c4e5b846e1bfb1556d7bfabb`；外层 `manifest`、`cmd/main`、`app.tgz` 完整。 | 使用该包进入真实 fnOS x86_64/ARM64、Gateway、ACL、升级和 Socket 验收；本地构建使用 Node v24，因此正式 Release 仍取 CI Node 22 构件。 |
+| 2026-09-19 | 当前真实 fnOS 设备 / 安装验收 | 安装最新 FPK | 用户确认安装测试正常；当前仅记录“安装通过”，设备架构、Gateway、ACL、升级、Socket 等证据尚未补齐。 | 继续在同一设备完成运行契约验收，并记录 CPU 架构；随后补另一架构。 |
 
 ## 实施任务
 
