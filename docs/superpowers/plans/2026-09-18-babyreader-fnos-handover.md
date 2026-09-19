@@ -124,24 +124,46 @@ fnOS 桌面（url 入口）
 
 ---
 
-## 2026-09-19 执行状态
+## 实时开发进度（持续更新）
 
-> 本节记录本轮实际执行结果；下方“审计快照/实施任务”保留 2026-09-18 的历史计划语义。只有取得对应环境证据的项目才标记为完成。
+> 本节是开发状态的唯一实时事实来源。每次完成代码修改、测试、CI、构件或真机验收后，必须在同一工作轮次更新本节；下方“审计快照/实施任务”保留原始计划语义，不再代表当前完成度。
 
-| 项目 | 当前状态 | 已取得证据 | 尚缺证据 |
+**当前开发线（2026-09-19）：**
+
+- 开发分支：`work/engineering-baseline`
+- 当前本地/远端 HEAD：`7c46337`（`docs: record engineering gate status`）
+- 最近一次包含产品代码改动的提交：`0cd2150`（`test: expand Chromium reader regression coverage`）
+- 稳定发布线：`main` → `v1.0.0`
+- Windows 本地目录：`D:\AI编程\reader\babyreader-fnos`
+- 工作区状态：本地改动已保存并提交，分支已与 `origin/work/engineering-baseline` 同步。
+
+| 工作项 | 当前状态 | 已验证证据 | 下一门禁 |
 | --- | --- | --- | --- |
-| Task 2：跨平台结构校验 | 本地完成 | Windows `npm run check` 与 `check:portable` 已通过；portable/POSIX 模式已分离；新增结构校验回归测试 | Linux CI 的 `check:posix` 首次远端通过记录 |
-| Task 3：Linux CI + FPK 溯源 | 已实现，待远端验证 | `.github/workflows/ci.yml`、固定 Node 22/fnpack 1.2.3、生产依赖 audit、FPK SHA-256 与 `build-provenance.json`；本地 Python 语法与旧 FPK 解析已验证 | 工作分支 GitHub Actions 的 Linux 构建、构件上传与 commit 绑定结果 |
-| Task 4：真实 fnOS 验收 | 验收资产完成，设备执行待办 | 新增 `scripts/fnos-device-acceptance.sh` 与 `docs/FNOS_DEVICE_ACCEPTANCE.md`，覆盖 x86/ARM、Socket、Gateway、ACL、升级快照与多用户 | 至少一台 x86_64 与一台 ARM64 真实 fnOS 的安装/升级/Gateway/ACL/Socket 原始证据 |
-| Task 5：前端单体拆分 | 本地完成 | `app.js` 从 3848 行降至约 190 行；拆为 core/reader/shell/library 职责模块；原 46 项测试保持 0 fail | Linux CI 与真实 fnOS 浏览器再验证 |
-| Task 6：Chromium E2E | 本地完成 | Playwright 1.63.0；隔离临时书库；真实 Node server；Markdown/TXT/EPUB fixture；桌面/移动端 Chromium 场景通过 | Linux CI E2E 通过记录；真机性能/无障碍扩展基线仍可继续完善 |
+| Task 2：Windows `sh ENOENT` / 跨平台结构校验 | **完成** | Windows `npm run check`、`check:portable` 通过；Linux `check:posix`、POSIX 生命周期测试已在 GitHub Actions 通过；Shell 文件 executable bit 已修正为 `100755`。 | 继续作为所有后续提交的 CI 门禁。 |
+| Task 3：Linux CI + FPK 可追溯构建 | **完成** | GitHub Actions 已验证 Windows、Ubuntu、Chromium E2E、FPK 构建；固定 Node 22、fnpack 1.2.3；fnpack SHA-256 固定为 `54b97fa7b70968c4d05c79840f5daeff508957d0bb2062fdb0376d00d9615c93`；构件记录 Git SHA、FPK SHA-256 与包内关键文件哈希。代码提交 `0cd2150` 的 Actions run `35432505583` 已完成且结论为 success。 | 正式发布时从 tagged commit 重新构建并保存 Release 构件。 |
+| Task 4：真实 fnOS x86_64 / ARM64、Gateway、ACL、升级、Socket | **验收工具完成，真机待验** | `scripts/fnos-device-acceptance.sh` 与 `docs/FNOS_DEVICE_ACCEPTANCE.md` 已覆盖架构、Node、生命周期、Socket、Gateway 身份、ACL、多用户隔离与升级快照。 | 至少一台 x86_64 + 一台 ARM64 真实 fnOS 完成全部矩阵并保留原始证据。未完成前不得合并 `main`。 |
+| Task 5：拆分 3848 行 `app.js` | **完成** | `app/ui/app.js` 已降至约 189 行；行为拆入 `core/`、`reader/`、`shell/`、`library/`；Node 回归测试当前 49 项，Windows 为 46 pass / 0 fail / 3 平台条件 skip；Linux CI 通过。 | 真机阅读行为纳入 Task 4 验收。 |
+| Task 6：Playwright Chromium E2E | **完成并增强** | 本地 Chromium 5/5 通过；Linux CI Chromium job 通过；覆盖模块加载、设置真实持久化、EPUB TOC 跨章节、Drawer 焦点、移动端。新增 E2E 曾发现并修复 TOC 跳转后章节进度仍显示上一章的问题。 | 后续补划线 CRUD/导出、性能与更完整 accessibility 基线。 |
 
-### 本轮执行原则
+### 实时记录规则
 
-1. 先建立验证能力，再进行结构性重构；任何后续功能扩展必须建立在 `npm test + portable/POSIX check + Chromium E2E` 的组合门禁上。
-2. `main` 继续代表最新稳定发布版本。本轮改动先留在 `work/engineering-baseline`，Linux CI 与真实 fnOS 发布条件未满足前不直接升级正式 tag。
-3. GitHub CI 只能证明 Linux、Chromium 和 FPK 构建链；它不能代替 fnOS Gateway/ACL/升级/Socket 的宿主契约。
-4. 真机验收没有设备连接时必须保持“待验”，不得用本地 Unix/Linux 模拟结果冒充真实 fnOS 结论。
+1. **每次实际改动都更新本节。** 代码、配置、测试、CI、构件、文档或真机结果发生变化时，同轮同步 plan，不能只改代码不改状态。
+2. **状态只允许使用事实型枚举：** `未开始`、`进行中`、`已实现待验证`、`完成`、`阻塞`、`真机待验`。没有对应环境证据不得写“完成”。
+3. **每条进度必须绑定证据。** 最少记录分支、commit；涉及自动化时记录测试结果/Actions run；涉及发布时记录 tag、FPK SHA-256；涉及真机时记录设备架构、fnOS/Node 版本和验收报告位置。
+4. **失败同样记录。** 若测试/CI 发现缺陷，先记录“失败现象 → 根因 → 修复 commit → 复验结果”，不能只留下最终成功结论。
+5. **`main` 仍只代表稳定发布。** 当前工程化改动继续留在 `work/engineering-baseline`；Task 4 双架构真机证据完成前，不合并到 `main`、不创建新的稳定 tag。
+6. **自动化证据不能替代宿主证据。** Linux CI/Chromium 只能证明源码、POSIX、浏览器与构建链；fnOS Gateway、ACL、应用中心升级、Socket owner/mode 必须在真实设备验收。
+7. **后续默认执行方式：** 每完成一个可回滚开发单元 → 跑对应测试 → 更新本节 → commit → push；正式发布再更新版本号/tag/Release 记录。
+
+### 进度日志
+
+| 日期 | 分支 / Commit | 事件 | 结果 / 证据 | 后续 |
+| --- | --- | --- | --- | --- |
+| 2026-09-19 | `main` / `v1.0.0` | 建立 Git/GitHub 稳定基线 | `main` 与 `v1.0.0` 固定首个稳定版本；GitHub `origin` 建立。 | 工程化改动转入短生命周期分支。 |
+| 2026-09-19 | `work/engineering-baseline` / `eda6713` | 修复 Linux POSIX executable bit | `cmd/*` 与 Shell 工具记录为 `100755`；随后 GitHub Actions 全绿。 | 加固可追溯构建。 |
+| 2026-09-19 | `work/engineering-baseline` / `cd2e0de` | 固定 fnpack 供应链哈希 | fnpack 1.2.3 Linux amd64 SHA-256 校验加入 CI/provenance。 | 扩充浏览器回归。 |
+| 2026-09-19 | `work/engineering-baseline` / `0cd2150` | 扩展 Playwright E2E 并修复 TOC 章节状态 | 本地 Chromium 5/5；GitHub Actions run `35432505583` success；生成 FPK 与 Playwright artifacts。 | 进入真实 fnOS 双架构验收。 |
+| 2026-09-19 | `work/engineering-baseline` / `7c46337` | 写入工程门禁状态 | plan 同步当前自动化与真机门禁事实。 | 保持实时记录，等待 Task 4 真机证据。 |
 
 ## 实施任务
 
@@ -202,20 +224,6 @@ git tag -a v1.0.0-baseline -m "Verified pre-handoff baseline"
 - [ ] **Step 5: 从干净 Linux clone 复现。**
 
 在 Task 2 完成后，以干净 clone 重建并比较内层应用文件哈希；将结果补入发布记录。
-
-## 2026-09-19 工程化实施状态
-
-按“验证链先于功能扩展”的顺序，当前在短生命周期分支 `work/engineering-baseline` 实施；`main` 继续保持 `v1.0.0` 稳定发布线，真机门禁完成前不合并。
-
-| 工作项 | 状态 | 已取得的证据 |
-| --- | --- | --- |
-| Windows `npm run check` 的 `sh ENOENT` | 已完成 | 默认 Windows 进入 portable 校验，不调用 `sh`；`npm run check`、`check:portable` 和结构测试通过。 |
-| Linux CI + FPK 可追溯构建 | 已完成 | GitHub Actions Windows/Linux、POSIX 生命周期、Chromium E2E、FPK job 已通过；Node 22、fnpack 1.2.3 与 fnpack SHA-256 固定，构件记录 Git SHA、FPK SHA-256 与包内关键文件哈希。 |
-| x86_64 / ARM64 真机、Gateway、ACL、升级、Socket | 验收工具完成，真实设备待验 | `scripts/fnos-device-acceptance.sh` 与 `docs/FNOS_DEVICE_ACCEPTANCE.md` 已覆盖架构、Node、生命周期、Socket、Gateway 身份、ACL、升级前后状态快照；当前环境没有可连接的两类 fnOS 设备，因此不得标记通过。 |
-| 拆分前端单体 | 已完成 | `app/ui/app.js` 已由约 3848 行降至约 189 行，职责拆到 `core/`、`reader/`、`shell/`、`library/`；49 项 Node 回归测试在 Windows 为 46 通过、0 失败、3 个平台条件跳过。 |
-| Playwright Chromium E2E | 已完成并增强 | 已覆盖模块加载、设置与真实持久化、TOC 跨章节、Drawer 焦点、移动端；本地 5/5 通过，Linux CI Chromium job 通过。新增测试实际发现并修复了 TOC 跳转后章节进度仍显示上一章的问题。 |
-
-第一性原理上的发布门禁保持不变：自动化只能证明源码/构建/浏览器契约，不能替代 fnOS Gateway、真实 ACL、应用中心升级和双架构宿主行为。Task 4 两列真机证据未完成前，不进入 `main`、不创建新稳定 tag。
 
 ### Task 2: 使结构校验跨平台且不降低 POSIX 严格度（P0）
 
