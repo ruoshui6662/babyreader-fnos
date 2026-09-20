@@ -10,7 +10,14 @@ const state = {
   currentPath: null,
   currentName: null,
   content: '',
+  epubArchive: null,
+  epubChapterIndex: 0,
+  epubChapterCount: 0,
   epubHtml: '',
+  epubChapters: [],
+  epubRenderPending: false,
+  epubChapterLoading: false,
+  epubDiagnostics: null,
   toc: [],
   tocOpen: true,
   epubBook: null,
@@ -20,6 +27,7 @@ const state = {
   session: null,
   userState: { version: 2, books: {}, settings: {} },
   readingMode: 'scroll',       // user preference: 'scroll' | 'double' ('single' is only the narrow-window fallback)
+  readingModeAutoApplied: false, // mobile default is temporary until the user chooses a mode
   effectiveReadingMode: 'scroll', // responsive mode after width-based fallback
   continuousScroll: true,     // legacy mirror retained for settings migration
   pageNumber: 1,

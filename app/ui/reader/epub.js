@@ -2,6 +2,43 @@
 
 'use strict';
 
+// EPUBs are untrusted, user-sized documents. Keeping every decoded image,
+// font, and CSS asset as a data URL can multiply memory use before the browser
+// has even laid out the first page. The text remains readable when an asset is
+// over budget; the asset is simply omitted from the first-pass render.
+const EPUB_RESOURCE_LIMITS = Object.freeze({
+  maxInlineResourceBytes: 8 * 1024 * 1024,
+  maxInlineTotalBytes: 48 * 1024 * 1024
+});
+
+function createEpubResourceBudget(limits = EPUB_RESOURCE_LIMITS) {
+  return {
+    totalBytes: 0,
+    skippedResources: [],
+    reserve(resourcePath, bytes) {
+      const size = Number(bytes) || 0;
+      if (size > limits.maxInlineResourceBytes || this.totalBytes + size > limits.maxInlineTotalBytes) {
+        this.skippedResources.push({
+          path: resourcePath,
+          bytes: size,
+          reason: size > limits.maxInlineResourceBytes ? 'single-resource-limit' : 'total-resource-limit'
+        });
+        return false;
+      }
+      this.totalBytes += size;
+      return true;
+    }
+  };
+}
+
+function yieldToBrowser() {
+  return new Promise((resolve) => {
+    const continueWork = () => setTimeout(resolve, 0);
+    if (typeof requestAnimationFrame === 'function') requestAnimationFrame(continueWork);
+    else continueWork();
+  });
+}
+
 function escapeHtml(str) {
   return str
     .replace(/&/g, '&amp;')
@@ -145,12 +182,22 @@ function sanitizeEpubHtml(html) {
     .replace(/<style\b([^>]*)>([\s\S]*?)<\/style>/gi, (_, attrs, css) => `<style${attrs}>${sanitizeCss(css)}</style>`);
 }
 
-async function resourceDataUrl(zip, resourcePath, mediaTypes) {
+function zipEntryUncompressedSize(file) {
+  const size = Number(file?._data?.uncompressedSize ?? file?.uncompressedSize);
+  return Number.isFinite(size) && size >= 0 ? size : null;
+}
+
+async function resourceDataUrl(zip, resourcePath, mediaTypes, budget) {
   const file = getZipFile(zip, resourcePath);
   if (!file) return null;
+  const declaredSize = zipEntryUncompressedSize(file);
+  if (budget && declaredSize !== null && !budget.reserve(resourcePath, declaredSize)) {
+    console.warn('跳过超出内联预算的 EPUB 资源', resourcePath, declaredSize);
+    return null;
+  }
   const bytes = await file.async('uint8array');
-  if (bytes.byteLength > 32 * 1024 * 1024) {
-    console.warn('跳过超大 EPUB 资源', resourcePath, bytes.byteLength);
+  if (budget && declaredSize === null && !budget.reserve(resourcePath, bytes.byteLength)) {
+    console.warn('跳过超出内联预算的 EPUB 资源', resourcePath, bytes.byteLength);
     return null;
   }
   let binary = '';
@@ -161,7 +208,7 @@ async function resourceDataUrl(zip, resourcePath, mediaTypes) {
   return `data:${mime};base64,${btoa(binary)}`;
 }
 
-async function inlineCssResources(css, cssPath, zip, mediaTypes) {
+async function inlineCssResources(css, cssPath, zip, mediaTypes, budget) {
   const cssDir = getDirPath(cssPath);
   let output = sanitizeCss(css);
   const references = [...output.matchAll(/url\s*\(\s*(["']?)([^"')]+)\1\s*\)/gi)];
@@ -170,8 +217,9 @@ async function inlineCssResources(css, cssPath, zip, mediaTypes) {
     if (!href || /^(?:data:|blob:|https?:|file:|javascript:|#)/i.test(href)) continue;
     try {
       const resourcePath = resolveZipPath(cssDir, href);
-      const dataUrl = await resourceDataUrl(zip, resourcePath, mediaTypes);
+      const dataUrl = await resourceDataUrl(zip, resourcePath, mediaTypes, budget);
       if (dataUrl) output = output.replace(match[0], `url("${dataUrl}")`);
+      else output = output.replace(match[0], 'none');
     } catch (error) {
       console.warn('EPUB CSS 资源路径无效', cssPath, href, error);
     }
@@ -179,7 +227,7 @@ async function inlineCssResources(css, cssPath, zip, mediaTypes) {
   return output;
 }
 
-async function inlineResourceRefs(html, chapterPath, zip, mediaTypes) {
+async function inlineResourceRefs(html, chapterPath, zip, mediaTypes, budget) {
   const chapterDir = getDirPath(chapterPath);
   let output = html;
 
@@ -199,7 +247,7 @@ async function inlineResourceRefs(html, chapterPath, zip, mediaTypes) {
         output = output.replace(tag, '');
         continue;
       }
-      const css = await inlineCssResources(await cssFile.async('text'), cssPath, zip, mediaTypes);
+      const css = await inlineCssResources(await cssFile.async('text'), cssPath, zip, mediaTypes, budget);
       output = output.replace(tag, `<style data-source-path="${escapeHtmlAttribute(cssPath)}">${css}</style>`);
     } catch (error) {
       console.warn('EPUB 样式表加载失败', chapterPath, href, error);
@@ -216,7 +264,7 @@ async function inlineResourceRefs(html, chapterPath, zip, mediaTypes) {
       if (!href || /^(?:data:|blob:|https?:|file:|javascript:|#)/i.test(href)) continue;
       try {
         const resourcePath = resolveZipPath(chapterDir, href);
-        const dataUrl = await resourceDataUrl(zip, resourcePath, mediaTypes);
+        const dataUrl = await resourceDataUrl(zip, resourcePath, mediaTypes, budget);
         if (!dataUrl) continue;
         const escapedHref = href.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
         const attrRe = new RegExp(`(${attrName.replace(':', '\\:')}\\s*=\\s*)(["'])${escapedHref}\\2`, 'i');
@@ -235,7 +283,11 @@ async function inlineResourceRefs(html, chapterPath, zip, mediaTypes) {
   return output;
 }
 
-function parseNavToc(navHtml, navPath, chapterTargets) {
+function epubPathTarget(chapterPath, fragment = '') {
+  return `epub-path:${normalizeZipPath(chapterPath)}#${fragment}`;
+}
+
+function parseNavToc(navHtml, navPath) {
   const navMatch = navHtml.match(/<nav\b[^>]*(?:epub:type|type)\s*=\s*["'][^"']*\btoc\b[^"']*["'][^>]*>([\s\S]*?)<\/nav>/i)
     || navHtml.match(/<nav\b[^>]*>([\s\S]*?)<\/nav>/i);
   if (!navMatch) return [];
@@ -251,14 +303,12 @@ function parseNavToc(navHtml, navPath, chapterTargets) {
 
     const split = splitHref(rawHref);
     const chapterPath = resolveZipPath(navDir, split.path);
-    const fallbackTarget = chapterTargets[chapterPath];
-    const target = split.fragment ? `#${split.fragment}` : fallbackTarget;
-    if (target) entries.push({ label, target });
+    entries.push({ label, target: epubPathTarget(chapterPath, split.fragment) });
   }
   return entries;
 }
 
-function parseNcxToc(ncxXml, ncxPath, chapterTargets) {
+function parseNcxToc(ncxXml, ncxPath) {
   const ncxDir = getDirPath(ncxPath);
   const entries = [];
   const pointRe = /<navPoint\b[^>]*>([\s\S]*?)<\/navPoint>/gi;
@@ -272,9 +322,7 @@ function parseNcxToc(ncxXml, ncxPath, chapterTargets) {
     const rawHref = decodeXmlEntities(contentMatch[2]);
     const split = splitHref(rawHref);
     const chapterPath = resolveZipPath(ncxDir, split.path);
-    const fallbackTarget = chapterTargets[chapterPath];
-    const target = split.fragment ? `#${split.fragment}` : fallbackTarget;
-    if (label && target) entries.push({ label, target });
+    if (label) entries.push({ label, target: epubPathTarget(chapterPath, split.fragment) });
   }
   return entries;
 }
@@ -471,7 +519,7 @@ function applyEpubTheme() {
 function themeIconSvg(nextTheme) {
   if (nextTheme === 'light') {
     return `
-      <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+      <svg viewBox="0 0 24 24" data-icon="theme" aria-hidden="true" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
         <circle cx="12" cy="12" r="4"></circle>
         <path d="M12 2v2"></path><path d="M12 20v2"></path>
         <path d="m4.93 4.93 1.41 1.41"></path><path d="m17.66 17.66 1.41 1.41"></path>
@@ -482,7 +530,7 @@ function themeIconSvg(nextTheme) {
   }
 
   return `
-    <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+    <svg viewBox="0 0 24 24" data-icon="theme" aria-hidden="true" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
       <path d="M20.4 14.4A7.3 7.3 0 0 1 9.6 3.6a8.7 8.7 0 1 0 10.8 10.8Z"></path>
     </svg>
   `;
@@ -519,8 +567,16 @@ function toggleTheme() {
 
 function destroyEpub() {
   dismissHighlightPill();
+  if (typeof invalidateEpubChapterRender === 'function') invalidateEpubChapterRender();
+  state.epubArchive = null;
+  state.epubChapterIndex = 0;
+  state.epubChapterCount = 0;
   state.epubMetadata = null;
   state.epubHtml = '';
+  state.epubChapters = [];
+  state.epubRenderPending = false;
+  state.epubChapterLoading = false;
+  state.epubDiagnostics = null;
   if (state.epubRendition) {
     state.epubRendition.destroy();
     state.epubRendition = null;
@@ -536,27 +592,52 @@ function destroyEpub() {
 
 async function renderEpubDocument(base64data) {
   destroyEpub();
-  const epub = await parseEpub(base64data);
-  state.epubHtml = epub.html;
-  state.epubMetadata = epub.metadata || {};
-  state.toc = epub.toc || [];
-  state.chapterPaths = Array.isArray(epub.chapterPaths) ? epub.chapterPaths : [];
+  const archive = await openEpubArchive(base64data);
+  if (!archive.spine.length) throw new Error('EPUB 中没有可读取的章节');
+
+  state.epubArchive = archive;
+  state.epubMetadata = archive.metadata;
+  state.epubDiagnostics = archive.diagnostics;
+  state.toc = archive.toc;
+  state.chapterPaths = archive.spine.map((chapter) => chapter.fullPath);
+  state.epubChapterCount = archive.spine.length;
+  state.epubChapterIndex = 0;
   state.currentChapterIndex = 0;
+
+  const article = document.getElementById('article');
+  if (article) article.dataset.epubSkippedResourceCount = '0';
   renderToc();
   updateTopbarState();
+
+  if (typeof renderEpubChapter === 'function') {
+    // Both modes mount one chapter initially. Continuous scroll advances by
+    // replacing that chapter at an explicit boundary.
+    const rendered = await renderEpubChapter(0);
+    if (!rendered) throw new Error('EPUB 首屏章节加载失败');
+  } else {
+    // Legacy compatibility bridge
+    const chapter = await loadEpubChapter(archive, 0);
+    state.epubHtml = chapter.html;
+    state.epubChapterIndex = chapter.index;
+    state.currentChapterIndex = chapter.index;
+    if (article) article.dataset.epubSkippedResourceCount = String(archive.diagnostics.skippedResourceCount);
+  }
 }
 
 /* ============================================================
    EPUB Parser
    ============================================================ */
-async function parseEpub(base64data) {
-  const zip = await JSZip.loadAsync(base64data, { base64: true });
+async function openEpubArchive(data) {
+  const zip = await JSZip.loadAsync(
+    data,
+    typeof data === 'string' ? { base64: true } : {}
+  );
 
   // 1. Find OPF path from META-INF/container.xml
   const containerXml = await zip.file('META-INF/container.xml').async('text');
   const opfMatch = containerXml.match(/full-path="([^"]+\.opf)"/i);
   if (!opfMatch) throw new Error('Cannot find OPF file in EPUB');
-  const opfPath = opfMatch[1];
+  const opfPath = normalizeZipPath(opfMatch[1]);
   const opfDir  = opfPath.includes('/') ? opfPath.substring(0, opfPath.lastIndexOf('/') + 1) : '';
 
   // 2. Parse OPF to get spine order
@@ -581,49 +662,33 @@ async function parseEpub(base64data) {
     }
   }
 
-  // Get spine order (idref list)
+  // Keep the spine as metadata only. XHTML bodies are read lazily by
+  // loadEpubChapter(), after the reader has already opened the archive.
   const spineRe = /<itemref\b[^>]*>/gi;
-  const spineIds = [];
+  const spine = [];
   while ((m = spineRe.exec(opfXml)) !== null) {
     const idref = getXmlAttribute(m[0], 'idref');
-    if (idref) spineIds.push(idref);
-  }
-
-  // 3. Read each chapter XHTML and extract body content
-  const chapters = [];
-  const chapterTargets = {};
-  for (const id of spineIds) {
-    const item = manifest[id];
+    const item = idref ? manifest[idref] : null;
     if (!item) continue;
-    const fullPath = item.fullPath;
-    const file = getZipFile(zip, fullPath);
-    if (!file) continue;
-
-    const xhtml = await file.async('text');
-    // Extract body content
-    const bodyMatch = xhtml.match(/<body[^>]*>([\s\S]*?)<\/body>/i);
-    const bodyContent = bodyMatch ? bodyMatch[1] : xhtml;
-    // Strip namespace attributes and xml:lang etc
-    const chapterId = `br-chapter-${chapters.length + 1}`;
-    chapterTargets[fullPath] = `#${chapterId}`;
-    const cleaned = await inlineResourceRefs(sanitizeEpubHtml(bodyContent), fullPath, zip, mediaTypes)
-      .then(content => content
-      .replace(/\s+xmlns(?::\w+)?="[^"]*"/g, '')
-      .replace(/\s+xml:\w+="[^"]*"/g, '')
-      .replace(/<svg\b/gi, '<svg class="epub-svg"')
-      );
-    chapters.push(`<section class="epub-chapter" id="${chapterId}" data-source-path="${escapeHtmlAttribute(fullPath)}">${cleaned}</section>`);
+    spine.push({
+      index: spine.length,
+      id: idref,
+      href: item.href,
+      fullPath: item.fullPath,
+      mediaType: item.mediaType
+    });
   }
 
-  if (!chapters.length) {
-    throw new Error('No readable chapters found in EPUB');
-  }
+  const resourceBudget = createEpubResourceBudget();
+  const chapterIndexByPath = Object.fromEntries(
+    spine.map((chapter) => [normalizeZipPath(chapter.fullPath), chapter.index])
+  );
 
   let toc = [];
   const navItem = Object.values(manifest).find(item => /\bnav\b/i.test(item.properties));
   if (navItem) {
     const navFile = getZipFile(zip, navItem.fullPath);
-    if (navFile) toc = parseNavToc(await navFile.async('text'), navItem.fullPath, chapterTargets);
+    if (navFile) toc = parseNavToc(await navFile.async('text'), navItem.fullPath);
   }
 
   if (!toc.length) {
@@ -631,15 +696,63 @@ async function parseEpub(base64data) {
       || manifest[(opfXml.match(/<spine\b[^>]*toc\s*=\s*(["'])(.*?)\1/i) || [])[2]];
     if (ncxItem) {
       const ncxFile = getZipFile(zip, ncxItem.fullPath);
-      if (ncxFile) toc = parseNcxToc(await ncxFile.async('text'), ncxItem.fullPath, chapterTargets);
+      if (ncxFile) toc = parseNcxToc(await ncxFile.async('text'), ncxItem.fullPath);
     }
   }
 
   return {
-    html: chapters.join('\n<hr class="chapter-break">\n'),
+    zip,
+    opfPath,
+    manifest,
+    mediaTypes,
+    spine,
+    chapterIndexByPath,
     toc,
-    chapterPaths: Object.keys(chapterTargets),
-    metadata: { title, creator }
+    metadata: { title, creator },
+    resourceBudget,
+    diagnostics: {
+      chapterCount: spine.length,
+      inlinedResourceBytes: 0,
+      skippedResourceCount: 0,
+      skippedResources: []
+    }
+  };
+}
+
+async function loadEpubChapter(archive, index) {
+  if (!archive || !Array.isArray(archive.spine)) throw new Error('EPUB 章节档案无效');
+  if (!Number.isInteger(index) || index < 0 || index >= archive.spine.length) {
+    throw new Error(`EPUB 章节序号无效：${index}`);
+  }
+
+  const chapter = archive.spine[index];
+  const file = getZipFile(archive.zip, chapter.fullPath);
+  if (!file) throw new Error(`无法打开第 ${index + 1} 章：缺少 ${chapter.fullPath}`);
+
+  await yieldToBrowser();
+  const xhtml = await file.async('text');
+  const bodyMatch = xhtml.match(/<body[^>]*>([\s\S]*?)<\/body>/i);
+  const bodyContent = bodyMatch ? bodyMatch[1] : xhtml;
+  const cleaned = (await inlineResourceRefs(
+    sanitizeEpubHtml(bodyContent),
+    chapter.fullPath,
+    archive.zip,
+    archive.mediaTypes,
+    archive.resourceBudget
+  ))
+    .replace(/\s+xmlns(?::\w+)?="[^"]*"/g, '')
+    .replace(/\s+xml:\w+="[^"]*"/g, '')
+    .replace(/<svg\b/gi, '<svg class="epub-svg"');
+  await yieldToBrowser();
+
+  archive.diagnostics.inlinedResourceBytes = archive.resourceBudget.totalBytes;
+  archive.diagnostics.skippedResourceCount = archive.resourceBudget.skippedResources.length;
+  archive.diagnostics.skippedResources = archive.resourceBudget.skippedResources.slice(0, 20);
+
+  return {
+    index,
+    href: chapter.fullPath,
+    html: `<section class="epub-chapter" id="br-chapter-${index + 1}" data-source-path="${escapeHtmlAttribute(chapter.fullPath)}">${cleaned}</section>`
   };
 }
 

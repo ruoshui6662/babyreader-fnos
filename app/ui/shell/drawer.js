@@ -6,7 +6,7 @@ const readerPanels = Object.freeze({
   toc: {
     id: 'readerPanelToc',
     title: '目录',
-    enabled: () => state.contentType === 'epub' && state.toc.length > 0
+    enabled: () => state.toc.length > 0
   },
   settings: {
     id: 'readerPanelSettings',
@@ -39,6 +39,7 @@ let activeReaderPanel = null;
 let readerDrawerReturnFocus = null;
 
 function closeReaderPanel({ restoreFocus = true } = {}) {
+  if (typeof closeAllCustomSelects === 'function') closeAllCustomSelects();
   const drawer = document.getElementById('readerDrawer');
   const backdrop = document.getElementById('readerDrawerBackdrop');
   if (drawer) drawer.hidden = true;
@@ -58,6 +59,9 @@ function closeReaderPanel({ restoreFocus = true } = {}) {
 function openReaderPanel(panelName, trigger = document.activeElement) {
   const panelConfig = readerPanels[panelName];
   if (!panelConfig) return false;
+  if (typeof setMobileChromeOpen === 'function' && isMobileReaderSurface()) {
+    setMobileChromeOpen(false);
+  }
   if (!panelConfig.enabled()) {
     showHighlightHint(`${panelConfig.title}功能尚未实现`);
     return false;
@@ -67,6 +71,11 @@ function openReaderPanel(panelName, trigger = document.activeElement) {
   const backdrop = document.getElementById('readerDrawerBackdrop');
   const title = document.getElementById('readerDrawerTitle');
   if (!drawer) return false;
+
+  // Custom select menus are body-level portals. They must be closed before a
+  // panel is hidden, otherwise their trigger can retain keyboard focus while
+  // the portal stays visible without a valid anchor.
+  if (typeof closeAllCustomSelects === 'function') closeAllCustomSelects();
 
   // Preserve the original launcher while switching panels inside the same Drawer.
   // Otherwise Esc may try to restore focus to a tab that has just become hidden.
@@ -88,7 +97,10 @@ function openReaderPanel(panelName, trigger = document.activeElement) {
   drawer.hidden = false;
   if (backdrop) backdrop.hidden = false;
   document.body.classList.add('reader-drawer-open');
-  requestAnimationFrame(() => document.getElementById(panelConfig.id)?.focus?.());
+  requestAnimationFrame(() => {
+    const selectedTab = document.querySelector(`[data-reader-panel-target="${panelName}"]`);
+    selectedTab?.focus?.();
+  });
   return true;
 }
 

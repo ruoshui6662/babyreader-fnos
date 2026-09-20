@@ -3,13 +3,23 @@
 'use strict';
 
 function currentUserSettings() {
+  const savedSettings = state.userState.settings || {};
+  const savedMode = savedSettings.readingMode === 'single' ? 'double' : savedSettings.readingMode;
+  const storedReadingMode = state.readingModeAutoApplied
+    ? ['scroll', 'double'].includes(savedMode)
+      ? savedMode
+      : savedSettings.continuousScroll === false ? 'double' : 'scroll'
+    : state.readingMode;
+  const readingMode = ['scroll', 'double'].includes(storedReadingMode)
+    ? storedReadingMode
+    : state.readingMode;
   return {
     theme: state.theme,
     fontSize: zoomLevel,
     lineHeight: state.lineHeight,
     pageMargin: state.pageMargin,
-    readingMode: state.readingMode,
-    continuousScroll: state.readingMode === 'scroll',
+    readingMode,
+    continuousScroll: readingMode === 'scroll',
     tocOpen: state.tocOpen,
     highlightColor: state.highlightColor,
     textIndent: state.textIndent,
@@ -44,9 +54,12 @@ function applyUserState(userState) {
   // the effective mode a narrow window degrades to, never as a stored choice.
   const allowedReadingModes = ['scroll', 'double'];
   const storedMode = settings.readingMode === 'single' ? 'double' : settings.readingMode;
-  state.readingMode = allowedReadingModes.includes(storedMode)
+  const restoredMode = allowedReadingModes.includes(storedMode)
     ? storedMode
     : settings.continuousScroll === false ? 'double' : 'scroll';
+  const mobileDefault = typeof isMobileReaderSurface === 'function' && isMobileReaderSurface();
+  state.readingModeAutoApplied = mobileDefault && restoredMode !== 'scroll';
+  state.readingMode = mobileDefault ? 'scroll' : restoredMode;
   state.continuousScroll = state.readingMode === 'scroll';
   state.effectiveReadingMode = state.readingMode;
   state.tocOpen = settings.tocOpen !== false;

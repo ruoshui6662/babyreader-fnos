@@ -61,6 +61,7 @@ function formatHighlightsMd(highlights) {
   for (const h of highlights) {
     if (h.text) {
       md += h.date ? `- [${h.date}] ${h.text}\n\n` : `- ${h.text}\n\n`;
+      if (h.note) md += `  > 备注：${h.note}\n\n`;
     }
   }
   return md;

@@ -10,6 +10,8 @@ async function returnToLibrary() {
     document.getElementById('btnMobileBackToLibrary')
   ].filter(Boolean);
 
+  if (typeof setMobileTopbarHidden === 'function') setMobileTopbarHidden(false);
+
   if (bookId && reader && state.contentType === 'epub') {
     saveTextScroll();
   }
@@ -35,17 +37,62 @@ async function returnToLibrary() {
 }
 
 function setupHighlightButtons() {
-  // Desktop actions are delegated through readerActions; retain the mobile compatibility control.
-  document.getElementById('btnMobileHighlight')?.addEventListener('click', triggerHighlightAction);
+  // Mobile highlight uses the same data-reader-action dispatcher as desktop.
 }
 
 function setupReaderNavigation() {
-  // Desktop navigation is delegated through readerActions; retain existing mobile IDs and behavior.
-  document.getElementById('btnMobilePreviousChapter')?.addEventListener('click', () => navigateChapter(-1));
-  document.getElementById('btnMobileNextChapter')?.addEventListener('click', () => navigateChapter(1));
-  document.getElementById('btnMobilePreviousPage')?.addEventListener('click', () => navigatePageGroup(-1));
-  document.getElementById('btnMobileNextPage')?.addEventListener('click', () => navigatePageGroup(1));
-  document.getElementById('btnMobileBackToLibrary')?.addEventListener('click', returnToLibrary);
+  const reader = document.getElementById('reader');
+  const chromeToggle = document.getElementById('mobileReaderChromeToggle');
+  let closeTimer = null;
+  let lastScrollTop = Math.max(0, Number(reader?.scrollTop) || 0);
+
+  const closeMobileChrome = () => {
+    clearTimeout(closeTimer);
+    if (typeof setMobileChromeOpen === 'function') setMobileChromeOpen(false);
+  };
+
+  const scheduleMobileChromeClose = () => {
+    clearTimeout(closeTimer);
+    closeTimer = setTimeout(closeMobileChrome, 4200);
+  };
+
+  chromeToggle?.addEventListener('click', (event) => {
+    event.preventDefault();
+    if (!isMobileReaderSurface() || state.contentType !== 'epub') return;
+    const open = !isMobileChromeOpen();
+    setMobileChromeOpen(open);
+    if (open) scheduleMobileChromeClose();
+  });
+
+  reader?.addEventListener('click', (event) => {
+    if (!isMobileReaderSurface() || state.contentType !== 'epub') return;
+    if (isPaginationInteractionTarget(event.target)) return;
+    const selection = window.getSelection?.();
+    if (selection && !selection.isCollapsed) return;
+    setMobileChromeOpen(!isMobileChromeOpen());
+    if (isMobileChromeOpen()) scheduleMobileChromeClose();
+  });
+
+  reader?.addEventListener('scroll', () => {
+    const currentScrollTop = Math.max(0, Number(reader.scrollTop) || 0);
+    const isMobileEpub = isMobileReaderSurface() && state.contentType === 'epub';
+
+    if (!isMobileEpub) {
+      if (typeof setMobileTopbarHidden === 'function') setMobileTopbarHidden(false);
+      lastScrollTop = currentScrollTop;
+      return;
+    }
+
+    if (isMobileChromeOpen()) closeMobileChrome();
+
+    const scrollDelta = currentScrollTop - lastScrollTop;
+    if (currentScrollTop <= 8 || scrollDelta < -4) {
+      setMobileTopbarHidden(false);
+    } else if (scrollDelta > 4) {
+      setMobileTopbarHidden(true);
+    }
+    lastScrollTop = currentScrollTop;
+  }, { passive: true });
 }
 
 function isTextInputTarget(target) {

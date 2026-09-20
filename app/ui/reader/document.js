@@ -170,6 +170,127 @@ function configureMarked() {
 /* ============================================================
    Rendering
    ============================================================ */
+let _epubChapterRenderGeneration = 0;
+
+function updateEpubChapterStatus(index) {
+  const status = document.getElementById('paginationStatus');
+  if (!status) return;
+  status.hidden = false;
+  status.textContent = `正在打开第 ${index + 1}/${state.epubChapterCount} 章`;
+}
+
+function isEpubChapterLoading() {
+  return state.epubChapterLoading === true;
+}
+
+function invalidateEpubChapterRender() {
+  _epubChapterRenderGeneration += 1;
+  invalidatePaginationMeasurement();
+}
+
+async function renderEpubChapter(index, options = {}) {
+  const archive = state.epubArchive;
+  const article = document.getElementById('article');
+  const reader = document.getElementById('reader');
+  if (!archive || !article || !Number.isInteger(index) || index < 0 || index >= state.epubChapterCount) return false;
+
+  invalidateEpubChapterRender();
+  const generation = _epubChapterRenderGeneration;
+  const isCurrent = () => generation === _epubChapterRenderGeneration
+    && state.contentType === 'epub' && state.epubArchive === archive;
+  state.epubChapterLoading = true;
+  state.epubRenderPending = true;
+  article.setAttribute('aria-busy', 'true');
+  updateEpubChapterStatus(index);
+  updatePaginationControls();
+  updateReadingProgress({ chapterIndexHint: state.epubChapterIndex });
+
+  try {
+    const chapter = await loadEpubChapter(archive, index);
+    if (!isCurrent()) return false;
+
+    // Validate against the same loaded result that will be mounted. A broken
+    // fragment must not replace the current chapter or reset its page.
+    if (options.fragment) {
+      const preview = document.createElement('template');
+      preview.innerHTML = chapter.html;
+      if (![...preview.content.querySelectorAll('[id]')].some((node) => node.id === options.fragment)) {
+        return false;
+      }
+    }
+
+    article.innerHTML = chapter.html;
+    // Replacing the mounted chapter starts a new scroll surface. Locator
+    // restoration, when requested, runs after pagination has settled.
+    const resetScroll = options.resetScroll !== false;
+    if (resetScroll) {
+      article.scrollLeft = 0;
+      article.scrollTop = 0;
+      if (reader) {
+        reader.scrollLeft = 0;
+        reader.scrollTop = 0;
+      }
+    }
+    state.epubHtml = chapter.html;
+    state.epubChapterIndex = chapter.index;
+    state.currentChapterIndex = chapter.index;
+    article.dataset.epubSkippedResourceCount = String(archive.diagnostics.skippedResourceCount || 0);
+
+    await new Promise((resolve) => requestAnimationFrame(resolve));
+    if (!isCurrent()) return false;
+
+    const settled = await measurePagination({
+      preserveLocator: false,
+      allowEpubPending: true,
+      isCurrent
+    });
+    if (!settled || !isCurrent()) return false;
+
+    // Internal restoration uses the ordinary page navigation API, which stays
+    // disabled until the destination's pagination has settled.
+    state.epubChapterLoading = false;
+    state.epubRenderPending = false;
+    redrawDomHighlights();
+    if (options.locator) {
+      restoreReadingLocator(options.locator);
+    } else if (options.page === 'last') {
+      setPageGroup(state.pageGroupCount - 1, { save: false });
+    } else if (Number.isFinite(options.page)) {
+      setPageGroup(pageGroupForPage(Math.max(1, Math.floor(options.page))), { save: false });
+    }
+    updateReadingProgress({ chapterIndexHint: chapter.index });
+    return true;
+  } catch (error) {
+    if (generation !== _epubChapterRenderGeneration || state.contentType !== 'epub') return false;
+    console.warn('EPUB 章节加载失败', { index, error });
+    showHighlightHint(error?.message || `无法打开第 ${index + 1} 章`);
+    return false;
+  } finally {
+    if (generation === _epubChapterRenderGeneration) {
+      state.epubChapterLoading = false;
+      state.epubRenderPending = false;
+      article.removeAttribute('aria-busy');
+      updatePaginationControls();
+      updateReadingProgress({ chapterIndexHint: state.epubChapterIndex });
+    }
+  }
+}
+
+function navigateToEpubChapter(index, options = {}) {
+  if (isEpubChapterLoading()) return false;
+  // The mounted chapter is authoritative in both modes. Re-render only when
+  // crossing a chapter boundary; same-chapter targets are resolved locally by
+  // navigateEpubTarget/fragment restoration.
+  if (index === state.epubChapterIndex && document.querySelector('#article .epub-chapter')) {
+    updateReadingProgress({ chapterIndexHint: index });
+    if (options.locator) {
+      requestAnimationFrame(() => restoreReadingLocator(options.locator));
+    }
+    return true;
+  }
+  return renderEpubChapter(index, options);
+}
+
 function renderArticle() {
   const article = document.getElementById('article');
   const reader = document.getElementById('reader');
@@ -177,8 +298,10 @@ function renderArticle() {
   const epubShell = document.getElementById('epubShell');
   const isWelcome = !state.currentPath && (!state.content || !state.content.trim());
 
+  if (article) article.classList.remove('is-library');
   if (reader) reader.classList.toggle('is-welcome', isWelcome);
   document.body.classList.toggle('is-welcome', isWelcome);
+  document.body.classList.remove('is-library');
 
   if (isWelcome) {
     if (epubShell) epubShell.style.display = 'none';
@@ -202,22 +325,6 @@ function renderArticle() {
     if (epubShell) epubShell.style.display = 'none';
     if (article) {
       article.style.display = '';
-      article.innerHTML = state.epubHtml || '';
-      ensureHighlightLayer();
-      requestAnimationFrame(redrawDomHighlights);
-      // Content arrives after the last pagination measurement, and the paper
-      // card has a fixed width, so the ResizeObserver never sees the column
-      // track grow. Without this the page count stays frozen at the value
-      // measured on the empty/placeholder article (cols=1, buttons dead).
-      requestAnimationFrame(() => {
-        if (state.effectiveReadingMode !== 'scroll') measurePagination({ preserveLocator: true });
-      });
-      for (const img of article.querySelectorAll('img')) {
-        if (img.complete) continue;
-        img.addEventListener('load', () => {
-          if (state.effectiveReadingMode !== 'scroll') measurePagination({ preserveLocator: true });
-        }, { once: true });
-      }
     }
   } else {
     if (epubShell) epubShell.style.display = 'none';

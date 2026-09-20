@@ -4,6 +4,12 @@
 
 'use strict';
 
+function openDefaultReaderToc() {
+  if (!state.tocOpen || state.toc.length === 0 || typeof openReaderPanel !== 'function') return false;
+  const trigger = document.getElementById('btnToc') || document.activeElement;
+  return openReaderPanel('toc', trigger);
+}
+
 
 
 
@@ -19,6 +25,11 @@
    ============================================================ */
 window.appHost = {
   async receiveDocument({ path, name, type, content, data, bookId }) {
+    // A document transition can replace or hide the settings drawer while a
+    // custom select is open. Close its body-level portal before changing UI.
+    if (typeof closeAllCustomSelects === 'function') closeAllCustomSelects();
+    if (typeof setMobileChromeOpen === 'function') setMobileChromeOpen(false);
+    if (typeof setMobileTopbarHidden === 'function') setMobileTopbarHidden(false);
     state.currentBookId = bookId || null;
     state.currentPath  = path;
     state.currentName  = name;
@@ -54,7 +65,7 @@ window.appHost = {
         // article now contains real chapter content and needs to grow its column
         // track. Resize won't trigger until viewport changes, so do it eagerly.
         const article = document.getElementById('article');
-        if (article && state.effectiveReadingMode !== 'scroll') {
+        if (article && !state.epubRenderPending && state.effectiveReadingMode !== 'scroll') {
           requestAnimationFrame(() => measurePagination({ preserveLocator: true }));
         }
       }
@@ -65,10 +76,16 @@ window.appHost = {
 
     setDirty(false);
     setMode('read');
-    renderArticle();
+    // The chapter-window renderer owns the EPUB DOM once it is available.
+    // Keep the existing article path as a compatibility bridge while Task 2's
+    // renderer is not present, and for all non-EPUB documents.
+    if (state.contentType !== 'epub' || typeof renderEpubChapter !== 'function') {
+      renderArticle();
+    }
     restoreTextScroll();
     renderToc();
     updateTopbarState();
+    openDefaultReaderToc();
   },
 
   notifySaved({ path, name } = {}) {
@@ -132,6 +149,7 @@ window.appHost = {
    DOMContentLoaded — Boot
    ============================================================ */
 document.addEventListener('DOMContentLoaded', () => {
+  setupReaderDeviceProfile();
   configureMarked();
   setupThemeToggle();
   setupTocToggle();
@@ -165,9 +183,14 @@ document.addEventListener('DOMContentLoaded', () => {
   setupPositionTracking();
   renderArticle();
   updateTopbarState();
-  window.addEventListener('resize', debounce(() => {
+  const handleViewportChange = debounce(() => {
     measurePagination({ preserveLocator: true });
-  }, 120));
+  }, 120);
+  window.addEventListener('resize', handleViewportChange);
+  window.visualViewport?.addEventListener('resize', handleViewportChange);
+  window.screen?.orientation?.addEventListener?.('change', handleViewportChange);
+  const orientationQuery = window.matchMedia?.('(orientation: portrait)');
+  orientationQuery?.addEventListener?.('change', handleViewportChange);
 
   document.addEventListener('click', (e) => {
     if (_highlightPill && e.target !== _highlightPill) {

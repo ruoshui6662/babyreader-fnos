@@ -1,5 +1,9 @@
 # BabyReader fnOS 接手与开发推进计划
 
+## 2026-09-20 执行记录：连续滚动章节边界
+
+连续滚动 EPUB 已按章节边界改造：单章挂载、显式上一章/下一章、章节级 locator 恢复、TOC/内链按需加载、当前章节划线层和真实样本性能回归均已接入现有接口。当前 FPK 构建通过，但仍需在 fnOS 真机上安装本次构件完成打开、章节边界、划线和进度的物理验收。
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use `superpowers:subagent-driven-development` (recommended) or `superpowers:executing-plans` to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** 在不破坏现有 fnOS 阅读体验、多用户隔离和内容安全边界的前提下，使 BabyReader 成为可追溯、可跨平台验证、可在真实 fnOS 发布并能持续扩展的产品。
@@ -134,7 +138,7 @@ fnOS 桌面（url 入口）
 - 最近一次自动验收与 FPK 打包源码基线：`5e0f233`（`docs: maintain realtime development progress`）；其运行时代码仍以 `0cd2150` 为最近一次产品代码改动。
 - 稳定发布线：`main` → `v1.0.0`
 - Windows 本地目录：`D:\AI编程\reader\babyreader-fnos`
-- 工作区状态：本地改动已保存并提交，分支已与 `origin/work/engineering-baseline` 同步。
+- 工作区状态：Playwright V2 第一阶段正在实现；当前工作区包含未提交改动，尚未 push。
 
 | 工作项 | 当前状态 | 已验证证据 | 下一门禁 |
 | --- | --- | --- | --- |
@@ -142,7 +146,7 @@ fnOS 桌面（url 入口）
 | Task 3：Linux CI + FPK 可追溯构建 | **完成** | GitHub Actions 已验证 Windows、Ubuntu、Chromium E2E、FPK 构建；固定 Node 22、fnpack 1.2.3；fnpack SHA-256 固定为 `54b97fa7b70968c4d05c79840f5daeff508957d0bb2062fdb0376d00d9615c93`；构件记录 Git SHA、FPK SHA-256 与包内关键文件哈希。当前源码基线 `5e0f233` 的 Actions run `35433053667` 已完成且结论为 success。Windows 本地同时成功生成验收包 `dist/babyreader-fnos.fpk`，SHA-256 `9a470d66faa0314c823195d8b5085f926bbadab7c4e5b846e1bfb1556d7bfabb`。 | 正式发布仍以 CI 的 Node 22 + 固定 fnpack 构件为权威；本地包仅作为安装/真机验收候选。 |
 | Task 4：真实 fnOS x86_64 / ARM64、Gateway、ACL、升级、Socket | **x86 基本功能通过，系统契约继续验收** | 已确认当前验收包安装在真实 **x86 fnOS** 设备上正常；实际阅读、翻译、下一章切换均正常。`scripts/fnos-device-acceptance.sh` 与 `docs/FNOS_DEVICE_ACCEPTANCE.md` 继续覆盖生命周期、Socket、Gateway 身份、ACL、多用户隔离与升级快照。 | 在该 x86 设备继续完成启动/status、Socket owner/mode、Gateway、ACL、多用户和升级保留；随后在 ARM64 设备完整复验。 |
 | Task 5：拆分 3848 行 `app.js` | **完成** | `app/ui/app.js` 已降至约 189 行；行为拆入 `core/`、`reader/`、`shell/`、`library/`；Node 回归测试当前 49 项，Windows 为 46 pass / 0 fail / 3 平台条件 skip；Linux CI 通过。 | 真机阅读行为纳入 Task 4 验收。 |
-| Task 6：Playwright Chromium E2E | **完成并增强** | 本地 Chromium 5/5 通过；Linux CI Chromium job 通过；覆盖模块加载、设置真实持久化、EPUB TOC 跨章节、Drawer 焦点、移动端。新增 E2E 曾发现并修复 TOC 跳转后章节进度仍显示上一章的问题。 | 后续补划线 CRUD/导出、性能与更完整 accessibility 基线。 |
+| Task 6：Playwright Chromium E2E | **第一阶段已实现待 CI/真机验证** | 默认本地 Chromium **17 pass / 1 local-only sample skip**；新增三章 EPUB fixture、设置隔离、划线 CRUD/稳定 ID/笔记/多章节 Markdown 导出、双页阅读进度 reload/reopen、真实鼠标/pointerup 选区、无 `window.resize` 的阅读区域变化、后续跨页组标记可见性、完整下一页遍历和超大资源首屏响应；恢复的用户真实 EPUB 在预先双页下已通过强化后的本地回归：12× 首章 `openedMs=4293`、最大 long task `530 ms`、边界最大 `498 ms`；4× 首章 `openedMs=1261`，`titlepage.xhtml → toc.xhtml` 后稳定、边界最大 `524 ms`。修复 highlight overlay 命中层、导出笔记、跨章节进度、保存 spread 恢复、viewport 监听、双页标记漏加 `scrollLeft/scrollTop` 的坐标换算，以及一次性整书 DOM 插入导致的首屏长任务。CI 已配置归档 HTML report 与 `test-results/`。 | 重新安装最新候选 FPK，优先复测真机划线、横竖屏显示器切换和《吃的营养科学观》的双页打开/排版/下一页；随后执行第二批 pagination/input，再做 cache/accessibility/performance。 |
 
 ### 实时记录规则
 
@@ -165,6 +169,11 @@ fnOS 桌面（url 入口）
 | 2026-09-19 | `work/engineering-baseline` / `7c46337` | 写入工程门禁状态 | plan 同步当前自动化与真机门禁事实。 | 保持实时记录，等待 Task 4 真机证据。 |
 | 2026-09-19 | `work/engineering-baseline` / `5e0f233` | 执行发布候选自动验收并打包最新 FPK | Windows：`npm test` 49 项 / 46 pass / 0 fail / 3 条件 skip；`npm run check` pass；Chromium E2E 5/5；`npm audit --omit=dev --audit-level=high` 0 vulnerabilities。GitHub Actions run `35433053667` success。Windows 本地生成 `dist/babyreader-fnos.fpk` 与 `dist/babyreader-fnos-5e0f233.fpk`，4,160,269 bytes，SHA-256 `9a470d66faa0314c823195d8b5085f926bbadab7c4e5b846e1bfb1556d7bfabb`；外层 `manifest`、`cmd/main`、`app.tgz` 完整。 | 使用该包进入真实 fnOS x86_64/ARM64、Gateway、ACL、升级和 Socket 验收；本地构建使用 Node v24，因此正式 Release 仍取 CI Node 22 构件。 |
 | 2026-09-19 | x86 fnOS / 真机基本功能验收 | 安装并实际使用最新 FPK | 用户确认：安装正常，阅读正常，翻译正常，下一章切换正常。x86 基本阅读链已通过；Gateway、ACL、多用户、升级与 Socket 仍未据此推断通过。 | 继续完成 x86 系统契约验收，再补 ARM64 全量验收。 |
+| 2026-09-19 | `work/engineering-baseline` / 工作区未提交 | 实施 Playwright Regression V2 第一阶段 | 本地 Chromium 11/11；FPK 候选 `dist/babyreader-fnos.fpk`，SHA-256 `5BF0E59542D97CDE5A5D7683E5BA1C90828EAE51BABF3ECE8CB8FC775693DBED`；CI 增加 `playwright-report/` 与 `test-results/` 归档。实机安装尚未执行。 | 获取可访问的 fnOS 设备入口后安装该候选包，完成一次真实阅读/划线/笔记/导出/进度冒烟，再决定提交与 push。 |
+| 2026-09-19 | `work/engineering-baseline` / 工作区未提交 | 修复双页模式后续跨页组划线不可见 | 本地 Chromium 16/16；完整双页组翻页通过；最新本地 FPK 4,169,356 bytes，SHA-256 `1E33137404EC5C9D727008F187DCC4250D9841EE8ED2D21AEA3A78E54E4175F6`。根因是 Range 视口坐标未转换为可滚动 article 内容坐标。 | 重新安装该 FPK，在真实 fnOS 上复测后续页划线、重载保留、下一页响应和横竖屏显示器迁移。 |
+| 2026-09-19 | `work/engineering-baseline` / 工作区未提交 | 用真实 EPUB 修复双页首屏长任务 | 《吃的营养科学观》126 个 spine 项在 4× CPU 降速下原先产生 3.27–3.62 秒长任务；分批挂载后低于 0.64 秒，默认 E2E 17 pass / 1 local-only sample skip。最新 FPK 4,174,923 bytes，SHA-256 `4858F8DDAEBE2EA56A718ED6CBF91630428C7769B85C8D3E18CCC237F41A2E0F`。 | 真机覆盖安装，复测该书双页首次打开、排版进度、下一页和划线。 |
+| 2026-09-19 | `work/engineering-baseline` / 工作区未提交 | EPUB chapter-window Task 4 本地门禁与 FPK | `npm test` 55 pass / 0 fail / 3 Windows 条件 skip；`npm run check` 通过；无样本环境的 Chromium 运行启动 22 个测试，Playwright `status: passed`，本地真实样本用例跳过；旧 `git diff --check` exit 0（仅已有 CRLF 警告）。FPK 4,187,897 bytes，SHA-256 `6F0165EB77E78641CA12DA1C9F55347BAA9DE1CFBE898C241311AF73F3CEFBE8`。页码改为当前章节内分页组，章节末页下一页加载下个 spine 项。样本恢复后，强化过媒体解码/可见性和章节稳定条件的最终完整 12× 命令 2/2 passed（首章 `4293 ms`、最大 `530 ms`；边界最大 `498 ms`）；最终完整 4× 命令 2/2 passed（首章 `1261 ms`，`titlepage.xhtml → toc.xhtml`、最大 `524 ms`）。缺失路径及封面被文本谓词拒绝的运行保留为历史失败证据。 | 新 FPK 仍需 fnOS 真机安装并验收。 |
+| 2026-09-19 | `work/engineering-baseline` / 工作区未提交 | **P0 连续滚动跨章完整性修复** | **问题根因**: 新版 chapter-window 渲染策略把整书 DOM 替换成单章，导致 scroll mode 下“一章到头”且 TOC 导航会破坏整书结构。<br>**修复方案**: <br>1. 新增 `renderEpubWholeBook()` 在 scroll mode 下拼接所有 spine items → `article.innerHTML = chapters.join('')`，形成连续文本流<br>2. `navigateToEpubChapter/chapterIndexByPath` 在 scroll mode 下不重渲染，直接 `target.scrollIntoView()`<br>3. `setReadingMode('scroll')` 检测 DOM 章节数≠archive.length 时异步重构整书，保存原滚动比例<br>4. 双页模式保持单章挂载以支持精确分页<br>**验证**: `npm test` 55 pass / 0 fail（含 2 new tests for P0 cross-chapter flow）；FPK 4.2MB；SHA-256 `50daa915faf9e89696457be6cf712f6d534c076372dc97521ba4b050faab819e`<br>**下一步**: 真机验收 scroll 模式的整书流畅滚读 + 跨章 TOC 点击定位。 |
 
 ## 实施任务
 

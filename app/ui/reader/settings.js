@@ -45,6 +45,203 @@ function applyTypography() {
   });
 }
 
+/*
+ * Native select popovers are owned by the operating system, so their radius,
+ * selected color, and placement vary across platforms. Keep the native
+ * element as the value/event source, but render a small app-owned menu for a
+ * consistent reader surface.
+ */
+const customSelectInstances = new Set();
+let customSelectGlobalEventsReady = false;
+
+function syncCustomSelectValue(select) {
+  const instance = select?._customSelect;
+  if (!instance) return;
+  const option = select.options[select.selectedIndex];
+  instance.trigger.textContent = option?.textContent || '';
+  instance.options.forEach((item) => {
+    const selected = item.dataset.value === select.value;
+    item.setAttribute('aria-selected', String(selected));
+    item.classList.toggle('is-selected', selected);
+  });
+}
+
+function closeCustomSelect(instance) {
+  if (!instance) return;
+  instance.wrapper.classList.remove('is-open');
+  instance.trigger.setAttribute('aria-expanded', 'false');
+  instance.menu.hidden = true;
+}
+
+function closeAllCustomSelects(except = null) {
+  customSelectInstances.forEach((instance) => {
+    if (instance !== except) closeCustomSelect(instance);
+  });
+  // Also sweep the DOM so an old instance cannot leave a portal visible after
+  // a panel rerender or a repeated app-shell initialization.
+  document.querySelectorAll('.custom-select-menu').forEach((menu) => {
+    const instance = [...customSelectInstances].find((candidate) => candidate.menu === menu);
+    if (instance === except) return;
+    menu.hidden = true;
+    instance?.wrapper.classList.remove('is-open');
+    instance?.trigger.setAttribute('aria-expanded', 'false');
+  });
+}
+
+function isCustomSelectVisible(instance) {
+  if (!instance?.wrapper?.isConnected || !instance.trigger?.isConnected) return false;
+  if (instance.wrapper.closest('[hidden]')) return false;
+  return instance.trigger.getClientRects().length > 0;
+}
+
+function positionCustomSelectMenu(instance) {
+  if (!instance || instance.menu.hidden) return;
+  // A menu is rendered in the document body, while its trigger belongs to a
+  // drawer panel. If that panel has been hidden, its rectangle becomes 0,0;
+  // retaining the portal would otherwise create an orphan menu at top-left.
+  if (!isCustomSelectVisible(instance)) {
+    closeCustomSelect(instance);
+    return;
+  }
+  const rect = instance.trigger.getBoundingClientRect();
+  instance.menu.style.left = `${Math.round(rect.left)}px`;
+  instance.menu.style.top = `${Math.round(rect.bottom + 6)}px`;
+  instance.menu.style.width = `${Math.max(136, Math.round(rect.width))}px`;
+  instance.menu.style.maxHeight = `${Math.max(96, Math.round(window.innerHeight - rect.bottom - 16))}px`;
+}
+
+function openCustomSelect(instance) {
+  if (!isCustomSelectVisible(instance)) {
+    closeAllCustomSelects();
+    return false;
+  }
+  closeAllCustomSelects(instance);
+  instance.menu.hidden = false;
+  instance.wrapper.classList.add('is-open');
+  instance.trigger.setAttribute('aria-expanded', 'true');
+  positionCustomSelectMenu(instance);
+  return !instance.menu.hidden;
+}
+
+function setupCustomSelectGlobalEvents() {
+  if (customSelectGlobalEventsReady) return;
+  customSelectGlobalEventsReady = true;
+  document.addEventListener('pointerdown', (event) => {
+    const target = event.target;
+    if (target instanceof Element && (
+      target.closest('.custom-select') || target.closest('.custom-select-menu')
+    )) return;
+    closeAllCustomSelects();
+  });
+  document.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape') closeAllCustomSelects();
+  });
+  window.addEventListener('resize', () => {
+    customSelectInstances.forEach(positionCustomSelectMenu);
+  });
+  document.addEventListener('scroll', () => {
+    customSelectInstances.forEach(positionCustomSelectMenu);
+  }, true);
+}
+
+function setupCustomSelect(select) {
+  if (!select || select._customSelect) return select?._customSelect;
+  const wrapper = document.createElement('div');
+  wrapper.className = 'custom-select';
+  wrapper.dataset.customSelectFor = select.id;
+  select.parentNode.insertBefore(wrapper, select);
+  wrapper.appendChild(select);
+
+  const trigger = document.createElement('button');
+  trigger.type = 'button';
+  trigger.className = 'custom-select-trigger';
+  trigger.setAttribute('aria-haspopup', 'listbox');
+  trigger.setAttribute('aria-expanded', 'false');
+  trigger.setAttribute('aria-label', wrapper.previousElementSibling?.textContent?.trim() || select.id);
+  wrapper.insertBefore(trigger, select);
+
+  const menu = document.createElement('div');
+  menu.id = `custom-options-${select.id}`;
+  menu.className = 'custom-select-menu';
+  menu.setAttribute('role', 'listbox');
+  menu.hidden = true;
+  document.body.appendChild(menu);
+
+  const instance = { select, wrapper, trigger, menu, options: [] };
+  select._customSelect = instance;
+  select.classList.add('custom-select-native');
+  select.tabIndex = -1;
+
+  Array.from(select.options).forEach((option) => {
+    const item = document.createElement('button');
+    item.type = 'button';
+    item.className = 'custom-select-option';
+    item.dataset.value = option.value;
+    item.textContent = option.textContent;
+    item.setAttribute('role', 'option');
+    item.tabIndex = -1;
+    item.addEventListener('click', () => {
+      select.value = option.value;
+      syncCustomSelectValue(select);
+      closeCustomSelect(instance);
+      trigger.focus();
+      // Let the browser paint the closed menu and the new trigger value before
+      // a setting change can perform EPUB reflow or pagination measurement.
+      setTimeout(() => {
+        if (select.value !== option.value) return;
+        select.dispatchEvent(new Event('change', { bubbles: true }));
+      }, 0);
+    });
+    menu.appendChild(item);
+    instance.options.push(item);
+  });
+
+  trigger.addEventListener('click', () => {
+    if (menu.hidden) openCustomSelect(instance);
+    else closeCustomSelect(instance);
+  });
+  trigger.addEventListener('keydown', (event) => {
+    if (event.key === 'ArrowDown' || event.key === 'Enter' || event.key === ' ') {
+      // Never allow a trigger inside a hidden drawer panel to reopen its
+      // body-level portal through a stale keyboard focus target.
+      if (!isCustomSelectVisible(instance)) return;
+      event.preventDefault();
+      if (openCustomSelect(instance)) {
+        instance.options[select.selectedIndex]?.focus();
+      }
+    }
+  });
+  select.addEventListener('change', () => {
+    syncCustomSelectValue(select);
+  });
+  menu.addEventListener('keydown', (event) => {
+    const currentIndex = instance.options.indexOf(document.activeElement);
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      closeCustomSelect(instance);
+      trigger.focus();
+    } else if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+      event.preventDefault();
+      const offset = event.key === 'ArrowDown' ? 1 : -1;
+      const nextIndex = Math.max(0, Math.min(instance.options.length - 1, currentIndex + offset));
+      instance.options[nextIndex]?.focus();
+    } else if (event.key === 'Enter' && currentIndex >= 0) {
+      event.preventDefault();
+      instance.options[currentIndex].click();
+    }
+  });
+
+  customSelectInstances.add(instance);
+  syncCustomSelectValue(select);
+  setupCustomSelectGlobalEvents();
+  return instance;
+}
+
+function setupCustomSelects() {
+  document.querySelectorAll('.settings-panel select')
+    .forEach(setupCustomSelect);
+}
+
 function syncSettingsPanel() {
   const theme = document.getElementById('settingTheme');
   const fontSize = document.getElementById('settingFontSize');
@@ -83,6 +280,8 @@ function syncSettingsPanel() {
       ? `当前用户：${state.session.username || state.session.uid}`
       : '';
   }
+  setupCustomSelects();
+  [theme, fontFamily, readingMode, highlightColor].forEach(syncCustomSelectValue);
 }
 
 
@@ -95,6 +294,7 @@ function setupTocToggle() {
 }
 
 function setupSettingsPanel() {
+  setupCustomSelects();
   const theme = document.getElementById('settingTheme');
   const fontSize = document.getElementById('settingFontSize');
   const lineHeight = document.getElementById('settingLineHeight');
@@ -133,7 +333,6 @@ function setupSettingsPanel() {
       ? highlightColor.value
       : 'yellow';
     applyZoom();
-    redrawDomHighlights();
     persistUserSettings();
   });
   readingMode?.addEventListener('change', () => {

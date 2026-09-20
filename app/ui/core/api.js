@@ -52,17 +52,15 @@ window.browserHost = {
       headers: { Accept: book.type === 'epub' ? 'application/epub+zip' : 'text/plain' }
     });
     if (book.type === 'epub') {
-      const bytes = new Uint8Array(await response.arrayBuffer());
-      let binary = '';
-      for (let offset = 0; offset < bytes.length; offset += 0x8000) {
-        binary += String.fromCharCode(...bytes.subarray(offset, offset + 0x8000));
-      }
       return window.appHost.receiveDocument({
         path: book.relativePath,
         name: book.title,
         type: 'epub',
         content: '',
-        data: btoa(binary),
+        // Keep the archive binary. Converting a large EPUB to a binary string
+        // and then Base64 duplicates the whole book before JSZip even starts
+        // parsing it, which can monopolise the fnOS browser main thread.
+        data: await response.arrayBuffer(),
         bookId: book.id
       });
     }

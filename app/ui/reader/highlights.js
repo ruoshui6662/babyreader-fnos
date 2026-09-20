@@ -4,16 +4,17 @@
 
 function highlightIconSvg() {
   return `
-    <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-      <path d="m14.5 2.5 5 5-9.5 9.5H5V12Z"></path>
-      <path d="M3 22h18"></path>
+    <svg viewBox="0 0 24 24" data-icon="highlight" aria-hidden="true" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+      <path d="m14.5 3 5.5 5.5-9 9H5.5v-5.5Z"></path>
+      <path d="m13 4.5 5.5 5.5"></path>
+      <path d="M4 21h16"></path>
     </svg>
   `;
 }
 
 function exportIconSvg() {
   return `
-    <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+    <svg viewBox="0 0 24 24" data-icon="export" aria-hidden="true" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
       <path d="M4 16v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"></path>
       <path d="M12 14V3"></path>
       <path d="m8 7 4-4 4 4"></path>
@@ -24,38 +25,39 @@ function exportIconSvg() {
 // P0: icon-only toolbar — no text labels
 function searchIconSvg() {
   return `
-    <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+    <svg viewBox="0 0 24 24" data-icon="search" aria-hidden="true" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
       <circle cx="11" cy="11" r="8"></circle><path d="m21 21-4.35-4.35"></path>
     </svg>
   `;
 }
 function bookmarkIconSvg() {
   return `
-    <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-      <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v16z"></path>
+    <svg viewBox="0 0 24 24" data-icon="bookmark" aria-hidden="true" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M6 4.5A2.5 2.5 0 0 1 8.5 2h7A2.5 2.5 0 0 1 18 4.5V21l-6-4-6 4Z"></path>
     </svg>
   `;
 }
 function notesIconSvg() {
   return `
-    <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-      <path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"></path>
-      <polyline points="14 2 14 8 20 8"></polyline>
+    <svg viewBox="0 0 24 24" data-icon="note" aria-hidden="true" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M6 3h8l4 4v14H6a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2Z"></path>
+      <path d="M14 3v5h5"></path>
+      <path d="M8 12h7M8 16h7"></path>
     </svg>
   `;
 }
 function aiIconSvg() {
   return `
-    <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-      <path d="M12 2a6 6 0 0 1 6 6v2a6 6 0 0 1-6 6 6 6 0 0 1-6-6V8a6 6 0 0 1 6-6z"></path>
-      <path d="M12 14a4 4 0 1 0 0-8 4 4 0 0 0 0 8z"></path>
-      <path d="M12 18v4"></path><path d="M8 22h8"></path>
+    <svg viewBox="0 0 24 24" data-icon="ai" aria-hidden="true" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+      <path d="m12 3 .9 3.1L16 7l-3.1.9L12 11l-.9-3.1L8 7l3.1-.9Z"></path>
+      <path d="m18 13 .55 1.95L20.5 15.5l-1.95.55L18 18l-.55-1.95-1.95-.55 1.95-.55Z"></path>
+      <path d="m5 14 .7 2.3L8 17l-2.3.7L5 20l-.7-2.3L2 17l2.3-.7Z"></path>
     </svg>
   `;
 }
 function settingsIconSvg() {
   return `
-    <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+    <svg viewBox="0 0 24 24" data-icon="settings" aria-hidden="true" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
       <path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.18-.08a2 2 0 0 0-2 2v.44a2 2 0 0 0 2 2h.18a2 2 0 0 1 1.73 1l.25.43a2 2 0 0 1 0 2l-.08.18a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.18.08a2 2 0 0 0 2-2v-.44a2 2 0 0 0-2-2h-.18a2 2 0 0 1-1.73-1l-.25-.43a2 2 0 0 1 0-2l.08-.18a2 2 0 0 0-2-2z"></path>
       <circle cx="12" cy="12" r="3"></circle>
     </svg>
@@ -121,7 +123,7 @@ function runPendingHighlight() {
 
 function updateTopbarState() {
   const isEpub = state.contentType === 'epub';
-  const hasToc = isEpub && state.toc.length > 0;
+  const hasToc = state.toc.length > 0;
   const btnToc = document.getElementById('btnToc');
   const btnEdit = document.getElementById('btnEdit');
 
@@ -131,7 +133,7 @@ function updateTopbarState() {
 
   if (btnToc) {
     btnToc.hidden = !hasToc;
-    btnToc.innerHTML = `<svg viewBox="0 0 24 24" stroke-width="1.8" stroke-linecap="round"><path d="M4 6h16"/><path d="M4 12h12"/><path d="M4 18h16"/></svg>`;
+    btnToc.innerHTML = `<svg viewBox="0 0 24 24" data-icon="toc" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 6h14"></path><path d="M5 12h10"></path><path d="M5 18h14"></path></svg>`;
     const tocLabel = state.tocOpen ? '隐藏目录' : '显示目录';
     btnToc.setAttribute('aria-label', tocLabel);
     btnToc.setAttribute('title', tocLabel);
@@ -171,6 +173,10 @@ function updateTopbarState() {
   const btnBack = document.getElementById('btnBackToLibrary');
   const btnPrevious = document.getElementById('btnPreviousChapter');
   const btnNext = document.getElementById('btnNextChapter');
+  const scrollChapterHeader = document.getElementById('scrollChapterHeader');
+  const scrollChapterFooter = document.getElementById('scrollChapterFooter');
+  const scrollPrevious = document.getElementById('btnScrollPreviousChapter');
+  const scrollNext = document.getElementById('btnScrollNextChapter');
   const readingProgress = document.getElementById('readingProgress');
   const floatingToolbar = document.getElementById('readerFloatingToolbar');
   const mobileToolbar = document.getElementById('mobileReaderToolbar');
@@ -181,11 +187,19 @@ function updateTopbarState() {
   const hasDocument = Boolean(state.currentPath);
 
   if (btnBack) btnBack.hidden = !isEpub;
-  if (btnPrevious) btnPrevious.hidden = !isEpub;
-  if (btnNext) btnNext.hidden = !isEpub;
+  const isScrollMode = state.effectiveReadingMode === 'scroll';
+  if (btnPrevious) btnPrevious.hidden = !isEpub || isScrollMode;
+  if (btnNext) btnNext.hidden = !isEpub || isScrollMode;
+  if (scrollChapterHeader) scrollChapterHeader.hidden = !isEpub || !isScrollMode;
+  if (scrollChapterFooter) scrollChapterFooter.hidden = !isEpub || !isScrollMode;
+  if (scrollPrevious) scrollPrevious.hidden = !isEpub || !isScrollMode || state.currentChapterIndex <= 0;
+  if (scrollNext) scrollNext.hidden = !isEpub || !isScrollMode
+    || state.currentChapterIndex >= Math.max(0, state.chapterPaths.length - 1);
   if (readingProgress) readingProgress.hidden = !isEpub;
   if (floatingToolbar) floatingToolbar.hidden = !hasDocument;
-  if (mobileToolbar) mobileToolbar.hidden = !isEpub;
+  if (mobileToolbar && typeof setMobileChromeOpen === 'function') {
+    setMobileChromeOpen(isMobileChromeOpen());
+  }
   if (mobileBack) mobileBack.disabled = !isEpub;
   if (mobilePrevious) mobilePrevious.disabled = !isEpub || state.currentChapterIndex <= 0;
   if (mobileHighlight) mobileHighlight.disabled = !isEpub;
@@ -407,6 +421,7 @@ function openHighlightEditor(id) {
   color.value = ['yellow', 'green', 'blue', 'pink'].includes(highlight.color)
     ? highlight.color
     : 'yellow';
+  if (typeof syncCustomSelectValue === 'function') syncCustomSelectValue(color);
   note.value = String(highlight.note || '');
   editor.hidden = false;
   requestAnimationFrame(() => note.focus());
@@ -507,6 +522,13 @@ function drawHighlightRects(id, range, color = 'yellow') {
   const allowedColors = ['yellow', 'green', 'blue', 'pink'];
   const normalizedColor = allowedColors.includes(color) ? color : 'yellow';
   const articleRect = article.getBoundingClientRect();
+  // Range rects are viewport coordinates, while the highlight layer is an
+  // absolutely positioned child of the scrollable article. In paged mode the
+  // visible spread is offset by article.scrollLeft; omitting that offset draws
+  // a saved marker back at the first spread, so the save toast succeeds while
+  // no marker is visible on the page the user selected.
+  const scrollLeft = article.scrollLeft || 0;
+  const scrollTop = article.scrollTop || 0;
   let drew = false;
   for (const rect of range.getClientRects()) {
     if (rect.width < 2 || rect.height < 2) continue;
@@ -516,8 +538,8 @@ function drawHighlightRects(id, range, color = 'yellow') {
     box.dataset.highlightId = id;
     box.dataset.highlightColor = normalizedColor;
     box.setAttribute('aria-label', '编辑划线');
-    box.style.left = `${rect.left - articleRect.left}px`;
-    box.style.top = `${rect.top - articleRect.top}px`;
+    box.style.left = `${rect.left - articleRect.left + scrollLeft}px`;
+    box.style.top = `${rect.top - articleRect.top + scrollTop}px`;
     box.style.width = `${rect.width}px`;
     box.style.height = `${rect.height}px`;
     box.addEventListener('click', (event) => {
@@ -647,6 +669,7 @@ function setupDomHighlightInteraction() {
   };
 
   article.addEventListener('mouseup', () => setTimeout(readSelection, 0));
+  article.addEventListener('pointerup', () => setTimeout(readSelection, 0));
   article.addEventListener('keyup', () => setTimeout(readSelection, 0));
   article.addEventListener('touchend', () => setTimeout(readSelection, 120));
 }

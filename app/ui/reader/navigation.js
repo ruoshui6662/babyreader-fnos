@@ -118,6 +118,7 @@ function setupEpubContentSelection(contents) {
   };
 
   doc.addEventListener('mouseup', () => setTimeout(readSelection, 0));
+  doc.addEventListener('pointerup', () => setTimeout(readSelection, 0));
   doc.addEventListener('keyup', () => setTimeout(readSelection, 0));
   doc.addEventListener('touchend', () => setTimeout(readSelection, 120));
   doc.addEventListener('selectionchange', () => setTimeout(readSelection, 0));
@@ -149,27 +150,44 @@ function setCurrentTocTarget(target) {
   });
 }
 
-function navigateEpubTarget(target, sourceChapter = null) {
-  if (!target || state.contentType !== 'epub') return false;
+async function navigateEpubTarget(target, sourceChapter = null) {
+  if (!target || state.contentType !== 'epub' || isEpubChapterLoading()) return false;
 
-  const split = splitHref(target);
-  let chapter = sourceChapter;
-  if (split.path) {
-    try {
-      const baseDir = getDirPath(sourceChapter?.dataset.sourcePath || '');
-      chapter = findChapterBySourcePath(resolveZipPath(baseDir, split.path));
-    } catch (error) {
-      console.warn('EPUB 内部链接路径无效', { target, source: sourceChapter?.dataset.sourcePath || '', error });
-      return false;
+  const archive = state.epubArchive;
+  if (!archive?.chapterIndexByPath) return false;
+
+  const rawTarget = String(target).startsWith('epub-path:') ? String(target).slice('epub-path:'.length) : target;
+  const split = splitHref(rawTarget);
+  let chapterPath = sourceChapter?.dataset.sourcePath || archive.spine?.[state.epubChapterIndex]?.fullPath || '';
+  try {
+    if (split.path) {
+      chapterPath = String(target).startsWith('epub-path:')
+        ? normalizeZipPath(split.path)
+        : resolveZipPath(getDirPath(chapterPath), split.path);
     }
+    chapterPath = normalizeZipPath(chapterPath);
+  } catch (error) {
+    console.warn('EPUB 内部链接路径无效', { target, source: sourceChapter?.dataset.sourcePath || '', error });
+    return false;
   }
 
+  const chapterIndex = archive.chapterIndexByPath[chapterPath];
+  if (!Number.isInteger(chapterIndex)) {
+    console.warn('EPUB 章节不存在', { target, chapterPath });
+    return false;
+  }
+  const fragment = split.fragment ? decodeEpubPath(split.fragment) : '';
+  if (chapterIndex !== state.epubChapterIndex) {
+    const rendered = await navigateToEpubChapter(chapterIndex, { page: 1, fragment });
+    if (!rendered) return false;
+  }
+  if (state.epubArchive !== archive || state.epubChapterIndex !== chapterIndex || isEpubChapterLoading()) return false;
+
+  const chapter = findChapterBySourcePath(chapterPath);
+  if (!chapter) return false;
   let node = chapter;
-  if (split.fragment) {
-    const fragment = decodeEpubPath(split.fragment);
-    const anchored = chapter
-      ? [...chapter.querySelectorAll('[id]')].find((candidate) => candidate.id === fragment)
-      : document.getElementById(fragment);
+  if (fragment) {
+    const anchored = [...chapter.querySelectorAll('[id]')].find((candidate) => candidate.id === fragment);
     if (!anchored) {
       console.warn('EPUB 锚点不存在', { target, fragment, chapter: chapter?.dataset.sourcePath || '' });
       return false;
@@ -181,12 +199,9 @@ function navigateEpubTarget(target, sourceChapter = null) {
     return false;
   }
 
-  const chapters = [...document.querySelectorAll('#article .epub-chapter')];
-  const targetChapter = chapter || node.closest?.('.epub-chapter') || null;
-  const chapterIndex = chapters.indexOf(targetChapter);
-  navigateToSemanticTarget(node);
+  if (!navigateToSemanticTarget(node)) return false;
   setCurrentTocTarget(target);
-  requestAnimationFrame(() => updateReadingProgress({ chapterIndexHint: chapterIndex >= 0 ? chapterIndex : null }));
+  updateReadingProgress({ chapterIndexHint: chapterIndex });
   return true;
 }
 
@@ -197,9 +212,9 @@ function setupTocNavigation() {
       e.preventDefault();
       e.stopPropagation();
       const target = tocLink.getAttribute('data-target');
-      if (!navigateEpubTarget(target)) {
-        showHighlightHint(describeEpubNavigationFailure(target));
-      }
+      navigateEpubTarget(target).then((navigated) => {
+        if (!navigated) showHighlightHint(describeEpubNavigationFailure(target));
+      });
       return;
     }
 
@@ -209,8 +224,8 @@ function setupTocNavigation() {
     e.stopPropagation();
     const sourceChapter = internalLink.closest('.epub-chapter');
     const target = internalLink.getAttribute('data-epub-href');
-    if (!navigateEpubTarget(target, sourceChapter)) {
-      showHighlightHint(describeEpubNavigationFailure(target, sourceChapter));
-    }
+    navigateEpubTarget(target, sourceChapter).then((navigated) => {
+      if (!navigated) showHighlightHint(describeEpubNavigationFailure(target, sourceChapter));
+    });
   });
 }

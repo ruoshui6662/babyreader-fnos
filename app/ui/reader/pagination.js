@@ -185,6 +185,34 @@ function applyPagedOffset(article, left) {
   article.scrollLeft = left;
 }
 
+function ensurePaginationTailSpacer(article) {
+  let spacer = article.querySelector('.pagination-tail-spacer');
+  // Rebuild the sentinel on every paged measurement. The content track can
+  // change after a font/theme/viewport update, and keeping the old anchor would
+  // reserve space at the wrong coordinate.
+  spacer?.remove();
+
+  spacer = document.createElement('div');
+  spacer.className = 'pagination-tail-spacer';
+  spacer.setAttribute('aria-hidden', 'true');
+  // Keep the pre-spacer width so settlePagination can tell whether the
+  // browser actually created the reserved trailing column. Some WebViews
+  // delay multicol overflow until the next layout pass.
+  const beforeTail = Number(article.scrollWidth || 0);
+  article.dataset.paginationBeforeTail = String(beforeTail);
+  // `left: 100%` means the visible article width, not the end of the
+  // multicolumn track. Anchor the sentinel at the pre-sentinel scrollWidth so
+  // it genuinely extends the browser's horizontal scroll range.
+  spacer.style.left = `${beforeTail}px`;
+  article.appendChild(spacer);
+  return spacer;
+}
+
+function removePaginationTailSpacer(article) {
+  article.querySelector('.pagination-tail-spacer')?.remove();
+  delete article.dataset.paginationBeforeTail;
+}
+
 function pagedLogicalLeft(article, target) {
   const articleRect = article.getBoundingClientRect();
   const targetRect = target.getBoundingClientRect();
@@ -194,10 +222,14 @@ function pagedLogicalLeft(article, target) {
   return state.pageOffset + delta;
 }
 
-function setPageGroup(group, { behavior = 'auto', save = false } = {}) {
+function setPageGroup(group, {
+  behavior = 'auto',
+  save = false,
+  redrawHighlights = false
+} = {}) {
   const reader = document.getElementById('reader');
   const article = document.getElementById('article');
-  if (!reader || !article || state.effectiveReadingMode === 'scroll') return false;
+  if (!reader || !article || state.effectiveReadingMode === 'scroll' || isEpubChapterLoading()) return false;
 
   const nextGroup = clampPageGroup(group);
   const left = pageLeftForGroup(nextGroup);
@@ -208,7 +240,7 @@ function setPageGroup(group, { behavior = 'auto', save = false } = {}) {
   reader.scrollTop = 0;
   updatePaginationControls();
   if (save) saveTextScroll();
-  requestAnimationFrame(redrawDomHighlights);
+  if (redrawHighlights) requestAnimationFrame(redrawDomHighlights);
 
   // Self-heal: never needed — scrollLeft on the article card works reliably.
   return true;
@@ -240,30 +272,45 @@ function navigateToSemanticTarget(target, { behavior = 'auto' } = {}) {
     target.scrollIntoView({ block: 'start', behavior });
     return true;
   }
-  return setPageGroup(pageGroupForPage(pageNumberForElement(target)), { behavior, save: true });
+  return setPageGroup(pageGroupForPage(pageNumberForElement(target)), {
+    behavior,
+    save: true,
+    redrawHighlights: true
+  });
 }
 
 function updatePaginationControls() {
   const paged = state.effectiveReadingMode !== 'scroll';
+  const rendering = state.contentType === 'epub' && isEpubChapterLoading();
   const previous = document.getElementById('btnPreviousPage');
   const next = document.getElementById('btnNextPage');
   const status = document.getElementById('paginationStatus');
   const mobilePrevious = document.getElementById('btnMobilePreviousPage');
   const mobileNext = document.getElementById('btnMobileNextPage');
-  const atStart = state.pageGroup <= 0;
-  const atEnd = state.pageGroup >= Math.max(0, state.pageGroupCount - 1);
+  const canPreviousChapter = state.contentType === 'epub'
+    && state.epubArchive
+    && state.epubChapterIndex > 0;
+  const canNextChapter = state.contentType === 'epub'
+    && state.epubArchive
+    && state.epubChapterIndex < state.epubChapterCount - 1;
+  const atStart = state.pageGroup <= 0 && !canPreviousChapter;
+  const atEnd = state.pageGroup >= Math.max(0, state.pageGroupCount - 1) && !canNextChapter;
 
   if (previous) {
     previous.hidden = !paged || state.contentType !== 'epub';
-    previous.disabled = atStart;
+    previous.disabled = rendering || atStart;
   }
   if (next) {
     next.hidden = !paged || state.contentType !== 'epub';
-    next.disabled = atEnd;
+    next.disabled = rendering || atEnd;
   }
-  if (mobilePrevious) mobilePrevious.disabled = !paged || atStart;
-  if (mobileNext) mobileNext.disabled = !paged || atEnd;
+  if (mobilePrevious) mobilePrevious.disabled = rendering || !paged || atStart;
+  if (mobileNext) mobileNext.disabled = rendering || !paged || atEnd;
   if (status) {
+    if (rendering) {
+      status.hidden = false;
+      return;
+    }
     status.hidden = !paged || state.contentType !== 'epub';
     status.textContent = paged
       ? `${state.pageNumber}-${Math.min(state.pageCount, state.pageNumber + pageStep() - 1)} / ${state.pageCount}`
@@ -285,21 +332,50 @@ function measureColumnTrackWidth(article, geometry) {
     const extent = lastRect.right - articleRect.left;
     if (Number.isFinite(extent) && extent > 0) track = Math.max(track, extent);
   }
+  // The tail spacer is an absolutely positioned overflow sentinel, not a
+  // multicolumn child. Use the pre-sentinel width for page counting so its
+  // alignment space can never become a phantom blank page.
+  const beforeTail = Number(article.dataset.paginationBeforeTail);
   // 2) The multicol box is its own scroll container, so scrollWidth covers the
-  //    whole track too; take the larger of the two.
-  if (Number.isFinite(article.scrollWidth) && article.scrollWidth > 0) {
-    track = Math.max(track, article.scrollWidth);
+  //    whole track too; take the larger of the two. When the sentinel exists,
+  //    cap this observation at the pre-sentinel width or its alignment space
+  //    would be counted as a phantom page.
+  const observedScrollWidth = Number.isFinite(beforeTail) && beforeTail > 0
+    ? Math.min(Number(article.scrollWidth) || 0, beforeTail)
+    : Number(article.scrollWidth) || 0;
+  if (observedScrollWidth > 0) {
+    track = Math.max(track, observedScrollWidth);
   }
-  const totalColumns = Math.max(geometry.columns, Math.round((track + geometry.columnGap) / columnPitch));
+  const totalColumns = Math.max(
+    geometry.columns,
+    Math.round((track + geometry.columnGap) / columnPitch)
+  );
   return { track, totalColumns };
 }
 
-function measurePagination({ preserveLocator = true } = {}) {
+let _paginationMeasurementGeneration = 0;
+let _cancelPaginationMeasurement = null;
+
+function invalidatePaginationMeasurement() {
+  _paginationMeasurementGeneration += 1;
+  _cancelPaginationMeasurement?.();
+  _cancelPaginationMeasurement = null;
+}
+
+function measurePagination({ preserveLocator = true, onSettled = null, allowEpubPending = false, isCurrent = () => true } = {}) {
   const reader = document.getElementById('reader');
   const article = document.getElementById('article');
-  if (!reader || !article) return;
+  if (!reader || !article || !isCurrent()) return Promise.resolve(false);
+  if (state.contentType === 'epub' && state.epubRenderPending && !allowEpubPending) return Promise.resolve(false);
+  invalidatePaginationMeasurement();
+  const generation = _paginationMeasurementGeneration;
+  const isActive = () => generation === _paginationMeasurementGeneration && isCurrent();
+  let finish;
+  const settled = new Promise((resolve) => { finish = resolve; });
+  _cancelPaginationMeasurement = () => finish(false);
+  observeReaderResize();
 
-  const locator = preserveLocator && state.currentPath && state.contentType === 'epub'
+  let locator = preserveLocator && state.currentPath && state.contentType === 'epub'
     ? currentReadingLocator(reader)
     : null;
   state.effectiveReadingMode = resolveEffectiveReadingMode(readingAreaWidth(reader));
@@ -313,6 +389,11 @@ function measurePagination({ preserveLocator = true } = {}) {
   document.body.classList.toggle('double-page-reading', state.effectiveReadingMode === 'double');
 
   if (state.effectiveReadingMode === 'scroll') {
+    removePaginationTailSpacer(article);
+    // Preserve the user's scroll position in continuous-scroll mode.
+    const savedArticleScrollTop = article.scrollTop;
+    const savedReaderScrollTop = reader?.scrollTop || 0;
+
     for (const property of [
       '--reader-column-count',
       '--reader-column-width',
@@ -329,8 +410,7 @@ function measurePagination({ preserveLocator = true } = {}) {
     delete article.dataset.paginationStep;
     article.style.removeProperty('transform');
     state.pageOffset = 0;
-    reader.scrollLeft = 0;
-    article.scrollLeft = 0;
+    // 连续滚动模式下不重置 scroll，保留用户的阅读进度
     state.columnWidth = 0;
     state.columnGap = 0;
     state.pageStepWidth = 0;
@@ -344,8 +424,17 @@ function measurePagination({ preserveLocator = true } = {}) {
     updatePaginationControls();
     if (locator) restoreReadingLocator(locator);
     requestAnimationFrame(redrawDomHighlights);
-    return;
+
+    // Restore scroll position after layout cleanup
+    article.scrollTop = savedArticleScrollTop;
+    if (reader) reader.scrollTop = savedReaderScrollTop;
+
+    onSettled?.();
+    finish(true);
+    return settled;
   }
+
+  ensurePaginationTailSpacer(article);
 
   const geometry = createPaginationGeometry({
     readerWidth: reader.clientWidth,
@@ -398,7 +487,9 @@ function measurePagination({ preserveLocator = true } = {}) {
   let settleAttempts = 0;
   let lastColumns = -1;
   const finalizePagination = () => {
+    if (!isActive()) { finish(false); return; }
     if (locator) restoreReadingLocator(locator);
+    locator = null;
     state.pageGroup = Math.max(0, Math.min(state.pageGroupCount - 1, pageGroupForPage(state.pageNumber)));
     state.pageNumber = Math.min(state.pageCount, state.pageGroup * geometry.columns + 1);
     applyPagedOffset(article, pageLeftForGroup(state.pageGroup, geometry.pageGroupWidth));
@@ -406,9 +497,13 @@ function measurePagination({ preserveLocator = true } = {}) {
     reader.scrollTop = 0;
     updatePaginationControls();
     redrawDomHighlights();
+    const callback = onSettled;
+    onSettled = null;
+    callback?.();
+    finish(true);
   };
   const settlePagination = () => {
-    if (state.effectiveReadingMode === 'scroll') return;
+    if (!isActive() || state.effectiveReadingMode === 'scroll') { finish(false); return; }
     const { track, totalColumns } = measureColumnTrackWidth(article, geometry);
     state.pageCount = totalColumns;
     state.pageGroupCount = Math.max(1, Math.ceil(totalColumns / geometry.columns));
@@ -426,12 +521,42 @@ function measurePagination({ preserveLocator = true } = {}) {
   };
   observePaginationSettle(settlePagination);
   settlePagination();
+  return settled;
 }
 
 // One observer for the life of the page: late web fonts, images and window
 // resizes all change the column track, and the page count has to follow.
 let _paginationSettleObserver = null;
 let _paginationSettleHandler = null;
+let _readerResizeObserver = null;
+
+function observeReaderResize() {
+  const reader = document.getElementById('reader');
+  if (!reader || typeof ResizeObserver !== 'function' || _readerResizeObserver) return;
+
+  _readerResizeObserver = new ResizeObserver(() => {
+    const geometry = state.paginationGeometry;
+    if (state.effectiveReadingMode === 'scroll') {
+      requestAnimationFrame(() => {
+        redrawDomHighlights();
+        updateReadingProgress();
+      });
+      return;
+    }
+    if (!geometry) return;
+
+    const width = Math.max(1, Math.floor(reader.clientWidth || 0));
+    const height = Math.max(1, Math.floor(reader.clientHeight || 0));
+    if (width === geometry.viewportWidth && height === geometry.viewportHeight) return;
+
+    // Moving a browser between monitors can resize the actual reader surface
+    // without dispatching window.resize. Recompute from the element that owns
+    // the pagination geometry so portrait/landscape changes apply immediately.
+    measurePagination({ preserveLocator: true });
+  });
+  _readerResizeObserver.observe(reader);
+}
+
 function observePaginationSettle(handler) {
   _paginationSettleHandler = handler;
   const article = document.getElementById('article');
@@ -447,13 +572,16 @@ function observePaginationSettle(handler) {
     if (totalColumns !== recorded) _paginationSettleHandler?.();
   });
   _paginationSettleObserver.observe(article);
+  observeReaderResize();
 }
 
 function setReadingMode(mode, { persist = true, preserveLocator = true } = {}) {
   // Only two user-selectable modes: scroll and double. (single is responsive fallback)
   if (!['scroll', 'double', 'single'].includes(mode)) return false;
   state.readingMode = mode === 'single' ? 'double' : mode;
+  state.readingModeAutoApplied = false;
   state.continuousScroll = state.readingMode === 'scroll';
+
   measurePagination({ preserveLocator });
   syncSettingsPanel();
   if (persist) persistUserSettings();
@@ -461,9 +589,20 @@ function setReadingMode(mode, { persist = true, preserveLocator = true } = {}) {
 }
 
 function navigatePageGroup(delta) {
-  if (state.effectiveReadingMode === 'scroll' || !Number.isInteger(delta) || delta === 0) return false;
+  if (isEpubChapterLoading() || state.effectiveReadingMode === 'scroll' || !Number.isInteger(delta) || delta === 0) return false;
   const target = state.pageGroup + Math.sign(delta);
-  if (target < 0 || target >= state.pageGroupCount) return false;
+  if (target < 0) {
+    if (state.contentType === 'epub' && state.epubArchive && state.epubChapterIndex > 0) {
+      return navigateToEpubChapter(state.epubChapterIndex - 1, { page: 'last' });
+    }
+    return false;
+  }
+  if (target >= state.pageGroupCount) {
+    if (state.contentType === 'epub' && state.epubArchive && state.epubChapterIndex < state.epubChapterCount - 1) {
+      return navigateToEpubChapter(state.epubChapterIndex + 1, { page: 1 });
+    }
+    return false;
+  }
   return setPageGroup(target, { save: true });
 }
 

@@ -14,6 +14,7 @@ async function createReaderDom() {
     '../app/ui/core/utils.js',
     '../app/ui/core/api.js',
     '../app/ui/core/user-state.js',
+    '../app/ui/reader/device-profile.js',
     '../app/ui/reader/epub.js',
     '../app/ui/reader/document.js',
     '../app/ui/reader/editor.js',
@@ -28,9 +29,11 @@ async function createReaderDom() {
     '../app/ui/library/view.js',
     '../app/ui/app.js'
   ];
-  const source = (await Promise.all(
+  let source = (await Promise.all(
     sourceFiles.map((relative) => fs.readFile(path.resolve(__dirname, relative), 'utf8'))
   )).join('\n');
+  source += '\nwindow.__babyReaderChapterApi = { renderEpubChapter, navigateToEpubChapter, isEpubChapterLoading, updateReadingProgress, restoreTextScroll, navigateEpubTarget, setupTocNavigation };\nwindow.__babyReaderDeviceApi = { getReaderDeviceProfile, setMobileChromeOpen, setupReaderNavigation };';
+  source += '\nwindow.__babyReaderUserStateApi = { applyUserState };';
 
   window.document.write(html.replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, ''));
   window.requestAnimationFrame = (callback) => {
@@ -56,6 +59,17 @@ async function createReaderDom() {
 
   window.eval(`${source}\nwindow.__babyReaderTest = {\n    state,\n    serializeDomRange,\n    rangeFromHighlight,\n    loadHighlights,\n    openHighlightEditor,\n    deleteActiveHighlight,\n    saveActiveHighlightEdits,\n    currentUserSettings,\n    applyZoom,\n    getEpubThemeCss,\n    debounce,\n    navigateChapter,\n    navigatePageGroup,\n    pageGroupForPage,\n    clampPageGroup,\n    pageLeftForGroup,\n    setPageGroup,\n    snapPaginationToNearestGroup,\n    pageNumberForElement,\n    navigateToSemanticTarget,\n    resolveEffectiveReadingMode,\n    createPaginationGeometry,\n    measurePagination,\n    setReadingMode,\n    currentReadingLocator,\n    restoreReadingLocator,\n    readerActions,\n    readerPanels,\n    openReaderPanel,\n    closeReaderPanel,\n    setupReaderActionMapping,\n    renderToc,\n    returnToLibrary\n  };`);
 
+  window.__babyReaderTest.renderEpubChapter = window.__babyReaderChapterApi.renderEpubChapter;
+  window.__babyReaderTest.navigateToEpubChapter = window.__babyReaderChapterApi.navigateToEpubChapter;
+  window.__babyReaderTest.isEpubChapterLoading = window.__babyReaderChapterApi.isEpubChapterLoading;
+  window.__babyReaderTest.updateReadingProgress = window.__babyReaderChapterApi.updateReadingProgress;
+  window.__babyReaderTest.restoreTextScroll = window.__babyReaderChapterApi.restoreTextScroll;
+  window.__babyReaderTest.navigateEpubTarget = window.__babyReaderChapterApi.navigateEpubTarget;
+  window.__babyReaderTest.setupTocNavigation = window.__babyReaderChapterApi.setupTocNavigation;
+  window.__babyReaderTest.applyUserState = window.__babyReaderUserStateApi.applyUserState;
+  window.__babyReaderTest.getReaderDeviceProfile = window.__babyReaderDeviceApi.getReaderDeviceProfile;
+  window.__babyReaderTest.setMobileChromeOpen = window.__babyReaderDeviceApi.setMobileChromeOpen;
+  window.__babyReaderTest.setupReaderNavigation = window.__babyReaderDeviceApi.setupReaderNavigation;
   return { window, api: window.__babyReaderTest };
 }
 
@@ -69,6 +83,409 @@ function mountDuplicateTextChapter(window) {
   article.appendChild(chapter);
   return chapter;
 }
+
+function deferred() {
+  let resolve;
+  let reject;
+  const promise = new Promise((nextResolve, nextReject) => {
+    resolve = nextResolve;
+    reject = nextReject;
+  });
+  return { promise, resolve, reject };
+}
+
+async function waitFor(predicate, message = 'Timed out waiting for condition') {
+  for (let attempt = 0; attempt < 20; attempt += 1) {
+    if (predicate()) return;
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  }
+  assert.fail(message);
+}
+
+test('EPUB chapter rendering keeps only the latest out-of-order chapter load', async () => {
+  const { window, api } = await createReaderDom();
+  const article = window.document.getElementById('article');
+  const chapterTwo = deferred();
+  const chapterThree = deferred();
+  const files = {
+    'OPS/chapter-2.xhtml': { async: () => chapterTwo.promise },
+    'OPS/chapter-3.xhtml': { async: () => chapterThree.promise }
+  };
+
+  api.state.contentType = 'epub';
+  api.state.epubArchive = {
+    spine: [
+      { index: 0, fullPath: 'OPS/chapter-1.xhtml' },
+      { index: 1, fullPath: 'OPS/chapter-2.xhtml' },
+      { index: 2, fullPath: 'OPS/chapter-3.xhtml' }
+    ],
+    zip: {
+      files,
+      file: (filePath) => files[filePath] || null
+    },
+    mediaTypes: {},
+    resourceBudget: { totalBytes: 0, skippedResources: [], reserve: () => true },
+    diagnostics: { inlinedResourceBytes: 0, skippedResourceCount: 0, skippedResources: [] }
+  };
+  api.state.epubChapterCount = 3;
+
+  const secondRequest = api.renderEpubChapter(1);
+  await waitFor(() => api.isEpubChapterLoading?.() === true, 'chapter 2 did not start loading');
+  const thirdRequest = api.renderEpubChapter(2);
+  await waitFor(() => api.isEpubChapterLoading?.() === true, 'chapter 3 did not start loading');
+
+  chapterThree.resolve('<body><p id="third-target">third chapter</p></body>');
+  assert.equal(await thirdRequest, true);
+  assert.equal(api.state.epubChapterIndex, 2);
+  assert.equal(article.querySelectorAll('.epub-chapter').length, 1);
+  assert.equal(article.textContent, 'third chapter');
+
+  chapterTwo.resolve('<body><p>second chapter</p></body>');
+  assert.equal(await secondRequest, false);
+  assert.equal(api.state.epubChapterIndex, 2);
+  assert.equal(article.querySelectorAll('.epub-chapter').length, 1);
+  assert.equal(article.textContent, 'third chapter');
+});
+
+test('scroll EPUB rendering mounts one chapter and loads the next only after navigation', async () => {
+  const { window, api } = await createReaderDom();
+  const article = window.document.getElementById('article');
+  const spine = Array.from({ length: 4 }, (_, index) => ({
+    index,
+    fullPath: `OPS/chapter-${index + 1}.xhtml`
+  }));
+  const reads = [];
+  const files = Object.fromEntries(spine.map((chapter, index) => [chapter.fullPath, {
+    async: async () => {
+      reads.push(index);
+      return `<!doctype html><html><body><h1>Chapter ${index + 1}</h1></body></html>`;
+    }
+  }]));
+
+  api.state.contentType = 'epub';
+  api.state.readingMode = 'scroll';
+  api.state.effectiveReadingMode = 'scroll';
+  api.state.chapterPaths = spine.map((chapter) => chapter.fullPath);
+  api.state.epubChapterCount = spine.length;
+  api.state.epubChapterIndex = 0;
+  api.state.epubArchive = {
+    spine,
+    zip: { files, file: (filePath) => files[filePath] || null },
+    mediaTypes: {},
+    resourceBudget: { totalBytes: 0, skippedResources: [], reserve: () => true },
+    diagnostics: { skippedResources: [], skippedResourceCount: 0, inlinedResourceBytes: 0 }
+  };
+
+  assert.equal(await api.renderEpubChapter(0), true);
+  assert.deepEqual(reads, [0]);
+  assert.equal(article.querySelectorAll('.epub-chapter').length, 1);
+  assert.match(article.textContent, /Chapter 1/);
+  assert.doesNotMatch(article.textContent, /Chapter 2|Chapter 3|Chapter 4/);
+
+  assert.equal(await api.navigateToEpubChapter(1), true);
+  assert.deepEqual(reads, [0, 1]);
+  assert.equal(article.querySelectorAll('.epub-chapter').length, 1);
+  assert.match(article.textContent, /Chapter 2/);
+  assert.doesNotMatch(article.textContent, /Chapter 1|Chapter 3|Chapter 4/);
+});
+
+test('scroll EPUB document loading does not retain the whole-book renderer', async () => {
+  const epubSource = await fs.readFile(path.resolve(__dirname, '../app/ui/reader/epub.js'), 'utf8');
+  assert.doesNotMatch(epubSource, /renderEpubWholeBook/);
+  assert.match(epubSource, /await renderEpubChapter\(0\)/);
+});
+
+test('EPUB progress uses the archive chapter index for a single mounted chapter', async () => {
+  const { window, api } = await createReaderDom();
+  mountDuplicateTextChapter(window);
+  api.state.contentType = 'epub';
+  api.state.epubArchive = {};
+  api.state.epubChapterCount = 3;
+  api.state.epubChapterIndex = 1;
+
+  api.updateReadingProgress();
+
+  assert.equal(api.state.currentChapterIndex, 1);
+  assert.match(window.document.getElementById('readingProgress').textContent, /2\/3/);
+});
+
+test('scroll EPUB locators preserve chapter-local and full-book progress', async () => {
+  const { window, api } = await createReaderDom();
+  const chapter = mountDuplicateTextChapter(window);
+  chapter.dataset.sourcePath = 'OPS/chapter-2.xhtml';
+  const reader = window.document.getElementById('reader');
+  Object.defineProperty(reader, 'clientHeight', { configurable: true, value: 100 });
+  Object.defineProperty(reader, 'scrollHeight', { configurable: true, value: 200 });
+  reader.scrollTop = 50;
+
+  api.state.contentType = 'epub';
+  api.state.effectiveReadingMode = 'scroll';
+  api.state.epubArchive = {};
+  api.state.epubChapterCount = 4;
+  api.state.epubChapterIndex = 1;
+
+  const locator = api.currentReadingLocator(reader);
+  assert.equal(locator.readingScope, 'chapter');
+  assert.equal(locator.chapterPercentage, 0.5);
+  assert.equal(locator.percentage, 0.375);
+  assert.equal(locator.href, 'OPS/chapter-2.xhtml');
+});
+
+test('legacy EPUB locators restore a valid chapter anchor before whole-book scroll values', async () => {
+  const { window, api } = await createReaderDom();
+  const chapter = mountDuplicateTextChapter(window);
+  chapter.dataset.sourcePath = 'OPS/chapter-2.xhtml';
+  const anchor = window.document.createElement('p');
+  anchor.id = 'saved-target';
+  anchor.textContent = 'saved target';
+  chapter.appendChild(anchor);
+  const reader = window.document.getElementById('reader');
+  Object.defineProperty(reader, 'clientHeight', { configurable: true, value: 100 });
+  Object.defineProperty(reader, 'scrollHeight', { configurable: true, value: 1000 });
+
+  api.state.contentType = 'epub';
+  api.state.effectiveReadingMode = 'scroll';
+  api.state.epubArchive = {};
+  api.state.epubChapterCount = 3;
+  api.state.epubChapterIndex = 1;
+
+  assert.equal(api.restoreReadingLocator({
+    href: 'OPS/chapter-2.xhtml',
+    anchor: 'saved-target',
+    percentage: 0.9,
+    scrollTop: 810
+  }), true);
+  assert.equal(anchor.dataset.scrolledIntoView, 'true');
+  assert.equal(reader.scrollTop, 0);
+
+  assert.equal(api.restoreReadingLocator({
+    href: 'OPS/chapter-2.xhtml',
+    readingScope: 'chapter',
+    chapterPercentage: 0.4,
+    percentage: 0.9
+  }), true);
+  assert.equal(reader.scrollTop, 360);
+});
+
+test('EPUB restoration loads the saved archive chapter before applying its locator', async () => {
+  const { window, api } = await createReaderDom();
+  const chapter = mountDuplicateTextChapter(window);
+  chapter.dataset.sourcePath = 'OPS/chapter-1.xhtml';
+  const files = {
+    'OPS/chapter-2.xhtml': { async: async () => '<body><p id="saved-target">restored chapter</p></body>' }
+  };
+  const bookId = 'restore-window';
+
+  api.state.contentType = 'epub';
+  api.state.currentBookId = bookId;
+  api.state.epubArchive = {
+    spine: [
+      { index: 0, fullPath: 'OPS/chapter-1.xhtml' },
+      { index: 1, fullPath: 'OPS/chapter-2.xhtml' }
+    ],
+    chapterIndexByPath: { 'OPS/chapter-1.xhtml': 0, 'OPS/chapter-2.xhtml': 1 },
+    zip: { files, file: (filePath) => files[filePath] || null },
+    mediaTypes: {},
+    resourceBudget: { totalBytes: 0, skippedResources: [], reserve: () => true },
+    diagnostics: { inlinedResourceBytes: 0, skippedResourceCount: 0, skippedResources: [] }
+  };
+  api.state.epubChapterCount = 2;
+  api.state.epubChapterIndex = 0;
+  api.state.userState.books[bookId] = {
+    progress: { locator: JSON.stringify({ href: 'OPS/chapter-2.xhtml', anchor: 'saved-target', pageNumber: 1 }) }
+  };
+
+  api.restoreTextScroll();
+  await waitFor(() => api.state.epubChapterIndex === 1, 'saved chapter was not loaded');
+
+  assert.equal(window.document.getElementById('article').textContent, 'restored chapter');
+  assert.equal(window.document.querySelectorAll('#article .epub-chapter').length, 1);
+});
+
+test('EPUB saved page restoration runs after pagination settles', async () => {
+  const { window, api } = await createReaderDom();
+  const reader = window.document.getElementById('reader');
+  const article = window.document.getElementById('article');
+  article.innerHTML = '<section class="epub-chapter">long chapter</section>';
+  article.scrollTo = ({ left, top = 0 }) => {
+    article.scrollLeft = left;
+    article.scrollTop = top;
+  };
+  Object.defineProperty(reader, 'clientWidth', { configurable: true, value: 1200 });
+  Object.defineProperty(reader, 'clientHeight', { configurable: true, value: 800 });
+  Object.defineProperty(article, 'scrollWidth', { configurable: true, value: 5000 });
+
+  api.state.contentType = 'epub';
+  api.state.readingMode = 'double';
+  api.state.pageMargin = 40;
+  api.state.epubRenderPending = true;
+  api.measurePagination({
+    preserveLocator: false,
+    allowEpubPending: true,
+    onSettled: () => api.restoreReadingLocator({ pageNumber: 3 })
+  });
+
+  assert.equal(api.state.pageNumber, 3);
+  assert.equal(api.state.pageGroup, 1);
+});
+
+test('cross-chapter EPUB fragments navigate after target pagination settles', async () => {
+  const { window, api } = await createReaderDom();
+  const article = window.document.getElementById('article');
+  const reader = window.document.getElementById('reader');
+  const animationFrames = [];
+  let chapterReads = 0;
+  const originalRect = window.HTMLElement.prototype.getBoundingClientRect;
+  window.requestAnimationFrame = (callback) => {
+    animationFrames.push(callback);
+    return animationFrames.length;
+  };
+  window.HTMLElement.prototype.getBoundingClientRect = function getBoundingClientRect() {
+    if (this.id === 'article') return { left: 0, right: 1200, top: 0, bottom: 800, width: 1200, height: 800 };
+    if (this.id === 'destination') return { left: 3000, right: 3100, top: 40, bottom: 80, width: 100, height: 40 };
+    return originalRect.call(this);
+  };
+  article.innerHTML = '<section class="epub-chapter" data-source-path="OPS/chapter-1.xhtml">first chapter</section>';
+  article.scrollTo = ({ left, top = 0 }) => {
+    article.scrollLeft = left;
+    article.scrollTop = top;
+  };
+  Object.defineProperty(reader, 'clientWidth', { configurable: true, value: 1200 });
+  Object.defineProperty(reader, 'clientHeight', { configurable: true, value: 800 });
+  Object.defineProperty(article, 'scrollWidth', { configurable: true, value: 5000 });
+
+  api.state.contentType = 'epub';
+  api.state.readingMode = 'double';
+  api.state.pageMargin = 40;
+  api.state.epubChapterIndex = 0;
+  api.state.epubChapterCount = 2;
+  api.state.epubArchive = {
+    spine: [
+      { index: 0, fullPath: 'OPS/chapter-1.xhtml' },
+      { index: 1, fullPath: 'OPS/chapter-2.xhtml' }
+    ],
+    chapterIndexByPath: { 'OPS/chapter-1.xhtml': 0, 'OPS/chapter-2.xhtml': 1 },
+    zip: {
+      file: (filePath) => filePath === 'OPS/chapter-2.xhtml'
+        ? { async: async () => { chapterReads += 1; return '<body><p id="destination">destination chapter</p></body>'; } }
+        : null
+    },
+    mediaTypes: {},
+    resourceBudget: { totalBytes: 0, skippedResources: [], reserve: () => true },
+    diagnostics: { inlinedResourceBytes: 0, skippedResourceCount: 0, skippedResources: [] }
+  };
+
+  const navigation = api.navigateEpubTarget('epub-path:OPS/chapter-2.xhtml#destination');
+  const flushNextFrame = async (description) => {
+    await waitFor(() => animationFrames.length > 0, description);
+    animationFrames.shift()(Date.now());
+  };
+  // The archive loader yields twice, then the renderer waits for its mount frame.
+  await flushNextFrame('first chapter-load frame was not requested');
+  await flushNextFrame('second chapter-load frame was not requested');
+  await flushNextFrame('chapter mount frame was not requested');
+  await waitFor(() => animationFrames.length > 0, 'pagination settlement frame was not requested');
+  assert.equal(api.isEpubChapterLoading(), true);
+  assert.equal(window.document.getElementById('btnNextPage').disabled, true);
+
+  // Do not let the target move until pagination has established its final page count.
+  animationFrames.shift()(Date.now());
+  assert.equal(await navigation, true);
+  assert.equal(api.state.epubChapterIndex, 1);
+  assert.ok(api.state.pageGroup > 0, 'fragment target should win over default page 1');
+  assert.ok(api.state.pageNumber > 1, 'fragment target should not remain on page 1');
+  assert.equal(chapterReads, 1, 'fragment validation must reuse the loaded chapter');
+  assert.equal(api.isEpubChapterLoading(), false);
+});
+
+test('an invalid cross-chapter EPUB fragment keeps the current chapter and page visible', async () => {
+  const { window, api } = await createReaderDom();
+  const article = window.document.getElementById('article');
+  const fileName = window.document.getElementById('fileName');
+  article.innerHTML = '<section class="epub-chapter" data-source-path="OPS/chapter-1.xhtml"><a href="#" data-epub-href="chapter-2.xhtml#missing">broken link</a></section>';
+  const sourceChapter = article.firstElementChild;
+  article.scrollLeft = 1200;
+  api.state.contentType = 'epub';
+  api.state.readingMode = 'double';
+  api.state.effectiveReadingMode = 'double';
+  api.state.epubChapterIndex = 0;
+  api.state.epubChapterCount = 2;
+  api.state.pageNumber = 3;
+  api.state.pageGroup = 1;
+  api.state.pageCount = 6;
+  api.state.pageGroupCount = 3;
+  api.state.epubArchive = {
+    spine: [
+      { index: 0, fullPath: 'OPS/chapter-1.xhtml' },
+      { index: 1, fullPath: 'OPS/chapter-2.xhtml' }
+    ],
+    chapterIndexByPath: { 'OPS/chapter-1.xhtml': 0, 'OPS/chapter-2.xhtml': 1 },
+    zip: {
+      file: (filePath) => filePath === 'OPS/chapter-2.xhtml'
+        ? { async: async () => '<body><p id="actual">destination chapter</p></body>' }
+        : null
+    },
+    mediaTypes: {},
+    resourceBudget: { totalBytes: 0, skippedResources: [], reserve: () => true },
+    diagnostics: { inlinedResourceBytes: 0, skippedResourceCount: 0, skippedResources: [] }
+  };
+  api.setupTocNavigation();
+
+  article.querySelector('a').click();
+  await waitFor(
+    () => fileName.textContent === '无法跳转：chapter-2.xhtml#missing（来源：OPS/chapter-1.xhtml）',
+    'invalid EPUB fragment did not show the existing navigation failure'
+  );
+
+  assert.equal(api.state.epubChapterIndex, 0);
+  assert.equal(api.state.pageNumber, 3);
+  assert.equal(api.state.pageGroup, 1);
+  assert.equal(article.querySelector('.epub-chapter').dataset.sourcePath, 'OPS/chapter-1.xhtml');
+  assert.equal(article.textContent, 'broken link');
+  assert.equal(article.firstElementChild, sourceChapter);
+  assert.equal(article.scrollLeft, 1200);
+  assert.equal(api.isEpubChapterLoading(), false);
+});
+
+test('superseded and stale pagination settlement cannot mutate current page state', async () => {
+  const { window, api } = await createReaderDom();
+  const article = window.document.getElementById('article');
+  const reader = window.document.getElementById('reader');
+  const frames = [];
+  window.requestAnimationFrame = (callback) => { frames.push(callback); return frames.length; };
+  Object.defineProperty(reader, 'clientWidth', { configurable: true, value: 1200 });
+  Object.defineProperty(reader, 'clientHeight', { configurable: true, value: 800 });
+  Object.defineProperty(article, 'scrollWidth', { configurable: true, value: 5000 });
+  api.state.readingMode = 'double';
+  let staleCallbacks = 0;
+  const previous = api.measurePagination({ preserveLocator: false, onSettled: () => { staleCallbacks += 1; } });
+  const previousFrame = frames.shift();
+  const current = api.measurePagination({ preserveLocator: false });
+  const currentFrame = frames.shift();
+  assert.equal(await previous, false, 'a newer measurement must cancel the previous completion');
+  currentFrame();
+  assert.equal(await current, true);
+  api.setPageGroup(1);
+  const page = api.state.pageNumber;
+  const offset = article.scrollLeft;
+  Object.defineProperty(article, 'scrollWidth', { configurable: true, value: 100 });
+  previousFrame();
+  assert.equal(api.state.pageNumber, page);
+  assert.equal(article.scrollLeft, offset);
+  assert.equal(staleCallbacks, 0);
+
+  frames.length = 0;
+  let isCurrent = true;
+  const stale = api.measurePagination({ preserveLocator: false, isCurrent: () => isCurrent });
+  const staleFrame = frames.shift();
+  isCurrent = false;
+  api.state.pageCount = 20;
+  api.state.pageGroupCount = 10;
+  staleFrame();
+  assert.equal(await stale, false, 'a stale chapter must cancel its measurement');
+  assert.equal(api.state.pageCount, 20);
+  assert.equal(api.state.pageGroupCount, 10);
+});
 
 test('DOM Range restoration uses chapter context to distinguish identical text', async () => {
   const { window, api } = await createReaderDom();
@@ -305,6 +722,30 @@ test('page navigation stays within pagination boundaries', async () => {
   assert.equal(api.navigatePageGroup(1), false);
 });
 
+test('page turns keep the existing highlight layer without a full redraw', async () => {
+  const { window, api } = await createReaderDom();
+  const article = window.document.getElementById('article');
+
+  api.state.contentType = 'epub';
+  api.state.currentPath = null;
+  api.state.effectiveReadingMode = 'double';
+  api.state.pageCount = 6;
+  api.state.pageGroupCount = 3;
+  api.state.pageGroup = 0;
+  api.state.pageNumber = 1;
+  api.state.pageGroupWidth = 800;
+
+  const layer = window.document.createElement('div');
+  layer.className = 'highlight-layer';
+  const marker = window.document.createElement('button');
+  marker.className = 'br-highlight-box';
+  layer.appendChild(marker);
+  article.appendChild(layer);
+
+  assert.equal(api.navigatePageGroup(1), true);
+  assert.equal(layer.contains(marker), true, 'paging must not clear and rebuild the highlight layer');
+});
+
 test('Reader Shell retains legacy DOM IDs and exposes one responsive Drawer', async () => {
   const { window } = await createReaderDom();
   const document = window.document;
@@ -362,8 +803,107 @@ test('Reader Shell retains legacy DOM IDs and exposes one responsive Drawer', as
   assert.match(css, /body\.is-epub \.reader \.article/);
   assert.match(css, /\.reader-floating-toolbar/);
   assert.match(css, /\.settings-panel\.reader-drawer/);
-  assert.match(css, /@media \(max-width: 800px\)/);
+  assert.match(css, /@media \(max-width: 1200px\)/);
   assert.match(css, /@media \(max-width: 520px\)/);
+});
+
+test('topbar navigation controls use icon-only SVGs without changing actions', async () => {
+  const { window } = await createReaderDom();
+  const document = window.document;
+  const controls = [
+    ['btnBackToLibrary', 'backToLibrary', '返回书架'],
+    ['btnPreviousChapter', 'previousChapter', '上一章'],
+    ['btnPreviousPage', 'previousPage', '上一页'],
+    ['btnNextPage', 'nextPage', '下一页'],
+    ['btnNextChapter', 'nextChapter', '下一章']
+  ];
+
+  for (const [id, action, label] of controls) {
+    const control = document.getElementById(id);
+    assert.equal(control.dataset.readerAction, action);
+    assert.equal(control.getAttribute('aria-label'), label);
+    assert.ok(control.querySelector('svg'), `${id} must render an SVG icon`);
+    assert.equal(control.textContent.trim(), '', `${id} must remain icon-only`);
+  }
+});
+
+test('mobile continuous-scroll controls use flow chapter boundaries and a compact shared-action HUD', async () => {
+  const { window, api } = await createReaderDom();
+  const document = window.document;
+  const toolbar = document.getElementById('mobileReaderToolbar');
+
+  assert.equal(document.getElementById('mobileReaderChromeToggle')?.getAttribute('aria-label'), '显示阅读工具');
+  assert.deepEqual(
+    [...toolbar.querySelectorAll('button')].map((button) => button.dataset.readerAction),
+    ['backToLibrary', 'openToc', 'highlight', 'openSettings']
+  );
+  assert.equal(document.getElementById('btnMobilePreviousPage'), null);
+  assert.equal(document.getElementById('btnMobileNextPage'), null);
+  assert.equal(document.getElementById('btnScrollPreviousChapter').parentElement.id, 'scrollChapterHeader');
+  assert.equal(document.getElementById('btnScrollNextChapter').parentElement.id, 'scrollChapterFooter');
+
+  window.document.documentElement.dataset.readerSurface = 'mobile';
+  api.state.contentType = 'epub';
+  api.setMobileChromeOpen(true);
+  assert.equal(document.body.dataset.mobileChrome, 'open');
+  assert.equal(toolbar.hidden, false);
+  api.setMobileChromeOpen(false);
+  assert.equal(document.body.dataset.mobileChrome, 'closed');
+  assert.equal(toolbar.hidden, true);
+});
+
+test('mobile reader hides the topbar while scrolling down and restores it while scrolling up', async () => {
+  const { window, api } = await createReaderDom();
+  const reader = window.document.getElementById('reader');
+  window.document.documentElement.dataset.readerSurface = 'mobile';
+  api.state.contentType = 'epub';
+  api.setupReaderNavigation();
+
+  reader.scrollTop = 160;
+  reader.dispatchEvent(new window.Event('scroll'));
+  assert.equal(window.document.body.classList.contains('mobile-topbar-hidden'), true);
+
+  reader.scrollTop = 80;
+  reader.dispatchEvent(new window.Event('scroll'));
+  assert.equal(window.document.body.classList.contains('mobile-topbar-hidden'), false);
+
+  reader.scrollTop = 0;
+  reader.dispatchEvent(new window.Event('scroll'));
+  assert.equal(window.document.body.classList.contains('mobile-topbar-hidden'), false);
+});
+
+test('mobile devices default to continuous reading without overwriting the desktop preference', async () => {
+  const mobile = await createReaderDom();
+  mobile.window.document.documentElement.dataset.readerSurface = 'mobile';
+  mobile.api.applyUserState({ settings: { readingMode: 'double', continuousScroll: false }, books: {} });
+
+  assert.equal(mobile.api.state.readingMode, 'scroll');
+  assert.equal(mobile.api.state.effectiveReadingMode, 'scroll');
+  assert.equal(mobile.api.currentUserSettings().readingMode, 'double');
+
+  const legacyMobile = await createReaderDom();
+  legacyMobile.window.document.documentElement.dataset.readerSurface = 'mobile';
+  legacyMobile.api.applyUserState({ settings: { continuousScroll: false }, books: {} });
+  assert.equal(legacyMobile.api.state.readingMode, 'scroll');
+  assert.equal(legacyMobile.api.currentUserSettings().readingMode, 'double');
+
+  const desktop = await createReaderDom();
+  desktop.window.document.documentElement.dataset.readerSurface = 'desktop';
+  desktop.api.applyUserState({ settings: { readingMode: 'double', continuousScroll: false }, books: {} });
+  assert.equal(desktop.api.state.readingMode, 'double');
+});
+
+test('mobile topbar hiding also releases the reader into the topbar area', async () => {
+  const css = await fs.readFile(path.resolve(__dirname, '../app/ui/styles.css'), 'utf8');
+  const normalized = css.replace(/\r\n/g, '\n');
+  assert.match(normalized, /html\[data-reader-surface="mobile"\]\s+body\.is-epub\.mobile-topbar-hidden\s+\.reader-shell-nav\s*\{[^}]*transform:\s*translateY\(-100%\);[^}]*pointer-events:\s*none;/s);
+  assert.match(normalized, /html\[data-reader-surface="mobile"\]\s+body\.is-epub\.mobile-topbar-hidden\s+\.reader\s*\{[^}]*top:\s*0;/s);
+});
+
+test('mobile chapter boundary buttons use a compact size rather than the desktop-width pill', async () => {
+  const css = await fs.readFile(path.resolve(__dirname, '../app/ui/styles.css'), 'utf8');
+  const normalized = css.replace(/\r\n/g, '\n');
+  assert.match(normalized, /html\[data-reader-surface="mobile"\]\s+\.scroll-chapter-btn\s*\{[^}]*width: min\(168px, 100%\);[^}]*min-height: 40px;/s);
 });
 
 test('readerActions and readerPanels switch TOC and settings inside the single Drawer', async () => {
