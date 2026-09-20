@@ -5,6 +5,32 @@ const path = require('node:path');
 const { execFileSync } = require('node:child_process');
 
 const root = path.resolve(__dirname, '..');
+const forcePortable = process.argv.includes('--portable');
+const forcePosix = process.argv.includes('--posix');
+if (forcePortable && forcePosix) {
+  console.error('ERROR: --portable and --posix cannot be used together');
+  process.exit(2);
+}
+const validatePosixShell = forcePosix || (!forcePortable && process.platform !== 'win32');
+const uiScriptFiles = [
+  'app/ui/core/state.js',
+  'app/ui/core/utils.js',
+  'app/ui/core/api.js',
+  'app/ui/core/user-state.js',
+  'app/ui/reader/epub.js',
+  'app/ui/reader/document.js',
+  'app/ui/reader/editor.js',
+  'app/ui/reader/highlights.js',
+  'app/ui/reader/actions.js',
+  'app/ui/reader/progress.js',
+  'app/ui/reader/pagination.js',
+  'app/ui/reader/settings.js',
+  'app/ui/reader/navigation.js',
+  'app/ui/reader/lifecycle.js',
+  'app/ui/shell/drawer.js',
+  'app/ui/library/view.js',
+  'app/ui/app.js'
+];
 const lifecycleScripts = [
   'cmd/main',
   'cmd/install_init',
@@ -15,6 +41,9 @@ const lifecycleScripts = [
   'cmd/uninstall_callback',
   'cmd/config_init',
   'cmd/config_callback'
+];
+const auxiliaryShellScripts = [
+  'scripts/fnos-device-acceptance.sh'
 ];
 const requiredFiles = [
   'manifest',
@@ -28,11 +57,12 @@ const requiredFiles = [
   'app/server/zip.js',
   'app/ui/config',
   'app/ui/index.html',
-  'app/ui/app.js',
   'app/ui/styles.css',
+  ...uiScriptFiles,
   'config/privilege',
   'config/resource',
-  ...lifecycleScripts
+  ...lifecycleScripts,
+  ...auxiliaryShellScripts
 ];
 
 const errors = [];
@@ -116,11 +146,32 @@ for (const relative of lifecycleScripts) {
   if (process.platform !== 'win32' && (fs.statSync(file).mode & 0o111) === 0) {
     errors.push(`${relative} must be executable`);
   }
-  try {
-    execFileSync('sh', ['-n', file], { stdio: 'pipe' });
-  } catch (error) {
-    const detail = error.stderr ? error.stderr.toString('utf8').trim() : error.message;
-    errors.push(`${relative} failed shell syntax validation: ${detail}`);
+  if (validatePosixShell) {
+    try {
+      execFileSync('sh', ['-n', file], { stdio: 'pipe' });
+    } catch (error) {
+      const detail = error.stderr ? error.stderr.toString('utf8').trim() : error.message;
+      errors.push(`${relative} failed shell syntax validation: ${detail}`);
+    }
+  }
+}
+
+for (const relative of auxiliaryShellScripts) {
+  const file = resolve(relative);
+  if (!fs.existsSync(file) || !fs.statSync(file).isFile()) continue;
+  const data = fs.readFileSync(file);
+  const text = data.toString('utf8');
+  if (data.includes(13)) errors.push(`${relative} must use LF line endings only`);
+  if (!text.startsWith('#!/bin/sh\n')) {
+    errors.push(`${relative} must use the POSIX #!/bin/sh shebang`);
+  }
+  if (validatePosixShell) {
+    try {
+      execFileSync('sh', ['-n', file], { stdio: 'pipe' });
+    } catch (error) {
+      const detail = error.stderr ? error.stderr.toString('utf8').trim() : error.message;
+      errors.push(`${relative} failed shell syntax validation: ${detail}`);
+    }
   }
 }
 
@@ -191,7 +242,7 @@ for (const name of ['install', 'upgrade', 'uninstall', 'config']) {
   }
 }
 
-const appSource = readText('app/ui/app.js');
+const appSource = uiScriptFiles.map(readText).join('\n');
 for (const forbidden of ['window.webkit', 'sendNative(', 'state.isNative', 'WKWebView']) {
   if (appSource.includes(forbidden)) {
     errors.push(`Native bridge reference remains: ${forbidden}`);
@@ -203,4 +254,5 @@ if (errors.length) {
   process.exit(1);
 }
 
-console.log(`Structure validation passed (${requiredFiles.length} required files, ${lifecycleScripts.length} lifecycle scripts).`);
+const shellMode = validatePosixShell ? 'POSIX shell syntax enforced' : 'portable mode; POSIX shell syntax skipped';
+console.log(`Structure validation passed (${requiredFiles.length} required files, ${lifecycleScripts.length} lifecycle scripts; ${shellMode}).`);

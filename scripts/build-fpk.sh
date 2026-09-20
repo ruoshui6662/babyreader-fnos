@@ -100,4 +100,7 @@ with tarfile.open(archive, 'r:gz') as source, tarfile.open(
 os.replace(temporary, archive)
 PY
 
+python "$ROOT/scripts/write-build-provenance.py" "$FPK_FILE" "$DIST_DIR/build-provenance.json"
+
 printf 'FPK 已生成：%s\n' "$FPK_FILE"
+printf '构建溯源：%s\n' "$DIST_DIR/build-provenance.json"

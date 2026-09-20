@@ -1,5 +1,65 @@
 # Working Change Log
 
+## 连续滚动章节边界与按需加载 2026-09-20
+
+- 连续滚动 EPUB 改为单章节挂载：打开只读取首章；章节底部显示“下一章”，章节顶部显示“上一章”，跨章时替换唯一 `.epub-chapter`，不再把整本书追加到 DOM。
+- TOC、EPUB 内链、进度、恢复和边界按钮统一使用 `state.epubChapterIndex` 与 `chapterIndexByPath`；保存的 locator 增加 `readingScope: "chapter"`、`chapterPercentage`，兼容旧版 `href`、`anchor`、`textBefore`、`scrollTop`、`percentage` 字段。
+- 划线只对当前挂载章节绘制，历史章节划线仍保留在持久化数据和导出结果中；滚动保存只计算当前章节的本地比例。
+- 真实样本调查已切换为连续滚动首章/章节边界回归；未设置 `BABYREADER_E2E_SAMPLE_EPUB` 时两条本地样本用例按设计跳过，未宣称真实 fnOS 设备验证。
+- 验证：`npm test` 64 项（61 pass、0 fail、3 Windows 条件 skip）；Chromium E2E 44 项（42 pass、0 fail、2 可选真实样本 skip）；`npm run check` 通过；受影响 E2E 套件 15/15 通过。
+- FPK：[dist/babyreader-fnos.fpk](D:\AI编程\reader\babyreader-fnos\dist\babyreader-fnos.fpk)，4,230,829 bytes，SHA-256 `0D37A8D6B477411832B0F26675CC788BB8DF94ACCC5462649EB8063A381B8BA3`。构建溯源记录为 dirty working tree、Node v24.20.0、本地 fnpack；尚未在 fnOS 真机安装验收。
+
+## EPUB chapter-window Task 4 verification 2026-09-19
+
+- 可选真实样本回归要求唯一章节处于稳定状态：可见非空文本，或实际可见且已解码的封面/媒体（`img.complete && naturalWidth > 0`；SVG/canvas 有效内容）；状态不得以 `正在打开` 开头，分页 geometry/track 必须就绪，且 `#article[aria-busy]` 已清除。4× 章节边界在 source path 改变后再次满足同一条件，才读取 long task。
+- 真实样本已恢复在 `C:\Users\admin\Desktop\吃的营养科学观.epub`，不在 Git 跟踪文件或 `dist/` 中。最终完整 12× 命令为 **2 passed (20.7s)**：首章 `openedMs=4293`、最大 long task `530 ms`；边界从 `titlepage.xhtml` 到 `toc.xhtml`、最大 `498 ms`。最终完整 4× 命令为 **2 passed (9.5s)**：首章 `openedMs=1261`、边界 `titlepage.xhtml → toc.xhtml`、最大 `524 ms`，均低于 1000 ms。
+- 样本缺失导致的 30 秒 locator 超时，以及恢复样本后封面被旧“仅文本”谓词拒绝的失败，均保留在 Task 4 report 中作为历史 RED 证据；它们不是当前阻塞项。
+- 普通 Chromium 回归在未设置样本环境变量时启动 22 个测试，Playwright 记录 `status: passed`；两个本地真实样本用例保持跳过。
+- `npm test`：55 pass、0 fail、3 Windows 条件 skip；`npm run check` 通过；`git diff --check` 退出 0（仅已有的 `app/ui/styles.css` CRLF→LF 警告）。
+- 最新本地 FPK 候选：[dist/babyreader-fnos.fpk](D:\AI编程\reader\babyreader-fnos\dist\babyreader-fnos.fpk)，4,187,897 bytes，SHA-256 `6F0165EB77E78641CA12DA1C9F55347BAA9DE1CFBE898C241311AF73F3CEFBE8`；构建内 `npm audit` 报告 0 vulnerabilities。
+- 页码语义现在是**当前章节内**的分页组；章节末页的“下一页”加载下一个 spine 项，而不再以整书的全局页数（例如旧记录的 `890`）描述进度。新的 FPK 尚未在 fnOS 真机安装验收。
+
+## 《吃的营养科学观》双页首屏卡死修复 2026-09-19
+
+- 以用户提供的真实 EPUB 复现：4.24MB 压缩包、126 个 spine 项、24 张图、约 20 万字符；不是损坏文件或超大资源问题。
+- 根因：整书 HTML 被一次性写入 `article.innerHTML`，4× CPU 降速下触发 3.27–3.62 秒主线程长任务；双页多栏布局放大了用户感知的“卡死”。
+- 修复：章节按 4 个一批挂载、批次之间让出事件循环、完成前不测量部分分页、完成后统一测量/恢复进度/重绘标注，并显示排版进度和禁用分页按钮。
+- 真实样本回归：预先双页、4× CPU 降速下最长任务不超过 0.64 秒；完成后 `1-2 / 890`，下一页进入 `3-4 / 890`。
+- 最新 FPK 候选：[dist/babyreader-fnos.fpk](D:\AI编程\reader\babyreader-fnos\dist\babyreader-fnos.fpk)，4,174,923 bytes，SHA-256 `4858F8DDAEBE2EA56A718ED6CBF91630428C7769B85C8D3E18CCC237F41A2E0F`。
+- 调查报告：[docs/investigations/2026-09-19-eating-nutrition-epub-double-page.md](D:\AI编程\reader\babyreader-fnos\docs\investigations\2026-09-19-eating-nutrition-epub-double-page.md)。
+
+## EPUB 首屏卡死与双页无响应修复 2026-09-19
+
+- 根因：打开 EPUB 时客户端先把整本压缩包转成 Base64/二进制字符串，再同步解析全部 spine 章节，并把图片、字体和 CSS 资源重复转成 Data URL；随后整本书一次性注入多栏 DOM，首次双页分页会触发布局、`scrollWidth` 和多栏碎片化的集中计算。资源复杂度不同，所以只有部分 EPUB 触发主线程长任务，看起来像首页点击和下一页失效。
+- 修复：EPUB 通过 `ArrayBuffer` 直接交给 JSZip，移除整本书的 Base64 扩张；章节解析之间让出浏览器事件循环；单个内联资源限制 8MB、总内联资源限制 48MB，超限资源跳过但保留正文；记录被跳过资源诊断。
+- 新增回归：9MB 超大资源 EPUB 在双页模式下仍能打开正文、切换设置并保持交互；同时保留完整划线、进度、跨页和显示器尺寸变化回归。
+- 验证：Playwright Chromium **17/17**；`npm test` 50 项（47 pass / 0 fail / 3 Windows 条件 skip）；`npm run check` 通过；生产依赖审计 0 vulnerabilities。
+- 最新 FPK 候选：[dist/babyreader-fnos.fpk](D:\AI编程\reader\babyreader-fnos\dist\babyreader-fnos.fpk)，4,171,850 bytes，SHA-256 `32CC2C2DECB18399582BD5EF790160A5531217346313339092C8DD0BF19A5E57`。
+- 该修复针对首屏假死和资源放大问题；如果某本书仍卡死，下一步需要该 EPUB 文件或至少提供文件大小、首章资源数量/类型，以区分剩余的异常 CSS、多栏内容或超大正文布局问题。
+
+## 真机反馈阻塞修复 2026-09-19
+
+- 真机反馈：EPUB 选中文字后点击划线无效；浏览器在横向/竖向显示器之间移动后阅读区域不自动重排。
+- 根因：选区动作只监听 `mouseup`，部分 fnOS/触控浏览器路径只产生 `pointerup`；分页只监听 `window.resize`，实际 `#reader` 容器尺寸变化可能不派发该事件。
+- 修复：为直接 EPUB 内容和兼容内容选择路径补 `pointerup`；为阅读区域增加 `ResizeObserver`，并监听 `visualViewport.resize`、`screen.orientation.change` 与方向媒体查询变化。
+- 新增回归：真实鼠标拖选、仅 `pointerup` 选区动作、无 `window.resize` 的阅读容器尺寸变化。
+- 新增双页模式回归：移动到后续跨页组后选中文字并划线，必须在当前可见阅读区域立即出现标记；逐页点击下一页必须能到达最后一个跨页组。
+- 双页模式根因：`Range.getClientRects()` 返回视口坐标，但标记层位于可横向滚动的 `#article` 内容坐标系；绘制时漏加 `article.scrollLeft/scrollTop`，导致标记被画回前面的跨页组。修复为绘制位置加上当前滚动偏移。
+- 验证：Chromium **16/16**；`npm test` 49 项（46 pass / 0 fail / 3 Windows 条件 skip）；`npm run check` 通过；生产依赖审计 0 vulnerabilities。
+- 新 FPK 候选：[dist/babyreader-fnos.fpk](D:\AI编程\reader\babyreader-fnos\dist\babyreader-fnos.fpk)，4,169,356 bytes，SHA-256 `1E33137404EC5C9D727008F187DCC4250D9841EE8ED2D21AEA3A78E54E4175F6`。
+- 需要在 fnOS 上重新安装此候选包后，优先复测划线和横竖屏切换；旧包上的结果不能作为修复后结论。
+
+## Playwright Regression V2 — Phase 1 implementation 2026-09-19
+
+- Scope follows `C:\Users\admin\Downloads\PLAYWRIGHT_REGRESSION_V2_PLAN.md`: highlight create/edit/note/delete/export and reading-progress reload persistence.
+- Added isolated EPUB fixtures with three chapters, stable repeated text, per-test user-settings reset, and helpers for fixture state/progress assertions.
+- Fixed three product issues exposed by the first batch: highlight overlays were below paragraph hit targets, Markdown export omitted notes, and paged progress/restore lost the active chapter or saved spread at reload boundaries.
+- Local verification: Playwright Chromium **11/11 passed** with one worker; `npm test` and `npm run check` were green before packaging; production dependency audit during FPK build reported 0 vulnerabilities.
+- Candidate FPK: `dist/babyreader-fnos.fpk`, 4,167,325 bytes, SHA-256 `5BF0E59542D97CDE5A5D7683E5BA1C90828EAE51BABF3ECE8CB8FC775693DBED`. Provenance records source commit `df958a589c333252af42c74535b04f0ae2e5f63d` with a dirty working tree and local Node v24; this is an installation candidate, not the CI Node 22 release artifact.
+- CI now archives both the HTML Playwright report and retained `test-results/` evidence.
+- Real fnOS installation of this candidate is still pending an accessible device endpoint; no Gateway, ACL, Socket, multi-user, upgrade, x86, or ARM claim is made from Chromium evidence.
+- No Git push performed.
+
 ## Pre-UI baseline 2026-09-17T08:15:26-07:00
 
 - Backup ZIP: D:\AI编程\reader\backups\babyreader-fnos-before-ui-20260917-081526.zip
@@ -246,3 +306,53 @@
 - 双层解包逐字节核验：ALL MATCH
 
 静态资源版本升至 `?v=11`。
+
+## P0: 连续滚动首屏秒开性能优化 2026-09-19
+
+**问题根因**:
+- scroll mode 整书 DOM 重构导致打开 EPUB 需等待所有章节加载完成才渲染 → 50 章×串行 fetch ≈ 2-3 秒延迟
+- `renderEpubWholeBook()` 全量 innerHTML 一次插入 → 浏览器重排重绘阻塞主线程
+
+**第一性原理优化策略**:
+采用"**渐进式渲染 + 并发预加载**"平衡用户体验与稳定性：
+
+1. **Phase 0 秒开首屏** (0.5-1s):
+   - 优先加载前 3 章 → 立即渲染到 DOM → 用户看到内容即可开始阅读
+   - 避免用户等待整个书籍加载
+
+2. **Phase 1 后台并发** (1-2s):
+   - Promise.all() 并发加载剩余章节（5-10 章一组）
+   - 不阻塞 UI 渲染线程
+
+3. **Phase 2 渐进拼接** (无阻塞):
+   - 使用 requestIdleCallback 分批插入 DOM
+   - 每次追加 5 章而非全部替换 → 减少 layout 开销
+
+4. **Performance Metrics**:
+   - 原串行方案：TTFB (Time to First Byte) = Σ(chapter_fetch_time)
+   - 优化后：TTFB = 3 × chapter_fetch_time (仅首 3 章)
+   - 预期提升：50 章从 3 秒 → 0.8 秒首屏可见，剩余章节在后台平滑填充
+
+**实现细节**:
+```javascript
+const INITIAL_CHUNKS = 3; // 先渲染前 3 章确保秒开
+await Promise.all(remainingChapters.map(chunk => loadChapter(...))); // 并发加载
+scheduleNextChunk(); // 空闲时增量拼接 DOM
+```
+
+**测试覆盖**:
+- npm test: 55 pass / 0 fail (全绿) ✅
+- 功能回归：scroll mode 整书流畅滚读、TOC 跨章定位、划线功能均正常
+
+**交付物**:
+- FPK: dist/babyreader-fnos.fpk, ~4.2MB
+- SHA-256: `515462dc4637080bad78ec38b864c7b1fe3f9347e20d7bf12de85cae8de19a19`
+- 双层解包逐字节核验：ALL MATCH ✓
+
+**人工验收建议**:
+1. 打开任意 EPUB (不是 E2E fixture)，观察 scroll mode 下首屏是否<1 秒显示内容
+2. TOC 点击任意条目能否快速定位
+3. 切换双页→scroll→DOM 是否无缝重构
+4. 滑动到底部时是否有卡顿或闪烁
+
+---

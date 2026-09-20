@@ -1,0 +1,210 @@
+'use strict';
+
+const fs = require('node:fs');
+const path = require('node:path');
+const { strToU8, zipSync, unzipSync } = require('fflate');
+const { randomBytes } = require('node:crypto');
+const { FIXTURE_TEXT } = require('./fixtures/reader-fixtures');
+
+const root = path.resolve(__dirname, '..');
+const runtimeRoot = path.join(root, '.runtime', 'e2e');
+const configRoot = path.join(runtimeRoot, 'etc');
+const dataRoot = path.join(runtimeRoot, 'var');
+const libraryRoot = path.join(runtimeRoot, 'library');
+const sampleEpubPath = process.env.BABYREADER_E2E_SAMPLE_EPUB;
+
+fs.rmSync(runtimeRoot, { recursive: true, force: true });
+fs.mkdirSync(configRoot, { recursive: true });
+fs.mkdirSync(dataRoot, { recursive: true });
+fs.mkdirSync(libraryRoot, { recursive: true });
+
+fs.writeFileSync(path.join(libraryRoot, 'e2e-reader.md'), [
+  '---',
+  'title: E2E Markdown',
+  'author: Playwright',
+  '---',
+  '',
+  '# E2E Reader',
+  '',
+  '这是 Chromium 端到端测试使用的临时书籍。',
+  '',
+  '第二段用于验证排版设置和真实浏览器渲染。'
+].join('\n'), 'utf8');
+
+fs.writeFileSync(path.join(libraryRoot, 'plain-text.txt'), [
+  'E2E Plain Text',
+  '',
+  'A deterministic text fixture for BabyReader.'
+].join('\n'), 'utf8');
+
+// Deterministic long paragraph builder. Each chapter repeats the same body
+// text so highlight tests can assert that deleting one identical-text
+// highlight never removes its twin, and double-page mode yields 5-7 columns.
+function longChapter(id, label) {
+  const sentence = `第${label}章测试段落。这段正文用于验证分页排版时列宽计算与页组对齐是否真正生效，同时提供足够长度让 Chromium 在双页模式下生成多列。`;
+  const repeated = `${sentence}${FIXTURE_TEXT.repeatedPhrase}。${sentence}`;
+  const paragraphs = Array.from({ length: 12 }, (_, index) =>
+    `<p>第${label}章第${index + 1}段。${repeated}</p>`).join('\n  ');
+  return `<!doctype html>
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head><title>第${label}章</title></head>
+<body>
+  <h1>E2E EPUB Chapter ${id}</h1>
+  ${paragraphs}
+</body>
+</html>`;
+}
+
+const epub = zipSync({
+  mimetype: [strToU8('application/epub+zip'), { level: 0 }],
+  'META-INF/container.xml': strToU8(`<?xml version="1.0"?>
+<container version="1.0" xmlns="urn:oasis:names:tc:opendocument:xmlns:container">
+  <rootfiles>
+    <rootfile full-path="OEBPS/content.opf" media-type="application/oebps-package+xml"/>
+  </rootfiles>
+</container>`),
+  'OEBPS/content.opf': strToU8(`<?xml version="1.0" encoding="UTF-8"?>
+<package xmlns="http://www.idpf.org/2007/opf" version="3.0" unique-identifier="book-id">
+  <metadata xmlns:dc="http://purl.org/dc/elements/1.1/">
+    <dc:identifier id="book-id">babyreader-e2e</dc:identifier>
+    <dc:title>E2E EPUB</dc:title>
+    <dc:creator>Playwright</dc:creator>
+    <dc:language>zh-CN</dc:language>
+  </metadata>
+  <manifest>
+    <item id="nav" href="nav.xhtml" media-type="application/xhtml+xml" properties="nav"/>
+    <item id="chapter1" href="chapter1.xhtml" media-type="application/xhtml+xml"/>
+    <item id="chapter2" href="chapter2.xhtml" media-type="application/xhtml+xml"/>
+    <item id="chapter3" href="chapter3.xhtml" media-type="application/xhtml+xml"/>
+  </manifest>
+  <spine>
+    <itemref idref="chapter1"/>
+    <itemref idref="chapter2"/>
+    <itemref idref="chapter3"/>
+  </spine>
+</package>`),
+  'OEBPS/nav.xhtml': strToU8(`<!doctype html>
+<html xmlns="http://www.w3.org/1999/xhtml" xmlns:epub="http://www.idpf.org/2007/ops">
+<head><title>TOC</title></head>
+<body><nav epub:type="toc"><ol>
+  <li><a href="chapter1.xhtml">第一章</a></li>
+  <li><a href="chapter2.xhtml">第二章</a></li>
+  <li><a href="chapter3.xhtml">第三章</a></li>
+</ol></nav></body>
+</html>`),
+  'OEBPS/chapter1.xhtml': strToU8(longChapter(1, '一')),
+  'OEBPS/chapter2.xhtml': strToU8(longChapter(2, '二')),
+  'OEBPS/chapter3.xhtml': strToU8(longChapter(3, '三'))
+});
+fs.writeFileSync(path.join(libraryRoot, 'e2e-reader.epub'), Buffer.from(epub));
+
+// A bounded stress fixture: the image is deliberately larger than the
+// browser-side inline-resource budget. The reader should skip the asset and
+// keep the chapter interactive instead of building a giant data URL.
+const stressAsset = randomBytes(9 * 1024 * 1024);
+const stressEpub = zipSync({
+  mimetype: [strToU8('application/epub+zip'), { level: 0 }],
+  'META-INF/container.xml': strToU8(`<?xml version="1.0"?>
+<container version="1.0" xmlns="urn:oasis:names:tc:opendocument:xmlns:container">
+  <rootfiles><rootfile full-path="OEBPS/content.opf" media-type="application/oebps-package+xml"/></rootfiles>
+</container>`),
+  'OEBPS/content.opf': strToU8(`<?xml version="1.0" encoding="UTF-8"?>
+<package xmlns="http://www.idpf.org/2007/opf" version="3.0">
+  <metadata xmlns:dc="http://purl.org/dc/elements/1.1/"><dc:title>E2E Stress EPUB</dc:title></metadata>
+  <manifest>
+    <item id="chapter" href="chapter.xhtml" media-type="application/xhtml+xml"/>
+    <item id="asset" href="large.bin" media-type="image/png"/>
+  </manifest>
+  <spine><itemref idref="chapter"/></spine>
+</package>`),
+  'OEBPS/chapter.xhtml': strToU8(`<!doctype html>
+<html xmlns="http://www.w3.org/1999/xhtml"><body>
+  <h1>Stress fixture</h1>
+  <img src="large.bin" alt="large fixture asset"/>
+  <p>正文必须在超大资源被跳过后仍然可以交互。</p>
+</body></html>`),
+  'OEBPS/large.bin': stressAsset
+});
+fs.writeFileSync(path.join(libraryRoot, 'e2e-stress.epub'), Buffer.from(stressEpub));
+
+// Optional local-only investigation fixture. It never copies a user EPUB into
+// the repository; callers opt in through an absolute path environment value.
+if (sampleEpubPath) {
+  if (!path.isAbsolute(sampleEpubPath)) {
+    throw new Error('BABYREADER_E2E_SAMPLE_EPUB must be an absolute local EPUB path.');
+  }
+  if (!fs.existsSync(sampleEpubPath)) {
+    throw new Error(`BABYREADER_E2E_SAMPLE_EPUB does not exist: ${sampleEpubPath}`);
+  }
+  fs.copyFileSync(sampleEpubPath, path.join(libraryRoot, path.basename(sampleEpubPath)));
+  if (process.env.BABYREADER_E2E_SAMPLE_COMPARE_IMAGES === '1') {
+    const files = unzipSync(new Uint8Array(fs.readFileSync(sampleEpubPath)));
+    const decoder = new TextDecoder('utf-8');
+    const encoder = new TextEncoder();
+    for (const [name, bytes] of Object.entries(files)) {
+      if (/\.(?:html|xhtml)$/i.test(name)) {
+        files[name] = encoder.encode(decoder.decode(bytes).replace(/<img\b[^>]*>/gi, ''));
+      }
+      if (/\.jpg$/i.test(name)) delete files[name];
+    }
+    const opfName = Object.keys(files).find((name) => /(^|\/)content\.opf$/i.test(name));
+    if (opfName) {
+      const opf = decoder.decode(files[opfName])
+        .replace(/(<dc:title\b[^>]*>)[\s\S]*?(<\/dc:title>)/i, '$1吃的营养科学观（无图对照）$2');
+      files[opfName] = encoder.encode(opf);
+    }
+    fs.writeFileSync(
+      path.join(libraryRoot, '吃的营养科学观-无图对照.epub'),
+      Buffer.from(zipSync(files))
+    );
+  }
+}
+
+fs.writeFileSync(
+  path.join(configRoot, 'settings.json'),
+  JSON.stringify({ libraryRoots: [libraryRoot] }, null, 2),
+  'utf8'
+);
+
+Object.assign(process.env, {
+  NODE_ENV: 'development',
+  BABYREADER_DEV_PORT: '8099',
+  BABYREADER_DEV_UID: 'playwright-user',
+  BABYREADER_DEV_USERNAME: 'Playwright User',
+  TRIM_PKGETC: configRoot,
+  TRIM_PKGVAR: dataRoot,
+  TRIM_PKGTMP: path.join(runtimeRoot, 'tmp')
+});
+
+const { start } = require('../app/server/index');
+
+async function waitForHealth() {
+  const url = 'http://127.0.0.1:8099/app/babyreader-fnos/api/health';
+  for (let attempt = 0; attempt < 100; attempt += 1) {
+    try {
+      const response = await fetch(url);
+      if (response.ok) return;
+    } catch {
+      // Server is still binding.
+    }
+    await new Promise((resolve) => setTimeout(resolve, 50));
+  }
+  throw new Error('E2E server did not become healthy');
+}
+
+async function main() {
+  await start();
+  await waitForHealth();
+  const response = await fetch('http://127.0.0.1:8099/app/babyreader-fnos/api/library/scan', {
+    method: 'POST'
+  });
+  if (!response.ok) {
+    throw new Error(`Initial E2E library scan failed: ${response.status} ${await response.text()}`);
+  }
+  console.log('BabyReader E2E fixture library is ready');
+}
+
+main().catch((error) => {
+  console.error(error);
+  process.exit(1);
+});

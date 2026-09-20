@@ -5,6 +5,7 @@ const fs = require('node:fs/promises');
 const os = require('node:os');
 const path = require('node:path');
 const test = require('node:test');
+const vm = require('node:vm');
 const { scanLibrary } = require('../app/server/library');
 const { UserStorage } = require('../app/server/storage');
 const { parseFnOSPathList } = require('../app/server/index');
@@ -209,7 +210,28 @@ test('server exposes health, diagnostics, scan status, error log, and shared sca
 });
 
 test('frontend restores server state and wires library, settings, EPUB TOC, and continuous scrolling', async () => {
-  const source = await fs.readFile(path.resolve(__dirname, '../app/ui/app.js'), 'utf8');
+  const sourceFiles = [
+    '../app/ui/core/state.js',
+    '../app/ui/core/utils.js',
+    '../app/ui/core/api.js',
+    '../app/ui/core/user-state.js',
+    '../app/ui/reader/epub.js',
+    '../app/ui/reader/document.js',
+    '../app/ui/reader/editor.js',
+    '../app/ui/reader/highlights.js',
+    '../app/ui/reader/actions.js',
+    '../app/ui/reader/progress.js',
+    '../app/ui/reader/pagination.js',
+    '../app/ui/reader/settings.js',
+    '../app/ui/reader/navigation.js',
+    '../app/ui/reader/lifecycle.js',
+    '../app/ui/shell/drawer.js',
+    '../app/ui/library/view.js',
+    '../app/ui/app.js'
+  ];
+  const source = (await Promise.all(
+    sourceFiles.map((relative) => fs.readFile(path.resolve(__dirname, relative), 'utf8'))
+  )).join('\n');
   const html = await fs.readFile(path.resolve(__dirname, '../app/ui/index.html'), 'utf8');
   const css = await fs.readFile(path.resolve(__dirname, '../app/ui/styles.css'), 'utf8');
 
@@ -252,4 +274,90 @@ test('frontend restores server state and wires library, settings, EPUB TOC, and 
   assert.match(css, /body\.paged-reading/);
   assert.match(css, /line-height: var\(--reader-line-height\) !important/);
   assert.match(css, /padding: 48px var\(--reader-page-margin\) 120px/);
+});
+
+test('EPUB transport keeps binary data binary and parser protects the main thread from resource amplification', async () => {
+  const apiSource = await fs.readFile(path.resolve(__dirname, '../app/ui/core/api.js'), 'utf8');
+  const epubSource = await fs.readFile(path.resolve(__dirname, '../app/ui/reader/epub.js'), 'utf8');
+
+  assert.match(apiSource, /data:\s*await response\.arrayBuffer\(\)/);
+  assert.doesNotMatch(apiSource, /String\.fromCharCode\(\.\.\.bytes\.subarray/);
+  assert.match(epubSource, /EPUB_RESOURCE_LIMITS/);
+  assert.match(epubSource, /maxInlineResourceBytes/);
+  assert.match(epubSource, /maxInlineTotalBytes/);
+  assert.match(epubSource, /yieldToBrowser/);
+});
+
+test('EPUB parser lazily opens three spine entries and loads only the requested chapter', async () => {
+  const calls = [];
+  const entry = (name, text) => ({
+    _data: { uncompressedSize: Buffer.byteLength(text) },
+    async(type) {
+      calls.push({ name, type });
+      assert.equal(type, 'text');
+      return text;
+    }
+  });
+  const entries = {
+    'META-INF/container.xml': entry('META-INF/container.xml', '<container><rootfile full-path="OPS/content.opf"/></container>'),
+    'OPS/content.opf': entry('OPS/content.opf', `
+      <package><metadata><dc:title>Fixture</dc:title></metadata><manifest>
+        <item id="chapter-1" href="text/chapter-01.xhtml" media-type="application/xhtml+xml"/>
+        <item id="chapter-2" href="text/chapter-02.xhtml" media-type="application/xhtml+xml"/>
+        <item id="chapter-3" href="text/chapter-03.xhtml" media-type="application/xhtml+xml"/>
+      </manifest><spine>
+        <itemref idref="chapter-1"/><itemref idref="chapter-2"/><itemref idref="chapter-3"/>
+      </spine></package>`),
+    'OPS/text/chapter-01.xhtml': entry('OPS/text/chapter-01.xhtml', '<html><body><p>First chapter.</p></body></html>'),
+    'OPS/text/chapter-02.xhtml': entry('OPS/text/chapter-02.xhtml', '<html><body><p>Second chapter.</p></body></html>'),
+    'OPS/text/chapter-03.xhtml': entry('OPS/text/chapter-03.xhtml', '<html><body><p>Third chapter.</p></body></html>')
+  };
+  const zip = { files: entries, file: (name) => entries[name] || null };
+  const epubSource = await fs.readFile(path.resolve(__dirname, '../app/ui/reader/epub.js'), 'utf8');
+  const context = vm.createContext({
+    Buffer,
+    JSZip: { loadAsync: async () => zip },
+    console: { warn() {} },
+    setTimeout,
+    btoa: (binary) => Buffer.from(binary, 'binary').toString('base64')
+  });
+  vm.runInContext(`${epubSource}\nglobalThis.epubTestApi = { createEpubResourceBudget, openEpubArchive, loadEpubChapter, resourceDataUrl };`, context);
+
+  const archive = await context.epubTestApi.openEpubArchive(new Uint8Array([1]));
+  assert.equal(archive.spine.length, 3);
+  assert.deepEqual(calls.map((call) => call.name), ['META-INF/container.xml', 'OPS/content.opf']);
+
+  const second = await context.epubTestApi.loadEpubChapter(archive, 1);
+  assert.equal(second.index, 1);
+  assert.equal(second.href, 'OPS/text/chapter-02.xhtml');
+  assert.match(second.html, /id="br-chapter-2"/);
+  assert.match(second.html, /data-source-path="OPS\/text\/chapter-02.xhtml"/);
+  assert.match(second.html, /Second chapter\./);
+  assert.doesNotMatch(second.html, /First chapter|Third chapter/);
+  assert.deepEqual(calls.map((call) => call.name), [
+    'META-INF/container.xml',
+    'OPS/content.opf',
+    'OPS/text/chapter-02.xhtml'
+  ]);
+
+  let oversizedEntryExtracted = false;
+  const oversizedEntry = {
+    _data: { uncompressedSize: 8 * 1024 * 1024 + 1 },
+    async() {
+      oversizedEntryExtracted = true;
+      return new Uint8Array(0);
+    }
+  };
+  const oversizedResult = await context.epubTestApi.resourceDataUrl(
+    { files: { 'OPS/images/oversized.jpg': oversizedEntry }, file: () => oversizedEntry },
+    'OPS/images/oversized.jpg',
+    {},
+    context.epubTestApi.createEpubResourceBudget()
+  );
+
+  assert.equal(oversizedEntryExtracted, false);
+  assert.equal(oversizedResult, null);
+  assert.match(epubSource, /async function openEpubArchive\s*\(/);
+  assert.match(epubSource, /async function loadEpubChapter\s*\(/);
+  assert.doesNotMatch(epubSource, /return \{[\s\S]*chapters\.join\(/);
 });

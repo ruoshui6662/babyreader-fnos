@@ -1,102 +1,214 @@
 /* ============================================================
-   BabyReader — Dark Theme Stylesheet
+   BabyReader — Apple HIG Design System
    ============================================================ */
 
-/* --- Custom Properties --- */
+/* --- Semantic Color Tokens (HIG: label/secondaryLabel/separator) --- */
 :root {
   color-scheme: dark;
-  --bg:          #1e1e1e;
-  --surface:     #262626;
-  --surface-alt: #232323;
-  --surface-code:#1a1a1a;
-  --text:        #e8e0d4;
-  --text-muted:  #9a918a;
-  --text-dim:    #6a6360;
-  --text-strong: #f0e8dc;
-  --accent:      #DA7756;
-  --border:      #333333;
-  --topbar-bg:   rgba(30, 30, 30, 0.85);
-  --toc-bg:      rgba(35, 35, 35, 0.82);
-  --hover-bg:    rgba(255, 255, 255, 0.06);
-  --selection-bg:rgba(218, 119, 86, 0.3);
-  --highlight-bg:rgba(218, 119, 86, 0.18);
+
+  /* Background layers */
+  --color-bg:          #1C1C1E;   /* 深灰背景，层次更清晰 */
+  --color-elevated:    #2C2C2E;   /* 卡片/纸面浮起层 */
+  --color-bar:         rgba(40,40,42,.72); /* 顶栏/工具栏材质 */
+  --color-fill:        rgba(120,120,128,.16); /* 按钮/控件填充 */
+  
+  /* Text colors */
+  --color-text:        #F2F2F7;   /* Primary label */
+  --color-text-2:      rgba(235,235,245,.6); /* Secondary label */
+  --color-text-3:      rgba(235,235,245,.3); /* Tertiary label */
+  
+  /* Separator & fill */
+  --color-separator:   rgba(84,84,88,.6);
+  
+  /* Accent & focus */
+  --color-accent:      #0A84FF;   /* Apple systemBlue，你的决策 */
+  --color-accent-hover:#409CFF;
+  --color-accent-active:#0778E6;
+  --color-focus:       #0A84FF;   /* Keyboard focus ring */
+  
+  /* Compatibility aliases */
+  --bg:          var(--color-bg);
+  --surface:     var(--color-elevated);
+  --surface-alt: #3A3A3C;
+  --text:        var(--color-text);
+  --text-muted:  var(--color-text-2);
+  --text-dim:    var(--color-text-3);
+  --accent:      var(--color-accent);
+  --border:      var(--color-separator);
+  --topbar-bg:   var(--color-bar);
+  --toc-bg:      var(--color-bar);
+  --hover-bg:    var(--color-fill);
+  --selection-bg:rgba(10,132,255,.25);
+  --highlight-bg:rgba(10,132,255,.18);
   --button-text: #ffffff;
-  --code-text:   #c4886a;
-  --pre-text:    #b8c0c8;
-  --table-row:   rgba(255,255,255,0.02);
-  --welcome-hint:#504945;
-  --topbar-h:    52px;
+
+  /* Typography scale */
+  --font-serif:  "Noto Serif SC", "Source Han Serif CN", "SimSun", "Songti SC", Georgia, serif;
+  --font-sans:   -apple-system, "SF Pro Text", "PingFang SC", "Helvetica Neue", system-ui, sans-serif;
+  --font-mono:   "SF Mono", "JetBrains Mono", Menlo, "Courier New", monospace;
+  --font-ui:     var(--font-sans);
+  --icon-size:   22px;
+
+  /* Reading typography (user-controllable) */
   --reader-line-height: 1.9;
   --reader-page-margin: 40px;
-
-  --font-serif:  "Noto Serif SC", "Source Han Serif CN", "SimSun", "Songti SC", Georgia, serif;
-  --font-sans:   -apple-system, "PingFang SC", "Helvetica Neue", "Noto Sans SC", sans-serif;
-  --font-mono:   "SF Mono", "JetBrains Mono", Menlo, "Courier New", monospace;
-
-  /* Reading typography, all user-overridable from the settings drawer.
-     Defaults keep the historical look (no indent, 1.1em gaps, sans body):
-     existing users see no change until they opt in. */
   --reader-text-indent: 0em;
   --reader-para-spacing: 1.1em;
   --reader-font-family: var(--font-sans);
+
+  /* --- Spacing Grid (4/8 multiples) --- */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+
+  /* --- Radius System (hierarchical) --- */
+  --radius-control: 10px;   /* Buttons, inputs */
+  --radius-card:    16px;   /* Paper card */
+  --radius-sheet:   20px;   /* Drawer, modal */
+  --radius-pill:    999px;  /* Segmented control, chips */
+
+  /* --- Materials & Shadow (depth hierarchy) --- */
+  --material-blur: saturate(180%) blur(20px);
+  --shadow-card:  0 12px 40px rgba(0,0,0,.14);
+  --shadow-float: 0 6px 24px rgba(0,0,0,.16);
+  --shadow-sheet: 0 -8px 40px rgba(0,0,0,.18);
+
+  /* --- Motion (Apple ease curves) --- */
+  --ease-out:    cubic-bezier(.22,1,.36,1);   /* Entrance */
+  --ease-in-out: cubic-bezier(.42,0,.58,1);   /* State change */
+  --dur-fast: 160ms;
+  --dur-med:  240ms;
+  --dur-slow: 320ms;
+
+  /* Legacy compatibility */
+  --topbar-h:    52px;
+  --welcome-hint:#504945;
+
+  /* Back-compat aliases kept for components not yet migrated in P1 */
+  --text-strong: #F2F2F7;      /* same as primary label in dark */
+  --surface-code:#161618;      /* deep surface for code/pre blocks */
+  --code-text:   #c4886a;
+  --pre-text:    #b8c0c8;
+  --table-row:   rgba(255,255,255,0.02);
 }
 
-/* 护眼纸张背景：暖米色底 + 深墨色文字，长时阅读对比度更柔和 */
+/* Sepia reading mode follows the library's white browsing surface so the app
+   keeps one visual language between choosing a book and reading it. */
 body.theme-sepia {
   color-scheme: light;
-  --bg:          #EFE5CF;
-  --surface:     #E8DCC2;
-  --surface-alt: #F2E9D6;
-  --surface-code:#E4D7BC;
-  --text:        #3D3427;
-  --text-muted:  #7A6E5B;
-  --text-dim:    #94876F;
-  --text-strong: #221C12;
-  --accent:      #A85E2E;
-  --border:      #CDBCA0;
-  --topbar-bg:   rgba(239, 229, 207, 0.92);
-  --toc-bg:      rgba(232, 220, 194, 0.92);
-  --hover-bg:    rgba(61, 52, 39, 0.07);
-  --selection-bg:rgba(168, 94, 46, 0.26);
-  --highlight-bg:rgba(168, 94, 46, 0.18);
-  --button-text: #3D3427;
-  --code-text:   #7C4A22;
-  --pre-text:    #4A4234;
-  --table-row:   rgba(61, 52, 39, 0.03);
-  --welcome-hint:#94876F;
+
+  /* Library baseline: white stage, quiet gray controls, dark neutral ink. */
+  --color-bg:          #FFFFFF;
+  --color-elevated:    #F7F7F7;
+  --color-bar:         rgba(255,255,255,.92);
+  --color-fill:        rgba(118,118,128,.12);
+  --color-text:        #1F1F1F;
+  --color-text-2:      rgba(60,60,67,.6);
+  --color-text-3:      rgba(60,60,67,.3);
+  --color-separator:   #EDEDED;
+  --color-accent:      #B4661F;   /* Accent warmer for sepia mode (brand preservation) */
+  --color-focus:       #0A74C4;
+  
+  /* Compatibility aliases */
+  --text-strong:       var(--color-text);
+
+  /* Back-compat aliases for unmigrated components */
+  --surface-code: var(--color-bg);
+  --code-text:   #B4661F;
+  --pre-text:    #4A433A;
+  --table-row:   rgba(61,50,35,.03);
+  --topbar-bg:   var(--color-bar);
+  --toc-bg:      var(--color-bar);
+  --hover-bg:    var(--color-fill);
+  --selection-bg:rgba(168,94,46,.25);
+  --highlight-bg:rgba(168,94,46,.18);
+  --welcome-hint:#888888;
+
+  /* Critical: legacy aliases MUST be redeclared per theme. They bake in the
+     theme value at declaration time, so :root's dark values would otherwise
+     leak through on light pages (black cards / black reading stage). */
+  --bg:          var(--color-bg);
+  --surface:     var(--color-elevated);
+  --surface-alt: #FFFFFF;         /* same paper surface as the library */
+  --text:        var(--color-text);
+  --text-muted:  var(--color-text-2);
+  --text-dim:    var(--color-text-3);
+  --accent:      var(--color-accent);
+  --border:      var(--color-separator);
+  --button-text: #2A251C;
 }
 
 body.theme-light {
   color-scheme: light;
-  --bg:          #FCF8F1;
-  --surface:     #F4EDE3;
-  --surface-alt: #FBF7EF;
-  --surface-code:#F3EFE8;
-  --text:        #3A342E;
-  --text-muted:  #8B8378;
-  --text-dim:    #A89B8C;
-  --text-strong: #161513;
-  --accent:      #C8A26C;
-  --border:      #DAD0C3;
-  --topbar-bg:   rgba(252, 248, 241, 0.92);
-  --toc-bg:      rgba(238, 234, 226, 0.92);
-  --hover-bg:    rgba(58, 52, 46, 0.06);
-  --selection-bg:rgba(200, 162, 108, 0.28);
-  --highlight-bg:rgba(200, 162, 108, 0.22);
-  --button-text: #3A342E;
+
+  /* Light semantic tokens */
+  --color-bg:          #FFFFFF;
+  --color-elevated:    #FCF8F1;
+  --color-bar:         rgba(249,249,246,.72);
+  --color-fill:        rgba(118,118,128,.12);
+  --color-text:        #1C1C1E;
+  --color-text-2:      rgba(60,60,67,.6);
+  --color-text-3:      rgba(60,60,67,.3);
+  --color-separator:   rgba(60,60,67,.29);
+  --color-accent:      #0A84FF;
+  --color-focus:       #0A84FF;
+
+  /* Compatibility aliases */
+  --text-strong:       var(--color-text);
+  
+  /* Back-compat aliases for unmigrated components */
+  --surface-code: var(--color-elevated);
   --code-text:   #7F5A2F;
   --pre-text:    #4A433A;
-  --table-row:   rgba(58, 52, 46, 0.025);
+  --table-row:   rgba(60,60,67,.025);
+  --topbar-bg:   var(--color-bar);
+  --toc-bg:      var(--color-bar);
+  --hover-bg:    var(--color-fill);
+  --selection-bg:rgba(10,132,255,.18);
+  --highlight-bg:rgba(10,132,255,.16);
   --welcome-hint:#A89B8C;
+
+  /* Critical: legacy aliases redeclared per theme (see sepia note). Without
+     these, :root's dark-baked values leak into light mode. */
+  --bg:          var(--color-bg);
+  --surface:     var(--color-elevated);
+  --surface-alt: #F2F2F7;         /* Apple systemGray6 light */
+  --text:        var(--color-text);
+  --text-muted:  var(--color-text-2);
+  --text-dim:    var(--color-text-3);
+  --accent:      var(--color-accent);
+  --border:      var(--color-separator);
+  --button-text: #1C1C1E;
 }
 
-/* --- Reset & Base --- */
+/* --- Base Reset --- */
 *, *::before, *::after {
   box-sizing: border-box;
   margin: 0;
   padding: 0;
 }
 
+/* Focus styles */
+:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--color-focus);
+  border-radius: var(--radius-control);
+}
+
+/* Buttons & interactive elements */
+button:focus-visible,
+a:focus-visible,
+[role="button"]:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--color-focus);
+  border-radius: var(--radius-control);
+}
+
+/* --- Typography --- */
 html {
   font-size: 16px;
   scroll-behavior: smooth;
@@ -104,8 +216,8 @@ html {
 }
 
 body {
-  background: var(--bg);
-  color: var(--text);
+  background: var(--color-bg);
+  color: var(--color-text);
   font-family: var(--font-sans);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
@@ -116,8 +228,8 @@ body {
 
 /* --- Selection --- */
 ::selection {
-  background: var(--selection-bg);
-  color: var(--text);
+  background: rgba(10,132,255,.25); /* Accent selection */
+  color: #ffffff;
 }
 
 /* --- Scrollbar --- */
@@ -129,11 +241,11 @@ body {
   background: transparent;
 }
 .editor::-webkit-scrollbar-thumb {
-  background: var(--border);
+  background: var(--color-text-3); /* Subtle Tertiary */
   border-radius: 3px;
 }
 .editor::-webkit-scrollbar-thumb:hover {
-  background: var(--text-dim);
+  background: var(--color-text-2); /* Secondary on hover */
 }
 
 /* ============================================================
@@ -150,17 +262,18 @@ body {
   align-items: center;
   justify-content: space-between;
   box-sizing: border-box;
-  padding: 4px 20px 0 76px;
-  background: var(--topbar-bg);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
+  padding: 0 var(--space-5) 0 76px; /* HIG: use --space-5 (20px) */
+  background: var(--color-bar); /* HIG: semantic bar color */
+  backdrop-filter: var(--material-blur); /* HIG: unified material */
+  -webkit-backdrop-filter: var(--material-blur);
+  border-bottom: 1px solid var(--color-separator); /* HIG: subtle separator */
   -webkit-app-region: drag; /* allow window drag in native app */
 }
 
 .topbar-left {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: var(--space-3); /* HIG: 12px unified spacing */
   flex: 1;
   min-width: 0;
 }
@@ -168,24 +281,24 @@ body {
 .topbar-right {
   display: flex;
   align-items: center;
-  gap: 2px;
+  gap: var(--space-1); /* HIG: 4px between buttons */
   flex-shrink: 0;
   -webkit-app-region: no-drag;
 }
 
 .app-name {
-  font-size: 15px;
+  font-size: 17px; /* HIG: Body/Headline size */
   font-weight: 600;
-  color: var(--text);
-  letter-spacing: 0.01em;
+  color: var(--color-text);
+  letter-spacing: -0.02em; /* Slight negative tracking for headlines */
   flex-shrink: 0;
 }
 
 .file-name {
   display: block;
   min-width: 0;
-  font-size: 14px;
-  color: var(--text-muted);
+  font-size: 14px; /* HIG: Subhead size */
+  color: var(--color-text-2); /* Secondary text */
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -221,65 +334,71 @@ body {
 .theme-btn,
 .reader-tool-btn {
   -webkit-app-region: no-drag;
-  width: 32px;
-  height: 32px;
+  width: 44px; /* HIG: minimum touch target */
+  height: 44px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   background: transparent;
   border: none;
-  border-radius: 8px;
-  color: var(--text-muted);
+  border-radius: var(--radius-control); /* HIG: 10px controls */
+  color: var(--color-text-2); /* Secondary text */
   cursor: pointer;
-  transition: color 0.15s ease, background 0.15s ease;
+  transition: color 160ms ease, background-color 160ms ease;
 }
 
 /* P0: icon-only toolbar, slightly larger */
 .reader-floating-toolbar .theme-btn svg,
-.reader-floating-toolbar .reader-tool-btn svg {
-  width: 20px;
-  height: 20px;
+.reader-floating-toolbar .reader-tool-btn svg,
+.reader-floating-toolbar .toc-toggle svg {
+  width: 22px; /* Slightly larger for visual balance */
+  height: 22px;
   display: block;
   stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  fill: none;
 }
 
 /* Disabled reserved buttons are subtle muted icons */
 .reader-floating-toolbar .reader-tool-btn:disabled svg {
-  opacity: 0.28;
+  opacity: 0.38; /* Tertiary opacity */
 }
 
 .theme-btn:hover,
 .reader-tool-btn:hover {
-  color: var(--accent);
-  background: var(--hover-bg);
+  color: var(--color-accent);
+  background: var(--color-fill);
 }
 
 .toc-toggle {
   -webkit-app-region: no-drag;
-  width: 32px;
-  height: 32px;
+  width: 44px; /* HIG: 44px target */
+  height: 44px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   background: transparent;
   border: none;
-  border-radius: 8px;
-  color: var(--text-muted);
+  border-radius: var(--radius-control);
+  color: var(--color-text-2);
   cursor: pointer;
-  transition: color 0.15s ease, background 0.15s ease;
+  transition: color 160ms ease, background-color 160ms ease;
 }
 
 .toc-toggle svg {
-  width: 20px;
-  height: 20px;
+  width: 22px;
+  height: 22px;
   display: block;
   stroke: currentColor;
+  stroke-width: 1.8;
   fill: none;
 }
 
 .toc-toggle:hover {
-  color: var(--accent);
-  background: var(--hover-bg);
+  color: var(--color-accent);
+  background: var(--color-fill);
 }
 
 .toc-toggle[hidden],
@@ -330,6 +449,25 @@ body.has-toc.toc-open .reader {
   max-width: 720px;
   margin: 0 auto;
   padding: 48px var(--reader-page-margin) 120px;
+}
+
+.scroll-chapter-header,
+.scroll-chapter-footer {
+  display: none;
+}
+
+/* The boundary controls are siblings of #article because chapter rendering
+   replaces article.innerHTML. Keep the wrapper layout-neutral everywhere else
+   so welcome, library, and paged-reader geometry remain unchanged. */
+.scroll-chapter-frame {
+  display: contents;
+}
+
+/* The library is a browsing surface rather than a reading column. It may use
+   the full desktop canvas while book and EPUB text retain the 720px measure. */
+.reader .article.is-library {
+  max-width: none;
+  padding: 56px clamp(28px, 6vw, 96px) 96px;
 }
 
 .epub-shell {
@@ -510,7 +648,7 @@ body.has-toc.toc-open .reader {
 .article .highlight-layer {
   position: absolute;
   inset: 0;
-  z-index: 0;
+  z-index: 2;
   pointer-events: none;
 }
 
@@ -865,11 +1003,45 @@ body:not(.toc-open) .toc {
 
 .welcome h1 {
   font-family: var(--font-serif);
-  font-size: 36px;
+  font-size: 34px;
   font-weight: 700;
-  color: var(--text-muted);
+  color: var(--color-text);
   letter-spacing: -0.02em;
-  margin-bottom: 32px;
+  margin-bottom: 20px;
+}
+
+.welcome-mark {
+  position: relative;
+  width: 52px;
+  height: 52px;
+  margin-bottom: 20px;
+  border: 1px solid var(--color-separator);
+  border-radius: 17px;
+  background: color-mix(in srgb, var(--color-elevated) 88%, transparent);
+  box-shadow: var(--shadow-card);
+}
+
+.welcome-mark::before,
+.welcome-mark::after {
+  position: absolute;
+  top: 13px;
+  width: 13px;
+  height: 24px;
+  border: 1.5px solid var(--color-accent);
+  content: '';
+}
+
+.welcome-mark::before {
+  left: 12px;
+  border-radius: 3px 1px 1px 3px;
+  border-right: 0;
+}
+
+.welcome-mark::after {
+  right: 12px;
+  border-radius: 1px 3px 3px 1px;
+  border-left: 0;
+}
 }
 
 /* Quote block: EN + ZH stay close together */
@@ -888,10 +1060,17 @@ body:not(.toc-open) .toc {
   font-size: 15px;
   color: var(--text-dim);
   letter-spacing: 0.06em;
-  margin-bottom: 36px; /* gap before info block */
+  margin-bottom: 20px;
 }
 
 /* Info block: hint + credit stay close together */
+.welcome-guidance {
+  margin-bottom: 12px;
+  color: var(--color-text-2);
+  font-size: 15px;
+  line-height: 1.5;
+}
+
 .welcome .hint {
   font-size: 13px;
   color: var(--welcome-hint);
@@ -966,40 +1145,42 @@ body:not(.toc-open) .toc {
 /* ============================================================
    Responsive
    ============================================================ */
-@media (max-width: 800px) {
-  body.has-toc.toc-open .reader {
+/* Mobile surface rules are data-attribute scoped, so the media range also
+   covers iPad landscape without changing narrow desktop windows. */
+@media (max-width: 1200px) {
+  html[data-reader-surface="mobile"] body.has-toc.toc-open .reader {
     padding-left: 0;
   }
 
-  .toc {
+  html[data-reader-surface="mobile"] .toc {
     display: none !important;
   }
 
-  .reader .article {
-    padding: 32px var(--reader-page-margin) calc(96px + env(safe-area-inset-bottom));
+  html[data-reader-surface="mobile"] .reader .article {
+    padding: 32px var(--reader-page-margin) calc(32px + env(safe-area-inset-bottom, 0px));
   }
 
-  .epub-shell {
+  html[data-reader-surface="mobile"] .epub-shell {
     padding: var(--topbar-h) 0 0;
   }
 
-  .article h1,
-  .article .block-title {
+  html[data-reader-surface="mobile"] .article h1,
+  html[data-reader-surface="mobile"] .article .block-title {
     font-size: 26px;
   }
 
-  .article p,
-  .article ul,
-  .article ol {
+  html[data-reader-surface="mobile"] .article p,
+  html[data-reader-surface="mobile"] .article ul,
+  html[data-reader-surface="mobile"] .article ol {
     font-size: 17px;
   }
 
-  .article .block-lede,
-  .article .block-lede p {
+  html[data-reader-surface="mobile"] .article .block-lede,
+  html[data-reader-surface="mobile"] .article .block-lede p {
     font-size: 17px;
   }
 
-  .topbar {
+  html[data-reader-surface="mobile"] .topbar {
     padding-left: 20px; /* non-macOS or small screen */
   }
 }
@@ -1043,9 +1224,42 @@ body:not(.toc-open) .toc {
 /* ============================================================
    Library and Settings
    ============================================================ */
+/* The library is a browse surface, not a reading sheet. In light and sepia
+   modes it uses quiet WeChat-style whites so book covers, not a warm page
+   treatment or card chrome, carry the visual weight. */
+body.is-library.theme-light,
+body.is-library.theme-sepia {
+  --library-stage: #fff;
+  --library-surface: #f7f7f7;
+  --library-text: #1f1f1f;
+  --library-text-muted: #888;
+  --library-separator: #ededed;
+  background: var(--library-stage);
+}
+
+body.is-library.theme-dark {
+  --library-stage: #1c1c1e;
+  --library-surface: #2c2c2e;
+  --library-text: #f2f2f7;
+  --library-text-muted: rgba(235, 235, 245, .6);
+  --library-separator: rgba(84, 84, 88, .6);
+}
+
+body.is-library .reader,
+body.is-library .reader .article.is-library {
+  background: var(--library-stage, var(--color-bg));
+}
+
+body.is-library.theme-light .topbar,
+body.is-library.theme-sepia .topbar {
+  background: rgba(255, 255, 255, .92);
+  border-bottom-color: var(--library-separator);
+}
+
 .library-view {
-  width: min(1080px, 100%);
+  width: min(1052px, 100%);
   margin: 0 auto;
+  padding: 0 0 48px;
 }
 
 .library-header {
@@ -1058,55 +1272,150 @@ body:not(.toc-open) .toc {
 
 .library-header h1 {
   margin: 0;
+  color: var(--library-text, var(--color-text));
+  font-family: var(--font-ui);
+  font-size: 22px;
+  letter-spacing: -0.03em;
+}
+
+.library-view .library-summary {
+  margin: 5px 0 0;
+  color: var(--library-text-muted, var(--color-text-2));
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.library-scan-button {
+  min-height: 32px;
+  padding: 6px 14px;
+  color: var(--library-text-muted, var(--color-text-2));
+  background: var(--library-surface, var(--color-fill));
+  border-color: transparent;
+  box-shadow: none;
+  font-size: 12px;
+}
+
+.library-scan-button:hover:not(:disabled) {
+  color: var(--library-text, var(--color-text));
+  background: color-mix(in srgb, var(--library-surface, var(--color-fill)) 84%, #ddd);
+}
+
+.library-scan-button:disabled {
+  opacity: .62;
 }
 
 .library-empty {
-  max-width: 680px;
-  padding: 28px;
-  border: 1px dashed var(--border);
+  display: flex;
+  min-height: 280px;
+  padding: 36px;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  border: 1px solid var(--library-separator, var(--color-separator));
+  border-radius: 8px;
+  background: var(--library-surface, var(--color-elevated));
+  box-shadow: none;
+}
+
+.library-empty-icon {
+  position: relative;
+  width: 44px;
+  height: 44px;
+  margin-bottom: 16px;
   border-radius: 14px;
-  background: var(--surface-alt);
-  color: var(--text-muted);
-  line-height: 1.8;
+  background: var(--library-stage, var(--color-fill));
+}
+
+.library-empty-icon::before {
+  position: absolute;
+  inset: 11px 12px;
+  border: 1.5px solid var(--library-text-muted, var(--color-accent));
+  border-radius: 3px;
+  content: '';
+}
+
+.library-empty-title {
+  margin: 0;
+  color: var(--library-text, var(--color-text));
+  font-size: 18px;
+  line-height: 1.4;
+}
+
+.library-empty-copy {
+  max-width: 400px;
+  margin: 8px 0 0;
+  color: var(--library-text-muted, var(--color-text-2));
+  font-size: 13px;
+  line-height: 1.6;
 }
 
 .library-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
-  gap: 20px;
+  grid-template-columns: repeat(auto-fill, 152px);
+  justify-content: start;
+  gap: 36px 28px;
 }
 
 .library-book {
+  width: 152px;
   min-width: 0;
-  padding: 14px;
+  padding: 0;
   display: flex;
   flex-direction: column;
   align-items: stretch;
   gap: 8px;
-  background: var(--surface-alt);
-  color: var(--text);
-  border: 1px solid var(--border);
-  border-radius: 14px;
+  background: transparent;
+  color: var(--library-text, var(--color-text));
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
   cursor: pointer;
   text-align: left;
-  transition: transform 0.15s ease, border-color 0.15s ease, background 0.15s ease;
+  transition: transform var(--dur-fast) var(--ease-out), opacity var(--dur-fast) var(--ease-out);
 }
 
 .library-book:hover,
 .library-book:focus-visible {
-  transform: translateY(-2px);
-  border-color: var(--accent);
-  background: var(--surface);
+  transform: translateY(-3px);
+  border-color: transparent;
+  box-shadow: none;
   outline: none;
 }
 
-.library-book img {
-  width: 100%;
+.library-book-cover {
+  display: block;
+  width: 152px;
   aspect-ratio: 2 / 3;
-  object-fit: cover;
-  margin: 0 0 4px;
-  border-radius: 9px;
-  background: var(--surface-code);
+  object-fit: contain;
+  border-radius: 5px;
+  background: var(--library-surface, var(--color-fill));
+  box-shadow: none;
+  transition: transform var(--dur-fast) var(--ease-out), box-shadow var(--dur-fast) var(--ease-out);
+}
+
+.library-book:hover .library-book-cover,
+.library-book:focus-visible .library-book-cover {
+  box-shadow: 0 6px 16px rgba(0, 0, 0, .12);
+}
+
+.library-book-cover:not(img)::after {
+  display: grid;
+  width: 100%;
+  height: 100%;
+  place-items: center;
+  color: var(--library-text-muted, var(--color-text-2));
+  content: '书';
+  font-family: var(--font-serif);
+  font-size: 24px;
+  font-weight: 600;
+}
+
+.library-book-metadata {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+  padding: 0;
 }
 
 .library-book strong,
@@ -1116,15 +1425,67 @@ body:not(.toc-open) .toc {
 }
 
 .library-book strong {
-  font-size: 15px;
+  display: -webkit-box;
+  overflow: hidden;
+  color: var(--library-text, var(--color-text));
+  font-size: 13px;
+  line-height: 1.45;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.library-book span {
+  color: var(--library-text-muted, var(--text-muted));
+  font-size: 12px;
   line-height: 1.4;
   white-space: nowrap;
 }
 
-.library-book span {
-  color: var(--text-muted);
-  font-size: 13px;
-  white-space: nowrap;
+@media (max-width: 900px) {
+  .reader .article.is-library {
+    padding: 36px 24px 72px;
+  }
+
+  .library-grid {
+    grid-template-columns: repeat(4, 152px);
+    gap: 32px 24px;
+  }
+}
+
+@media (max-width: 720px) {
+  .reader .article.is-library {
+    padding: 28px 16px 48px;
+  }
+
+  .library-header {
+    align-items: flex-start;
+  }
+
+  .library-header h1 {
+    font-size: 24px;
+  }
+
+  .library-grid {
+    grid-template-columns: repeat(3, 152px);
+  }
+}
+
+@media (max-width: 540px) {
+  .library-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 28px 16px;
+  }
+
+  .library-book,
+  .library-book-cover {
+    width: 100%;
+  }
+}
+
+@media (max-width: 380px) {
+  .library-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }
 
 .settings-panel {
@@ -1149,60 +1510,294 @@ body:not(.toc-open) .toc {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 18px;
+  margin-bottom: 20px;
 }
 
 .settings-header h2 {
-  font-size: 18px;
+  color: var(--color-text);
+  font-size: 22px;
+  line-height: 28px;
+  font-weight: 700;
 }
 
 .settings-header button {
-  padding: 5px 10px;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  background: transparent;
-  color: var(--text-muted);
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  color: var(--color-text-2);
+  background: var(--color-fill);
+  border: 0;
+  border-radius: 50%;
+  font-size: 0;
   cursor: pointer;
+  transition: color var(--dur-fast) var(--ease-out), background-color var(--dur-fast) var(--ease-out), transform var(--dur-fast) var(--ease-out);
+}
+
+.settings-header button::before {
+  content: '×';
+  font-size: 22px;
+  line-height: 1;
+}
+
+.settings-header button:hover,
+.settings-header button:focus-visible {
+  color: var(--color-text);
+  background: var(--color-fill);
+}
+
+.settings-header button:active {
+  transform: scale(.94);
+}
+
+.settings-header button:focus-visible {
+  outline: 2px solid var(--color-focus);
+  outline-offset: 2px;
 }
 
 .settings-field {
   display: grid;
-  grid-template-columns: 76px 1fr auto;
+  grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
-  gap: 10px;
-  min-height: 44px;
-  color: var(--text-muted);
+  gap: 12px;
+  min-height: 56px;
+  padding: 14px 16px;
+  color: var(--color-text);
   font-size: 14px;
 }
 
-.settings-field select,
-.settings-field input[type="range"] {
-  width: 100%;
+.settings-field + .settings-field {
+  border-top: 1px solid var(--color-separator);
 }
 
-.settings-field select {
-  grid-column: 2 / 4;
-  padding: 7px 9px;
-  border: 1px solid var(--border);
+.settings-field select,
+.highlight-editor select {
+  width: 136px;
+  min-width: 136px;
+  max-width: 136px;
+  padding: 8px 28px 8px 12px;
+  color: var(--color-text);
+  background: var(--color-fill);
+  border: 1px solid transparent;
+  border-radius: var(--radius-control);
+  appearance: none;
+  background-image: linear-gradient(45deg, transparent 50%, var(--color-text-2) 50%), linear-gradient(135deg, var(--color-text-2) 50%, transparent 50%);
+  background-position: calc(100% - 15px) 50%, calc(100% - 11px) 50%;
+  background-repeat: no-repeat;
+  background-size: 4px 4px, 4px 4px;
+  text-align: center;
+  text-align-last: center;
+  cursor: pointer;
+}
+
+.settings-field select:hover,
+.highlight-editor select:hover {
+  background-color: color-mix(in srgb, var(--color-fill) 82%, var(--color-elevated));
+}
+
+.settings-field select option,
+.highlight-editor select option {
+  color: var(--color-text);
+  background: var(--color-elevated);
+  text-align: center;
+}
+
+.settings-field select option:checked,
+.highlight-editor select option:checked {
+  color: var(--color-text);
+  background: color-mix(in srgb, var(--color-accent) 14%, var(--color-elevated));
+}
+
+.settings-field select:focus-visible,
+.highlight-editor select:focus-visible {
+  outline: 2px solid var(--color-focus);
+  outline-offset: 1px;
+}
+
+/* App-owned select surface: native popovers cannot provide a consistent
+   radius, selected state, or placement across Windows/macOS/browser shells. */
+.custom-select {
+  position: relative;
+  width: 136px;
+  min-width: 136px;
+  max-width: 136px;
+}
+
+.highlight-editor .custom-select {
+  width: 100%;
+  min-width: 0;
+  max-width: none;
+}
+
+.custom-select-native {
+  position: absolute;
+  inset: 0;
+  width: 100% !important;
+  height: 100%;
+  min-width: 0 !important;
+  max-width: none !important;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.custom-select-trigger {
+  position: relative;
+  display: block;
+  width: 100%;
+  min-height: 36px;
+  padding: 8px 30px 8px 12px;
+  color: var(--color-text);
+  background: var(--color-fill);
+  border: 1px solid transparent;
+  border-radius: var(--radius-control);
+  font: inherit;
+  line-height: 1.25;
+  text-align: center;
+  cursor: pointer;
+  transition: background-color .16s ease, border-color .16s ease, box-shadow .16s ease;
+}
+
+.custom-select-trigger::after {
+  position: absolute;
+  top: 50%;
+  right: 15px;
+  width: 6px;
+  height: 6px;
+  border-right: 1.5px solid var(--color-text-2);
+  border-bottom: 1.5px solid var(--color-text-2);
+  content: '';
+  transform: translateY(-65%) rotate(45deg);
+  transition: transform .16s ease;
+}
+
+.custom-select-trigger:hover {
+  background: color-mix(in srgb, var(--color-fill) 82%, var(--color-elevated));
+}
+
+.custom-select.is-open .custom-select-trigger,
+.custom-select-trigger:focus-visible {
+  border-color: var(--color-focus);
+  outline: none;
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--color-focus) 18%, transparent);
+}
+
+.custom-select.is-open .custom-select-trigger::after {
+  transform: translateY(-35%) rotate(225deg);
+}
+
+.custom-select-menu {
+  position: fixed;
+  z-index: 1200;
+  display: grid;
+  gap: 2px;
+  /* This portal lives under body, so it cannot inherit the 14px setting-row
+     type scale from its trigger. Keep menu and trigger typography aligned. */
+  font-size: 14px;
+  overflow-y: auto;
+  padding: 4px;
+  color: var(--color-text);
+  background: color-mix(in srgb, var(--color-elevated) 96%, transparent);
+  border: 1px solid var(--color-separator);
+  border-radius: 12px;
+  box-shadow: var(--shadow-float);
+  backdrop-filter: blur(18px) saturate(1.15);
+}
+
+/* The menu is a body-level portal. Its grid display must never override the
+   semantic hidden attribute used by the drawer and select lifecycle. */
+.custom-select-menu[hidden] {
+  display: none !important;
+}
+
+.custom-select-option {
+  min-height: 34px;
+  padding: 7px 10px;
+  color: var(--color-text-2);
+  background: transparent;
+  border: 0;
   border-radius: 8px;
-  background: var(--surface-alt);
-  color: var(--text);
+  font: inherit;
+  line-height: 1.25;
+  text-align: center;
+  cursor: pointer;
+}
+
+.custom-select-option:hover,
+.custom-select-option:focus-visible,
+.custom-select-option.is-selected {
+  color: var(--color-text);
+  background: color-mix(in srgb, var(--color-accent) 14%, var(--color-elevated));
+  outline: none;
+}
+
+.settings-field input[type="range"] {
+  grid-column: 1 / -1;
+  width: 100%;
+  accent-color: var(--color-accent);
+  cursor: pointer;
+}
+
+.settings-field output {
+  min-width: 48px;
+  padding: 3px 7px;
+  color: var(--color-text-2);
+  background: var(--color-fill);
+  border-radius: var(--radius-pill);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
 }
 
 .settings-checkbox {
-  grid-template-columns: auto 1fr;
+  grid-template-columns: minmax(0, 1fr) auto;
+  min-height: 54px;
 }
 
 .settings-checkbox input {
-  accent-color: var(--accent);
+  position: relative;
+  width: 44px;
+  height: 26px;
+  margin: 0;
+  appearance: none;
+  background: var(--color-fill);
+  border: 1px solid var(--color-separator);
+  border-radius: var(--radius-pill);
+  cursor: pointer;
+  transition: background-color var(--dur-fast) var(--ease-out), border-color var(--dur-fast) var(--ease-out);
+}
+
+.settings-checkbox input::after {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 20px;
+  height: 20px;
+  content: '';
+  background: var(--color-text-2);
+  border-radius: 50%;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, .24);
+  transition: transform var(--dur-fast) var(--ease-out), background-color var(--dur-fast) var(--ease-out);
+}
+
+.settings-checkbox input:checked {
+  background: var(--color-accent);
+  border-color: var(--color-accent);
+}
+
+.settings-checkbox input:checked::after {
+  background: #fff;
+  transform: translateX(18px);
+}
+
+.settings-checkbox input:focus-visible {
+  outline: 2px solid var(--color-focus);
+  outline-offset: 2px;
 }
 
 .settings-user {
-  margin-top: 14px;
-  padding-top: 14px;
-  border-top: 1px solid var(--border);
-  color: var(--text-dim);
+  margin: 4px 12px 0;
+  color: var(--color-text-3);
   font-size: 12px;
+  line-height: 1.5;
 }
 
 /* Pagination layout lives in the single "Deterministic pagination geometry"
@@ -1249,14 +1844,6 @@ body.paged-reading .epub-chapter:first-of-type {
 /* ============================================================
    Highlight editor and mobile reader controls
    ============================================================ */
-.reader-tool-btn.chapter-nav-btn,
-#btnBackToLibrary,
-#btnSettings {
-  width: auto;
-  min-width: 32px;
-  padding: 0 10px;
-}
-
 .reader-tool-btn:focus-visible,
 .theme-btn:focus-visible,
 .toc-toggle:focus-visible,
@@ -1362,6 +1949,11 @@ body.paged-reading .epub-chapter:first-of-type {
   border-radius: 9px;
 }
 
+.highlight-editor select {
+  min-width: 0;
+  max-width: none;
+}
+
 .highlight-editor textarea {
   resize: vertical;
   line-height: 1.55;
@@ -1393,52 +1985,81 @@ body.paged-reading .epub-chapter:first-of-type {
   border-color: var(--accent);
 }
 
-.mobile-reader-toolbar {
+.mobile-reader-toolbar,
+.mobile-reader-chrome-toggle {
   display: none;
 }
 
-@media (max-width: 800px) {
-  body.is-epub .reader {
-    bottom: calc(104px + env(safe-area-inset-bottom));
-  }
+.mobile-reader-toolbar[hidden],
+.mobile-reader-chrome-toggle[hidden] {
+  display: none !important;
+}
 
-  body.is-epub .topbar-right .chapter-nav-btn,
-  body.is-epub .topbar-right #btnHighlight,
-  body.is-epub .topbar-right #btnBackToLibrary,
-  body.is-epub .topbar-right .reading-progress {
+@media (max-width: 1200px) {
+  html[data-reader-surface="mobile"] body.is-epub .topbar-right .chapter-nav-btn,
+  html[data-reader-surface="mobile"] body.is-epub .topbar-right #btnHighlight,
+  html[data-reader-surface="mobile"] body.is-epub .topbar-right #btnBackToLibrary,
+  html[data-reader-surface="mobile"] body.is-epub .topbar-right .reading-progress {
     display: none;
   }
 
-  .mobile-reader-toolbar {
+  html[data-reader-surface="mobile"] .mobile-reader-toolbar {
     position: fixed;
     left: 0;
     right: 0;
     bottom: 0;
     z-index: 190;
-    display: grid;
-    grid-template-columns: repeat(4, minmax(0, 1fr));
-    gap: 4px;
-    min-height: 104px;
-    padding: 6px 8px calc(6px + env(safe-area-inset-bottom));
+    display: flex;
+    align-items: stretch;
+    justify-content: center;
+    gap: 6px;
+    min-height: 0;
+    padding: 6px 10px calc(6px + env(safe-area-inset-bottom, 0px));
     background: var(--topbar-bg);
     border-top: 1px solid color-mix(in srgb, var(--border) 60%, transparent);
     backdrop-filter: blur(12px);
     -webkit-backdrop-filter: blur(12px);
   }
 
-  .mobile-reader-toolbar button {
+  html[data-reader-surface="mobile"] .mobile-reader-toolbar button {
+    flex: 1 1 0;
     min-width: 0;
+    max-width: 160px;
     min-height: 40px;
-    padding: 6px 4px;
+    padding: 6px 8px;
     font-size: 12px;
   }
 
-  .mobile-reader-toolbar button:disabled {
-    opacity: 0.4;
-    cursor: default;
+  html[data-reader-surface="mobile"] .mobile-reader-chrome-toggle {
+    position: fixed;
+    right: 12px;
+    bottom: calc(12px + env(safe-area-inset-bottom, 0px));
+    z-index: 191;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 40px;
+    height: 40px;
+    min-height: 40px;
+    padding: 0;
+    color: var(--color-text-2);
+    background: color-mix(in srgb, var(--color-bar) 92%, transparent);
+    border: 1px solid var(--color-separator);
+    border-radius: 50%;
+    box-shadow: var(--shadow-float);
+    font-size: 18px;
+    line-height: 1;
   }
 
-  .reader .article {
+  html[data-reader-surface="mobile"] body.mobile-chrome-open .mobile-reader-chrome-toggle {
+    bottom: calc(62px + env(safe-area-inset-bottom, 0px));
+  }
+
+  html[data-reader-surface="mobile"] body.is-epub.mobile-chrome-open .reader {
+    padding-bottom: calc(58px + env(safe-area-inset-bottom, 0px));
+  }
+
+  html[data-reader-surface="mobile"] .reader .article {
     padding-right: var(--reader-page-margin);
     padding-left: var(--reader-page-margin);
   }
@@ -1452,6 +2073,16 @@ body.paged-reading .epub-chapter:first-of-type {
   box-shadow: 0 1px 18px rgba(0, 0, 0, 0.08);
 }
 
+html[data-reader-surface="mobile"] .reader-shell-nav {
+  transition: transform 180ms var(--ease-out), opacity 180ms var(--ease-out);
+}
+
+html[data-reader-surface="mobile"] body.is-epub.mobile-topbar-hidden .reader-shell-nav {
+  transform: translateY(-100%);
+  opacity: 0;
+  pointer-events: none;
+}
+
 .reader-status {
   position: absolute;
   left: 50%;
@@ -1463,27 +2094,51 @@ body.paged-reading .epub-chapter:first-of-type {
 }
 
 .reader-nav-button {
-  min-height: 32px;
-  padding: 0 10px;
-  color: var(--text-muted);
+  width: 44px;
+  min-width: 44px;
+  min-height: 44px; /* HIG: minimum touch target */
+  padding: 0;
+  color: var(--color-text-2); /* Secondary text */
   background: transparent;
   border: 1px solid transparent;
-  border-radius: 8px;
+  border-radius: var(--radius-control); /* HIG: 10px controls */
   font: inherit;
-  font-size: 13px;
+  font-size: 14px; /* HIG: Subhead size */
   cursor: pointer;
   -webkit-app-region: no-drag;
+  transition: color 160ms ease, background-color 160ms ease;
+}
+
+.reader-nav-button svg {
+  width: var(--icon-size, 22px);
+  height: var(--icon-size, 22px);
+  display: block;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
 }
 
 .reader-nav-button:hover,
 .reader-nav-button:focus-visible {
-  color: var(--text);
-  background: var(--hover-bg);
+  color: var(--color-text); /* Primary label on hover */
+  background: var(--color-fill); /* Fill layer */
+}
+
+.reader-nav-button:active,
+.reader-tool-btn:active,
+.theme-btn:active,
+.toc-toggle:active {
+  transform: scale(.94);
+}
+
+.reader-nav-button.active {
+  color: var(--color-accent); /* Accent color for active state */
+  background: var(--color-fill);
 }
 
 .reader-nav-button:disabled,
 .reader-tool-btn:disabled {
-  opacity: 0.38;
+  opacity: 0.38; /* Tertiary text opacity */
   cursor: default;
 }
 
@@ -1503,24 +2158,101 @@ body.is-epub .reader .article {
   box-shadow: 0 18px 50px rgba(0, 0, 0, 0.16);
 }
 
+body.is-epub.continuous-scroll .scroll-chapter-frame {
+  display: flex;
+  flex-direction: column;
+  width: min(860px, 100%);
+  margin-inline: auto;
+  box-sizing: border-box;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.16);
+}
+
+body.is-epub.continuous-scroll .scroll-chapter-header:not([hidden]),
+body.is-epub.continuous-scroll .scroll-chapter-footer:not([hidden]) {
+  display: flex;
+  width: 100%;
+  margin-inline: 0;
+  box-sizing: border-box;
+}
+
+body.is-epub.continuous-scroll .scroll-chapter-frame > .article {
+  width: 100%;
+  max-width: none;
+  min-height: 0;
+  margin: 0;
+  background: var(--bg);
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+}
+
+body.is-epub.continuous-scroll .scroll-chapter-header:not([hidden]) {
+  min-height: 48px;
+  align-items: flex-end;
+  padding: 8px var(--reader-page-margin) 0;
+}
+
+body.is-epub.continuous-scroll .scroll-chapter-footer:not([hidden]) {
+  justify-content: flex-end;
+  padding: 8px var(--reader-page-margin) 48px;
+}
+
+.scroll-chapter-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  width: 160px;
+  min-width: 160px;
+  min-height: 40px;
+  padding: 0 12px;
+  font-size: 13px;
+  background: var(--color-fill);
+  border-color: var(--color-separator);
+  border-radius: var(--radius-pill);
+}
+
+.scroll-chapter-btn[hidden] {
+  display: none;
+}
+
+.scroll-chapter-header .scroll-chapter-btn {
+  justify-content: center;
+  margin-right: 0;
+}
+
+.scroll-chapter-footer .scroll-chapter-btn {
+  justify-content: center;
+  margin-left: 0;
+}
+
+.scroll-chapter-btn svg {
+  width: 16px;
+  height: 16px;
+  flex: 0 0 16px;
+}
+
 .reader-floating-toolbar {
   position: fixed;
   top: 50%;
-  right: 18px;
+  right: var(--space-5); /* HIG: 20px from edge */
   z-index: 170;
   display: flex;
   flex-direction: column;
   align-items: stretch;
-  gap: 6px;
-  width: 56px;
-  padding: 8px;
+  gap: 4px;
+  width: 58px;
+  padding: 6px;
   transform: translateY(-50%);
-  background: var(--topbar-bg);
-  border: 1px solid var(--border);
+  background: var(--color-bar); /* HIG: semantic bar material */
+  border: 1px solid var(--color-separator);
   border-radius: 18px;
-  box-shadow: 0 14px 42px rgba(0, 0, 0, 0.22);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
+  box-shadow: var(--shadow-float); /* HIG: elevated shadow */
+  backdrop-filter: var(--material-blur);
+  -webkit-backdrop-filter: var(--material-blur);
+  transition: all 240ms var(--ease-out); /* HIG: smooth transitions */
 }
 
 body.is-epub .reader-floating-toolbar {
@@ -1537,11 +2269,42 @@ body.is-epub .reader-floating-toolbar {
 .reader-floating-toolbar .reader-tool-btn,
 .reader-floating-toolbar .theme-btn,
 .reader-floating-toolbar .toc-toggle {
-  width: 40px;       /* P0: slightly larger for better touch target */
-  min-width: 40px;
-  height: 40px;
+  width: 44px;
+  min-width: 44px;
+  height: 44px;
   padding: 0;
   font-size: 12px;   /* slight bump for SVG fit */
+}
+
+.reader-floating-toolbar button {
+  transition: color var(--dur-fast, 160ms) var(--ease-out, ease-out),
+    background-color var(--dur-fast, 160ms) var(--ease-out, ease-out),
+    transform var(--dur-fast, 160ms) var(--ease-out, ease-out);
+}
+
+.reader-floating-toolbar button:hover,
+.reader-floating-toolbar button:focus-visible {
+  color: var(--color-accent);
+  background: var(--color-fill);
+}
+
+.reader-floating-toolbar button[aria-expanded="true"] {
+  color: var(--color-accent);
+  background: color-mix(in srgb, var(--color-accent) 14%, transparent);
+  box-shadow: inset 2px 0 0 var(--color-accent);
+}
+
+.reader-floating-toolbar button:active {
+  transform: scale(.94);
+}
+
+.reader-toolbar-divider {
+  width: 28px;
+  height: 1px;
+  margin: 2px auto;
+  background: var(--color-separator);
+  opacity: .72;
+  pointer-events: none;
 }
 
 .reader-drawer-backdrop {
@@ -1560,37 +2323,68 @@ body.is-epub .reader-floating-toolbar {
   width: min(380px, calc(100vw - 28px));
   max-height: none;
   overflow-y: auto;
-  padding: 20px;
-  background: var(--surface);
+  padding: 24px 20px 32px;
+  background: var(--color-bg);
   border: 0;
-  border-left: 1px solid var(--border);
+  border-left: 1px solid var(--color-separator);
   border-radius: 0;
-  box-shadow: -18px 0 52px rgba(0, 0, 0, 0.28);
+  box-shadow: -18px 0 52px rgba(0, 0, 0, 0.22);
 }
 
 .reader-drawer-tabs {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 6px;
-  margin-bottom: 18px;
-  padding: 4px;
-  background: var(--surface-alt);
-  border-radius: 10px;
+  gap: 2px;
+  margin-bottom: 24px;
+  padding: 3px;
+  background: var(--color-fill);
+  border: 1px solid var(--color-separator);
+  border-radius: var(--radius-pill);
 }
 
 .reader-drawer-tabs button {
   min-height: 36px;
-  color: var(--text-muted);
+  padding: 0 12px;
+  color: var(--color-text-2);
   background: transparent;
   border: 0;
-  border-radius: 8px;
+  border-radius: var(--radius-pill);
+  font: inherit;
+  font-size: 13px;
   cursor: pointer;
+  transition: color var(--dur-fast) var(--ease-out), background-color var(--dur-fast) var(--ease-out), box-shadow var(--dur-fast) var(--ease-out);
+}
+
+.reader-drawer-tabs button:focus-visible {
+  outline: 2px solid var(--color-focus);
+  outline-offset: -2px;
 }
 
 .reader-drawer-tabs button[aria-selected="true"] {
-  color: var(--text);
-  background: var(--bg);
-  box-shadow: 0 1px 6px rgba(0, 0, 0, 0.12);
+  color: var(--color-text);
+  background: var(--color-elevated);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.14);
+}
+
+.settings-panel-content {
+  display: grid;
+  gap: 24px;
+}
+
+.settings-group-title {
+  margin: 0 12px 8px;
+  color: var(--color-text-2);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: .02em;
+}
+
+.settings-group-card {
+  overflow: hidden;
+  background: var(--color-elevated);
+  border: 1px solid var(--color-separator);
+  border-radius: var(--radius-card);
+  box-shadow: 0 2px 12px rgba(0, 0, 0, .06);
 }
 
 .reader-panel {
@@ -1619,10 +2413,50 @@ body.is-epub .reader-floating-toolbar {
   width: auto;
   max-height: none;
   overflow: visible;
-  padding: 0;
-  background: transparent;
+  padding: 16px 12px 20px;
+  color: var(--color-text);
+  background: var(--color-elevated);
+  border: 1px solid var(--color-separator);
+  border-radius: var(--radius-card);
+  box-shadow: 0 2px 12px rgba(0, 0, 0, .06);
   backdrop-filter: none;
   -webkit-backdrop-filter: none;
+}
+
+.reader-drawer .toc-title {
+  margin: 0 4px 10px;
+  color: var(--color-text-2);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: .02em;
+}
+
+.reader-drawer .toc a {
+  padding: 9px 12px;
+  color: var(--color-text-2);
+  border-radius: var(--radius-control);
+  font-size: 14px;
+  line-height: 1.4;
+  transition: color var(--dur-fast) var(--ease-out), background-color var(--dur-fast) var(--ease-out), box-shadow var(--dur-fast) var(--ease-out);
+}
+
+.reader-drawer .toc a:hover,
+.reader-drawer .toc a:focus-visible {
+  color: var(--color-text);
+  background: var(--color-fill);
+}
+
+.reader-drawer .toc a:focus-visible {
+  outline: 2px solid var(--color-focus);
+  outline-offset: -2px;
+}
+
+.reader-drawer .toc a.current,
+.reader-drawer .toc a[aria-current="location"] {
+  color: var(--color-text);
+  background: color-mix(in srgb, var(--color-accent) 12%, transparent);
+  box-shadow: inset 3px 0 0 var(--color-accent);
+  font-weight: 600;
 }
 
 body:not(.toc-open) .reader-drawer .toc {
@@ -1648,12 +2482,20 @@ body.has-toc.toc-open .reader {
   }
 }
 
-@media (max-width: 800px) {
-  body.is-epub .reader {
+@media (max-width: 1200px) {
+  html[data-reader-surface="mobile"] body.is-epub .reader {
+    transition: top 180ms var(--ease-out);
+  }
+
+  html[data-reader-surface="mobile"] body.is-epub.mobile-topbar-hidden .reader {
+    top: 0;
+  }
+
+  html[data-reader-surface="mobile"] body.is-epub .reader {
     padding: 0;
   }
 
-  body.is-epub .reader .article {
+  html[data-reader-surface="mobile"] body.is-epub .reader .article {
     width: 100%;
     max-width: none;
     min-height: 100%;
@@ -1663,23 +2505,67 @@ body.has-toc.toc-open .reader {
     box-shadow: none;
   }
 
-  .reader-floating-toolbar {
-    top: auto;
-    right: 10px;
-    bottom: calc(66px + env(safe-area-inset-bottom));
-    flex-direction: row;
-    width: auto;
-    max-width: calc(100vw - 20px);
-    overflow-x: auto;
-    transform: none;
+  html[data-reader-surface="mobile"] body.is-epub.continuous-scroll .scroll-chapter-frame {
+    display: block;
+    width: 100%;
+    background: transparent;
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
   }
 
-  .reader-status,
-  .topbar-right .page-nav-btn {
+  html[data-reader-surface="mobile"] body.is-epub.continuous-scroll .scroll-chapter-frame > .article {
+    width: 100%;
+    min-height: 100%;
+  }
+
+  html[data-reader-surface="mobile"] body.is-epub.continuous-scroll .scroll-chapter-header:not([hidden]),
+  html[data-reader-surface="mobile"] body.is-epub.continuous-scroll .scroll-chapter-footer:not([hidden]) {
+    display: flex;
+    box-sizing: border-box;
+    width: 100%;
+    padding-inline: var(--reader-page-margin);
+  }
+
+  html[data-reader-surface="mobile"] body.is-epub.continuous-scroll .scroll-chapter-header:not([hidden]) {
+    min-height: 60px;
+    align-items: flex-end;
+    justify-content: flex-start;
+    padding-top: 16px;
+  }
+
+  html[data-reader-surface="mobile"] body.is-epub.continuous-scroll .scroll-chapter-footer:not([hidden]) {
+    justify-content: center;
+    padding-top: 16px;
+    padding-bottom: calc(32px + env(safe-area-inset-bottom, 0px));
+  }
+
+  html[data-reader-surface="mobile"] .scroll-chapter-btn {
+    width: min(168px, 100%);
+    min-width: 0;
+    min-height: 40px;
+    padding-inline: 10px;
+    gap: 4px;
+    font-size: 13px;
+  }
+
+  html[data-reader-surface="mobile"] .scroll-chapter-btn svg {
+    width: 14px;
+    height: 14px;
+    flex-basis: 14px;
+  }
+
+  html[data-reader-surface="mobile"] .reader-floating-toolbar {
     display: none;
   }
 
-  .settings-panel.reader-drawer {
+  html[data-reader-surface="mobile"] .reader-status,
+  html[data-reader-surface="mobile"] .topbar-right .page-nav-btn,
+  html[data-reader-surface="mobile"] .reader .reader-page-nav-btn {
+    display: none;
+  }
+
+  html[data-reader-surface="mobile"] .settings-panel.reader-drawer {
     top: auto;
     left: 0;
     width: 100%;
@@ -1689,21 +2575,21 @@ body.has-toc.toc-open .reader {
     border-radius: 18px 18px 0 0;
   }
 
-  .reader-drawer-backdrop {
+  html[data-reader-surface="mobile"] .reader-drawer-backdrop {
     inset: 0;
   }
 }
 
 @media (max-width: 520px) {
-  .topbar-right .mode-btn,
-  .reader-floating-toolbar #btnSearch,
-  .reader-floating-toolbar #btnBookmarks,
-  .reader-floating-toolbar #btnNotes,
-  .reader-floating-toolbar #btnAi {
+  html[data-reader-surface="mobile"] .topbar-right .mode-btn,
+  html[data-reader-surface="mobile"] .reader-floating-toolbar #btnSearch,
+  html[data-reader-surface="mobile"] .reader-floating-toolbar #btnBookmarks,
+  html[data-reader-surface="mobile"] .reader-floating-toolbar #btnNotes,
+  html[data-reader-surface="mobile"] .reader-floating-toolbar #btnAi {
     display: none;
   }
 
-  .file-name {
+  html[data-reader-surface="mobile"] .file-name {
     max-width: 42vw;
   }
 }
@@ -1747,6 +2633,69 @@ body.is-epub.paged-reading .reader {
   scrollbar-width: none;
   scroll-behavior: auto;
   box-sizing: border-box;
+}
+
+/* WeChat Reading-style page navigation: in double-page mode the page actions
+   belong to the reading surface, not the top bar. Keep the existing buttons
+   and actions, but turn them into quiet lower-corner pills with stable touch
+   targets. The reader's measured paper insets keep them aligned with the
+   centred paper on wide desktop screens while remaining edge-safe on smaller
+   windows. */
+@media (min-width: 801px) {
+  .reader .reader-page-nav-btn:not([hidden]) {
+    position: absolute;
+    top: auto !important;
+    bottom: max(24px, calc(var(--reader-band-bottom, 40px) + env(safe-area-inset-bottom, 0px) + 24px)) !important;
+    z-index: 155;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    width: 80px;
+    min-width: 80px;
+    height: 40px;
+    min-height: 40px;
+    padding: 0 10px;
+    color: var(--color-text-2);
+    background: color-mix(in srgb, var(--color-bar) 92%, transparent);
+    border: 1px solid var(--color-separator);
+    border-radius: var(--radius-pill);
+    box-shadow: var(--shadow-float);
+    backdrop-filter: var(--material-blur);
+    -webkit-backdrop-filter: var(--material-blur);
+    font-size: 12px;
+    white-space: nowrap;
+  }
+
+  .reader #btnPreviousPage:not([hidden]) {
+    left: calc(var(--reader-inset-left, 0px) + 24px);
+    justify-content: flex-start;
+  }
+
+  .reader #btnNextPage:not([hidden]) {
+    right: calc(var(--reader-inset-right, 0px) + 24px);
+    justify-content: flex-end;
+  }
+
+  .reader #btnPreviousPage:not([hidden])::after {
+    content: '上一页';
+  }
+
+  .reader #btnNextPage:not([hidden])::before {
+    content: '下一页';
+  }
+
+  .reader .reader-page-nav-btn:not([hidden]) svg {
+    width: 16px;
+    height: 16px;
+    flex: 0 0 16px;
+  }
+
+  .reader .reader-page-nav-btn:not([hidden]):hover,
+  .reader .reader-page-nav-btn:not([hidden]):focus-visible {
+    color: var(--color-text);
+    background: color-mix(in srgb, var(--color-accent) 12%, var(--color-bar));
+    border-color: color-mix(in srgb, var(--color-accent) 35%, var(--color-separator));
+  }
 }
 
 body.is-epub.paged-reading .reader::-webkit-scrollbar {
@@ -1811,6 +2760,24 @@ body.is-epub.paged-reading .reader .article::-webkit-scrollbar {
   display: none;
   width: 0;
   height: 0;
+}
+
+/* Extend the horizontal scrollable overflow after every paged chapter. Without
+   it an odd final page group is clamped by the browser before its calculated
+   double-page offset, exposing the previous column at the left edge and
+   clipping the final page at the right edge. This is deliberately an
+   absolutely positioned sentinel: VIA's desktop-mode WebView can disagree
+   with break-before:column during multicolumn reflow, but its overflow math is
+   stable. Pagination excludes the sentinel from page-count measurement. */
+body.is-epub.paged-reading .reader .pagination-tail-spacer {
+  position: absolute;
+  top: 0;
+  left: 100%;
+  display: block;
+  width: calc(var(--reader-column-width, 0px) + var(--reader-column-gap, 0px));
+  height: 1px;
+  visibility: hidden;
+  pointer-events: none;
 }
 
 body.is-epub.double-page-reading .reader .article {

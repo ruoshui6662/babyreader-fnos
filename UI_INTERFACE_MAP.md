@@ -13,6 +13,32 @@
 
 Reader Shell 保持正文为第一视觉层级。目录、显示设置及后续搜索、书签、笔记、AI 功能统一使用一个 Drawer Shell，任意时刻只允许一个 `data-reader-panel-name` 面板可见。
 
+## 前端模块边界
+
+前端继续使用同源经典外部脚本，不引入 bundler、远程 import、`eval` 或框架；`index.html` 的脚本顺序就是依赖顺序。原 3848 行单体 `app.js` 已拆分，`app.js` 仅保留 `appHost` 与启动编排。
+
+| 模块 | 职责 |
+| --- | --- |
+| `core/state.js` | 共享运行状态、常量与字体栈 |
+| `core/utils.js` | 通用转义、路径与 debounce 等纯辅助函数 |
+| `core/api.js` | HTTP 请求与 `browserHost` 服务适配 |
+| `core/user-state.js` | 用户设置、进度和划线状态的读取/写入协调 |
+| `reader/epub.js` | EPUB/ZIP 解析、章节资源、主题与内容准备 |
+| `reader/document.js` | Markdown/TXT 自定义块与正文渲染 |
+| `reader/editor.js` | 保留的文本编辑/预览兼容逻辑 |
+| `reader/highlights.js` | DOM Range/CFI 划线、恢复、编辑与显示 |
+| `reader/actions.js` | 文件操作、划线导出、反馈提示 |
+| `reader/progress.js` | 语义 locator、阅读进度、章节定位与恢复 |
+| `reader/pagination.js` | 分页几何、页组、窄屏降级、翻页与吸附 |
+| `reader/settings.js` | 主题、字号、行高、页边距、字体与阅读模式 |
+| `reader/navigation.js` | 快捷键、TOC 和 EPUB 内部链接导航 |
+| `reader/lifecycle.js` | 返回书架、位置追踪及阅读器事件绑定 |
+| `shell/drawer.js` | Reader Actions/Panel、焦点循环与 Drawer 生命周期 |
+| `library/view.js` | 书架渲染、书籍打开与扫描入口 |
+| `app.js` | `appHost` 对外接口和 `DOMContentLoaded` bootstrap |
+
+任何跨模块改动必须保持现有 API、DOM ID 和用户状态 schema；脚本新增/重排后同步更新结构校验、DOM 回归与 Chromium E2E。
+
 ## 控件、动作与接口映射
 
 | 控件 | DOM ID | action ID | panel ID | 处理函数 | API / 本地行为 | 键盘入口 | 移动端入口 | 状态 | 后续接口 |
