@@ -150,6 +150,34 @@ test.describe('EPUB bookmarks', () => {
     await expect(page.locator('body')).toHaveClass(/single-page-reading/);
   });
 
+  test('refreshes the bookmark state after a page turn and allows a new page bookmark', async ({ page }) => {
+    await page.locator('#btnSettings').click();
+    const settingsSave = waitForSettingsSave(page);
+    await page.locator('#settingReadingMode').selectOption('double');
+    await settingsSave;
+    await page.locator('#btnCloseSettings').click();
+    await expect(page.locator('body')).toHaveClass(/double-page-reading/);
+    await expect(page.locator('#btnNextPage')).toBeEnabled();
+
+    const firstCreate = waitForBookmarkRequest(page, 'POST');
+    await page.locator('#btnBookmarks').click();
+    await firstCreate;
+    await expect(page.locator('#btnBookmarks')).toHaveAttribute('aria-pressed', 'true');
+
+    await page.locator('#btnNextPage').click();
+    await expect.poll(() => page.evaluate(() => state.pageGroup)).toBe(1);
+    await expect(page.locator('#btnBookmarks')).toHaveAttribute('aria-pressed', 'false');
+    await expect(page.locator('#btnBookmarks')).toHaveAttribute('aria-label', '添加当前书签');
+
+    const secondCreate = waitForBookmarkRequest(page, 'POST');
+    await page.locator('#btnBookmarks').click();
+    await secondCreate;
+    await expect(page.locator('#btnBookmarks')).toHaveAttribute('aria-pressed', 'true');
+
+    await openBookmarkPanel(page);
+    await expect(page.locator('.bookmark-row')).toHaveCount(2);
+  });
+
   test('Drawer supports keyboard focus recovery and Tab traversal', async ({ page }) => {
     const create = waitForBookmarkRequest(page, 'POST');
     await page.locator('#btnBookmarks').click();

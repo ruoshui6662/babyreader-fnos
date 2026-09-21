@@ -239,6 +239,7 @@ function setPageGroup(group, {
   reader.scrollLeft = 0;
   reader.scrollTop = 0;
   updatePaginationControls();
+  if (typeof renderBookmarkButtonState === 'function') renderBookmarkButtonState();
   if (save) saveTextScroll();
   if (redrawHighlights) requestAnimationFrame(redrawDomHighlights);
 

@@ -171,9 +171,14 @@ async function jumpToBookmark(bookmark) {
 function renderBookmarkButtonState() {
   const button = document.getElementById('btnBookmarks');
   if (!button) return false;
-  const active = isCurrentBookmark();
+  const available = state.contentType === 'epub' && Boolean(state.currentBookId);
+  const active = available && isCurrentBookmark();
+  button.disabled = !available;
   button.dataset.bookmarkActive = active ? 'true' : 'false';
   button.setAttribute('aria-pressed', active ? 'true' : 'false');
+  const label = active ? '取消当前书签' : '添加当前书签';
+  button.setAttribute('aria-label', available ? label : '书签仅支持 EPUB');
+  button.setAttribute('title', available ? label : '书签仅支持 EPUB');
   return active;
 }
 
