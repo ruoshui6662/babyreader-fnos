@@ -36,7 +36,7 @@
     <button class="reader-tool-btn" id="btnHighlight" type="button" hidden data-reader-action="highlight" aria-label="划线" title="划线"></button>
     <button class="reader-tool-btn" id="btnExportHighlights" type="button" hidden data-reader-action="exportHighlights" aria-label="导出标记与想法" title="导出标记与想法"></button>
     <span class="reader-toolbar-divider" aria-hidden="true"></span>
-    <button class="reader-tool-btn" id="btnSearch" type="button" data-reader-action="openSearch" data-reader-panel="search" data-reader-status="reserved" aria-controls="readerSearchSheet" aria-expanded="false" aria-label="搜索，预留功能，当前不可用" title="搜索，预留功能，当前不可用" disabled></button>
+    <button class="reader-tool-btn" id="btnSearch" type="button" data-reader-action="openSearch" data-reader-panel="search" data-reader-status="reserved" aria-controls="readerSearchSheet" aria-expanded="false" aria-label="搜索，打开书籍后可用" title="搜索，打开书籍后可用" disabled></button>
     <button class="reader-tool-btn" id="btnBookmarks" type="button" data-reader-action="toggleBookmark" aria-pressed="false" aria-label="书签仅支持 EPUB" title="书签仅支持 EPUB" disabled></button>
     <button class="reader-tool-btn" id="btnNotes" type="button" data-reader-action="openNotes" data-reader-panel="notes" aria-controls="readerDrawer" aria-expanded="false" aria-label="打开标记与想法" title="打开标记与想法"></button>
     <button class="reader-tool-btn" id="btnAi" type="button" data-reader-action="openAi" data-reader-panel="ai" aria-controls="aiModal" aria-expanded="false" aria-label="打开 AI 阅读助手" title="打开 AI 阅读助手" disabled></button>
@@ -214,25 +214,25 @@
       <button type="button" data-reader-action="closePanel" aria-label="关闭搜索">关闭</button>
     </div>
     <div class="reader-search-content" id="readerSearchContent">
-      <form class="reader-search-form" id="readerSearchForm" novalidate data-reader-search-state="reserved">
+      <form class="reader-search-form" id="readerSearchForm" novalidate data-reader-search-state="idle">
         <label class="reader-search-field" for="readerSearchQuery">
           <span>查找本书内容</span>
-          <input id="readerSearchQuery" type="search" autocomplete="off" placeholder="搜索将在功能开放后提供" disabled>
+          <input id="readerSearchQuery" type="search" autocomplete="off" placeholder="输入关键词">
         </label>
         <div class="reader-search-options">
           <label class="reader-search-field" for="readerSearchScope">
             <span>范围</span>
-            <select id="readerSearchScope" disabled>
+            <select id="readerSearchScope">
               <option value="book">全书</option>
               <option value="chapter">本章</option>
             </select>
           </label>
-          <button class="reader-search-submit" id="readerSearchSubmit" type="submit" disabled>搜索</button>
+          <button class="reader-search-submit" id="readerSearchSubmit" type="submit">搜索</button>
         </div>
       </form>
       <div class="reader-search-status" id="readerSearchStatus" role="status" aria-live="polite" hidden></div>
       <div class="reader-search-loading" id="readerSearchLoading" role="status" aria-live="polite" hidden>正在搜索…</div>
-      <p class="reader-search-empty" id="readerSearchEmpty">全文搜索将在搜索功能开放后提供。</p>
+      <p class="reader-search-empty" id="readerSearchEmpty" hidden>输入关键词后开始搜索。</p>
       <ol class="reader-search-results" id="readerSearchResults" role="list" hidden></ol>
       <div class="reader-search-error" id="readerSearchError" role="alert" hidden>搜索暂时不可用。</div>
     </div>
@@ -359,6 +359,7 @@
     <button type="button" id="btnMobileBackToLibrary" data-reader-action="backToLibrary" aria-label="返回书架">书架</button>
     <button type="button" id="btnMobileToc" data-reader-action="openToc" data-reader-panel="toc" aria-controls="readerDrawer" aria-expanded="false" aria-label="打开目录">目录</button>
     <button type="button" id="btnMobileBookmarks" data-reader-action="openBookmarks" data-reader-panel="bookmarks" aria-controls="readerDrawer" aria-expanded="false" aria-label="打开书签" disabled>书签</button>
+    <button type="button" id="btnMobileSearch" data-reader-action="openSearch" data-reader-panel="search" aria-controls="readerSearchSheet" aria-expanded="false" aria-label="搜索本书" disabled>搜索</button>
     <button type="button" id="btnMobileNotes" data-reader-action="openNotes" data-reader-panel="notes" aria-controls="readerDrawer" aria-expanded="false" aria-label="打开标记与想法">笔记</button>
     <button type="button" id="btnMobileHighlight" data-reader-action="highlight" aria-label="创建或编辑划线">划线</button>
     <button type="button" id="btnMobileSettings" data-reader-action="openSettings" data-reader-panel="settings" aria-controls="readerSettingsSheet" aria-expanded="false" aria-label="打开显示设置">设置</button>
@@ -435,6 +436,7 @@
   <script src="reader/settings.js?v=29"></script>
   <script src="reader/navigation.js?v=28"></script>
   <script src="reader/lifecycle.js?v=31"></script>
+  <script src="reader/search.js?v=1"></script>
   <script src="shell/drawer.js?v=31"></script>
   <script src="library/view.js?v=28"></script>
   <script src="app.js?v=31"></script>

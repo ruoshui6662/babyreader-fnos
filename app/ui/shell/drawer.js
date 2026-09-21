@@ -57,7 +57,7 @@ const readerPanels = Object.freeze({
     id: 'readerSearchSheet',
     title: '搜索',
     surface: 'search',
-    enabled: () => false
+    enabled: () => Boolean(state.currentBookId && state.currentPath)
   },
   bookmarks: {
     id: 'readerPanelBookmarks',

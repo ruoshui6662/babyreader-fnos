@@ -163,7 +163,14 @@ function updateTopbarState() {
   const btnSettings = document.getElementById('btnSettings');
   const themeBtn = document.getElementById('btnTheme');
 
-  if (btnSearch) btnSearch.innerHTML = searchIconSvg();
+  const searchAvailable = Boolean(state.currentBookId && state.currentPath);
+  if (btnSearch) {
+    btnSearch.innerHTML = searchIconSvg();
+    btnSearch.disabled = !searchAvailable;
+    btnSearch.dataset.readerStatus = searchAvailable ? 'enabled' : 'reserved';
+    btnSearch.setAttribute('aria-label', searchAvailable ? '搜索本书' : '搜索，打开书籍后可用');
+    btnSearch.setAttribute('title', searchAvailable ? '搜索本书' : '搜索，打开书籍后可用');
+  }
   if (btnBookmarks) {
     btnBookmarks.innerHTML = bookmarkIconSvg();
     const bookmarkAvailable = isEpub && Boolean(state.currentBookId);
@@ -210,6 +217,7 @@ function updateTopbarState() {
   const mobileToolbar = document.getElementById('mobileReaderToolbar');
   const mobileBack = document.getElementById('btnMobileBackToLibrary');
   const mobileBookmarks = document.getElementById('btnMobileBookmarks');
+  const mobileSearch = document.getElementById('btnMobileSearch');
   const mobileNotes = document.getElementById('btnMobileNotes');
   const mobilePrevious = document.getElementById('btnMobilePreviousChapter');
   const mobileHighlight = document.getElementById('btnMobileHighlight');
@@ -232,6 +240,7 @@ function updateTopbarState() {
   }
   if (mobileBack) mobileBack.disabled = !isEpub;
   if (mobileBookmarks) mobileBookmarks.disabled = !(isEpub && Boolean(state.currentBookId));
+  if (mobileSearch) mobileSearch.disabled = !searchAvailable;
   if (mobileNotes) mobileNotes.disabled = !isEpub;
   if (mobilePrevious) mobilePrevious.disabled = !isEpub || state.currentChapterIndex <= 0;
   if (mobileHighlight) mobileHighlight.disabled = !isEpub;

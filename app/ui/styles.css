@@ -4735,6 +4735,61 @@ body.is-epub .reader-floating-toolbar {
   list-style: none;
 }
 
+.reader-search-result-item {
+  min-width: 0;
+}
+
+.reader-search-result {
+  display: grid;
+  gap: 6px;
+  width: 100%;
+  padding: 12px 13px;
+  color: var(--ui-label);
+  text-align: left;
+  background: var(--ui-fill);
+  border: 1px solid var(--ui-separator);
+  border-radius: 14px;
+  font: inherit;
+  cursor: pointer;
+  transition: background-color .16s ease, border-color .16s ease, transform .16s ease;
+}
+
+.reader-search-result:hover,
+.reader-search-result:focus-visible {
+  background: color-mix(in srgb, var(--ui-accent) 8%, var(--ui-fill));
+  border-color: color-mix(in srgb, var(--ui-accent) 42%, var(--ui-separator));
+}
+
+.reader-search-result:active {
+  transform: scale(.99);
+}
+
+.reader-search-result-meta {
+  overflow: hidden;
+  color: var(--ui-secondary-label);
+  font-size: 12px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.reader-search-result-excerpt {
+  display: -webkit-box;
+  overflow: hidden;
+  color: var(--ui-label);
+  font-size: 14px;
+  line-height: 1.55;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+}
+
+.reader-search-target {
+  outline: 3px solid color-mix(in srgb, var(--ui-accent) 35%, transparent);
+  outline-offset: 5px;
+  border-radius: 4px;
+  transition: outline-color .2s ease;
+}
+
 .reader-settings-content > #readerPanelSettings {
   flex: 1 0 auto;
   padding-bottom: 8px;

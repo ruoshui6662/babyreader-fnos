@@ -37,6 +37,7 @@ window.appHost = {
     state.currentPath  = path;
     state.currentName  = name;
     state.contentType  = (type === 'epub') ? 'epub' : 'text';
+    if (typeof resetReaderSearch === 'function') resetReaderSearch();
     state.toc          = [];
     _pendingCfiRange   = null;
     renderToc();
@@ -164,6 +165,7 @@ document.addEventListener('DOMContentLoaded', () => {
   setupNotesPanel();
   setupReaderNavigation();
   setupReaderActionMapping();
+  setupReaderSearch();
   // Topbar 阅读/编辑 buttons removed (P0); setMode is now driven only by
   // openDocument/reset flows. No keyboard shortcut exists, so markdown/txt
   // edit mode has no UI entry (editor DOM kept for a future re-add).

@@ -207,6 +207,26 @@ window.browserHost = {
     })).json();
   },
 
+  async searchBook(bookId, {
+    query = '',
+    scope = 'book',
+    chapterIndex = null,
+    limit = 20,
+    signal
+  } = {}) {
+    if (!bookId) throw new Error('当前没有打开的书');
+    const params = new URLSearchParams();
+    params.set('q', String(query || '').trim());
+    params.set('scope', scope === 'chapter' ? 'chapter' : 'book');
+    if (scope === 'chapter' && Number.isInteger(chapterIndex)) {
+      params.set('chapterIndex', String(chapterIndex));
+    }
+    params.set('limit', String(Math.max(1, Math.min(50, Math.trunc(Number(limit) || 20)))));
+    return (await apiRequest(`/books/${encodeURIComponent(bookId)}/search?${params.toString()}`, {
+      signal
+    })).json();
+  },
+
   async askAiStream(bookId, payload, handlers = {}, signal) {
     if (!bookId) throw new Error('当前没有打开的书');
     const response = await fetch(`${API_PREFIX}/books/${encodeURIComponent(bookId)}/ai/ask/stream`, {

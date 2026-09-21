@@ -29,6 +29,7 @@ async function createReaderDom() {
     '../app/ui/reader/settings.js',
     '../app/ui/reader/navigation.js',
     '../app/ui/reader/lifecycle.js',
+    '../app/ui/reader/search.js',
     '../app/ui/shell/drawer.js',
     '../app/ui/library/view.js',
     '../app/ui/app.js'
@@ -42,6 +43,7 @@ async function createReaderDom() {
   source += '\nwindow.__babyReaderActionsApi = { formatHighlightsMd };';
   source += '\nwindow.__babyReaderEpubApi = { parseNavToc, parseNcxToc };';
   source += '\nwindow.__babyReaderBookmarkApi = { getCurrentBookmarkLocator, isCurrentBookmark, toggleCurrentBookmark, jumpToBookmark, renderBookmarkButtonState, renderBookmarkList, deleteBookmarkFromList, refreshBookmarks };';
+  source += '\nwindow.__babyReaderSearchApi = { updateTopbarState, setupReaderSearch };';
 
   window.document.write(html.replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, ''));
   window.requestAnimationFrame = (callback) => {
@@ -67,9 +69,12 @@ async function createReaderDom() {
 
   window.eval(`${source}\nwindow.__babyReaderTest = {\n    state,\n    serializeDomRange,\n    rangeFromHighlight,\n    loadHighlights,\n    openHighlightEditor,\n    deleteActiveHighlight,\n    saveActiveHighlightEdits,\n    currentUserSettings,\n    applyZoom,\n    getEpubThemeCss,\n    debounce,\n    navigateChapter,\n    navigatePageGroup,\n    pageGroupForPage,\n    clampPageGroup,\n    pageLeftForGroup,\n    setPageGroup,\n    snapPaginationToNearestGroup,\n    pageNumberForElement,\n    navigateToSemanticTarget,\n    resolveEffectiveReadingMode,\n    createPaginationGeometry,\n    measurePagination,\n    setReadingMode,\n    currentReadingLocator,\n    restoreReadingLocator,\n    readerActions,\n    readerPanels,\n    openReaderPanel,\n    closeReaderPanel,\n    setupReaderActionMapping,\n    renderToc,\n    returnToLibrary\n  };`);
 
+  window.__babyReaderTest.updateTopbarState = window.__babyReaderSearchApi.updateTopbarState;
+  window.__babyReaderTest.setupReaderSearch = window.__babyReaderSearchApi.setupReaderSearch;
   window.__babyReaderTest.readerSurfaceController = window.readerSurfaceController;
   window.__babyReaderTest.readerSearchContract = window.readerSearchContract;
   window.__babyReaderTest.buildReaderSearchUrl = window.buildReaderSearchUrl;
+  window.__babyReaderTest.navigateToSearchResult = window.readerSearchApi.navigateToSearchResult;
   window.__babyReaderTest.formatHighlightsMd = window.__babyReaderActionsApi.formatHighlightsMd;
   window.__babyReaderTest.typographyApi = window.__babyReaderTypographyApi;
   window.__babyReaderTest.parseNavToc = window.__babyReaderEpubApi.parseNavToc;
@@ -1351,7 +1356,7 @@ test('Reader Shell retains legacy DOM IDs and exposes one responsive Drawer', as
   assert.ok(searchControl);
   assert.equal(searchControl.disabled, true);
   assert.equal(searchControl.dataset.readerStatus, 'reserved');
-  assert.match(searchControl.getAttribute('aria-label'), /预留功能，当前不可用/);
+  assert.match(searchControl.getAttribute('aria-label'), /打开书籍后可用/);
   assert.equal(searchControl.textContent.trim(), '');
 
   const bookmarkControl = document.getElementById('btnBookmarks');
@@ -1379,25 +1384,25 @@ test('Reader Shell retains legacy DOM IDs and exposes one responsive Drawer', as
   assert.match(css, /@media \(max-width: 520px\)/);
 });
 
-test('reserved search surface exposes a stable future contract without enabling search', async () => {
+test('search surface opens, queries the book, and renders safe results', async () => {
   const { window, api } = await createReaderDom();
   const document = window.document;
   const searchSheet = document.getElementById('readerSearchSheet');
 
   assert.ok(searchSheet);
   assert.equal(searchSheet.hidden, true);
-  assert.equal(document.getElementById('readerSearchForm').dataset.readerSearchState, 'reserved');
-  assert.equal(document.getElementById('readerSearchQuery').disabled, true);
-  assert.equal(document.getElementById('readerSearchScope').disabled, true);
+  assert.equal(document.getElementById('readerSearchForm').dataset.readerSearchState, 'idle');
+  assert.equal(document.getElementById('readerSearchQuery').disabled, false);
+  assert.equal(document.getElementById('readerSearchScope').disabled, false);
   assert.deepEqual(
     [...document.getElementById('readerSearchScope').options].map((option) => option.value),
     ['book', 'chapter']
   );
-  assert.equal(document.getElementById('readerSearchSubmit').disabled, true);
+  assert.equal(document.getElementById('readerSearchSubmit').disabled, false);
   assert.equal(document.getElementById('readerSearchLoading').hidden, true);
   assert.equal(document.getElementById('readerSearchResults').hidden, true);
   assert.equal(document.getElementById('readerSearchError').hidden, true);
-  assert.equal(document.getElementById('readerSearchEmpty').hidden, false);
+  assert.equal(document.getElementById('readerSearchEmpty').hidden, true);
 
   assert.equal(api.readerSearchContract.endpointTemplate, '/api/books/:bookId/search');
   assert.deepEqual([...api.readerSearchContract.scopes], ['book', 'chapter']);
@@ -1415,15 +1420,109 @@ test('reserved search surface exposes a stable future contract without enabling 
     '/api/books/book%2F1/search?q=%E8%9B%8B%E7%99%BD%E8%B4%A8+%E4%B8%8E+%E5%81%A5%E5%BA%B7&scope=chapter&chapterIndex=2&limit=50'
   );
 
-  let requestCount = 0;
-  window.fetch = async () => {
-    requestCount += 1;
-    return { ok: true, json: async () => ({}) };
+  api.state.currentBookId = 'search-book';
+  api.state.currentPath = 'search-book.txt';
+  api.state.contentType = 'text';
+  api.updateTopbarState();
+  api.setupReaderActionMapping();
+  api.setupReaderSearch();
+
+  let requestedUrl = '';
+  window.fetch = async (url) => {
+    requestedUrl = String(url);
+    return {
+      ok: true,
+      json: async () => ({
+        available: true,
+        query: '蛋白质',
+        scope: 'book',
+        truncated: false,
+        results: [{
+          id: '0:12:3',
+          chapterIndex: 0,
+          chapterHref: '',
+          chapterLabel: '当前书本',
+          snippet: '<img src=x>蛋白质相关内容',
+          matchText: '蛋白质',
+          matchOffset: 12,
+          locator: { version: 1, type: 'text-search', chapterIndex: 0, chapterHref: '', offset: 12, text: '蛋白质' }
+        }]
+      })
+    };
   };
-  assert.equal(document.getElementById('btnSearch').disabled, true);
-  assert.equal(api.readerActions.openSearch(document.getElementById('btnSearch')), false);
+
+  assert.equal(document.getElementById('btnSearch').disabled, false);
+  assert.equal(api.readerPanels.search.enabled(), true);
+  document.getElementById('btnSearch').click();
+  assert.equal(searchSheet.hidden, false);
+
+  const query = document.getElementById('readerSearchQuery');
+  query.value = '蛋白质';
   document.getElementById('readerSearchForm').dispatchEvent(new window.Event('submit', { bubbles: true, cancelable: true }));
-  assert.equal(requestCount, 0);
+  await new Promise((resolve) => setTimeout(resolve, 0));
+
+  assert.match(requestedUrl, /\/search\?q=%E8%9B%8B%E7%99%BD%E8%B4%A8/);
+  assert.equal(document.getElementById('readerSearchResults').hidden, false);
+  assert.equal(document.querySelectorAll('#readerSearchResults > li').length, 1);
+  assert.match(document.querySelector('#readerSearchResults').textContent, /蛋白质相关内容/);
+  assert.equal(document.querySelector('#readerSearchResults img'), null);
+  assert.equal(document.getElementById('readerSearchEmpty').hidden, true);
+});
+
+test('search surface keeps the newest query when responses finish out of order', async () => {
+  const { window, api } = await createReaderDom();
+  const document = window.document;
+  api.state.currentBookId = 'search-book';
+  api.state.currentPath = 'search-book.txt';
+  api.state.contentType = 'text';
+  api.updateTopbarState();
+  api.setupReaderActionMapping();
+  api.setupReaderSearch();
+
+  const pending = new Map();
+  window.fetch = (url) => new Promise((resolve) => {
+    const query = new URL(String(url), window.location.origin).searchParams.get('q');
+    pending.set(query, resolve);
+  });
+
+  const input = document.getElementById('readerSearchQuery');
+  const form = document.getElementById('readerSearchForm');
+  input.value = '第一次';
+  form.dispatchEvent(new window.Event('submit', { bubbles: true, cancelable: true }));
+  input.value = '第二次';
+  form.dispatchEvent(new window.Event('submit', { bubbles: true, cancelable: true }));
+
+  pending.get('第二次')({
+    ok: true,
+    json: async () => ({ available: true, results: [{ id: 'new', chapterLabel: '第二次', snippet: '新结果' }] })
+  });
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  pending.get('第一次')({
+    ok: true,
+    json: async () => ({ available: true, results: [{ id: 'old', chapterLabel: '第一次', snippet: '旧结果' }] })
+  });
+  await new Promise((resolve) => setTimeout(resolve, 0));
+
+  assert.match(document.getElementById('readerSearchResults').textContent, /新结果/);
+  assert.doesNotMatch(document.getElementById('readerSearchResults').textContent, /旧结果/);
+});
+
+test('search result navigation locates text in the current document safely', async () => {
+  const { window, api } = await createReaderDom();
+  const document = window.document;
+  api.state.currentBookId = 'search-book';
+  api.state.currentPath = 'search-book.txt';
+  api.state.contentType = 'text';
+  document.getElementById('article').innerHTML = '<p>这是可定位的蛋白质内容。</p>';
+
+  const navigated = await api.navigateToSearchResult({
+    chapterIndex: 0,
+    matchText: '蛋白质',
+    locator: { text: '蛋白质' }
+  });
+
+  assert.equal(navigated, true);
+  assert.equal(document.querySelector('.reader-search-target')?.dataset.scrolledIntoView, 'true');
 });
 
 test('topbar navigation controls use icon-only SVGs without changing actions', async () => {
@@ -1477,7 +1576,7 @@ test('mobile continuous-scroll controls use flow chapter boundaries and a compac
   assert.equal(document.getElementById('mobileReaderChromeToggle')?.getAttribute('aria-label'), '显示阅读工具');
   assert.deepEqual(
     [...toolbar.querySelectorAll('button')].map((button) => button.dataset.readerAction),
-    ['backToLibrary', 'openToc', 'openBookmarks', 'openNotes', 'highlight', 'openSettings']
+    ['backToLibrary', 'openToc', 'openBookmarks', 'openSearch', 'openNotes', 'highlight', 'openSettings']
   );
   assert.equal(document.getElementById('btnMobilePreviousPage'), null);
   assert.equal(document.getElementById('btnMobileNextPage'), null);
