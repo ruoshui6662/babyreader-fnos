@@ -2741,6 +2741,21 @@ body.is-epub .reader-floating-toolbar {
   max-width: none;
 }
 
+.notes-panel-sort .custom-select-trigger {
+  font-size: var(--notes-control-font-size);
+  line-height: 1.2;
+}
+
+#custom-options-notesSort {
+  --notes-control-font-size: 11px;
+  font-size: var(--notes-control-font-size);
+}
+
+#custom-options-notesSort .custom-select-option {
+  font-size: var(--notes-control-font-size);
+  line-height: 1.2;
+}
+
 .notes-panel-sort > .visually-hidden {
   position: absolute !important;
   width: 1px !important;

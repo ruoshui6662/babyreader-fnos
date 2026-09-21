@@ -187,16 +187,20 @@ test.describe('Highlight CRUD', () => {
       const sortField = document.querySelector('.notes-panel-sort');
       const sortLabel = sortField?.querySelector(':scope > span');
       const sortControl = sortField?.querySelector('select');
+      const sortTrigger = sortField?.querySelector('.custom-select-trigger');
       const filterButton = filters?.querySelector('button');
       const thoughtButton = filters?.querySelector('[data-notes-filter="thought"]');
       const sortOption = sortControl?.querySelector('option');
+      const menuOption = document.querySelector('#custom-options-notesSort .custom-select-option');
       const filterRect = filters?.getBoundingClientRect();
       const sortRect = sortField?.getBoundingClientRect();
       const controlRect = sortControl?.getBoundingClientRect();
       const filterStyle = filterButton ? getComputedStyle(filterButton) : null;
       const thoughtStyle = thoughtButton ? getComputedStyle(thoughtButton) : null;
       const sortStyle = sortControl ? getComputedStyle(sortControl) : null;
+      const triggerStyle = sortTrigger ? getComputedStyle(sortTrigger) : null;
       const optionStyle = sortOption ? getComputedStyle(sortOption) : null;
+      const menuOptionStyle = menuOption ? getComputedStyle(menuOption) : null;
       const labelStyle = sortLabel ? getComputedStyle(sortLabel) : null;
       return {
         filterTop: filterRect?.top,
@@ -210,6 +214,10 @@ test.describe('Highlight CRUD', () => {
         filterFontSize: filterStyle?.fontSize,
         sortFontSize: sortStyle?.fontSize,
         sortOptionFontSize: optionStyle?.fontSize,
+        triggerFontSize: triggerStyle?.fontSize,
+        menuOptionFontSize: menuOptionStyle?.fontSize,
+        triggerLineHeight: triggerStyle?.lineHeight,
+        menuOptionLineHeight: menuOptionStyle?.lineHeight,
         labelPosition: labelStyle?.position,
         labelClip: labelStyle?.clip
       };
@@ -223,6 +231,9 @@ test.describe('Highlight CRUD', () => {
     expect(notesToolbarLayout.filterFontSize).toBe('11px');
     expect(notesToolbarLayout.sortFontSize).toBe(notesToolbarLayout.filterFontSize);
     expect(notesToolbarLayout.sortOptionFontSize).toBe(notesToolbarLayout.filterFontSize);
+    expect(notesToolbarLayout.triggerFontSize).toBe(notesToolbarLayout.filterFontSize);
+    expect(notesToolbarLayout.menuOptionFontSize).toBe(notesToolbarLayout.filterFontSize);
+    expect(notesToolbarLayout.triggerLineHeight).toBe(notesToolbarLayout.menuOptionLineHeight);
     expect(notesToolbarLayout.labelPosition).toBe('absolute');
     expect(notesToolbarLayout.labelClip).toBe('rect(0px, 0px, 0px, 0px)');
 
