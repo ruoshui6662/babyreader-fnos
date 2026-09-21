@@ -1569,36 +1569,23 @@ body.is-library.theme-sepia .topbar {
   }
 }
 
-.settings-panel {
-  position: fixed;
-  top: calc(var(--topbar-h) + 10px);
-  right: 18px;
-  z-index: 180;
-  width: min(340px, calc(100vw - 36px));
-  padding: 20px;
-  background: var(--surface);
-  color: var(--text);
-  border: 1px solid var(--border);
-  border-radius: 16px;
-  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.28);
-}
-
-.settings-panel[hidden] {
-  display: none;
-}
-
 .settings-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 20px;
+  min-height: 44px;
+  margin: 0 0 12px;
+  padding: 0 0 12px;
+  border-bottom: 1px solid var(--color-separator);
 }
 
 .settings-header h2 {
+  margin: 0;
   color: var(--color-text);
-  font-size: 22px;
-  line-height: 28px;
-  font-weight: 700;
+  font-size: 20px;
+  line-height: 24px;
+  font-weight: 650;
+  letter-spacing: -.01em;
 }
 
 .settings-header button {
@@ -2535,58 +2522,6 @@ body.is-epub .reader-floating-toolbar {
   inset: var(--topbar-h) 0 0;
   z-index: 175;
   background: rgba(0, 0, 0, 0.2);
-}
-
-.settings-panel.reader-drawer {
-  position: fixed;
-  top: var(--topbar-h);
-  right: 0;
-  bottom: 0;
-  z-index: 180;
-  width: min(380px, calc(100vw - 28px));
-  max-height: none;
-  overflow-y: auto;
-  padding: 24px 20px 32px;
-  background: var(--color-bg);
-  border: 0;
-  border-left: 1px solid var(--color-separator);
-  border-radius: 0;
-  box-shadow: -18px 0 52px rgba(0, 0, 0, 0.22);
-}
-
-.reader-drawer-tabs {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 2px;
-  margin-bottom: 24px;
-  padding: 3px;
-  background: var(--color-fill);
-  border: 1px solid var(--color-separator);
-  border-radius: var(--radius-pill);
-}
-
-.reader-drawer-tabs button {
-  min-height: 36px;
-  padding: 0 12px;
-  color: var(--color-text-2);
-  background: transparent;
-  border: 0;
-  border-radius: var(--radius-pill);
-  font: inherit;
-  font-size: 13px;
-  cursor: pointer;
-  transition: color var(--dur-fast) var(--ease-out), background-color var(--dur-fast) var(--ease-out), box-shadow var(--dur-fast) var(--ease-out);
-}
-
-.reader-drawer-tabs button:focus-visible {
-  outline: 2px solid var(--color-focus);
-  outline-offset: -2px;
-}
-
-.reader-drawer-tabs button[aria-selected="true"] {
-  color: var(--color-text);
-  background: var(--color-elevated);
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.14);
 }
 
 .bookmark-list {
@@ -4141,19 +4076,6 @@ body.has-toc.toc-open .reader {
     display: none;
   }
 
-  html[data-reader-surface="mobile"] .settings-panel.reader-drawer {
-    top: auto;
-    left: 0;
-    width: 100%;
-    max-height: min(78vh, 680px);
-    border-top: 1px solid var(--border);
-    border-left: 0;
-    border-radius: 18px 18px 0 0;
-  }
-
-  html[data-reader-surface="mobile"] .reader-drawer-backdrop {
-    inset: 0;
-  }
 }
 
 @media (max-width: 520px) {
@@ -4423,27 +4345,6 @@ body.paged-reading .article::after {
    Keep settings, TOC and annotations visually aligned with AI 问书.
    Reading paper themes remain independent from these controls.
    ============================================================ */
-.settings-panel.reader-drawer {
-  color: var(--ui-label);
-  background: var(--ui-bg);
-  border-left-color: var(--ui-separator);
-}
-
-.reader-drawer-tabs {
-  background: var(--ui-fill);
-  border-color: var(--ui-separator);
-}
-
-.reader-drawer-tabs button {
-  color: var(--ui-secondary-label);
-}
-
-.reader-drawer-tabs button[aria-selected="true"] {
-  color: var(--ui-label);
-  background: var(--ui-surface);
-  box-shadow: 0 1px 4px rgba(0, 0, 0, .10);
-}
-
 .settings-group-title,
 .reader-panel-empty,
 .notes-panel-summary {
@@ -4599,34 +4500,55 @@ body.is-epub .reader-floating-toolbar {
   box-shadow: var(--shadow-float);
 }
 
-.settings-panel.reader-drawer {
-  top: calc(var(--topbar-h) + 16px);
-  right: calc(74px + 16px);
-  bottom: 16px;
-  display: flex;
-  flex-direction: column;
-  width: min(380px, calc(100vw - 116px));
-  max-height: none;
-  overflow: hidden;
-  padding: 16px;
-  color: var(--ui-label);
-  background: var(--ui-bg);
-  border: 1px solid var(--ui-separator);
-  border-radius: var(--radius-sheet);
-  box-shadow: var(--shadow-card);
-}
-
 .reader-drawer-header {
   flex: 0 0 auto;
-  margin-bottom: 12px;
 }
 
 .reader-drawer-tabs {
+  display: grid;
   flex: 0 0 auto;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 2px;
   margin-bottom: 16px;
+  padding: 3px;
+  color: var(--ui-secondary-label);
+  background: var(--ui-fill);
+  border: 1px solid var(--ui-separator);
+  border-radius: var(--radius-pill);
 }
 
-.reader-drawer-content {
+.reader-drawer-tabs button {
+  min-width: 0;
+  min-height: 36px;
+  padding: 0 12px;
+  overflow: hidden;
+  color: var(--ui-secondary-label);
+  text-align: center;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  background: transparent;
+  border: 0;
+  border-radius: var(--radius-pill);
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+  transition: color var(--dur-fast) var(--ease-out), background-color var(--dur-fast) var(--ease-out), box-shadow var(--dur-fast) var(--ease-out);
+}
+
+.reader-drawer-tabs button:focus-visible {
+  outline: 2px solid var(--ui-focus);
+  outline-offset: -2px;
+}
+
+.reader-drawer-tabs button[aria-selected="true"] {
+  color: var(--ui-label);
+  background: var(--ui-surface);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, .10);
+}
+
+.reader-drawer-content,
+.reader-settings-content,
+.reader-search-content {
   display: flex;
   flex: 1 1 auto;
   flex-direction: column;
@@ -4637,15 +4559,21 @@ body.is-epub .reader-floating-toolbar {
   scrollbar-width: thin;
 }
 
-.reader-drawer-content::-webkit-scrollbar {
+.reader-drawer-content::-webkit-scrollbar,
+.reader-settings-content::-webkit-scrollbar,
+.reader-search-content::-webkit-scrollbar {
   width: 8px;
 }
 
-.reader-drawer-content::-webkit-scrollbar-track {
+.reader-drawer-content::-webkit-scrollbar-track,
+.reader-settings-content::-webkit-scrollbar-track,
+.reader-search-content::-webkit-scrollbar-track {
   background: transparent;
 }
 
-.reader-drawer-content::-webkit-scrollbar-thumb {
+.reader-drawer-content::-webkit-scrollbar-thumb,
+.reader-settings-content::-webkit-scrollbar-thumb,
+.reader-search-content::-webkit-scrollbar-thumb {
   background: var(--ui-separator);
   border: 2px solid transparent;
   border-radius: 999px;
@@ -4663,6 +4591,7 @@ body.is-epub .reader-floating-toolbar {
    tablist. Keep one scroll owner per surface so the topbar cannot cover the
    panel body on desktop or mobile. */
 .reader-sheet {
+  box-sizing: border-box;
   position: fixed;
   top: calc(var(--topbar-h) + 16px);
   right: calc(74px + 16px);
@@ -4681,42 +4610,28 @@ body.is-epub .reader-floating-toolbar {
   box-shadow: var(--shadow-card);
 }
 
-.reader-content-sheet .reader-drawer-header,
-.reader-settings-sheet .reader-drawer-header,
-.reader-search-sheet .reader-drawer-header {
-  flex: 0 0 auto;
-  margin-bottom: 12px;
+.reader-sheet .reader-drawer-header {
+  color: var(--ui-label);
+  border-bottom-color: var(--ui-separator);
 }
 
-.reader-content-sheet .reader-drawer-tabs {
-  flex: 0 0 auto;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  margin-bottom: 16px;
+.reader-sheet .reader-drawer-header h2 {
+  color: var(--ui-label);
 }
 
-.reader-settings-content,
-.reader-search-content {
-  display: flex;
-  flex: 1 1 auto;
-  flex-direction: column;
-  min-height: 0;
-  overflow-y: auto;
-  overscroll-behavior: contain;
-  scrollbar-color: var(--ui-separator) transparent;
-  scrollbar-width: thin;
+.reader-sheet .reader-drawer-header button {
+  color: var(--ui-secondary-label);
+  background: var(--ui-fill);
 }
 
-.reader-settings-content::-webkit-scrollbar,
-.reader-search-content::-webkit-scrollbar {
-  width: 8px;
+.reader-sheet .reader-drawer-header button:hover,
+.reader-sheet .reader-drawer-header button:focus-visible {
+  color: var(--ui-label);
+  background: color-mix(in srgb, var(--ui-accent) 10%, var(--ui-fill));
 }
 
-.reader-settings-content::-webkit-scrollbar-thumb,
-.reader-search-content::-webkit-scrollbar-thumb {
-  background: var(--ui-separator);
-  border: 2px solid transparent;
-  border-radius: 999px;
-  background-clip: padding-box;
+.reader-sheet .reader-drawer-header button:focus-visible {
+  outline-color: var(--ui-focus);
 }
 
 .reader-settings-content > #readerPanelSettings {
@@ -4743,21 +4658,7 @@ body.is-epub .reader-floating-toolbar {
     border-left: 0;
     border-radius: 20px 20px 0 0;
   }
-}
-
-@media (max-width: 1200px) {
-  html[data-reader-surface="mobile"] .settings-panel.reader-drawer {
-    top: auto;
-    right: 0;
-    bottom: 0;
-    left: 0;
-    width: 100%;
-    max-height: min(78vh, 680px);
-    height: min(78vh, 680px);
-    padding: 16px 16px calc(16px + env(safe-area-inset-bottom, 0px));
-    border-right: 0;
-    border-bottom: 0;
-    border-left: 0;
-    border-radius: 20px 20px 0 0;
+  html[data-reader-surface="mobile"] .reader-drawer-backdrop {
+    inset: 0;
   }
 }

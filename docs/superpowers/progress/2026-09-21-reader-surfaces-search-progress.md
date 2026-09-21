@@ -1,7 +1,7 @@
 # Reader surfaces and search progress
 
 **Last updated:** 2026-09-21
-**Current milestone:** Task 2 complete
+**Current milestone:** Task 3 complete
 
 ## Completed
 
@@ -13,6 +13,9 @@
 - [x] Shared `readerSurfaceController` now separates content/settings/search state, backdrop, Escape, focus restoration, accessibility state, and mutual exclusion.
 - [x] Reader launchers keep `aria-expanded` synchronized with the active reader surface; Escape/backdrop restore focus to the surface launcher.
 - [x] AI remains an independent floating surface: opening AI closes reader surfaces, while opening reader surfaces does not destroy an existing AI conversation.
+- [x] Sheet visual system uses one canonical surface rule set for header, divider, close button, padding, focus ring, and neutral UI tokens.
+- [x] Content/settings/search sheets each have one scroll owner; content tabs stay three-column and nowrap.
+- [x] Mobile sheets share bottom-sheet geometry, full-screen backdrop coverage, and safe-area bottom padding.
 - [x] Settings custom-select initialization remains compatible after the DOM move.
 - [x] Regression coverage updated for desktop, mobile, AI, bookmarks, notes, settings, keyboard, backdrop, and touch entry points.
 
@@ -20,9 +23,8 @@
 
 - `npm test`: 131 passed, 3 skipped.
 - `npm run check`: passed.
-- Chromium Playwright: 67 passed, 2 optional real-EPUB tests skipped.
+- Chromium Playwright: 68 passed, 2 optional real-EPUB tests skipped.
 
 ## Next work
 
-- Task 3: consolidate duplicate CSS into canonical sheet tokens and capture desktop/mobile visual evidence.
 - Task 4: implement the independent search surface contract, then separately implement the full-text search API and SQLite FTS result semantics.

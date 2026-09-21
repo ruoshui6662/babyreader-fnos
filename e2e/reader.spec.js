@@ -457,6 +457,63 @@ test('settings drawer presents grouped controls and a selected segmented tab', a
   }
 });
 
+test('reader sheets share canonical chrome and keep one scroll owner', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await openEpubFixture(page);
+
+  const metrics = await page.evaluate(() => {
+    const ids = ['readerDrawer', 'readerSettingsSheet', 'readerSearchSheet'];
+    const getMetrics = (id) => {
+      const root = document.getElementById(id);
+      const header = root?.querySelector('.reader-drawer-header');
+      const viewport = root?.querySelector('.reader-drawer-content, .reader-settings-content, .reader-search-content');
+      const rootStyle = root ? getComputedStyle(root) : null;
+      const headerStyle = header ? getComputedStyle(header) : null;
+      const viewportStyle = viewport ? getComputedStyle(viewport) : null;
+      return {
+        borderRadius: rootStyle?.borderRadius,
+        overflow: rootStyle?.overflow,
+        padding: rootStyle?.padding,
+        headerBorderBottom: headerStyle?.borderBottomWidth,
+        headerPaddingBottom: headerStyle?.paddingBottom,
+        viewportOverflowY: viewportStyle?.overflowY,
+        viewportOverscroll: viewportStyle?.overscrollBehaviorY
+      };
+    };
+    return {
+      sheets: ids.map(getMetrics),
+      tabs: (() => {
+        const tabs = document.querySelector('.reader-drawer-tabs');
+        const style = tabs ? getComputedStyle(tabs) : null;
+        return {
+          columns: style?.gridTemplateColumns,
+          whiteSpace: getComputedStyle(tabs.querySelector('button'))?.whiteSpace
+        };
+      })(),
+      settingsPanel: (() => {
+        const panel = document.getElementById('settingsPanel');
+        const style = panel ? getComputedStyle(panel) : null;
+        return { overflowY: style?.overflowY };
+      })()
+    };
+  });
+
+  for (const sheet of metrics.sheets) {
+    expect(sheet.borderRadius).toBe('20px');
+    expect(sheet.overflow).toBe('hidden');
+    expect(sheet.padding).toBe('16px');
+    expect(sheet.headerBorderBottom).toBe('1px');
+    expect(sheet.headerPaddingBottom).toBe('12px');
+    expect(sheet.viewportOverflowY).toBe('auto');
+    expect(sheet.viewportOverscroll).toBe('contain');
+  }
+  const tabColumns = metrics.tabs.columns.split(' ').map(parseFloat);
+  expect(tabColumns).toHaveLength(3);
+  expect(Math.max(...tabColumns) - Math.min(...tabColumns)).toBeLessThanOrEqual(1);
+  expect(metrics.tabs.whiteSpace).toBe('nowrap');
+  expect(metrics.settingsPanel.overflowY).toBe('visible');
+});
+
 test('settings selects use a rounded custom menu that always opens below the trigger', async ({ page }) => {
   await openFixtureBook(page);
 
@@ -1135,5 +1192,26 @@ test('mobile viewport keeps the reader chrome collapsed until requested', async 
   await page.locator('#btnMobileSettings').click();
   await expect(page.locator('#readerSettingsSheet')).toBeVisible();
   await expect(page.locator('#settingReadingMode')).toHaveValue('scroll');
+  const mobileSurface = await page.locator('#readerSettingsSheet').evaluate((element) => {
+    const style = getComputedStyle(element);
+    const backdrop = document.getElementById('readerSettingsBackdrop');
+    const backdropStyle = backdrop ? getComputedStyle(backdrop) : null;
+    return {
+      bottom: style.bottom,
+      left: style.left,
+      right: style.right,
+      width: style.width,
+      borderTopLeftRadius: style.borderTopLeftRadius,
+      paddingBottom: style.paddingBottom,
+      backdropInset: backdropStyle?.inset
+    };
+  });
+  expect(mobileSurface.bottom).toBe('0px');
+  expect(mobileSurface.left).toBe('0px');
+  expect(mobileSurface.right).toBe('0px');
+  expect(mobileSurface.width).toBe('390px');
+  expect(mobileSurface.borderTopLeftRadius).toBe('20px');
+  expect(mobileSurface.paddingBottom).toBe('16px');
+  expect(mobileSurface.backdropInset).toBe('0px');
   expect(pageErrors).toEqual([]);
 });

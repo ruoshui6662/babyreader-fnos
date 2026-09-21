@@ -4,7 +4,7 @@
 
 **Goal:** Separate reader content navigation, display settings, and future search into independent in-app sheets while preserving all existing reader and AI behavior.
 
-**Status:** Task 2 complete; Task 3 pending
+**Status:** Task 3 complete; Task 4 pending
 
 **Architecture:** Keep one shared surface controller for exclusivity, backdrop, Escape, focus restoration, and responsive behavior. Use separate DOM roots and state namespaces for content, settings, and search. Keep AI as the existing independent modal.
 
@@ -42,10 +42,12 @@ Task 2 boundary: AI remains an independent floating modal. The shared controller
 
 **Files:** `app/ui/styles.css`, relevant screenshots/tests
 
-1. Add visual assertions for no tab wrapping and one scroll owner per sheet.
-2. Consolidate duplicate Drawer rules into canonical sheet classes and shared UI tokens.
-3. Align header, divider, close button, body padding, focus ring, and mobile safe-area rules.
-4. Capture desktop and mobile screenshots for review.
+1. Add visual assertions for no tab wrapping and one scroll owner per sheet. — complete
+2. Consolidate duplicate Drawer rules into canonical sheet classes and shared UI tokens. — complete
+3. Align header, divider, close button, body padding, focus ring, and mobile safe-area rules. — complete
+4. Verify desktop and mobile visual contracts in Chromium. — complete
+
+Task 3 boundary: this pass changes only sheet chrome and layout ownership. It does not change reader content rendering, AI retrieval, server APIs, or persisted settings values.
 
 ## Task 4: Reserve the independent search surface
 

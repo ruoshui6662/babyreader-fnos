@@ -1417,7 +1417,7 @@ test('reader drawer separates fixed chrome from the scrollable panel viewport', 
 
   const css = await fs.readFile(path.resolve(__dirname, '../app/ui/styles.css'), 'utf8');
   assert.match(css, /\.reader-sheet\s*\{[\s\S]*?overflow:\s*hidden;/);
-  assert.match(css, /\.reader-drawer-content\s*\{[\s\S]*?overflow-y:\s*auto;/);
+  assert.match(css, /\.reader-drawer-content\s*,[\s\S]*?overflow-y:\s*auto;/);
 });
 
 test('mobile continuous-scroll controls use flow chapter boundaries and a compact shared-action HUD', async () => {
