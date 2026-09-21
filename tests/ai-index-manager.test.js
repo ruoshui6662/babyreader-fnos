@@ -251,3 +251,59 @@ test('publishIndex replaces an existing index without deleting it on failure', a
   );
   assert.equal(await fs.readFile(targetPath, 'utf8'), 'new-index');
 });
+
+test('temporary cleanup removes only expired inactive build files', async (t) => {
+  const now = new Date('2026-09-21T05:11:32.835Z');
+  const dataRoot = await temporaryDirectory(t);
+  const manager = createAiIndexManager({ dataRoot, now: () => now });
+  const oldPath = manager.getIndexPath(BOOK_ID) + '.123.1.tmp';
+  const freshPath = manager.getIndexPath(ORPHAN_ID) + '.123.1.tmp';
+  await fs.mkdir(path.dirname(oldPath), { recursive: true });
+  await fs.writeFile(oldPath, 'old');
+  await fs.writeFile(freshPath, 'fresh');
+  await fs.utimes(oldPath, new Date('2026-09-19T05:11:32.835Z'), new Date('2026-09-19T05:11:32.835Z'));
+
+  const result = await manager.cleanup({ kind: 'temporary', confirm: true, scanHealthy: false });
+
+  assert.equal(result.deleted.length, 1);
+  await assert.rejects(() => fs.access(oldPath), { code: 'ENOENT' });
+  await fs.access(freshPath);
+});
+
+test('temporary cleanup skips files belonging to an active build lease', async (t) => {
+  const now = new Date('2026-09-21T05:11:32.835Z');
+  const dataRoot = await temporaryDirectory(t);
+  const manager = createAiIndexManager({ dataRoot, now: () => now });
+  const temporaryPath = manager.getIndexPath(BOOK_ID) + '.123.1.tmp';
+  await fs.mkdir(path.dirname(temporaryPath), { recursive: true });
+  await fs.writeFile(temporaryPath, 'active');
+  await fs.utimes(temporaryPath, new Date('2026-09-19T05:11:32.835Z'), new Date('2026-09-19T05:11:32.835Z'));
+
+  let release;
+  const gate = new Promise((resolve) => {
+    release = resolve;
+  });
+  const build = manager.withBuildLease(BOOK_ID, () => gate);
+  const result = await manager.cleanup({ kind: 'temporary', confirm: true, scanHealthy: false });
+  release();
+  await build;
+
+  assert.equal(result.deleted.length, 0);
+  assert.equal(result.skipped[0].reason, 'INDEX_BUSY');
+  await fs.access(temporaryPath);
+});
+
+test('corrupt SQLite files are reported without destructive repair', {
+  skip: !DatabaseSync
+}, async (t) => {
+  const dataRoot = await temporaryDirectory(t);
+  const manager = createAiIndexManager({ dataRoot });
+  const filePath = manager.getIndexPath(BOOK_ID);
+  await fs.mkdir(path.dirname(filePath), { recursive: true });
+  await fs.writeFile(filePath, 'not sqlite');
+
+  const result = await manager.inspectIndexFile(filePath);
+
+  assert.equal(result.status, 'corrupt');
+  assert.equal(await fs.readFile(filePath, 'utf8'), 'not sqlite');
+});

@@ -9,6 +9,7 @@ const { resolveAuthorizedPath } = require('./security');
 const { AiConfigStorage, normalizeAiSettings, publicAiConfig } = require('./ai-config');
 const { validateAiBookContext } = require('./ai-book-context');
 const { searchBook: searchAiBook } = require('./ai-fts');
+const { createAiIndexManager } = require('./ai-index-manager');
 const { parseBookSearchParams, searchBookText } = require('./book-search');
 const {
   normalizeAiConfig,
@@ -29,6 +30,10 @@ const CSP = "default-src 'self'; base-uri 'none'; object-src 'none'; frame-ances
 
 const storage = new UserStorage(DATA_ROOT);
 const aiConfigStorage = new AiConfigStorage(DATA_ROOT);
+const aiIndexManager = createAiIndexManager({
+  dataRoot: DATA_ROOT,
+  getLibraryIndex: () => storage.getLibraryIndex()
+});
 const STARTED_AT = new Date().toISOString();
 let authorizedRoots = [];
 let rootDiagnostics = {
@@ -66,6 +71,12 @@ function currentScanState() {
     ...scanState,
     active: Boolean(activeScan)
   };
+}
+
+function isHealthyLibraryIndex(index) {
+  return index?.scan?.status === 'completed'
+    && Number(index.scan.errorCount || 0) === 0
+    && (!Array.isArray(index.scan.rootErrors) || index.scan.rootErrors.length === 0);
 }
 
 async function runLibraryScan() {
@@ -332,6 +343,29 @@ async function handleApi(request, response, pathname, searchParams = new URLSear
   }
 
   const user = gatewayUser(request);
+  if (pathname === APP_PREFIX + '/api/ai/indexes' && request.method === 'GET') {
+    if (!user.isAdmin) return sendError(response, 403, 'Administrator access is required');
+    const index = await storage.getLibraryIndex();
+    return sendJson(response, 200, await aiIndexManager.listIndexes({
+      libraryIndex: index.books,
+      scanHealthy: isHealthyLibraryIndex(index)
+    }));
+  }
+  const aiIndexDeleteMatch = pathname.match(new RegExp('^' + APP_PREFIX + '/api/ai/indexes/([a-f0-9]{64})$'));
+  if (aiIndexDeleteMatch && request.method === 'DELETE') {
+    if (!user.isAdmin) return sendError(response, 403, 'Administrator access is required');
+    return sendJson(response, 200, await aiIndexManager.deleteIndex(aiIndexDeleteMatch[1]));
+  }
+  if (pathname === APP_PREFIX + '/api/ai/indexes/cleanup' && request.method === 'POST') {
+    if (!user.isAdmin) return sendError(response, 403, 'Administrator access is required');
+    const index = await storage.getLibraryIndex();
+    const body = await readJsonBody(request);
+    return sendJson(response, 200, await aiIndexManager.cleanup({
+      ...body,
+      libraryIndex: index.books,
+      scanHealthy: isHealthyLibraryIndex(index)
+    }));
+  }
   if (request.method === 'GET' && pathname === `${APP_PREFIX}/api/session`) {
     return sendJson(response, 200, { uid: user.uid, username: user.username, isAdmin: user.isAdmin });
   }

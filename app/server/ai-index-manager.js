@@ -18,6 +18,14 @@ const REQUIRED_TABLES = ['ai_meta', 'ai_chunk_text', 'ai_chunks'];
 function managerError(code, message) {
   const error = new Error(message);
   error.code = code;
+  error.statusCode = {
+    INVALID_REQUEST: 400,
+    INVALID_BOOK_ID: 400,
+    INDEX_UNSAFE_TARGET: 409,
+    INDEX_BUSY: 409,
+    LIBRARY_SCAN_UNAVAILABLE: 503,
+    INDEX_MANAGER_UNAVAILABLE: 503
+  }[code] || 500;
   return error;
 }
 
@@ -332,6 +340,32 @@ function createAiIndexManager({
     return true;
   }
 
+  async function deleteIndex(bookId) {
+    const validBookId = validateBookId(bookId);
+    const state = leaseState(validBookId);
+    if (state.building || state.readers > 0) {
+      throw managerError('INDEX_BUSY', 'index is active');
+    }
+    const filePath = getIndexPath(validBookId);
+    let deleted = false;
+    try {
+      const stat = await fs.lstat(filePath);
+      if (stat.isSymbolicLink() || !stat.isFile()) {
+        throw managerError('INDEX_UNSAFE_TARGET', 'index target is not a regular file');
+      }
+      await fs.rm(filePath);
+      deleted = true;
+    } catch (error) {
+      if (error?.code !== 'ENOENT') throw error;
+    }
+    const manifest = await loadManifest();
+    if (manifest.entries[validBookId]) {
+      delete manifest.entries[validBookId];
+      await publishManifest(manifest);
+    }
+    return { bookId: validBookId, deleted };
+  }
+
   async function publishIndex(temporaryPath, targetPath) {
     const targetBookId = managedBookIdFromPath(targetPath);
     const resolvedTemporaryPath = path.resolve(String(temporaryPath || ''));
@@ -381,6 +415,72 @@ function createAiIndexManager({
       if (error?.code === 'ENOENT') return [];
       throw error;
     }
+  }
+
+  async function cleanup({ kind = '', libraryIndex = null, scanHealthy = false, confirm = false } = {}) {
+    if (confirm !== true) throw managerError('INVALID_REQUEST', 'cleanup requires confirmation');
+    if (!['orphans', 'temporary', 'all'].includes(kind)) {
+      throw managerError('INVALID_REQUEST', 'cleanup kind is invalid');
+    }
+    if ((kind === 'orphans' || kind === 'all') && !scanHealthy) {
+      throw managerError('LIBRARY_SCAN_UNAVAILABLE', 'library scan is not healthy');
+    }
+    const suppliedLibrary = Array.isArray(libraryIndex)
+      ? libraryIndex
+      : (typeof getLibraryIndex === 'function' ? await getLibraryIndex() : []);
+    const books = new Set(
+      suppliedLibrary
+        .filter((book) => BOOK_ID_PATTERN.test(String(book?.id || '')))
+        .map((book) => book.id)
+    );
+    const deleted = [];
+    const skipped = [];
+    let bytesFreed = 0;
+
+    if (kind === 'orphans' || kind === 'all') {
+      for (const filePath of await listIndexFiles()) {
+        const fileName = path.basename(filePath);
+        const bookId = fileName.slice(0, -'.sqlite'.length);
+        if (!BOOK_ID_PATTERN.test(bookId) || books.has(bookId)) continue;
+        try {
+          const stat = await fs.lstat(filePath);
+          const result = await deleteIndex(bookId);
+          if (result.deleted) {
+            deleted.push({ kind: 'orphan', bookId });
+            bytesFreed += stat.size;
+          }
+        } catch (error) {
+          if (error.code === 'INDEX_BUSY') skipped.push({ kind: 'orphan', bookId, reason: error.code });
+          else throw error;
+        }
+      }
+    }
+
+    if (kind === 'temporary' || kind === 'all') {
+      const cutoff = new Date(now()).getTime() - 24 * 60 * 60 * 1000;
+      let entries = [];
+      try {
+        entries = await fs.readdir(directory, { withFileTypes: true });
+      } catch (error) {
+        if (error?.code !== 'ENOENT') throw error;
+      }
+      for (const entry of entries) {
+        if (!entry.isFile() || !entry.name.endsWith('.tmp')) continue;
+        const match = entry.name.match(/^([a-f0-9]{64})\.sqlite\./);
+        const bookId = match?.[1] || null;
+        if (bookId && leaseState(bookId).building) {
+          skipped.push({ kind: 'temporary', bookId, reason: 'INDEX_BUSY' });
+          continue;
+        }
+        const filePath = path.join(directory, entry.name);
+        const stat = await fs.lstat(filePath);
+        if (stat.mtimeMs >= cutoff) continue;
+        await fs.rm(filePath);
+        deleted.push({ kind: 'temporary' });
+        bytesFreed += stat.size;
+      }
+    }
+    return { kind, deleted, skipped, bytesFreed };
   }
 
   async function listIndexes({ libraryIndex = null, scanHealthy = true } = {}) {
@@ -464,6 +564,8 @@ function createAiIndexManager({
     withReadLease,
     leaseState,
     publishIndex,
+    deleteIndex,
+    cleanup,
     getManifestPath: () => manifestPath
   };
 }
