@@ -10,7 +10,7 @@
 - 规格：已写入 docs/superpowers/specs/2026-09-21-ai-index-manager-design.md。
 - 实现计划：已写入 docs/superpowers/plans/2026-09-21-ai-index-manager.md。
 - 运行代码：Task 1 已新增管理器基础；Task 2 已接入 FTS 生命周期和安全发布；Task 3 已接入管理员 API；Task 4 已接入独立 UI；Task 5 已完成恢复与清理边界测试。
-- FPK：未重新打包。
+- FPK：已重新打包，当前产物为 `dist/babyreader-fnos.fpk`，溯源文件记录了 clean source commit 与 SHA-256。
 - fnOS 真机验收：未开始。
 
 ## 任务状态
