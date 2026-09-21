@@ -13,7 +13,7 @@
 ## Global Constraints
 
 - The FPK must be built from a clean, identified Git commit and manifest version `1.1.1`.
-- The package must include the independent search API, `ui/reader/search.js`, search E2E tests, and `docs/fnos-device-acceptance.sh`.
+- The package must include the independent search API, `ui/reader/search.js`, server/DOM regression tests, and `docs/fnos-device-acceptance.sh`; Playwright E2E sources remain repository-side because the FPK does not ship the dev-only E2E tree.
 - Packaging must not alter the SQLite schema, AI route, AI settings, or existing user data paths.
 - Device acceptance is not considered complete without x86_64 and ARM64 fnOS evidence; local packaging cannot substitute for it.
 
@@ -49,7 +49,7 @@
 
 - [ ] **Step 3: Inspect package contents and provenance**
 
-  Verify `dist/build-provenance.json` identifies the current commit and `git_dirty=false`. Inspect the outer archive and nested `app.tgz` for `server/index.js`, `ui/reader/search.js`, `ui/index.html`, `tests/search-api.test.js`, `e2e/search.spec.js`, and `docs/fnos-device-acceptance.sh`. Verify the SHA-256 sidecar matches the artifact.
+  Verify `dist/build-provenance.json` identifies the current commit and `git_dirty=false`. Inspect the outer archive and nested `app.tgz` for `server/index.js`, `ui/reader/search.js`, `ui/index.html`, `tests/search-api.test.js`, and `docs/fnos-device-acceptance.sh`. Verify the SHA-256 sidecar matches the artifact; `e2e/search.spec.js` is validated from the source checkout, not expected inside the runtime package.
 
 - [ ] **Step 4: Record device acceptance boundary**
 
