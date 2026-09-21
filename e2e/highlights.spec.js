@@ -233,6 +233,39 @@ test.describe('Highlight CRUD', () => {
     await expect(page.locator('#notesList [data-annotation-id]')).toHaveCount(1);
   });
 
+  test('notes panel keeps compact sections after rapid reader action switching', async ({ page }) => {
+    await page.locator('#btnNotes').click();
+    await page.locator('#btnToc').click();
+    await page.locator('#btnNotes').click();
+    await page.locator('#btnBookmarks').click();
+    await page.locator('#btnNotes').click();
+
+    await expect(page.locator('#readerPanelNotes')).toBeVisible();
+    const layout = await page.evaluate(() => {
+      const summary = document.getElementById('notesPanelSummary');
+      const toolbar = document.querySelector('.notes-panel-toolbar');
+      const content = document.getElementById('readerDrawerContent');
+      return {
+        visiblePanels: [...document.querySelectorAll('#readerDrawer [data-reader-panel-name]')]
+          .filter((panel) => !panel.hidden)
+          .map((panel) => panel.id),
+        selectedTabs: [...document.querySelectorAll('#readerDrawer [data-reader-panel-target]')]
+          .filter((tab) => tab.getAttribute('aria-selected') === 'true')
+          .map((tab) => tab.dataset.readerPanelTarget),
+        summaryHeight: summary?.getBoundingClientRect().height || 0,
+        toolbarHeight: toolbar?.getBoundingClientRect().height || 0,
+        scrollWidth: content?.scrollWidth || 0,
+        clientWidth: content?.clientWidth || 0
+      };
+    });
+
+    expect(layout.visiblePanels).toEqual(['readerPanelNotes']);
+    expect(layout.selectedTabs).toEqual(['notes']);
+    expect(layout.summaryHeight).toBeLessThanOrEqual(50);
+    expect(layout.toolbarHeight).toBeLessThanOrEqual(50);
+    expect(layout.scrollWidth).toBe(layout.clientWidth);
+  });
+
   test('notes panel jumps to a later chapter without flashing a focus border', async ({ page }) => {
     await expect(selectArticleText(page, FIXTURE_TEXT.firstParagraph)).resolves.toBeTruthy();
     const firstSave = waitForHighlightsSave(page);
