@@ -2174,7 +2174,7 @@ body.paged-reading .epub-chapter:first-of-type {
 
 .highlight-editor button,
 .mobile-reader-toolbar button {
-  min-height: 40px;
+  min-height: 44px;
   padding: 8px 13px;
   color: var(--text);
   background: var(--surface-alt);
@@ -2238,7 +2238,7 @@ body.paged-reading .epub-chapter:first-of-type {
     flex: 1 1 0;
     min-width: 0;
     max-width: 160px;
-    min-height: 40px;
+    min-height: 44px;
     padding: 6px 8px;
     font-size: 12px;
   }

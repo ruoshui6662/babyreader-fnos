@@ -56,6 +56,22 @@ async function resetEpubFixtureState(page) {
   }, APP_PREFIX);
 }
 
+async function resetEpubFixtureBookmarks(page) {
+  const bookId = await getEpubFixtureId(page);
+  const bookmarks = await page.evaluate(async ({ prefix, id }) => {
+    const response = await fetch(`${prefix}/api/books/${encodeURIComponent(id)}/bookmarks`);
+    if (!response.ok) throw new Error(`Bookmark list request failed: ${response.status}`);
+    return response.json();
+  }, { prefix: APP_PREFIX, id: bookId });
+
+  for (const bookmark of bookmarks) {
+    const response = await page.request.delete(
+      `${APP_PREFIX}/api/books/${encodeURIComponent(bookId)}/bookmarks/${encodeURIComponent(bookmark.id)}`
+    );
+    if (!response.ok()) throw new Error(`Bookmark reset failed: ${response.status()}`);
+  }
+}
+
 async function saveEpubFixtureProgress(page, locator) {
   const bookId = await getEpubFixtureId(page);
   return page.evaluate(async ({ prefix, bookId: id, savedLocator }) => {
@@ -137,6 +153,14 @@ async function waitForProgressSave(page, requestPredicate = () => true) {
     response.request().method() === 'PUT' &&
     response.ok() &&
     requestPredicate(response.request())
+  );
+}
+
+async function waitForBookmarkRequest(page, method) {
+  return page.waitForResponse((response) =>
+    /\/api\/books\/[^/]+\/bookmarks(?:\/[^/]+)?$/.test(response.url()) &&
+    response.request().method() === method &&
+    response.ok()
   );
 }
 
@@ -236,11 +260,13 @@ module.exports = {
   openEpubFixture,
   getEpubFixtureId,
   resetEpubFixtureState,
+  resetEpubFixtureBookmarks,
   saveEpubFixtureProgress,
   resetReaderSettings,
   waitForSettingsSave,
   waitForHighlightsSave,
   waitForProgressSave,
+  waitForBookmarkRequest,
   selectArticleText,
   selectNthArticleText,
   commitSelectionHighlight,

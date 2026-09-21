@@ -56,6 +56,7 @@ test('loads split UI modules in Chromium and opens a real library book', async (
     '/app/babyreader-fnos/reader/ai.js',
     '/app/babyreader-fnos/reader/actions.js',
     '/app/babyreader-fnos/reader/progress.js',
+    '/app/babyreader-fnos/reader/bookmarks.js',
     '/app/babyreader-fnos/reader/pagination.js',
     '/app/babyreader-fnos/reader/settings.js',
     '/app/babyreader-fnos/reader/navigation.js',
@@ -638,6 +639,7 @@ test('reader shell has unique IDs, reserved actions disabled, and restores Drawe
   for (const selector of ['#btnSearch', '#btnBookmarks', '#btnNotes', '#btnAi']) {
     await expect(page.locator(selector)).toBeDisabled();
   }
+  await expect(page.locator('#btnBookmarks')).not.toHaveAttribute('data-reader-status', 'reserved');
 
   const settingsButton = page.locator('#btnSettings');
   await settingsButton.focus();
