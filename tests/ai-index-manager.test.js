@@ -1,0 +1,178 @@
+'use strict';
+
+const assert = require('node:assert/strict');
+const fs = require('node:fs/promises');
+const os = require('node:os');
+const path = require('node:path');
+const test = require('node:test');
+
+let DatabaseSync = null;
+try {
+  ({ DatabaseSync } = require('node:sqlite'));
+} catch {
+  DatabaseSync = null;
+}
+
+const { createAiIndexManager } = require('../app/server/ai-index-manager');
+
+const BOOK_ID = 'a'.repeat(64);
+const ORPHAN_ID = 'b'.repeat(64);
+const MISSING_ID = 'c'.repeat(64);
+
+async function temporaryDirectory(t) {
+  const directory = await fs.mkdtemp(path.join(os.tmpdir(), 'babyreader-ai-index-manager-'));
+  t.after(() => fs.rm(directory, { recursive: true, force: true }));
+  return directory;
+}
+
+async function createValidIndex(dataRoot, bookId, fingerprint = 'fingerprint-1') {
+  const directory = path.join(dataRoot, 'ai-index');
+  const filePath = path.join(directory, bookId + '.sqlite');
+  await fs.mkdir(directory, { recursive: true, mode: 0o700 });
+  const db = new DatabaseSync(filePath);
+  db.exec('CREATE TABLE ai_meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);');
+  db.exec('CREATE TABLE ai_chunk_text (rowid INTEGER PRIMARY KEY, bodyText TEXT NOT NULL, titleText TEXT NOT NULL, headingsText TEXT NOT NULL);');
+  db.exec('CREATE VIRTUAL TABLE ai_chunks USING fts5(title, headings, body, chapterIndex UNINDEXED, chapterHref UNINDEXED, chapterLabel UNINDEXED, startOffset UNINDEXED);');
+  const insert = db.prepare('INSERT INTO ai_meta(key, value) VALUES (?, ?)');
+  insert.run('schemaVersion', '2');
+  insert.run('bookId', bookId);
+  insert.run('fingerprint', fingerprint);
+  db.close();
+  return filePath;
+}
+
+test('manager derives safe index paths and rejects invalid book ids', async (t) => {
+  const dataRoot = await temporaryDirectory(t);
+  const manager = createAiIndexManager({ dataRoot });
+
+  assert.equal(
+    manager.getIndexPath(BOOK_ID),
+    path.join(path.resolve(dataRoot), 'ai-index', BOOK_ID + '.sqlite')
+  );
+  assert.throws(() => manager.getIndexPath('../outside'), (error) => error.code === 'INVALID_BOOK_ID');
+  assert.throws(() => manager.getIndexPath('A'.repeat(64)), (error) => error.code === 'INVALID_BOOK_ID');
+  assert.throws(() => manager.getIndexPath('a'.repeat(63)), (error) => error.code === 'INVALID_BOOK_ID');
+});
+
+test('missing inspection is read-only and does not create a database', async (t) => {
+  const dataRoot = await temporaryDirectory(t);
+  const manager = createAiIndexManager({ dataRoot });
+  const filePath = manager.getIndexPath(BOOK_ID);
+
+  const result = await manager.inspectIndexFile(filePath);
+
+  assert.equal(result.status, 'missing');
+  assert.equal(result.exists, false);
+  await assert.rejects(() => fs.access(filePath), { code: 'ENOENT' });
+});
+
+test('read-only inspection returns required schema and SQLite size statistics', {
+  skip: !DatabaseSync
+}, async (t) => {
+  const dataRoot = await temporaryDirectory(t);
+  const filePath = await createValidIndex(dataRoot, BOOK_ID);
+  const manager = createAiIndexManager({ dataRoot });
+
+  const result = await manager.inspectIndexFile(filePath);
+
+  assert.equal(result.status, 'ready');
+  assert.equal(result.exists, true);
+  assert.deepEqual(result.requiredTables.sort(), ['ai_chunk_text', 'ai_chunks', 'ai_meta']);
+  assert.ok(result.sizeBytes > 0);
+  assert.ok(result.pageCount > 0);
+  assert.ok(result.pageSize > 0);
+  assert.ok(Number.isInteger(result.freelistCount));
+});
+
+test('recordBuildSuccess writes only non-sensitive manifest metadata atomically', async (t) => {
+  const dataRoot = await temporaryDirectory(t);
+  const manager = createAiIndexManager({ dataRoot, now: () => new Date('2026-09-21T05:11:32.835Z') });
+  const filePath = manager.getIndexPath(BOOK_ID);
+  await fs.mkdir(path.dirname(filePath), { recursive: true });
+  await fs.writeFile(filePath, 'sqlite-placeholder');
+
+  await manager.recordBuildSuccess(
+    { id: BOOK_ID, title: '测试书', path: path.join(dataRoot, 'secret-book.epub') },
+    { filePath, fingerprint: 'fingerprint-1', schemaVersion: 2 }
+  );
+
+  const manifestPath = path.join(dataRoot, 'ai-index', 'manifest.json');
+  const manifestText = await fs.readFile(manifestPath, 'utf8');
+  const manifest = JSON.parse(manifestText);
+  assert.equal(manifest.version, 1);
+  assert.deepEqual(manifest.entries[BOOK_ID], {
+    bookId: BOOK_ID,
+    sizeBytes: Buffer.byteLength('sqlite-placeholder'),
+    indexedAt: '2026-09-21T05:11:32.835Z',
+    lastAccessedAt: '2026-09-21T05:11:32.835Z',
+    fingerprint: 'fingerprint-1',
+    schemaVersion: 2
+  });
+  assert.equal(manifestText.includes('secret-book.epub'), false);
+  assert.equal(manifestText.includes('测试书'), false);
+});
+
+test('listIndexes distinguishes ready, orphan, and manifest-only missing indexes', {
+  skip: !DatabaseSync
+}, async (t) => {
+  const dataRoot = await temporaryDirectory(t);
+  const manager = createAiIndexManager({ dataRoot });
+  const readyPath = await createValidIndex(dataRoot, BOOK_ID);
+  await manager.recordBuildSuccess(
+    { id: BOOK_ID },
+    { filePath: readyPath, fingerprint: 'fingerprint-1', schemaVersion: 2 }
+  );
+  await createValidIndex(dataRoot, ORPHAN_ID);
+  const missingPath = await createValidIndex(dataRoot, MISSING_ID);
+  await manager.recordBuildSuccess(
+    { id: MISSING_ID },
+    { filePath: missingPath, fingerprint: 'fingerprint-1', schemaVersion: 2 }
+  );
+  await fs.rm(missingPath);
+
+  const result = await manager.listIndexes({
+    libraryIndex: [{ id: BOOK_ID, title: '测试书', type: 'txt' }],
+    scanHealthy: true
+  });
+  const byId = new Map(result.items.map((item) => [item.bookId, item]));
+
+  assert.equal(byId.get(BOOK_ID).status, 'ready');
+  assert.equal(byId.get(ORPHAN_ID).status, 'orphan');
+  assert.equal(byId.get(MISSING_ID).status, 'missing');
+  assert.equal(result.summary.ready, 1);
+  assert.equal(result.summary.orphan, 1);
+  assert.equal(result.summary.missing, 1);
+});
+
+test('malformed manifest is recoverable without deleting a valid index', {
+  skip: !DatabaseSync
+}, async (t) => {
+  const dataRoot = await temporaryDirectory(t);
+  const directory = path.join(dataRoot, 'ai-index');
+  await fs.mkdir(directory, { recursive: true });
+  const filePath = await createValidIndex(dataRoot, BOOK_ID);
+  await fs.writeFile(path.join(directory, 'manifest.json'), '{not-json');
+  const manager = createAiIndexManager({ dataRoot });
+
+  const result = await manager.listIndexes({
+    libraryIndex: [{ id: BOOK_ID, title: '测试书', type: 'txt' }],
+    scanHealthy: true
+  });
+
+  assert.equal(result.items.find((item) => item.bookId === BOOK_ID).status, 'ready');
+  await fs.access(filePath);
+});
+
+test('unhealthy library scan refuses to infer orphan indexes', {
+  skip: !DatabaseSync
+}, async (t) => {
+  const dataRoot = await temporaryDirectory(t);
+  await createValidIndex(dataRoot, ORPHAN_ID);
+  const manager = createAiIndexManager({ dataRoot });
+
+  const result = await manager.listIndexes({ libraryIndex: [], scanHealthy: false });
+
+  assert.equal(result.scanHealthy, false);
+  assert.equal(result.summary.orphan, 0);
+  assert.equal(result.items.find((item) => item.bookId === ORPHAN_ID).status, 'unknown');
+});
