@@ -119,4 +119,12 @@ test.describe('mobile search entry', () => {
     await runSearch(page, 'E2E EPUB Chapter 1', 'book', '#btnMobileSearch');
     await expect(page.locator('.reader-search-result')).toContainText('E2E EPUB Chapter 1');
   });
+
+  test('opens search from the mobile toolbar for a Markdown book', async ({ page }) => {
+    await openLibraryBook(page, 'E2E Markdown', 'E2E Reader');
+    await expect(page.locator('#mobileReaderChromeToggle')).toBeVisible();
+    await page.locator('#mobileReaderChromeToggle').click();
+    await runSearch(page, 'E2E Reader', 'book', '#btnMobileSearch');
+    await expect(page.locator('.reader-search-result')).toContainText('E2E Reader');
+  });
 });

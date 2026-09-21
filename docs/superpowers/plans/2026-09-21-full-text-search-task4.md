@@ -16,7 +16,7 @@
 - Search results must be rendered as safe text and must navigate only within the currently opened book.
 - Existing desktop, mobile, single-page, double-page, continuous-scroll, bookmark, annotation, and AI behavior must remain unchanged.
 - E2E tests must use the existing temporary fixture library and must not copy user books into the repository.
-- This task changes tests and test plans only; production search behavior is already delivered by Task 3.
+- This task does not change search service, API, or ranking behavior. A minimal mobile-shell compatibility fix is allowed because the existing EPUB-only chrome gate made Markdown/TXT search unreachable on mobile.
 
 ## Review Focus
 

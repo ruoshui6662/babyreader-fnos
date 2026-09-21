@@ -58,7 +58,7 @@ function setupReaderNavigation() {
 
   chromeToggle?.addEventListener('click', (event) => {
     event.preventDefault();
-    if (!isMobileReaderSurface() || state.contentType !== 'epub') return;
+    if (!isMobileReaderSurface() || !state.currentPath) return;
     const open = !isMobileChromeOpen();
     setMobileChromeOpen(open);
     if (open) scheduleMobileChromeClose();

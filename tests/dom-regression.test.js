@@ -1585,6 +1585,7 @@ test('mobile continuous-scroll controls use flow chapter boundaries and a compac
 
   window.document.documentElement.dataset.readerSurface = 'mobile';
   api.state.contentType = 'epub';
+  api.state.currentPath = 'fixture.epub';
   api.setMobileChromeOpen(true);
   assert.equal(document.body.dataset.mobileChrome, 'open');
   assert.equal(toolbar.hidden, false);

@@ -57,14 +57,15 @@ function setMobileTopbarHidden(hidden) {
 
 function setMobileChromeOpen(open) {
   _mobileChromeOpen = Boolean(open);
-  const isOpen = _mobileChromeOpen && isMobileReaderSurface() && state.contentType === 'epub';
+  const hasDocument = Boolean(state.currentPath);
+  const isOpen = _mobileChromeOpen && isMobileReaderSurface() && hasDocument;
   document.body.dataset.mobileChrome = isOpen ? 'open' : 'closed';
   document.body.classList.toggle('mobile-chrome-open', isOpen);
   const toolbar = document.getElementById('mobileReaderToolbar');
   const trigger = document.getElementById('mobileReaderChromeToggle');
   if (toolbar) toolbar.hidden = !isOpen;
   if (trigger) {
-    trigger.hidden = !isMobileReaderSurface() || state.contentType !== 'epub';
+    trigger.hidden = !isMobileReaderSurface() || !hasDocument;
     trigger.setAttribute('aria-expanded', String(isOpen));
     trigger.setAttribute('aria-label', isOpen ? '隐藏阅读工具' : '显示阅读工具');
     trigger.setAttribute('title', isOpen ? '隐藏阅读工具' : '显示阅读工具');
