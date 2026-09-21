@@ -1467,6 +1467,33 @@ test('search surface opens, queries the book, and renders safe results', async (
   assert.equal(document.getElementById('readerSearchEmpty').hidden, true);
 });
 
+test('search loading shows one progress message without the redundant whole-book hint', async () => {
+  const { window, api } = await createReaderDom();
+  const document = window.document;
+  api.state.currentBookId = 'search-book';
+  api.state.currentPath = 'search-book.txt';
+  api.state.contentType = 'text';
+  api.updateTopbarState();
+  api.setupReaderActionMapping();
+  api.setupReaderSearch();
+
+  window.fetch = () => new Promise((resolve) => {
+    window.setTimeout(() => resolve({
+      ok: true,
+      json: async () => ({ available: true, results: [] })
+    }), 50);
+  });
+  document.getElementById('readerSearchQuery').value = '蛋白质';
+  document.getElementById('readerSearchForm').dispatchEvent(new window.Event('submit', { bubbles: true, cancelable: true }));
+  await new Promise((resolve) => setTimeout(resolve, 0));
+
+  assert.equal(document.querySelector('.reader-search-hint'), null);
+  assert.equal(document.querySelectorAll('.reader-search-loading').length, 1);
+  assert.equal(document.getElementById('readerSearchLoading').hidden, false);
+  assert.equal(document.getElementById('readerSearchStatus').hidden, true);
+  await new Promise((resolve) => setTimeout(resolve, 60));
+});
+
 test('search surface keeps the newest query when responses finish out of order', async () => {
   const { window, api } = await createReaderDom();
   const document = window.document;

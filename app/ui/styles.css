@@ -4698,12 +4698,6 @@ body.is-epub .reader-floating-toolbar {
   opacity: .68;
 }
 
-.reader-search-hint {
-  color: var(--ui-tertiary-label);
-  font-size: 12px;
-  line-height: 1.4;
-}
-
 .reader-search-submit {
   min-width: 72px;
   padding: 0 16px;

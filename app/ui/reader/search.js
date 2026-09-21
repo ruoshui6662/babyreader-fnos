@@ -179,7 +179,7 @@ async function submitReaderSearch(event) {
   _readerSearchAbortController = new AbortController();
   const token = ++_readerSearchToken;
   _readerSearchBookId = state.currentBookId;
-  setSearchState('loading', '正在搜索…');
+  setSearchState('loading');
 
   try {
     const payload = await window.browserHost.searchBook(state.currentBookId, {
