@@ -28,6 +28,26 @@ test('build installs production dependencies inside app/server', () => {
   assert.doesNotMatch(source, /npm ci --omit=dev --ignore-scripts --prefix \"\$BUILD_ROOT\"\s*$/m);
 });
 
+test('build includes the fnOS acceptance tool in the packaged documentation', () => {
+  const source = read('scripts/build-fpk.sh');
+  assert.match(source, /cp \"\$ROOT\/scripts\/fnos-device-acceptance\.sh\" \"\$BUILD_ROOT\/app\/docs\/\"/);
+});
+
+test('acceptance tool checks the outer FPK lifecycle entry, not target contents', () => {
+  const source = read('scripts/fnos-device-acceptance.sh');
+  assert.match(source, /PKG_ROOT=.*TRIM_PKGROOT/);
+  assert.match(source, /MAIN=\"\$\{TRIM_MAIN:-\$PKG_ROOT\/cmd\/main\}\"/);
+  assert.doesNotMatch(source, /MAIN=\"\$APP_DEST\/cmd\/main\"/);
+  assert.match(source, /TRIM_APPDEST=\"\$APP_DEST\"/);
+});
+
+test('acceptance reconciles supervisor status 3 with a healthy target socket', () => {
+  const source = read('scripts/fnos-device-acceptance.sh');
+  assert.match(source, /LIFECYCLE_STATUS_DEFERRED=0/);
+  assert.match(source, /STATUS.*-eq 3.*SOCKET_FILE/);
+  assert.match(source, /service is running under fnOS supervisor/);
+});
+
 test('install_callback does not start the service inside the install transaction', () => {
   const source = read('cmd/install_callback');
   const executableLines = source.split('\n').filter((line) => !line.trimStart().startsWith('#')).join('\n');

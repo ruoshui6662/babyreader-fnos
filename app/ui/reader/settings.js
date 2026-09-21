@@ -2,6 +2,107 @@
 
 'use strict';
 
+const TYPOGRAPHY_SLIDER_CONFIG = Object.freeze({
+  textIndent: Object.freeze({
+    presets: Object.freeze([0, 1, 1.5, 2, 2.5, 3, 4]),
+    defaultValue: 2,
+    format: (value) => Number(value) === 0 ? '无' : `${Number(value)}字`
+  }),
+  paragraphSpacing: Object.freeze({
+    presets: Object.freeze([0.4, 0.5, 0.75, 1, 1.25, 1.5, 2, 2.5, 3]),
+    defaultValue: 1.1,
+    format: (value) => `${Number(value).toFixed(2).replace(/\.0+$/, '').replace(/(\.\d)0$/, '$1')}em`
+  }),
+  fontSize: Object.freeze({
+    presets: Object.freeze([83, 100, 111, 122, 133, 144, 156, 167]),
+    defaultValue: 100,
+    format: (value) => `${Math.round(Number(value) / 100 * 18)}px`
+  }),
+  lineHeight: Object.freeze({
+    presets: Object.freeze([1.2, 1.4, 1.6, 1.8, 2, 2.2, 2.4, 2.6]),
+    defaultValue: 1.9,
+    format: (value) => Number(value).toFixed(2).replace(/\.0+$/, '').replace(/(\.\d)0$/, '$1')
+  }),
+  pageMargin: Object.freeze({
+    presets: Object.freeze([8, 16, 24, 32, 40, 48, 64, 80, 96]),
+    defaultValue: 40,
+    format: (value) => `${Math.round(Number(value))}px`
+  })
+});
+
+function nearestTypographyPreset(key, rawValue) {
+  const config = TYPOGRAPHY_SLIDER_CONFIG[key];
+  if (!config) return Number(rawValue) || 0;
+  const value = Number(rawValue);
+  if (!Number.isFinite(value)) return config.presets[0];
+  return config.presets.reduce((nearest, candidate) => (
+    Math.abs(candidate - value) < Math.abs(nearest - value) ? candidate : nearest
+  ), config.presets[0]);
+}
+
+function formatTypographySliderValue(key, rawValue) {
+  const config = TYPOGRAPHY_SLIDER_CONFIG[key];
+  if (!config) return String(rawValue ?? '');
+  return config.format(Number(rawValue));
+}
+
+function resetTypographySettings() {
+  zoomLevel = TYPOGRAPHY_SLIDER_CONFIG.fontSize.defaultValue;
+  state.lineHeight = TYPOGRAPHY_SLIDER_CONFIG.lineHeight.defaultValue;
+  state.pageMargin = TYPOGRAPHY_SLIDER_CONFIG.pageMargin.defaultValue;
+  state.textIndent = TYPOGRAPHY_SLIDER_CONFIG.textIndent.defaultValue;
+  state.paragraphSpacing = TYPOGRAPHY_SLIDER_CONFIG.paragraphSpacing.defaultValue;
+  applyZoom();
+  applyTypography();
+  syncSettingsPanel();
+  persistUserSettings();
+}
+
+function renderTypographySliderTicks(key, input) {
+  const config = TYPOGRAPHY_SLIDER_CONFIG[key];
+  const track = input?.closest('.settings-range-track');
+  if (!config || !track || track.querySelector('.settings-range-ticks')) return;
+  const min = Number(input.min);
+  const max = Number(input.max);
+  if (!Number.isFinite(min) || !Number.isFinite(max) || max <= min) return;
+
+  const ticks = document.createElement('span');
+  ticks.className = 'settings-range-ticks';
+  ticks.setAttribute('aria-hidden', 'true');
+  config.presets.forEach((preset) => {
+    const tick = document.createElement('i');
+    const progress = Math.max(0, Math.min(100, ((preset - min) / (max - min)) * 100));
+    tick.className = 'settings-range-tick';
+    tick.style.left = `${progress}%`;
+    ticks.appendChild(tick);
+  });
+  track.appendChild(ticks);
+}
+
+function updateTypographySliderHint(key, rawValue, visible = true) {
+  const input = document.querySelector(`[data-typography-slider="${key}"]`);
+  if (!input) return;
+  const output = document.getElementById(`${input.id}Value`);
+  if (!output) return;
+  output.textContent = formatTypographySliderValue(key, rawValue);
+  output.hidden = !visible;
+  input.closest('.settings-range-field')?.classList.toggle('is-showing-value', visible);
+}
+
+function syncTypographySliderAccessibility(key, rawValue) {
+  const input = document.querySelector(`[data-typography-slider="${key}"]`);
+  if (!input) return;
+  const value = Number(rawValue);
+  const min = Number(input.min);
+  const max = Number(input.max);
+  const progress = Number.isFinite(value) && max > min
+    ? Math.max(0, Math.min(100, ((value - min) / (max - min)) * 100))
+    : 0;
+  input.style.setProperty('--range-progress', `${progress}%`);
+  input.closest('.settings-range-track')?.style.setProperty('--range-progress', `${progress}%`);
+  input.setAttribute('aria-valuetext', formatTypographySliderValue(key, rawValue));
+}
+
 /* ============================================================
    Zoom
    ============================================================ */
@@ -245,35 +346,45 @@ function setupCustomSelects() {
 function syncSettingsPanel() {
   const theme = document.getElementById('settingTheme');
   const fontSize = document.getElementById('settingFontSize');
-  const fontSizeValue = document.getElementById('settingFontSizeValue');
   const lineHeight = document.getElementById('settingLineHeight');
-  const lineHeightValue = document.getElementById('settingLineHeightValue');
   const pageMargin = document.getElementById('settingPageMargin');
-  const pageMarginValue = document.getElementById('settingPageMarginValue');
   const highlightColor = document.getElementById('settingHighlightColor');
   const readingMode = document.getElementById('settingReadingMode');
   const tocOpen = document.getElementById('settingTocOpen');
   const fontFamily = document.getElementById('settingFontFamily');
   const textIndent = document.getElementById('settingTextIndent');
-  const textIndentValue = document.getElementById('settingTextIndentValue');
   const paragraphSpacing = document.getElementById('settingParagraphSpacing');
-  const paragraphSpacingValue = document.getElementById('settingParagraphSpacingValue');
   const settingsUser = document.getElementById('settingsUser');
 
   if (theme) theme.value = state.theme;
-  if (fontSize) fontSize.value = String(zoomLevel);
-  if (fontSizeValue) fontSizeValue.textContent = `${zoomLevel}%`;
-  if (lineHeight) lineHeight.value = String(state.lineHeight);
-  if (lineHeightValue) lineHeightValue.textContent = state.lineHeight.toFixed(1);
-  if (pageMargin) pageMargin.value = String(state.pageMargin);
-  if (pageMarginValue) pageMarginValue.textContent = `${state.pageMargin}px`;
+  if (fontSize) {
+    fontSize.value = String(zoomLevel);
+    syncTypographySliderAccessibility('fontSize', zoomLevel);
+    updateTypographySliderHint('fontSize', zoomLevel, false);
+  }
+  if (lineHeight) {
+    lineHeight.value = String(state.lineHeight);
+    syncTypographySliderAccessibility('lineHeight', state.lineHeight);
+    updateTypographySliderHint('lineHeight', state.lineHeight, false);
+  }
+  if (pageMargin) {
+    pageMargin.value = String(state.pageMargin);
+    syncTypographySliderAccessibility('pageMargin', state.pageMargin);
+    updateTypographySliderHint('pageMargin', state.pageMargin, false);
+  }
   if (highlightColor) highlightColor.value = state.highlightColor;
   if (readingMode) readingMode.value = state.readingMode;
   if (fontFamily) fontFamily.value = state.fontFamily;
-  if (textIndent) textIndent.value = String(state.textIndent);
-  if (textIndentValue) textIndentValue.textContent = state.textIndent === 0 ? '无' : `${state.textIndent} 字`;
-  if (paragraphSpacing) paragraphSpacing.value = String(state.paragraphSpacing);
-  if (paragraphSpacingValue) paragraphSpacingValue.textContent = `${state.paragraphSpacing.toFixed(1)} em`;
+  if (textIndent) {
+    textIndent.value = String(state.textIndent);
+    syncTypographySliderAccessibility('textIndent', state.textIndent);
+    updateTypographySliderHint('textIndent', state.textIndent, false);
+  }
+  if (paragraphSpacing) {
+    paragraphSpacing.value = String(state.paragraphSpacing);
+    syncTypographySliderAccessibility('paragraphSpacing', state.paragraphSpacing);
+    updateTypographySliderHint('paragraphSpacing', state.paragraphSpacing, false);
+  }
   if (tocOpen) tocOpen.checked = state.tocOpen;
   if (settingsUser) {
     settingsUser.textContent = state.session
@@ -293,6 +404,52 @@ function setupTocToggle() {
   // The legacy btnToc ID is retained, while activation is delegated through readerActions.
 }
 
+function setupTypographySlider(key, input, applyValue) {
+  if (!input || input._typographySliderReady) return;
+  input._typographySliderReady = true;
+  renderTypographySliderTicks(key, input);
+
+  const showHint = () => {
+    updateTypographySliderHint(key, input.value, true);
+    clearTimeout(input._typographyHintTimer);
+    input._typographyHintTimer = setTimeout(() => {
+      updateTypographySliderHint(key, input.value, false);
+    }, 800);
+  };
+
+  input.addEventListener('input', () => {
+    applyValue(Number(input.value));
+    syncTypographySliderAccessibility(key, input.value);
+    syncSettingsPanel();
+    showHint();
+  });
+
+  input.addEventListener('change', () => {
+    const snappedValue = nearestTypographyPreset(key, input.value);
+    input.value = String(snappedValue);
+    applyValue(snappedValue);
+    syncTypographySliderAccessibility(key, snappedValue);
+    syncSettingsPanel();
+    updateTypographySliderHint(key, snappedValue, true);
+    clearTimeout(input._typographyHintTimer);
+    input._typographyHintTimer = setTimeout(() => {
+      updateTypographySliderHint(key, snappedValue, false);
+    }, 800);
+    persistUserSettings();
+  });
+
+  input.addEventListener('pointerdown', showHint);
+  input.addEventListener('keydown', (event) => {
+    if (['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Home', 'End', 'PageUp', 'PageDown'].includes(event.key)) {
+      showHint();
+    }
+  });
+  input.addEventListener('blur', () => {
+    clearTimeout(input._typographyHintTimer);
+    updateTypographySliderHint(key, input.value, false);
+  });
+}
+
 function setupSettingsPanel() {
   setupCustomSelects();
   const theme = document.getElementById('settingTheme');
@@ -305,28 +462,23 @@ function setupSettingsPanel() {
   const fontFamily = document.getElementById('settingFontFamily');
   const textIndent = document.getElementById('settingTextIndent');
   const paragraphSpacing = document.getElementById('settingParagraphSpacing');
+  const resetTypography = document.getElementById('btnResetTypography');
   theme?.addEventListener('change', () => {
     applyTheme(theme.value, false);
     syncSettingsPanel();
     persistUserSettings();
   });
-  fontSize?.addEventListener('input', () => {
-    zoomLevel = Math.max(60, Math.min(200, Number(fontSize.value) || 100));
+  setupTypographySlider('fontSize', fontSize, (value) => {
+    zoomLevel = Math.max(60, Math.min(200, Number(value) || 100));
     applyZoom();
-    syncSettingsPanel();
-    persistUserSettings();
   });
-  lineHeight?.addEventListener('input', () => {
-    state.lineHeight = Math.max(1.2, Math.min(2.6, Number(lineHeight.value) || 1.9));
+  setupTypographySlider('lineHeight', lineHeight, (value) => {
+    state.lineHeight = Math.max(1.2, Math.min(2.6, Number(value) || 1.9));
     applyZoom();
-    syncSettingsPanel();
-    persistUserSettings();
   });
-  pageMargin?.addEventListener('input', () => {
-    state.pageMargin = Math.max(8, Math.min(96, Number(pageMargin.value) || 40));
+  setupTypographySlider('pageMargin', pageMargin, (value) => {
+    state.pageMargin = Math.max(8, Math.min(96, Number(value) || 40));
     applyZoom();
-    syncSettingsPanel();
-    persistUserSettings();
   });
   highlightColor?.addEventListener('change', () => {
     state.highlightColor = ['yellow', 'green', 'blue', 'pink'].includes(highlightColor.value)
@@ -350,18 +502,15 @@ function setupSettingsPanel() {
     syncSettingsPanel();
     persistUserSettings();
   });
-  textIndent?.addEventListener('input', () => {
-    state.textIndent = Math.max(0, Math.min(4, Number(textIndent.value) || 2));
+  setupTypographySlider('textIndent', textIndent, (value) => {
+    state.textIndent = Math.max(0, Math.min(4, Number(value) || 2));
     applyTypography();
-    syncSettingsPanel();
-    persistUserSettings();
   });
-  paragraphSpacing?.addEventListener('input', () => {
-    state.paragraphSpacing = Math.max(0.4, Math.min(3, Number(paragraphSpacing.value) || 1.1));
+  setupTypographySlider('paragraphSpacing', paragraphSpacing, (value) => {
+    state.paragraphSpacing = Math.max(0.4, Math.min(3, Number(value) || 1.1));
     applyTypography();
-    syncSettingsPanel();
-    persistUserSettings();
   });
+  resetTypography?.addEventListener('click', resetTypographySettings);
 
   syncSettingsPanel();
   applyContinuousScroll();

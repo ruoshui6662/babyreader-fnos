@@ -196,6 +196,8 @@ class UserStorage {
     }
 
     const allowedColors = new Set(['yellow', 'green', 'blue', 'pink']);
+    const allowedKinds = new Set(['highlight', 'thought']);
+    const allowedStyles = new Set(['marker', 'wave', 'line', 'none']);
     const cleaned = highlights.map((item, index) => {
       if (!item || typeof item !== 'object' || Array.isArray(item)) {
         throw new Error(`Invalid highlight at index ${index}`);
@@ -212,6 +214,7 @@ class UserStorage {
         throw new Error(`Invalid highlight chapterHref at index ${index}`);
       }
 
+      const thought = String(item.thought || item.note || '').slice(0, 4000);
       return {
         id,
         locator,
@@ -219,9 +222,14 @@ class UserStorage {
         text,
         contextBefore: String(item.contextBefore || '').slice(-1000),
         contextAfter: String(item.contextAfter || '').slice(0, 1000),
-        note: String(item.note || '').slice(0, 4000),
+        thought,
+        // Keep the legacy field mirrored for older clients and existing data.
+        note: thought,
         color: allowedColors.has(item.color) ? item.color : 'yellow',
-        createdAt: String(item.createdAt || new Date().toISOString()).slice(0, 64)
+        kind: allowedKinds.has(item.kind) ? item.kind : 'highlight',
+        style: allowedStyles.has(item.style) ? item.style : 'marker',
+        createdAt: String(item.createdAt || new Date().toISOString()).slice(0, 64),
+        updatedAt: String(item.updatedAt || item.createdAt || new Date().toISOString()).slice(0, 64)
       };
     });
 

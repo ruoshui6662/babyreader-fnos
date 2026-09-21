@@ -340,32 +340,32 @@ Expected: Entries from two chapters are visible in one panel, filters change row
 
 **Produces:** `navigateToAnnotation(annotationId)` that supports mounted scroll chapters, unmounted scroll chapters, and paged chapter windows.
 
-- [ ] **Step 1: Write failing two-chapter E2E navigation test**
+- [x] **Step 1: Write failing two-chapter E2E navigation test**
 
 ```js
 test('a whole-book note opens its later chapter and focuses the quote in double-page mode', async ({ page }) => {
   // create chapter 1 and chapter 2 annotations, return to chapter 1, open Notes
   await page.locator('[data-annotation-id="chapter-2-id"]').click();
   await expect(page.locator('#article .epub-chapter')).toHaveAttribute('data-source-path', /chapter-2/);
-  await expect(page.locator('.annotation-focus-flash')).toBeVisible();
+  await expect(page.locator('.annotation-focus-flash')).toHaveCount(0);
 });
 ```
 
-- [ ] **Step 2: Run and confirm current notes placeholder cannot navigate**
+- [x] **Step 2: Run and confirm current notes placeholder cannot navigate**
 
 Run: `npx playwright test e2e/notes-panel.spec.js --project=chromium --workers=1 --grep "later chapter"`
 
 Expected: FAIL before implementation.
 
-- [ ] **Step 3: Implement page-mode navigation sequence**
+- [x] **Step 3: Implement page-mode navigation sequence**
 
-Await `navigateToEpubChapter(index)`, recover the range only after the chapter and pagination settle, use the current semantic navigation helper, redraw, then add a 1.5-second `.annotation-focus-flash` class. On locator failure, keep the Drawer open and render a visible row-level error.
+Await `navigateToEpubChapter(index)`, recover the range only after the chapter and pagination settle, use the current semantic navigation helper, and redraw. Do not add a focus border or flash animation after locating the target. On locator failure, keep the Drawer open and render a visible row-level error.
 
-- [ ] **Step 4: Implement scrolling-mode unmounted chapter fallback**
+- [x] **Step 4: Implement scrolling-mode unmounted chapter fallback**
 
 Expose a narrow helper from the whole-book renderer that waits until a requested chapter is appended or loads that chapter into the reader without clearing annotation state. Do not call `scrollIntoView()` until the target chapter exists.
 
-- [ ] **Step 5: Run navigation and resilience suites**
+- [x] **Step 5: Run navigation and resilience suites**
 
 Run: `npx playwright test e2e/notes-panel.spec.js e2e/epub-resilience.spec.js e2e/viewport.spec.js --project=chromium --workers=1`
 

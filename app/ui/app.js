@@ -28,6 +28,9 @@ window.appHost = {
     // A document transition can replace or hide the settings drawer while a
     // custom select is open. Close its body-level portal before changing UI.
     if (typeof closeAllCustomSelects === 'function') closeAllCustomSelects();
+    if (state.currentBookId && state.currentBookId !== bookId && typeof closeAiModal === 'function') {
+      closeAiModal({ restoreFocus: false });
+    }
     if (typeof setMobileChromeOpen === 'function') setMobileChromeOpen(false);
     if (typeof setMobileTopbarHidden === 'function') setMobileTopbarHidden(false);
     state.currentBookId = bookId || null;
@@ -156,6 +159,9 @@ document.addEventListener('DOMContentLoaded', () => {
   setupSettingsPanel();
   setupHighlightButtons();
   setupHighlightEditor();
+  setupSelectionMenu();
+  setupAiPanel();
+  setupNotesPanel();
   setupReaderNavigation();
   setupReaderActionMapping();
   // Topbar 阅读/编辑 buttons removed (P0); setMode is now driven only by

@@ -8,6 +8,7 @@
 function renderLibrary(library) {
   if (typeof closeReaderPanel === 'function') closeReaderPanel({ restoreFocus: false });
   else if (typeof closeAllCustomSelects === 'function') closeAllCustomSelects();
+  if (typeof closeAiModal === 'function') closeAiModal({ restoreFocus: false });
   const article = document.getElementById('article');
   const welcome = document.getElementById('welcome');
   if (!article) return;

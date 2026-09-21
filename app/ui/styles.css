@@ -25,6 +25,7 @@
   --color-accent-hover:#409CFF;
   --color-accent-active:#0778E6;
   --color-focus:       #0A84FF;   /* Keyboard focus ring */
+  --color-destructive: #FF453A;   /* Apple systemRed */
   
   /* Compatibility aliases */
   --bg:          var(--color-bg);
@@ -41,6 +42,19 @@
   --selection-bg:rgba(10,132,255,.25);
   --highlight-bg:rgba(10,132,255,.18);
   --button-text: #ffffff;
+
+  /* Application chrome tokens. These stay neutral even when the reading
+     surface uses a warm or sepia paper theme. */
+  --ui-bg:                 var(--color-bg);
+  --ui-surface:            var(--color-elevated);
+  --ui-surface-secondary:  var(--color-fill);
+  --ui-fill:               var(--color-fill);
+  --ui-label:              var(--color-text);
+  --ui-secondary-label:    var(--color-text-2);
+  --ui-tertiary-label:     var(--color-text-3);
+  --ui-separator:          var(--color-separator);
+  --ui-accent:             var(--color-accent);
+  --ui-focus:              var(--color-focus);
 
   /* Typography scale */
   --font-serif:  "Noto Serif SC", "Source Han Serif CN", "SimSun", "Songti SC", Georgia, serif;
@@ -112,6 +126,7 @@ body.theme-sepia {
   --color-separator:   #EDEDED;
   --color-accent:      #B4661F;   /* Accent warmer for sepia mode (brand preservation) */
   --color-focus:       #0A74C4;
+  --color-destructive: #FF3B30;
   
   /* Compatibility aliases */
   --text-strong:       var(--color-text);
@@ -140,6 +155,18 @@ body.theme-sepia {
   --accent:      var(--color-accent);
   --border:      var(--color-separator);
   --button-text: #2A251C;
+
+  /* Keep application controls neutral; sepia is a reading-surface choice. */
+  --ui-bg:                #FFFFFF;
+  --ui-surface:           #FFFFFF;
+  --ui-surface-secondary: #F7F7F9;
+  --ui-fill:              #F2F2F7;
+  --ui-label:             #1D1D1F;
+  --ui-secondary-label:   #6E6E73;
+  --ui-tertiary-label:    #8E8E93;
+  --ui-separator:         #D2D2D7;
+  --ui-accent:            #0A84FF;
+  --ui-focus:             #0A84FF;
 }
 
 body.theme-light {
@@ -156,6 +183,7 @@ body.theme-light {
   --color-separator:   rgba(60,60,67,.29);
   --color-accent:      #0A84FF;
   --color-focus:       #0A84FF;
+  --color-destructive: #FF3B30;
 
   /* Compatibility aliases */
   --text-strong:       var(--color-text);
@@ -183,6 +211,19 @@ body.theme-light {
   --accent:      var(--color-accent);
   --border:      var(--color-separator);
   --button-text: #1C1C1E;
+
+  /* The light browsing chrome follows the same neutral palette as AI 问书;
+     only the reading paper remains warm when the user chooses it. */
+  --ui-bg:                #FFFFFF;
+  --ui-surface:           #FFFFFF;
+  --ui-surface-secondary: #F7F7F9;
+  --ui-fill:              #F2F2F7;
+  --ui-label:             #1D1D1F;
+  --ui-secondary-label:   #6E6E73;
+  --ui-tertiary-label:    #8E8E93;
+  --ui-separator:         #D2D2D7;
+  --ui-accent:            #0A84FF;
+  --ui-focus:             #0A84FF;
 }
 
 /* --- Base Reset --- */
@@ -1221,6 +1262,46 @@ body:not(.toc-open) .toc {
   color: var(--accent);
 }
 
+.selection-menu {
+  position: fixed;
+  z-index: 220;
+  display: flex;
+  align-items: stretch;
+  gap: 2px;
+  max-width: calc(100vw - 16px);
+  padding: 4px;
+  background: rgba(48, 48, 48, 0.96);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 10px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.28);
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.selection-menu[hidden] {
+  display: none;
+}
+
+.selection-menu button {
+  min-width: 52px;
+  min-height: 36px;
+  padding: 5px 8px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.92);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.selection-menu button:hover,
+.selection-menu button:focus-visible {
+  background: rgba(255, 255, 255, 0.14);
+  outline: none;
+}
+
 /* ============================================================
    Library and Settings
    ============================================================ */
@@ -1730,21 +1811,114 @@ body.is-library.theme-sepia .topbar {
 }
 
 .settings-field input[type="range"] {
-  grid-column: 1 / -1;
   width: 100%;
-  accent-color: var(--color-accent);
+  min-width: 0;
+  height: 8px;
+  margin: 0;
+  appearance: none;
+  -webkit-appearance: none;
+  background: linear-gradient(
+    to right,
+    var(--ui-accent) 0%,
+    var(--ui-accent) var(--range-progress, 50%),
+    var(--ui-fill) var(--range-progress, 50%),
+    var(--ui-fill) 100%
+  );
+  border: 1px solid var(--ui-separator);
+  border-radius: 999px;
   cursor: pointer;
 }
 
-.settings-field output {
-  min-width: 48px;
-  padding: 3px 7px;
-  color: var(--color-text-2);
-  background: var(--color-fill);
-  border-radius: var(--radius-pill);
-  font-size: 12px;
+.settings-field input[type="range"]::-webkit-slider-thumb {
+  width: 20px;
+  height: 20px;
+  appearance: none;
+  -webkit-appearance: none;
+  background: var(--ui-surface);
+  border: 1px solid var(--ui-separator);
+  border-radius: 50%;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, .14);
+}
+
+.settings-field input[type="range"]::-moz-range-thumb {
+  width: 20px;
+  height: 20px;
+  background: var(--ui-surface);
+  border: 1px solid var(--ui-separator);
+  border-radius: 50%;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, .14);
+}
+
+.settings-field input[type="range"]:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--ui-accent) 38%, transparent);
+  outline-offset: 5px;
+}
+
+.settings-range-field {
+  display: block;
+}
+
+.settings-field-label {
+  display: block;
+  margin-bottom: 12px;
+}
+
+.settings-range-track {
+  position: relative;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  min-height: 28px;
+}
+
+.settings-range-ticks {
+  position: absolute;
+  top: 50%;
+  right: 30px;
+  left: 30px;
+  z-index: 1;
+  height: 8px;
+  transform: translateY(-50%);
+  pointer-events: none;
+}
+
+.settings-range-tick {
+  position: absolute;
+  top: 50%;
+  width: 3px;
+  height: 3px;
+  background: color-mix(in srgb, var(--ui-secondary-label) 34%, transparent);
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+}
+
+.settings-range-endpoint {
+  min-width: 22px;
+  color: var(--ui-secondary-label);
+  font-size: 11px;
+  line-height: 16px;
+  text-align: center;
+  white-space: nowrap;
+}
+
+.settings-range-tooltip {
+  position: absolute;
+  top: -8px;
+  left: var(--range-progress, 50%);
+  z-index: 2;
+  min-width: 36px;
+  padding: 4px 8px;
+  color: var(--ui-label);
+  background: var(--ui-surface);
+  border: 1px solid var(--ui-separator);
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, .12);
+  font-size: 11px;
   font-variant-numeric: tabular-nums;
   text-align: center;
+  transform: translate(-50%, -100%);
+  pointer-events: none;
 }
 
 .settings-checkbox {
@@ -1863,18 +2037,57 @@ body.paged-reading .epub-chapter:first-of-type {
 
 .article .br-highlight-box[data-highlight-color="yellow"] {
   background: rgba(245, 196, 66, 0.35);
+  color: rgba(205, 145, 0, 0.95);
 }
 
 .article .br-highlight-box[data-highlight-color="green"] {
   background: rgba(91, 190, 125, 0.32);
+  color: rgba(31, 132, 70, 0.95);
 }
 
 .article .br-highlight-box[data-highlight-color="blue"] {
   background: rgba(79, 146, 230, 0.32);
+  color: rgba(40, 100, 190, 0.95);
 }
 
 .article .br-highlight-box[data-highlight-color="pink"] {
   background: rgba(225, 105, 155, 0.32);
+  color: rgba(185, 55, 110, 0.95);
+}
+
+.article .br-highlight-box[data-annotation-style="wave"],
+.article .br-highlight-box[data-annotation-style="line"] {
+  background: transparent;
+  border-radius: 0;
+}
+
+.article .br-highlight-box[data-annotation-style="line"] {
+  border-bottom: 2px solid currentColor;
+}
+
+.article .br-highlight-box[data-annotation-style="wave"] {
+  color: currentColor;
+}
+
+.article .br-highlight-wave {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -1px;
+  width: 100%;
+  height: 6px;
+  max-width: none;
+  margin: 0;
+  overflow: visible;
+  pointer-events: none;
+}
+
+.article .br-highlight-wave path {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
 }
 
 .highlight-editor {
@@ -2333,7 +2546,7 @@ body.is-epub .reader-floating-toolbar {
 
 .reader-drawer-tabs {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 2px;
   margin-bottom: 24px;
   padding: 3px;
@@ -2371,12 +2584,43 @@ body.is-epub .reader-floating-toolbar {
   gap: 24px;
 }
 
+.settings-group-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 24px;
+  margin-bottom: 8px;
+}
+
 .settings-group-title {
-  margin: 0 12px 8px;
+  margin: 0 12px;
   color: var(--color-text-2);
   font-size: 12px;
   font-weight: 600;
   letter-spacing: .02em;
+}
+
+.settings-group-reset {
+  margin: 0 12px 0 auto;
+  padding: 2px 0;
+  color: var(--ui-secondary-label);
+  background: transparent;
+  border: 0;
+  font: inherit;
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.settings-group-reset:hover,
+.settings-group-reset:focus-visible {
+  color: var(--ui-accent);
+}
+
+.settings-group-reset:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--ui-accent) 35%, transparent);
+  outline-offset: 3px;
+  border-radius: 4px;
 }
 
 .settings-group-card {
@@ -2406,6 +2650,1252 @@ body.is-epub .reader-floating-toolbar {
   padding: 20px 4px;
   color: var(--text-muted);
   font-size: 14px;
+}
+
+.notes-panel {
+  display: grid;
+  gap: 14px;
+}
+
+.notes-panel-summary {
+  color: var(--color-text-2);
+  font-size: 13px;
+}
+
+.notes-panel-toolbar {
+  --notes-control-font-size: 11px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.notes-panel-filters {
+  display: inline-grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  flex: 1;
+  gap: 2px;
+  padding: 2px;
+  background: var(--color-fill);
+  border: 1px solid var(--color-separator);
+  border-radius: var(--radius-pill);
+}
+
+.notes-panel-filters button {
+  min-height: 30px;
+  padding: 0 8px;
+  color: var(--color-text-2);
+  background: transparent;
+  border: 0;
+  border-radius: var(--radius-pill);
+  font: inherit;
+  font-size: var(--notes-control-font-size);
+  line-height: 1.2;
+  cursor: pointer;
+}
+
+.notes-panel-filters button[aria-selected="true"] {
+  color: var(--color-text);
+  background: var(--color-elevated);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, .12);
+}
+
+.notes-panel-sort {
+  position: relative;
+  display: flex;
+  flex: 0 0 128px;
+  align-items: center;
+  width: 128px;
+  min-width: 128px;
+  height: 36px;
+}
+
+.notes-panel-sort > .visually-hidden {
+  position: absolute !important;
+  width: 1px !important;
+  height: 1px !important;
+  margin: -1px !important;
+  padding: 0 !important;
+  overflow: hidden !important;
+  white-space: nowrap !important;
+  border: 0 !important;
+  clip: rect(0, 0, 0, 0) !important;
+  clip-path: inset(50%) !important;
+}
+
+.notes-panel-filters button:focus-visible,
+.notes-panel-sort select:focus-visible {
+  outline: 2px solid var(--color-focus);
+  outline-offset: 1px;
+}
+
+.notes-panel-sort select {
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  max-width: none;
+  height: 36px;
+  min-height: 36px;
+  padding: 0 28px 0 12px;
+  color: var(--color-text-2);
+  -webkit-text-fill-color: var(--color-text-2);
+  background: var(--color-fill);
+  border: 1px solid var(--color-separator);
+  border-radius: var(--radius-pill);
+  font: inherit;
+  font-size: var(--notes-control-font-size);
+  line-height: 1.2;
+}
+
+.notes-panel-sort select option {
+  font: inherit;
+  font-size: var(--notes-control-font-size);
+  line-height: 1.2;
+  color: var(--color-text-2);
+}
+
+.notes-list {
+  display: grid;
+  gap: 10px;
+}
+
+.ai-panel {
+  display: grid;
+  gap: 14px;
+}
+
+.ai-panel-intro {
+  display: grid;
+  gap: 5px;
+}
+
+.ai-panel-title,
+.ai-answer-title,
+.ai-sources-title {
+  color: var(--color-text);
+  font-size: 14px;
+  font-weight: 650;
+}
+
+.ai-status {
+  margin: 0;
+  color: var(--color-text-2);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.ai-status[data-tone="warning"],
+.ai-status[data-tone="error"] {
+  color: var(--color-accent);
+}
+
+.ai-status[data-tone="busy"] {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--color-text-2);
+}
+
+.ai-status[data-tone="busy"]::before {
+  width: 12px;
+  height: 12px;
+  flex: 0 0 12px;
+  content: '';
+  border: 2px solid var(--color-separator);
+  border-top-color: var(--color-accent);
+  border-radius: 50%;
+  animation: ai-status-spin 760ms linear infinite;
+}
+
+.ai-confidence-notice {
+  margin: 0 0 10px;
+  padding: 8px 10px;
+  color: var(--color-text-2);
+  background: color-mix(in srgb, var(--color-accent) 8%, var(--color-surface));
+  border: 1px solid color-mix(in srgb, var(--color-accent) 20%, var(--color-separator));
+  border-radius: 10px;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+@keyframes ai-status-spin {
+  to { transform: rotate(360deg); }
+}
+
+.ai-selected-text {
+  margin: 0;
+  padding: 11px 12px;
+  color: var(--color-text-2);
+  background: var(--color-fill);
+  border-left: 3px solid var(--color-accent);
+  border-radius: 0 var(--radius-card) var(--radius-card) 0;
+  font-size: 13px;
+  line-height: 1.65;
+}
+
+.ai-question-field {
+  display: grid;
+  gap: 7px;
+  color: var(--color-text-2);
+  font-size: 12px;
+}
+
+.ai-question-field textarea {
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 96px;
+  padding: 10px 12px;
+  color: var(--color-text);
+  background: var(--color-elevated);
+  border: 1px solid var(--color-separator);
+  border-radius: var(--radius-card);
+  font: inherit;
+  font-size: 13px;
+  line-height: 1.6;
+  resize: vertical;
+}
+
+.ai-question-field textarea:focus-visible {
+  outline: 2px solid var(--color-focus);
+  outline-offset: 1px;
+}
+
+.ai-question-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.ai-question-hint {
+  color: var(--color-text-3);
+  font-size: 11px;
+}
+
+.ai-question-actions .reader-action-button {
+  min-height: 32px;
+  padding: 0 14px;
+  color: var(--color-text);
+  background: var(--color-fill);
+  border: 1px solid var(--color-separator);
+  border-radius: var(--radius-pill);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.ai-question-actions .reader-action-button:not(:disabled):hover,
+.ai-source:hover {
+  color: var(--color-accent);
+  border-color: var(--color-accent);
+}
+
+.ai-question-actions .reader-action-button:disabled {
+  color: var(--color-text-3);
+  cursor: not-allowed;
+  opacity: .7;
+}
+
+.ai-answer-block {
+  display: grid;
+  gap: 7px;
+}
+
+.ai-answer {
+  padding: 12px;
+  color: var(--color-text);
+  background: var(--color-elevated);
+  border: 1px solid var(--color-separator);
+  border-radius: var(--radius-card);
+  font-size: 13px;
+  line-height: 1.7;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.ai-sources {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: stretch;
+  gap: 6px;
+}
+
+.ai-sources-title {
+  flex-basis: 100%;
+  color: var(--color-text-2);
+  font-size: 12px;
+}
+
+.ai-source {
+  box-sizing: border-box;
+  display: inline-flex;
+  align-items: center;
+  min-height: 28px;
+  max-width: 100%;
+  gap: 6px;
+  padding: 4px 10px 4px 6px;
+  color: var(--color-text-2);
+  background: var(--color-fill);
+  border: 1px solid var(--color-separator);
+  border-radius: var(--radius-pill);
+  font: inherit;
+  font-size: 12px;
+  line-height: 18px;
+  cursor: pointer;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.ai-source:hover,
+.ai-source:focus-visible {
+  color: var(--color-accent);
+  border-color: var(--color-accent);
+}
+
+.ai-source:focus-visible {
+  color: var(--color-text-2);
+  border-color: var(--color-separator);
+  outline: none;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-accent) 22%, transparent);
+}
+
+.ai-source-index {
+  box-sizing: border-box;
+  display: inline-grid;
+  flex: 0 0 auto;
+  place-items: center;
+  width: 16px;
+  min-width: 16px;
+  height: 16px;
+  padding: 0;
+  color: var(--color-text-2);
+  background: var(--color-elevated);
+  border: 1px solid var(--color-separator);
+  border-radius: 50%;
+  font-size: 9px;
+  font-weight: 650;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+
+.ai-source-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ai-citation {
+  display: inline-block;
+  min-width: 1em;
+  color: var(--color-accent);
+  font-size: .88em;
+  font-weight: 650;
+  line-height: 1;
+  text-decoration: none;
+  vertical-align: super;
+}
+
+.ai-citation:hover,
+.ai-citation:focus-visible {
+  text-decoration: underline;
+  outline: none;
+}
+
+.ai-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 240;
+  background: rgba(20, 24, 30, .28);
+  backdrop-filter: blur(2px);
+  -webkit-backdrop-filter: blur(2px);
+}
+
+.ai-modal {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  z-index: 250;
+  --color-bg: #FFFFFF;
+  --color-elevated: #FFFFFF;
+  --color-fill: #F5F5F7;
+  --color-text: #1D1D1F;
+  --color-text-2: #6E6E73;
+  --color-text-3: #8E8E93;
+  --color-separator: #D2D2D7;
+  --color-accent: #0A84FF;
+  --color-focus: #0A84FF;
+  display: flex;
+  flex-direction: column;
+  width: min(620px, calc(100vw - 32px));
+  max-height: min(88vh, 820px);
+  overflow: hidden;
+  color: var(--color-text);
+  background: var(--color-bg);
+  border: 1px solid var(--color-separator);
+  border-radius: 18px;
+  box-shadow: 0 24px 80px rgba(0, 0, 0, .28);
+  transform: translate(-50%, -50%);
+}
+
+.ai-modal[hidden],
+.ai-modal-backdrop[hidden] {
+  display: none !important;
+}
+
+.ai-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 18px 20px 14px;
+  border-bottom: 1px solid var(--color-separator);
+}
+
+.ai-modal-heading {
+  min-width: 0;
+  text-align: center;
+  flex: 1;
+}
+
+.ai-modal-heading h2 {
+  margin: 0;
+  color: var(--color-text);
+  font-size: 18px;
+  font-weight: 650;
+}
+
+.ai-modal-heading p {
+  margin: 4px 0 0;
+  color: var(--color-text-3);
+  font-size: 11px;
+}
+
+.ai-modal-actions {
+  display: flex;
+  gap: 6px;
+}
+
+.ai-icon-button,
+.ai-back-button,
+.ai-secondary-button {
+  min-height: 30px;
+  padding: 0 9px;
+  color: var(--color-text-2);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--radius-pill);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.ai-icon-button:hover,
+.ai-icon-button:focus-visible,
+.ai-back-button:hover,
+.ai-back-button:focus-visible,
+.ai-secondary-button:hover,
+.ai-secondary-button:focus-visible {
+  color: var(--color-accent);
+  background: var(--color-fill);
+  border-color: var(--color-separator);
+}
+
+.ai-icon-button:last-child {
+  width: 30px;
+  padding: 0;
+  font-size: 20px;
+  line-height: 1;
+}
+
+.ai-modal-body {
+  overflow-y: auto;
+  padding: 18px 20px 22px;
+}
+
+.ai-modal-status {
+  margin-bottom: 12px;
+}
+
+.ai-selected-text {
+  margin: 0 0 14px;
+  padding: 10px 12px;
+  color: var(--color-text-2);
+  background: var(--color-fill);
+  border-left: 3px solid var(--color-accent);
+  border-radius: 0 var(--radius-card) var(--radius-card) 0;
+  font-size: 13px;
+  line-height: 1.65;
+}
+
+.ai-answer-card {
+  display: grid;
+  gap: 8px;
+  padding: 0;
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+}
+
+.ai-messages {
+  display: grid;
+  gap: 14px;
+}
+
+.ai-message-user {
+  justify-self: end;
+  max-width: 88%;
+  padding: 9px 12px;
+  color: #1D1D1F;
+  background: #F2F2F7;
+  border: 1px solid #E5E5EA;
+  border-radius: 14px 14px 4px 14px;
+  font-size: 13px;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+
+.ai-message-assistant {
+  min-width: 0;
+}
+
+.ai-message-assistant:not([hidden]) + .ai-message-user {
+  margin-top: 2px;
+}
+
+.ai-stop-glyph {
+  display: block;
+  flex: 0 0 10px;
+  width: 10px;
+  height: 10px;
+  border-radius: 3px;
+  background: currentColor;
+}
+
+.ai-answer-title {
+  color: var(--color-text);
+  font-size: 13px;
+  font-weight: 650;
+}
+
+.ai-answer {
+  padding: 0;
+  color: var(--color-text);
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  font-size: 14px;
+  line-height: 1.8;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.ai-answer > :first-child {
+  margin-top: 0;
+}
+
+.ai-answer > :last-child {
+  margin-bottom: 0;
+}
+
+.ai-answer p {
+  margin: 0 0 12px;
+}
+
+.ai-answer h1,
+.ai-answer h2,
+.ai-answer h3,
+.ai-answer h4,
+.ai-answer h5,
+.ai-answer h6 {
+  margin: 18px 0 8px;
+  color: var(--color-text);
+  line-height: 1.4;
+}
+
+.ai-answer h1,
+.ai-answer h2 {
+  font-size: 16px;
+}
+
+.ai-answer h3,
+.ai-answer h4,
+.ai-answer h5,
+.ai-answer h6 {
+  font-size: 14px;
+}
+
+.ai-answer ul,
+.ai-answer ol {
+  margin: 0 0 12px;
+  padding-left: 22px;
+}
+
+.ai-answer li + li {
+  margin-top: 4px;
+}
+
+.ai-answer blockquote {
+  margin: 12px 0;
+  padding: 8px 12px;
+  color: var(--color-text-2);
+  background: var(--color-fill);
+  border-left: 3px solid var(--color-accent);
+  border-radius: 0 8px 8px 0;
+}
+
+.ai-answer code {
+  padding: 2px 5px;
+  color: var(--color-text);
+  background: var(--color-fill);
+  border-radius: 5px;
+  font-size: .92em;
+}
+
+.ai-answer pre {
+  margin: 12px 0;
+  padding: 10px 12px;
+  overflow-x: auto;
+  color: var(--color-text);
+  background: var(--color-fill);
+  border: 1px solid var(--color-separator);
+  border-radius: 8px;
+}
+
+.ai-answer pre code {
+  padding: 0;
+  background: transparent;
+}
+
+.ai-answer hr {
+  margin: 16px 0;
+  border: 0;
+  border-top: 1px solid var(--color-separator);
+}
+
+.ai-answer a {
+  color: var(--color-accent);
+  text-decoration: none;
+}
+
+.ai-answer a:hover,
+.ai-answer a:focus-visible {
+  text-decoration: underline;
+}
+
+.ai-suggested-title {
+  margin: 17px 0 8px;
+  color: var(--color-text-2);
+  font-size: 12px;
+}
+
+.ai-suggested-questions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.ai-suggested-questions button {
+  min-height: 32px;
+  padding: 0 12px;
+  color: var(--color-text-2);
+  background: var(--color-fill);
+  border: 1px solid var(--color-separator);
+  border-radius: var(--radius-pill);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.ai-suggested-questions button:hover,
+.ai-suggested-questions button:focus-visible {
+  color: var(--color-accent);
+  border-color: var(--color-accent);
+}
+
+.ai-question-field {
+  display: grid;
+  gap: 7px;
+  color: var(--color-text-2);
+  font-size: 12px;
+}
+
+.ai-question-field textarea,
+.ai-config-field input {
+  box-sizing: border-box;
+  width: 100%;
+  padding: 11px 12px;
+  color: var(--color-text);
+  background: var(--color-elevated);
+  border: 1px solid var(--color-separator);
+  border-radius: 12px;
+  font: inherit;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.ai-question-field textarea {
+  min-height: 66px;
+  resize: vertical;
+}
+
+.ai-question-field textarea:focus-visible,
+.ai-config-field input:focus-visible {
+  outline: 2px solid var(--color-focus);
+  outline-offset: 1px;
+}
+
+.ai-question-actions,
+.ai-config-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-top: 8px;
+}
+
+.ai-question-hint,
+.ai-config-hint,
+.ai-config-heading p {
+  color: var(--color-text-3);
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.ai-send-button {
+  width: 34px;
+  min-height: 34px;
+  padding: 0;
+  border-radius: 50%;
+  font-size: 18px !important;
+  line-height: 1;
+}
+
+.ai-config-view {
+  display: grid;
+  gap: 14px;
+}
+
+.ai-config-heading {
+  display: grid;
+  gap: 5px;
+}
+
+.ai-config-heading h3 {
+  margin: 2px 0 0;
+  color: var(--color-text);
+  font-size: 16px;
+}
+
+.ai-config-heading p {
+  margin: 0;
+}
+
+.ai-config-field {
+  display: grid;
+  gap: 7px;
+  color: var(--color-text-2);
+  font-size: 12px;
+}
+
+.ai-config-actions {
+  justify-content: flex-end;
+  margin-top: 2px;
+}
+
+.ai-config-actions .reader-action-button {
+  min-height: 34px;
+  padding: 0 16px;
+  color: var(--color-text);
+  background: var(--color-fill);
+  border: 1px solid var(--color-separator);
+  border-radius: var(--radius-pill);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.ai-config-actions .reader-action-button:hover,
+.ai-config-actions .reader-action-button:focus-visible {
+  color: var(--color-accent);
+  border-color: var(--color-accent);
+}
+
+@media (max-width: 640px) {
+  .ai-modal {
+    top: auto;
+    right: 10px;
+    bottom: 10px;
+    left: 10px;
+    width: auto;
+    max-height: calc(100vh - 20px);
+    transform: none;
+  }
+
+  .ai-modal-body {
+    padding-right: 16px;
+    padding-left: 16px;
+  }
+}
+
+/* Desktop AI is a persistent floating panel. It lives beside the reader's
+   utility toolbar without shrinking the reading surface. When the Drawer is
+   open, the panel moves left to preserve a clear, non-overlapping workspace. */
+@media (min-width: 801px) {
+  body.ai-modal-open {
+    --ai-modal-width: 400px;
+    --ai-modal-height: 648px;
+    --ai-modal-toolbar-gap: 12px;
+    --ai-drawer-width: min(380px, calc(100vw - 28px));
+  }
+
+  body.ai-modal-open .reader {
+    right: 0;
+    width: 100% !important;
+  }
+
+  body.ai-modal-open .reader-floating-toolbar {
+    right: var(--space-5);
+  }
+
+  body.ai-modal-open .ai-modal-backdrop {
+    background: transparent;
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+    pointer-events: none;
+  }
+
+  .ai-modal {
+    top: 50%;
+    right: calc(var(--space-5) + 58px + var(--ai-modal-toolbar-gap));
+    bottom: auto;
+    left: auto;
+    width: min(var(--ai-modal-width, 400px), calc(100vw - 110px));
+    height: min(var(--ai-modal-height, 648px), calc(100vh - 120px));
+    max-width: calc(100vw - 110px);
+    max-height: calc(100vh - 120px);
+    border-right: 1px solid var(--color-separator);
+    border-radius: 16px;
+    transform: translateY(-50%);
+  }
+
+  body.reader-drawer-open.ai-modal-open .ai-modal {
+    right: calc(var(--ai-drawer-width) + 74px + 16px + var(--ai-modal-toolbar-gap));
+  }
+
+  .ai-modal-header {
+    padding: 14px 16px 11px;
+  }
+
+  .ai-modal-body {
+    padding: 14px 14px 16px;
+  }
+}
+
+@media (max-width: 800px) and (min-width: 641px) {
+  .ai-modal {
+    width: min(520px, calc(100vw - 32px));
+    height: min(680px, calc(100vh - 64px));
+    max-height: calc(100vh - 64px);
+  }
+}
+
+/* The chat keeps its transcript scrollable while the composer stays pinned
+   to the bottom of the AI panel. The AI surface deliberately owns a neutral
+   macOS white palette, independent of the reader's dark/sepia theme. */
+.ai-modal-body {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.ai-chat-view {
+  display: flex;
+  min-height: 0;
+  flex: 1 1 auto;
+  flex-direction: column;
+}
+
+.ai-chat-scroll {
+  min-height: 0;
+  flex: 1 1 auto;
+  overflow-y: auto;
+  scrollbar-width: none;
+}
+
+.ai-chat-scroll::-webkit-scrollbar,
+body.ai-modal-open .reader::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+.ai-composer {
+  position: relative;
+  flex: 0 0 auto;
+  padding-top: 12px;
+  background: #FFFFFF;
+  border-top: 1px solid #E5E5EA;
+}
+
+.ai-question-field {
+  display: block;
+  position: relative;
+}
+
+.ai-question-label {
+  position: absolute !important;
+  width: 1px !important;
+  height: 1px !important;
+  margin: -1px !important;
+  padding: 0 !important;
+  overflow: hidden !important;
+  white-space: nowrap !important;
+  border: 0 !important;
+  clip: rect(0, 0, 0, 0) !important;
+  clip-path: inset(50%) !important;
+}
+
+.ai-question-field textarea {
+  min-height: 56px;
+  padding: 13px 52px 13px 14px;
+  background: #FFFFFF;
+  border: 1px solid #D2D2D7;
+  border-radius: 16px;
+  resize: none;
+}
+
+.ai-question-field textarea:focus,
+.ai-question-field textarea:focus-visible {
+  outline: none;
+  border-color: #B8B8C2;
+  box-shadow: 0 0 0 3px rgba(10, 132, 255, .16);
+}
+
+.ai-question-actions {
+  position: absolute;
+  right: 9px;
+  bottom: 9px;
+  display: block;
+  margin: 0;
+}
+
+.ai-question-hint {
+  position: absolute !important;
+  width: 1px !important;
+  height: 1px !important;
+  margin: -1px !important;
+  padding: 0 !important;
+  overflow: hidden !important;
+  white-space: nowrap !important;
+  border: 0 !important;
+  clip: rect(0, 0, 0, 0) !important;
+  clip-path: inset(50%) !important;
+}
+
+.ai-send-button,
+.ai-send-button:disabled {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  vertical-align: middle;
+  width: 34px;
+  height: 34px;
+  min-height: 34px;
+  padding: 0;
+  color: #8E8E93;
+  background: #E5E5EA;
+  border: 1px solid #D2D2D7;
+  border-radius: 50%;
+  box-shadow: none;
+  font-size: 0 !important;
+  line-height: 0;
+  opacity: 1;
+  transition: color var(--dur-fast) var(--ease-out), background-color var(--dur-fast) var(--ease-out), border-color var(--dur-fast) var(--ease-out), transform var(--dur-fast) var(--ease-out), box-shadow var(--dur-fast) var(--ease-out);
+}
+
+.ai-send-button svg {
+  width: 17px;
+  height: 17px;
+  display: block;
+  flex: 0 0 17px;
+  margin: 0;
+}
+
+.ai-send-button:not(:disabled) {
+  color: #FFFFFF;
+  background: #0A84FF;
+  border-color: #0A84FF;
+  box-shadow: 0 2px 6px rgba(10, 132, 255, .22);
+}
+
+.ai-send-button:not(:disabled):hover,
+.ai-send-button:not(:disabled):focus-visible {
+  color: #FFFFFF;
+  background: #0077ED;
+  border-color: #0077ED;
+  box-shadow: 0 3px 8px rgba(10, 132, 255, .28);
+}
+
+.ai-send-button:not(:disabled):active {
+  transform: scale(.94);
+  box-shadow: 0 1px 3px rgba(10, 132, 255, .18);
+}
+
+/* AI settings are a secondary sheet inside the persistent chat surface. The
+   transcript stays mounted underneath so configuration never feels like a
+   separate page or resets the current conversation. */
+.ai-config-sheet {
+  position: absolute;
+  inset: 0;
+  z-index: 4;
+  display: grid;
+  place-items: center;
+}
+
+.ai-config-sheet[hidden] {
+  display: none !important;
+}
+
+.ai-config-sheet-backdrop {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  padding: 0;
+  border: 0;
+  background: rgba(29, 29, 31, .18);
+  backdrop-filter: blur(5px);
+  -webkit-backdrop-filter: blur(5px);
+  cursor: default;
+}
+
+.ai-config-sheet-card {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  width: min(360px, calc(100% - 28px));
+  max-height: min(560px, calc(100% - 28px));
+  overflow: hidden;
+  color: var(--color-text);
+  background: var(--color-elevated);
+  border: 1px solid var(--color-separator);
+  border-radius: 17px;
+  box-shadow: 0 18px 48px rgba(0, 0, 0, .22);
+}
+
+.ai-config-sheet-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 18px 18px 14px;
+  border-bottom: 1px solid var(--color-separator);
+}
+
+.ai-config-sheet-header .ai-config-heading {
+  gap: 4px;
+}
+
+.ai-config-sheet-header .ai-config-heading h3 {
+  margin: 0;
+  font-size: 17px;
+  letter-spacing: -.01em;
+}
+
+.ai-config-sheet-header .ai-config-heading p {
+  max-width: 270px;
+  color: var(--color-text-3);
+}
+
+.ai-config-sheet-content {
+  display: grid;
+  gap: 14px;
+  min-height: 0;
+  padding: 16px 18px;
+  overflow-y: auto;
+  scrollbar-width: none;
+}
+
+.ai-config-sheet-content::-webkit-scrollbar {
+  display: none;
+}
+
+.ai-config-sheet .ai-config-field {
+  gap: 6px;
+}
+
+.ai-config-sheet .ai-config-actions {
+  flex: 0 0 auto;
+  margin: 0;
+  padding: 12px 18px 16px;
+  border-top: 1px solid var(--color-separator);
+}
+
+.ai-config-sheet .ai-config-actions > button {
+  min-height: 34px;
+  padding: 0 16px;
+  border-radius: var(--radius-pill);
+  font: inherit;
+  font-size: 12px;
+  line-height: 1;
+}
+
+.ai-config-sheet .ai-config-actions .ai-clear-key-button {
+  color: var(--color-text-2);
+  background: var(--color-fill);
+  border: 1px solid var(--color-separator);
+}
+
+.ai-config-sheet .ai-config-actions .ai-clear-key-button:hover,
+.ai-config-sheet .ai-config-actions .ai-clear-key-button:focus-visible {
+  color: var(--color-accent);
+  border-color: var(--color-accent);
+}
+
+.ai-config-sheet .ai-config-actions .ai-clear-key-button.is-pending {
+  color: var(--color-destructive);
+  background: color-mix(in srgb, var(--color-destructive) 10%, transparent);
+  border-color: color-mix(in srgb, var(--color-destructive) 40%, var(--color-separator));
+}
+
+.ai-config-sheet .ai-config-actions .ai-clear-key-button:disabled {
+  color: var(--color-text-3);
+  background: var(--color-fill);
+  border-color: var(--color-separator);
+  cursor: not-allowed;
+  opacity: .72;
+}
+
+.ai-config-sheet .ai-config-actions .reader-action-button {
+  color: #FFFFFF;
+  background: var(--color-accent);
+  border-color: var(--color-accent);
+}
+
+.ai-config-sheet .ai-config-actions .reader-action-button:hover,
+.ai-config-sheet .ai-config-actions .reader-action-button:focus-visible {
+  color: #FFFFFF;
+  background: var(--color-accent-hover, var(--color-accent));
+  border-color: var(--color-accent-hover, var(--color-accent));
+}
+
+@media (max-width: 640px) {
+  .ai-config-sheet {
+    place-items: end center;
+  }
+
+  .ai-config-sheet-card {
+    width: calc(100% - 20px);
+    max-height: calc(100% - 20px);
+    margin-bottom: 10px;
+    border-radius: 18px;
+  }
+}
+
+.ai-config-view {
+  min-height: 0;
+  flex: 1 1 auto;
+  overflow-y: auto;
+  scrollbar-width: none;
+}
+
+.ai-config-view::-webkit-scrollbar,
+body.ai-modal-open .reader {
+  scrollbar-width: none;
+}
+
+.notes-item {
+  position: relative;
+  padding: 12px;
+  background: var(--color-elevated);
+  border: 1px solid var(--color-separator);
+  border-radius: var(--radius-card);
+  cursor: pointer;
+}
+
+.notes-item:focus-visible {
+  outline: 2px solid var(--color-focus);
+  outline-offset: 2px;
+}
+
+.notes-item-error {
+  margin: 10px 0 0;
+  color: var(--color-accent);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.notes-item-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 8px;
+  color: var(--color-text-2);
+  font-size: 11px;
+}
+
+.notes-item-chapter {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.notes-item-style {
+  flex: 0 0 auto;
+  color: var(--color-accent);
+}
+
+.notes-item-quote {
+  margin: 0;
+  padding-left: 10px;
+  color: var(--color-text);
+  border-left: 2px solid var(--color-accent);
+  font-size: 14px;
+  line-height: 1.55;
+  white-space: pre-wrap;
+}
+
+.notes-item-thought {
+  margin: 10px 0 0;
+  color: var(--color-text-2);
+  font-size: 13px;
+  line-height: 1.55;
+  white-space: pre-wrap;
+}
+
+.notes-item-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 6px;
+  margin-top: 10px;
+}
+
+.notes-item-actions button {
+  min-height: 28px;
+  padding: 0 8px;
+  color: var(--color-text-2);
+  background: transparent;
+  border: 1px solid var(--color-separator);
+  border-radius: var(--radius-control);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.notes-item-actions button:hover,
+.notes-item-actions button:focus-visible {
+  color: var(--color-text);
+  background: var(--color-fill);
+  outline: none;
+}
+
+.notes-empty-state[hidden] {
+  display: none;
 }
 
 .reader-drawer .toc {
@@ -2737,22 +4227,21 @@ body.is-epub.paged-reading .reader .article {
   column-rule: 0 solid transparent;
   contain: layout style;
   /* Paper look. No border: a border would shrink the content box by 1px and
-     break the exact column fit the pagination maths depends on. The card sits
-     one step darker than the stage, with a soft shadow and a 16px radius
-     matching the measured baseline. */
+     break the exact column fit the pagination maths depends on. Keep the
+     reading surface on the same theme token as continuous scroll so changing
+     pagination mode never changes the book's paper color. The surrounding
+     reader stage and shadow still provide the card separation. */
   border: 0 !important;
   border-radius: 16px;
   box-shadow: 0 12px 40px rgba(0, 0, 0, 0.14);
-  /* The paper must be its own surface: without this the stage background shows
-     through and only the shadow hints at the card edge. */
-  background-color: var(--surface);
+  background-color: var(--bg);
   background-clip: padding-box;
 }
 
-/* On sepia the stage and the sheet share the same warm tone, so the card is
-   told apart by its shadow only — same choice WeChat makes on paper themes. */
+/* Keep the explicit sepia rule for its softer shadow, while using the same
+   reading surface as continuous scroll. */
 body.theme-sepia.is-epub.paged-reading .reader .article {
-  background-color: var(--surface-alt);
+  background-color: var(--bg);
   box-shadow: 0 12px 40px rgba(61, 52, 39, 0.10);
 }
 
@@ -2841,4 +4330,261 @@ body.paged-reading .article::before,
 body.paged-reading .article::after {
   content: none !important;
   display: none !important;
+}
+
+/* ============================================================
+   Neutral application chrome
+   Keep settings, TOC and annotations visually aligned with AI 问书.
+   Reading paper themes remain independent from these controls.
+   ============================================================ */
+.settings-panel.reader-drawer {
+  color: var(--ui-label);
+  background: var(--ui-bg);
+  border-left-color: var(--ui-separator);
+}
+
+.reader-drawer-tabs {
+  background: var(--ui-fill);
+  border-color: var(--ui-separator);
+}
+
+.reader-drawer-tabs button {
+  color: var(--ui-secondary-label);
+}
+
+.reader-drawer-tabs button[aria-selected="true"] {
+  color: var(--ui-label);
+  background: var(--ui-surface);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, .10);
+}
+
+.settings-group-title,
+.reader-panel-empty,
+.notes-panel-summary {
+  color: var(--ui-secondary-label);
+}
+
+.settings-group-card,
+.reader-drawer .toc,
+.notes-item {
+  color: var(--ui-label);
+  background: var(--ui-surface);
+  border-color: var(--ui-separator);
+  box-shadow: 0 2px 12px rgba(0, 0, 0, .05);
+}
+
+.settings-field {
+  color: var(--ui-label);
+}
+
+.settings-field + .settings-field {
+  border-top-color: var(--ui-separator);
+}
+
+.settings-field select,
+.highlight-editor select,
+.custom-select-trigger,
+.settings-field output,
+.settings-checkbox input,
+.notes-panel-sort select {
+  color: var(--ui-label);
+  background-color: var(--ui-fill);
+  border-color: var(--ui-separator);
+}
+
+.settings-field select option,
+.highlight-editor select option,
+.custom-select-menu {
+  color: var(--ui-label);
+  background: var(--ui-surface);
+}
+
+.custom-select-menu {
+  border-color: var(--ui-separator);
+}
+
+.custom-select-option {
+  color: var(--ui-secondary-label);
+}
+
+.custom-select-option:hover,
+.custom-select-option:focus-visible,
+.custom-select-option.is-selected {
+  color: var(--ui-label);
+  background: color-mix(in srgb, var(--ui-accent) 12%, var(--ui-surface));
+}
+
+.settings-field input[type="range"] {
+  accent-color: var(--ui-accent);
+}
+
+.settings-checkbox input::after {
+  background: var(--ui-secondary-label);
+}
+
+.settings-checkbox input:checked {
+  background: var(--ui-accent);
+  border-color: var(--ui-accent);
+}
+
+.settings-checkbox input:checked::after {
+  background: #FFFFFF;
+}
+
+.reader-drawer .toc-title,
+.reader-drawer .toc a,
+.notes-item-meta,
+.notes-item-thought,
+.notes-item-actions button,
+.notes-panel-sort select,
+.notes-panel-sort select option {
+  color: var(--ui-secondary-label);
+}
+
+.reader-drawer .toc a:hover,
+.reader-drawer .toc a:focus-visible,
+.notes-item-actions button:hover,
+.notes-item-actions button:focus-visible {
+  color: var(--ui-label);
+  background: var(--ui-fill);
+}
+
+.reader-drawer .toc a.current,
+.reader-drawer .toc a[aria-current="location"] {
+  color: var(--ui-label);
+  background: color-mix(in srgb, var(--ui-accent) 10%, var(--ui-surface));
+  box-shadow: inset 3px 0 0 var(--ui-accent);
+}
+
+.notes-panel-filters {
+  background: var(--ui-fill);
+  border-color: var(--ui-separator);
+}
+
+.notes-panel-filters button {
+  color: var(--ui-secondary-label);
+}
+
+.notes-panel-filters button[aria-selected="true"] {
+  color: var(--ui-label);
+  background: var(--ui-surface);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, .10);
+}
+
+.notes-panel-sort select {
+  -webkit-text-fill-color: var(--ui-secondary-label);
+}
+
+.notes-item-style,
+.notes-item-error {
+  color: var(--ui-accent);
+}
+
+.notes-item-quote {
+  color: var(--ui-label);
+  border-left-color: var(--ui-accent);
+}
+
+.notes-item-actions button {
+  border-color: var(--ui-separator);
+}
+
+.reader-drawer :focus-visible {
+  outline-color: var(--ui-focus);
+}
+
+/* Reader chrome relationship: the topbar owns global status, the floating
+   rail owns actions, and the Drawer owns a separate scroll viewport. Keep
+   these surfaces on the same neutral UI material instead of mixing them with
+   the reading paper theme. */
+body.is-epub .reader-shell-nav,
+body.is-epub .reader-floating-toolbar {
+  color: var(--ui-label);
+  background: var(--ui-bg);
+  border-color: var(--ui-separator);
+}
+
+body.is-epub .reader-shell-nav {
+  box-shadow: 0 1px 18px rgba(0, 0, 0, .08);
+}
+
+body.is-epub .reader-floating-toolbar {
+  z-index: 190;
+  box-shadow: var(--shadow-float);
+}
+
+.settings-panel.reader-drawer {
+  top: calc(var(--topbar-h) + 16px);
+  right: calc(74px + 16px);
+  bottom: 16px;
+  display: flex;
+  flex-direction: column;
+  width: min(380px, calc(100vw - 116px));
+  max-height: none;
+  overflow: hidden;
+  padding: 16px;
+  color: var(--ui-label);
+  background: var(--ui-bg);
+  border: 1px solid var(--ui-separator);
+  border-radius: var(--radius-sheet);
+  box-shadow: var(--shadow-card);
+}
+
+.reader-drawer-header {
+  flex: 0 0 auto;
+  margin-bottom: 12px;
+}
+
+.reader-drawer-tabs {
+  flex: 0 0 auto;
+  margin-bottom: 16px;
+}
+
+.reader-drawer-content {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-color: var(--ui-separator) transparent;
+  scrollbar-width: thin;
+}
+
+.reader-drawer-content::-webkit-scrollbar {
+  width: 8px;
+}
+
+.reader-drawer-content::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.reader-drawer-content::-webkit-scrollbar-thumb {
+  background: var(--ui-separator);
+  border: 2px solid transparent;
+  border-radius: 999px;
+  background-clip: padding-box;
+}
+
+.reader-drawer-content > .reader-panel {
+  flex: 1 0 auto;
+  min-height: min-content;
+  padding-bottom: 8px;
+}
+
+@media (max-width: 1200px) {
+  html[data-reader-surface="mobile"] .settings-panel.reader-drawer {
+    top: auto;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    width: 100%;
+    max-height: min(78vh, 680px);
+    height: min(78vh, 680px);
+    padding: 16px 16px calc(16px + env(safe-area-inset-bottom, 0px));
+    border-right: 0;
+    border-bottom: 0;
+    border-left: 0;
+    border-radius: 20px 20px 0 0;
+  }
 }

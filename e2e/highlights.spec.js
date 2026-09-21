@@ -109,30 +109,225 @@ test.describe('Highlight CRUD', () => {
     expect(reloadedState[0].id).toBe(editedState[0].id);
   });
 
-  test('highlights: add/modify note, persist through reload', async ({ page }) => {
+  test('highlights: add/modify thought, persist through reload', async ({ page }) => {
     // Create first highlight
     await expect(selectArticleText(page, FIXTURE_TEXT.firstParagraph)).resolves.toBeTruthy();
     const firstSave = waitForHighlightsSave(page);
     await page.locator('#btnHighlight').click();
     await firstSave;
 
-    // Edit note
+    // Edit thought
     const highlightBox = page.locator('.br-highlight-box').first();
     await highlightBox.click();
     await expect(page.locator('#highlightEditor')).toBeVisible();
-    await page.locator('#highlightEditorNote').fill('This is a new note for testing.');
+    await expect(page.locator('#highlightEditorTitle')).toHaveText('编辑批注');
+    await page.locator('#highlightEditorThought').fill('This is a new thought for testing.');
     const originalId = await highlightBox.getAttribute('data-highlight-id');
-    const noteSave = waitForHighlightsSave(page);
+    const thoughtSave = waitForHighlightsSave(page);
     await page.locator('#btnSaveHighlight').click();
-    await noteSave;
+    await thoughtSave;
 
-    // Verify note persisted through reload
+    // Verify thought persisted through reload
     await page.reload({ waitUntil: 'load' });
     await openEpubFixture(page);
     const hls = await readHighlightState(page);
-    const notesMatch = hls.find(h => h.note === 'This is a new note for testing.');
-    expect(notesMatch).toBeDefined();
-    expect(notesMatch.id).toBe(originalId);
+    const thoughtsMatch = hls.find(h => h.thought === 'This is a new thought for testing.');
+    expect(thoughtsMatch).toBeDefined();
+    expect(thoughtsMatch.id).toBe(originalId);
+  });
+
+  test('thought composer creates a thought without a visual mark', async ({ page }) => {
+    await expect(selectArticleText(page, FIXTURE_TEXT.firstParagraph)).resolves.toBeTruthy();
+    await page.locator('#selectionMenu [data-selection-action="thought"]').click();
+    await expect(page.locator('#highlightEditor')).toBeVisible();
+    await expect(page.locator('#highlightEditorTitle')).toHaveText('写想法');
+    await page.locator('#highlightEditorThought').fill('This is a standalone thought.');
+    const save = waitForHighlightsSave(page);
+    await page.locator('#btnSaveHighlight').click();
+    await save;
+
+    const thoughts = await readHighlightState(page);
+    expect(thoughts).toContainEqual(expect.objectContaining({
+      kind: 'thought',
+      style: 'none',
+      thought: 'This is a standalone thought.'
+    }));
+    await expect(page.locator('.br-highlight-box')).toHaveCount(0);
+  });
+
+  test('cancelling thought composer does not create a record', async ({ page }) => {
+    await expect(selectArticleText(page, FIXTURE_TEXT.firstParagraph)).resolves.toBeTruthy();
+    await page.locator('#selectionMenu [data-selection-action="thought"]').click();
+    await expect(page.locator('#highlightEditor')).toBeVisible();
+    await page.locator('#btnCloseHighlightEditor').click();
+    await expect(page.locator('#highlightEditor')).toBeHidden();
+    expect(await readHighlightState(page)).toEqual([]);
+  });
+
+  test('notes panel lists the book annotations and filters thoughts', async ({ page }) => {
+    await expect(selectArticleText(page, FIXTURE_TEXT.firstParagraph)).resolves.toBeTruthy();
+    const highlightSave = waitForHighlightsSave(page);
+    await page.locator('#selectionMenu [data-selection-action="marker"]').click();
+    await highlightSave;
+
+    await page.locator('.br-highlight-box').first().click();
+    await page.locator('#highlightEditorThought').fill('A thought visible in the notes panel.');
+    const thoughtSave = waitForHighlightsSave(page);
+    await page.locator('#btnSaveHighlight').click();
+    await thoughtSave;
+
+    await page.locator('#btnNotes').click();
+    await expect(page.locator('#readerPanelNotes')).toBeVisible();
+    await expect(page.locator('#readerDrawerTitle')).toHaveText('标记与想法');
+    await expect(page.locator('#notesPanelSummary')).toHaveText('1 条标记 · 1 条想法');
+    await expect(page.locator('#notesList [data-annotation-id]')).toHaveCount(1);
+
+    const notesToolbarLayout = await page.evaluate(() => {
+      const filters = document.querySelector('.notes-panel-filters');
+      const sortField = document.querySelector('.notes-panel-sort');
+      const sortLabel = sortField?.querySelector(':scope > span');
+      const sortControl = sortField?.querySelector('select');
+      const filterButton = filters?.querySelector('button');
+      const thoughtButton = filters?.querySelector('[data-notes-filter="thought"]');
+      const sortOption = sortControl?.querySelector('option');
+      const filterRect = filters?.getBoundingClientRect();
+      const sortRect = sortField?.getBoundingClientRect();
+      const controlRect = sortControl?.getBoundingClientRect();
+      const filterStyle = filterButton ? getComputedStyle(filterButton) : null;
+      const thoughtStyle = thoughtButton ? getComputedStyle(thoughtButton) : null;
+      const sortStyle = sortControl ? getComputedStyle(sortControl) : null;
+      const optionStyle = sortOption ? getComputedStyle(sortOption) : null;
+      const labelStyle = sortLabel ? getComputedStyle(sortLabel) : null;
+      return {
+        filterTop: filterRect?.top,
+        filterHeight: filterRect?.height,
+        sortTop: sortRect?.top,
+        sortHeight: sortRect?.height,
+        controlHeight: controlRect?.height,
+        thoughtColor: thoughtStyle?.color,
+        sortColor: sortStyle?.color,
+        sortOptionColor: optionStyle?.color,
+        filterFontSize: filterStyle?.fontSize,
+        sortFontSize: sortStyle?.fontSize,
+        sortOptionFontSize: optionStyle?.fontSize,
+        labelPosition: labelStyle?.position,
+        labelClip: labelStyle?.clip
+      };
+    });
+    expect(notesToolbarLayout.sortTop).toBeCloseTo(notesToolbarLayout.filterTop, 0);
+    expect(notesToolbarLayout.filterHeight).toBeCloseTo(36, 0);
+    expect(notesToolbarLayout.sortHeight).toBeCloseTo(36, 0);
+    expect(notesToolbarLayout.controlHeight).toBeCloseTo(36, 0);
+    expect(notesToolbarLayout.sortColor).toBe(notesToolbarLayout.thoughtColor);
+    expect(notesToolbarLayout.sortOptionColor).toBe(notesToolbarLayout.thoughtColor);
+    expect(notesToolbarLayout.filterFontSize).toBe('11px');
+    expect(notesToolbarLayout.sortFontSize).toBe(notesToolbarLayout.filterFontSize);
+    expect(notesToolbarLayout.sortOptionFontSize).toBe(notesToolbarLayout.filterFontSize);
+    expect(notesToolbarLayout.labelPosition).toBe('absolute');
+    expect(notesToolbarLayout.labelClip).toBe('rect(0px, 0px, 0px, 0px)');
+
+    await page.locator('[data-notes-filter="thought"]').click();
+    await expect(page.locator('#notesList [data-annotation-id]')).toHaveCount(1);
+    await expect(page.locator('#notesList')).toContainText('A thought visible in the notes panel.');
+    await page.locator('[data-notes-filter="marker"]').click();
+    await expect(page.locator('#notesList [data-annotation-id]')).toHaveCount(1);
+  });
+
+  test('notes panel jumps to a later chapter without flashing a focus border', async ({ page }) => {
+    await expect(selectArticleText(page, FIXTURE_TEXT.firstParagraph)).resolves.toBeTruthy();
+    const firstSave = waitForHighlightsSave(page);
+    await page.locator('#selectionMenu [data-selection-action="marker"]').click();
+    await firstSave;
+
+    await page.locator('#btnToc').click();
+    const tocLinks = page.locator('#tocList a[data-target]');
+    await expect(tocLinks).toHaveCount(3);
+    await tocLinks.nth(1).click();
+    await expect(page.locator('#article')).toContainText('E2E EPUB Chapter 2');
+    await page.locator('#btnCloseSettings').click();
+
+    await expect(selectArticleText(page, FIXTURE_TEXT.secondParagraph)).resolves.toBeTruthy();
+    const secondSave = waitForHighlightsSave(page);
+    await page.locator('#selectionMenu [data-selection-action="marker"]').click();
+    await secondSave;
+
+    await page.locator('#btnToc').click();
+    await tocLinks.nth(0).click();
+    await expect(page.locator('#article')).toContainText('E2E EPUB Chapter 1');
+    await page.locator('#btnCloseSettings').click();
+
+    await page.locator('#btnNotes').click();
+    const laterRow = page.locator('#notesList [data-annotation-id]').filter({ hasText: FIXTURE_TEXT.secondParagraph });
+    await expect(laterRow).toHaveCount(1);
+    await laterRow.click();
+
+    await expect(page.locator('#article')).toContainText('E2E EPUB Chapter 2');
+    expect(await page.locator('.annotation-focus-flash').count()).toBe(0);
+  });
+
+  test('notes panel jumps to a later chapter after pagination settles in double-page mode', async ({ page }) => {
+    await page.locator('#btnSettings').click();
+    const settingsSave = page.waitForResponse((response) =>
+      response.url().endsWith('/api/settings')
+        && response.request().method() === 'PUT'
+        && response.ok()
+    );
+    await page.locator('#settingReadingMode').selectOption('double');
+    await settingsSave;
+    await page.locator('#btnCloseSettings').click();
+    await expect(page.locator('body')).toHaveClass(/double-page-reading/);
+
+    await expect(selectArticleText(page, FIXTURE_TEXT.firstParagraph)).resolves.toBeTruthy();
+    const firstSave = waitForHighlightsSave(page);
+    await page.locator('#selectionMenu [data-selection-action="marker"]').click();
+    await firstSave;
+
+    await page.locator('#btnToc').click();
+    const tocLinks = page.locator('#tocList a[data-target]');
+    await expect(tocLinks).toHaveCount(3);
+    await tocLinks.nth(1).click();
+    await expect(page.locator('#article')).toContainText('E2E EPUB Chapter 2');
+    await page.locator('#btnCloseSettings').click();
+
+    await expect(selectArticleText(page, FIXTURE_TEXT.secondParagraph)).resolves.toBeTruthy();
+    const secondSave = waitForHighlightsSave(page);
+    await page.locator('#selectionMenu [data-selection-action="marker"]').click();
+    await secondSave;
+
+    await page.locator('#btnToc').click();
+    await tocLinks.nth(0).click();
+    await expect(page.locator('#article')).toContainText('E2E EPUB Chapter 1');
+    await page.locator('#btnCloseSettings').click();
+
+    await page.locator('#btnNotes').click();
+    const laterRow = page.locator('#notesList [data-annotation-id]').filter({ hasText: FIXTURE_TEXT.secondParagraph });
+    await laterRow.click();
+    await expect(page.locator('#article')).toContainText('E2E EPUB Chapter 2');
+    expect(await page.locator('.annotation-focus-flash').count()).toBe(0);
+  });
+
+  test('notes panel edits and deletes an annotation through row actions', async ({ page }) => {
+    await expect(selectArticleText(page, FIXTURE_TEXT.firstParagraph)).resolves.toBeTruthy();
+    const save = waitForHighlightsSave(page);
+    await page.locator('#selectionMenu [data-selection-action="marker"]').click();
+    await save;
+
+    await page.locator('#btnNotes').click();
+    const row = page.locator('#notesList [data-annotation-id]').first();
+    await expect(row.locator('[data-notes-action="edit"]')).toHaveCount(1);
+    await row.locator('[data-notes-action="edit"]').click();
+    await expect(page.locator('#highlightEditor')).toBeVisible();
+    await page.locator('#highlightEditorThought').fill('从侧栏编辑的想法');
+    const editSave = waitForHighlightsSave(page);
+    await page.locator('#btnSaveHighlight').click();
+    await editSave;
+    await expect(row).toContainText('从侧栏编辑的想法');
+
+    const deleteSave = waitForHighlightsSave(page);
+    await row.locator('[data-notes-action="delete"]').click();
+    await deleteSave;
+    await expect(page.locator('#notesList [data-annotation-id]')).toHaveCount(0);
+    await expect(page.locator('#notesPanelSummary')).toHaveText('0 条标记 · 0 条想法');
   });
 
   test('highlights: delete only one of two identical-text highlights', async ({ page }) => {
@@ -188,10 +383,10 @@ test.describe('Highlight CRUD', () => {
     const firstId = await firstBox.getAttribute('data-highlight-id');
     await firstBox.click();
     await expect(page.locator('#highlightEditor')).toBeVisible();
-    await page.locator('#highlightEditorNote').fill('Export note');
-    const noteSave = waitForHighlightsSave(page);
+    await page.locator('#highlightEditorThought').fill('Export thought');
+    const thoughtSave = waitForHighlightsSave(page);
     await page.locator('#btnSaveHighlight').click();
-    await noteSave;
+    await thoughtSave;
 
     await page.locator('#btnToc').click();
     const tocLinks = page.locator('#tocList a[data-target]');
@@ -239,17 +434,22 @@ test.describe('Highlight CRUD', () => {
     const content = fs.readFileSync(savedFile, 'utf8');
 
     // Verify markdown includes book name, chapter text
-    expect(content).toContain('《E2E EPUB》划线笔记');
+    expect(content).toContain('《E2E EPUB》标记与想法');
     expect(content).toContain('作者：Playwright');
     expect(content).toContain('- ');
+    expect(content).toContain('## 第一章');
+    expect(content).toContain('## 第二章');
     expect(content).toContain(FIXTURE_TEXT.firstParagraph);
     expect(content).toContain(FIXTURE_TEXT.secondParagraph);
-    expect(content).toContain('Export note');
+    expect(content).toMatch(new RegExp(`> \\[\\d{4}-\\d{2}-\\d{2}\\] ${FIXTURE_TEXT.firstParagraph}`));
+    expect(content).toContain('Export thought');
+    expect(content).toContain('想法：Export thought');
+    expect(content).not.toContain('> 想法：Export thought');
 
     // Verify server state unchanged (no additional highlights created by export)
     const afterHls = await readHighlightState(page);
     expect(afterHls).toEqual(beforeExport);
-    expect(afterHls.find((item) => item.id === firstId)?.note).toBe('Export note');
+    expect(afterHls.find((item) => item.id === firstId)?.thought).toBe('Export thought');
 
     await resetEpubFixtureState(page);
   });
@@ -278,10 +478,10 @@ test.describe('Highlight CRUD', () => {
     await page.mouse.down();
     await page.mouse.move(selectionBounds.endX, selectionBounds.y, { steps: 4 });
     await page.mouse.up();
-    await expect(page.locator('.highlight-pill')).toBeVisible();
+    await expect(page.locator('#selectionMenu')).toBeVisible();
 
     const save = waitForHighlightsSave(page);
-    await page.locator('#btnHighlight').click();
+    await page.locator('#selectionMenu [data-selection-action="marker"]').click();
     await save;
     await expect(page.locator('.br-highlight-box')).toHaveCount(1);
   });
@@ -306,15 +506,51 @@ test.describe('Highlight CRUD', () => {
       return false;
     }, FIXTURE_TEXT.firstParagraph);
     expect(selected).toBeTruthy();
-    await expect(page.locator('.highlight-pill')).toBeVisible();
+    await expect(page.locator('#selectionMenu')).toBeVisible();
 
     const save = waitForHighlightsSave(page);
-    await page.locator('#btnHighlight').click();
+    await page.locator('#selectionMenu [data-selection-action="marker"]').click();
     await save;
     await expect(page.locator('.br-highlight-box')).toHaveCount(1);
   });
 
-  test('highlights: marker stays on the visible later spread in double-page mode', async ({ page }) => {
+test('highlights: wave underline stays aligned with the selected text line', async ({ page }) => {
+    await selectArticleText(page, FIXTURE_TEXT.firstParagraph);
+    const rangeRects = await page.evaluate(() => {
+      const selection = window.getSelection();
+      if (!selection || selection.rangeCount === 0) return [];
+      return [...selection.getRangeAt(0).getClientRects()].map((rect) => ({
+        top: rect.top,
+        bottom: rect.bottom,
+        height: rect.height,
+        left: rect.left,
+        right: rect.right
+      }));
+    });
+    const save = waitForHighlightsSave(page);
+    await page.locator('#selectionMenu [data-selection-action="wave"]').click();
+    await save;
+    const boxes = await page.evaluate(() => [...document.querySelectorAll('[data-annotation-style="wave"]')].map((box) => {
+      const boxRect = box.getBoundingClientRect();
+      const svg = box.querySelector('.br-highlight-wave');
+      const svgRect = svg?.getBoundingClientRect();
+      return {
+        box: { top: boxRect.top, bottom: boxRect.bottom, height: boxRect.height },
+        svg: svgRect ? { top: svgRect.top, bottom: svgRect.bottom, height: svgRect.height } : null,
+        cssBottom: svg ? getComputedStyle(svg).bottom : null,
+        cssTop: svg ? getComputedStyle(svg).top : null,
+        boxPosition: getComputedStyle(box).position,
+        svgPosition: svg ? getComputedStyle(svg).position : null,
+        offsetParent: svg?.offsetParent?.className || null
+      };
+    }));
+    expect(boxes).toHaveLength(rangeRects.length);
+    for (const item of boxes) {
+      expect(Math.abs(item.svg.bottom - item.box.bottom)).toBeLessThanOrEqual(2);
+    }
+  });
+
+test('highlights: marker stays on the visible later spread in double-page mode', async ({ page }) => {
     await page.locator('#btnSettings').click();
     const settingsSave = page.waitForResponse((response) =>
       response.url().endsWith('/api/settings')

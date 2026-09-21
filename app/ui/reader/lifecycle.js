@@ -20,7 +20,7 @@ async function returnToLibrary() {
   try {
     await Promise.all([
       saveTextScroll.flush(),
-      persistUserSettings.flush()
+      flushUserSettings()
     ]);
     await Promise.all([
       flushPendingHighlightSaves(),

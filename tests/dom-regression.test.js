@@ -19,7 +19,10 @@ async function createReaderDom() {
     '../app/ui/reader/document.js',
     '../app/ui/reader/editor.js',
     '../app/ui/reader/highlights.js',
+    '../app/ui/reader/ai.js',
+    '../app/ui/reader/selection-menu.js',
     '../app/ui/reader/actions.js',
+    '../app/ui/reader/notes-panel.js',
     '../app/ui/reader/progress.js',
     '../app/ui/reader/pagination.js',
     '../app/ui/reader/settings.js',
@@ -33,7 +36,10 @@ async function createReaderDom() {
     sourceFiles.map((relative) => fs.readFile(path.resolve(__dirname, relative), 'utf8'))
   )).join('\n');
   source += '\nwindow.__babyReaderChapterApi = { renderEpubChapter, navigateToEpubChapter, isEpubChapterLoading, updateReadingProgress, restoreTextScroll, navigateEpubTarget, setupTocNavigation };\nwindow.__babyReaderDeviceApi = { getReaderDeviceProfile, setMobileChromeOpen, setupReaderNavigation };';
-  source += '\nwindow.__babyReaderUserStateApi = { applyUserState };';
+  source += '\nwindow.__babyReaderTypographyApi = { TYPOGRAPHY_SLIDER_CONFIG, nearestTypographyPreset, formatTypographySliderValue, setupTypographySlider, setupSettingsPanel, resetTypographySettings };';
+  source += '\nwindow.__babyReaderUserStateApi = { applyUserState, persistUserSettings, flushUserSettings, currentUserSettings };';
+  source += '\nwindow.__babyReaderActionsApi = { formatHighlightsMd };';
+  source += '\nwindow.__babyReaderEpubApi = { parseNavToc, parseNcxToc };';
 
   window.document.write(html.replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, ''));
   window.requestAnimationFrame = (callback) => {
@@ -59,6 +65,11 @@ async function createReaderDom() {
 
   window.eval(`${source}\nwindow.__babyReaderTest = {\n    state,\n    serializeDomRange,\n    rangeFromHighlight,\n    loadHighlights,\n    openHighlightEditor,\n    deleteActiveHighlight,\n    saveActiveHighlightEdits,\n    currentUserSettings,\n    applyZoom,\n    getEpubThemeCss,\n    debounce,\n    navigateChapter,\n    navigatePageGroup,\n    pageGroupForPage,\n    clampPageGroup,\n    pageLeftForGroup,\n    setPageGroup,\n    snapPaginationToNearestGroup,\n    pageNumberForElement,\n    navigateToSemanticTarget,\n    resolveEffectiveReadingMode,\n    createPaginationGeometry,\n    measurePagination,\n    setReadingMode,\n    currentReadingLocator,\n    restoreReadingLocator,\n    readerActions,\n    readerPanels,\n    openReaderPanel,\n    closeReaderPanel,\n    setupReaderActionMapping,\n    renderToc,\n    returnToLibrary\n  };`);
 
+  window.__babyReaderTest.formatHighlightsMd = window.__babyReaderActionsApi.formatHighlightsMd;
+  window.__babyReaderTest.typographyApi = window.__babyReaderTypographyApi;
+  window.__babyReaderTest.parseNavToc = window.__babyReaderEpubApi.parseNavToc;
+  window.__babyReaderTest.parseNcxToc = window.__babyReaderEpubApi.parseNcxToc;
+  window.__babyReaderTest.aiApi = window.__babyReaderAiApi;
   window.__babyReaderTest.renderEpubChapter = window.__babyReaderChapterApi.renderEpubChapter;
   window.__babyReaderTest.navigateToEpubChapter = window.__babyReaderChapterApi.navigateToEpubChapter;
   window.__babyReaderTest.isEpubChapterLoading = window.__babyReaderChapterApi.isEpubChapterLoading;
@@ -67,11 +78,286 @@ async function createReaderDom() {
   window.__babyReaderTest.navigateEpubTarget = window.__babyReaderChapterApi.navigateEpubTarget;
   window.__babyReaderTest.setupTocNavigation = window.__babyReaderChapterApi.setupTocNavigation;
   window.__babyReaderTest.applyUserState = window.__babyReaderUserStateApi.applyUserState;
+  window.__babyReaderTest.userStateApi = window.__babyReaderUserStateApi;
   window.__babyReaderTest.getReaderDeviceProfile = window.__babyReaderDeviceApi.getReaderDeviceProfile;
   window.__babyReaderTest.setMobileChromeOpen = window.__babyReaderDeviceApi.setMobileChromeOpen;
   window.__babyReaderTest.setupReaderNavigation = window.__babyReaderDeviceApi.setupReaderNavigation;
+  window.__babyReaderTest.captureSelectionSession = window.__babyReaderSelectionMenuApi.captureSelectionSession;
+  window.__babyReaderTest.setupSelectionMenu = window.__babyReaderSelectionMenuApi.setupSelectionMenu;
+  window.__babyReaderTest.showSelectionMenuForCurrentSelection = window.__babyReaderSelectionMenuApi.showSelectionMenuForCurrentSelection;
+  window.__babyReaderTest.closeSelectionMenu = window.__babyReaderSelectionMenuApi.closeSelectionMenu;
+  window.__babyReaderTest.renderNotesPanel = window.__babyReaderNotesPanelApi.renderNotesPanel;
+  window.__babyReaderTest.setupNotesPanel = window.__babyReaderNotesPanelApi.setupNotesPanel;
+  window.__babyReaderTest.navigateToAnnotation = window.__babyReaderNotesPanelApi.navigateToAnnotation;
   return { window, api: window.__babyReaderTest };
 }
+
+test('AI local retrieval chunks book text and prioritizes selected terms and current chapter', async () => {
+  const { api } = await createReaderDom();
+  const index = api.aiApi.buildBookSearchIndex([
+    { index: 0, href: 'OPS/one.xhtml', label: '第一章', text: '苹果和维生素是第一章的内容。' },
+    { index: 1, href: 'OPS/two.xhtml', label: '第二章', text: '蛋白质与氨基酸是第二章的核心内容，蛋白质帮助身体维持健康。' }
+  ]);
+  assert.ok(index.length >= 2);
+  const results = api.aiApi.searchBookIndex(index, {
+    query: '蛋白质如何维持健康',
+    selectedText: '蛋白质帮助身体维持健康',
+    currentChapterIndex: 1,
+    limit: 3
+  });
+  assert.ok(results.length > 0);
+  assert.equal(results[0].chapterIndex, 1);
+  assert.match(results[0].text, /蛋白质/);
+  assert.ok(results[0].score > 0);
+});
+
+test('AI local retrieval weights chapter titles and headings without expanding the result budget', async () => {
+  const { api } = await createReaderDom();
+  const index = api.aiApi.buildBookSearchIndex([
+    {
+      index: 0,
+      href: 'OPS/one.xhtml',
+      label: '第一章 日常饮食',
+      headings: ['早餐与能量'],
+      text: '这里介绍普通饮食安排和生活习惯。'
+    },
+    {
+      index: 1,
+      href: 'OPS/two.xhtml',
+      label: '第二章 蛋白质',
+      headings: ['蛋白质的需要量'],
+      text: '蛋白质帮助身体维持健康，食物中的蛋白质需要合理摄取。'
+    }
+  ]);
+  const results = api.aiApi.searchBookIndex(index, {
+    query: '蛋白质需要量',
+    currentChapterIndex: 0,
+    limit: 3
+  });
+
+  assert.equal(results.length, 1);
+  assert.equal(results[0].chapterIndex, 1);
+  assert.ok(results[0].headingScore > 0);
+  assert.ok(results[0].score >= results[0].bodyScore);
+});
+
+test('AI local retrieval removes overlapping chunks before filling the fixed result budget', async () => {
+  const { api } = await createReaderDom();
+  const repeated = '蛋白质是人体重要的营养物质，合理摄取蛋白质有助于维持健康。'.repeat(20);
+  const index = api.aiApi.buildBookSearchIndex([
+    { index: 0, href: 'OPS/one.xhtml', label: '第一章', text: repeated },
+    { index: 1, href: 'OPS/two.xhtml', label: '第二章', text: '维生素和矿物质同样与健康有关。'.repeat(30) }
+  ]);
+  const results = api.aiApi.searchBookIndex(index, {
+    query: '蛋白质 健康 维生素',
+    limit: 6
+  });
+
+  assert.ok(results.length <= 6);
+  assert.ok(new Set(results.map((item) => `${item.chapterIndex}:${item.start}`)).size === results.length);
+  assert.ok(results.some((item) => item.chapterIndex === 1));
+  assert.ok(results.reduce((total, item) => total + item.text.length, 0) <= 5400);
+});
+
+test('AI local retrieval exposes a guarded state for weak matches', async () => {
+  const { api } = await createReaderDom();
+  const weak = api.aiApi.assessAiRetrievalConfidence([
+    { text: '蛋白质是人体重要的营养物质。', lexicalScore: 2, bodyScore: 2, retrievalSources: ['fts', 'lexical'] }
+  ], { query: '量子物理火星发动机' });
+  assert.equal(weak.level, 'low');
+  assert.equal(weak.guarded, true);
+});
+
+test('AI panel exposes a safe answer surface and the selection entry point', async () => {
+  const { window, api } = await createReaderDom();
+  assert.ok(window.document.getElementById('aiModal'));
+  assert.equal(window.document.getElementById('readerPanelAi'), null);
+  assert.ok(window.document.getElementById('aiQuestion'));
+  assert.ok(window.document.getElementById('aiAnswer'));
+  assert.equal(window.document.querySelector('.ai-answer-title'), null);
+  assert.ok(window.document.getElementById('aiBaseUrl'));
+  assert.ok(window.document.getElementById('aiApiKey'));
+  assert.ok(window.document.getElementById('aiModel'));
+  assert.match(await fs.readFile(path.resolve(__dirname, '../app/ui/reader/selection-menu.js'), 'utf8'), /openAiForSelection/);
+  assert.equal(typeof api.aiApi.openAiForSelection, 'function');
+  api.state.contentType = 'epub';
+  await api.aiApi.openAiForSelection({ text: '书本选中文本' });
+  assert.equal(window.document.getElementById('aiModal').hidden, false);
+  assert.equal(window.document.getElementById('readerDrawer').hidden, true);
+  const answer = window.document.getElementById('aiAnswer');
+  window.marked.parse = () => '<h2>核心观点</h2><p><strong>书本依据</strong>如下：</p><ul><li>第一条</li></ul>';
+  api.aiApi.renderAiAnswer('## 核心观点\n\n**书本依据**如下：\n\n- 第一条');
+  assert.equal(answer.querySelector('h2')?.textContent, '核心观点');
+  assert.equal(answer.querySelector('strong')?.textContent, '书本依据');
+  assert.equal(answer.querySelector('li')?.textContent, '第一条');
+  window.marked.parse = () => '<p onclick="alert(1)"><script>alert(1)</script><strong>安全文本</strong><a href="javascript:alert(1)">危险链接</a><a href="https://example.com">安全链接</a></p>';
+  api.aiApi.renderAiAnswer('恶意输入');
+  assert.equal(answer.querySelector('script'), null);
+  assert.equal(answer.querySelector('[onclick]'), null);
+  assert.equal(answer.querySelector('a[href^="javascript:"]'), null);
+  assert.equal(answer.querySelector('a[href="https://example.com/"]')?.textContent, '安全链接');
+});
+
+test('AI settings open as a secondary sheet without replacing the conversation and close after saving', async () => {
+  const { window, api } = await createReaderDom();
+  let saveCount = 0;
+  window.browserHost = {
+    aiStatus: async () => ({ configured: true, model: 'test-model' }),
+    getAiConfig: async () => ({ baseUrl: 'https://api.example.com/v1', model: 'test-model', hasApiKey: true }),
+    saveAiConfig: async () => {
+      saveCount += 1;
+      return { configured: true, model: 'test-model', hasApiKey: true };
+    }
+  };
+  api.state.contentType = 'epub';
+  await api.aiApi.openAiForSelection({ text: '设置浮层测试' });
+  api.aiApi.renderAiAnswer('当前对话内容');
+  await api.aiApi.openAiConfigSheet();
+  await waitFor(() => window.document.getElementById('aiConfigView')?.hidden === false, 'AI settings sheet did not open');
+  assert.equal(window.document.getElementById('aiChatView')?.hidden, false);
+  assert.equal(window.document.getElementById('aiAnswer')?.textContent, '当前对话内容');
+  await api.aiApi.saveAiSettings();
+  await waitFor(() => saveCount === 1, 'AI settings did not save');
+  await waitFor(() => window.document.getElementById('aiConfigView')?.hidden === true, 'AI settings sheet did not close after saving');
+  assert.equal(window.document.getElementById('aiChatView')?.hidden, false);
+  assert.equal(window.document.getElementById('aiAnswer')?.textContent, '当前对话内容');
+});
+
+test('AI browser stream reader dispatches split UTF-8 SSE events', async () => {
+  const { window } = await createReaderDom();
+  const encoder = new TextEncoder();
+  const chunks = [
+    'event: meta\ndata: {"sources":[]}',
+    '\n\nevent: delta\ndata: {"delta":"第一"}\n\n',
+    'event: delta\ndata: {"delta":"轮"}\n\n',
+    'event: done\ndata: {"answer":"第一轮"}\n\n'
+  ].map((chunk) => encoder.encode(chunk));
+  window.fetch = async () => ({
+    ok: true,
+    body: {
+      getReader() {
+        let index = 0;
+        return {
+          async read() {
+            if (index >= chunks.length) return { done: true, value: undefined };
+            return { done: false, value: chunks[index++] };
+          }
+        };
+      }
+    }
+  });
+  const received = { meta: null, deltas: [], done: null };
+  const result = await window.browserHost.askAiStream('a'.repeat(64), { question: '问题' }, {
+    onMeta: (value) => { received.meta = value; },
+    onDelta: (value) => { received.deltas.push(value); },
+    onDone: (value) => { received.done = value; }
+  });
+  assert.deepEqual(JSON.parse(JSON.stringify(received.meta)), { sources: [] });
+  assert.deepEqual(received.deltas, ['第一', '轮']);
+  assert.deepEqual(JSON.parse(JSON.stringify(received.done)), { answer: '第一轮' });
+  assert.deepEqual(JSON.parse(JSON.stringify(result)), { answer: '第一轮' });
+});
+
+test('AI citations render as circled links and only cited sources appear after completion', async () => {
+  const { window, api } = await createReaderDom();
+  await api.aiApi.openAiForSelection({ text: '引用测试' });
+  api.aiApi.renderAiAnswer('本章明确说明了这个结论【1】，另一个片段没有被引用。');
+  api.aiApi.renderAiSources([
+    { chapterIndex: 0, chapterLabel: '第一章' },
+    { chapterIndex: 1, chapterLabel: '第二章' }
+  ], null, '本章明确说明了这个结论【1】，另一个片段没有被引用。');
+  const citation = window.document.querySelector('#aiAnswer [data-ai-citation="1"]');
+  assert.equal(citation?.textContent, '①');
+  assert.equal(citation?.getAttribute('href'), '#ai-source-1');
+  assert.equal(window.document.querySelectorAll('#aiSources .ai-source').length, 1);
+  assert.match(window.document.querySelector('#aiSources')?.textContent || '', /第一章/);
+  assert.doesNotMatch(window.document.querySelector('#aiSources')?.textContent || '', /第二章/);
+  assert.equal(window.document.querySelector('#aiSources')?.hidden, false);
+
+  api.aiApi.renderAiAnswer('同一章节的第二个片段支持这个结论【3】。');
+  api.aiApi.renderAiSources([
+    { chapterIndex: 0, chapterLabel: '第一章', citationIndexes: [1, 2, 3] }
+  ], null, '同一章节的第二个片段支持这个结论【3】。');
+  assert.equal(window.document.querySelector('#aiSources .ai-source-index')?.textContent, '3');
+  assert.equal(window.document.querySelector('#aiSources .ai-source-label')?.textContent, '第一章');
+  assert.ok(window.document.getElementById('ai-source-3'));
+});
+
+test('AI citations stay scoped to their own multi-turn answer card', async () => {
+  const { window, api } = await createReaderDom();
+  const createCard = () => {
+    const card = window.document.createElement('div');
+    card.className = 'ai-message-assistant ai-answer-card';
+    const answer = window.document.createElement('div');
+    answer.className = 'ai-answer';
+    const sources = window.document.createElement('div');
+    sources.className = 'ai-sources';
+    card.append(answer, sources);
+    window.document.body.appendChild(card);
+    return { card, answer, sources };
+  };
+  const first = createCard();
+  const second = createCard();
+  const firstAnswer = '第一轮引用【1】。';
+  const secondAnswer = '第二轮引用【1】。';
+  api.aiApi.renderAiAnswer(firstAnswer, first.answer);
+  api.aiApi.renderAiSources([{ chapterIndex: 0, chapterLabel: '第一章' }], first.sources, firstAnswer);
+  api.aiApi.renderAiAnswer(secondAnswer, second.answer);
+  api.aiApi.renderAiSources([{ chapterIndex: 1, chapterLabel: '第二章' }], second.sources, secondAnswer);
+  const firstCitation = first.answer.querySelector('[data-ai-citation="1"]');
+  const secondCitation = second.answer.querySelector('[data-ai-citation="1"]');
+  assert.notEqual(firstCitation?.getAttribute('href'), secondCitation?.getAttribute('href'));
+  assert.ok(first.card.querySelector('[data-ai-source-index="1"]'));
+  assert.ok(second.card.querySelector('[data-ai-source-index="1"]'));
+});
+
+test('AI source chips use a fixed number badge and label slot for one and two digit citations', async () => {
+  const { window, api } = await createReaderDom();
+  await api.aiApi.openAiForSelection({ text: '来源标签样式' });
+  const answer = '引用多个片段【1】【10】。';
+  api.aiApi.renderAiAnswer(answer);
+  api.aiApi.renderAiSources([
+    { chapterIndex: 0, chapterLabel: '⑦ 第一章' },
+    { chapterIndex: 9, chapterLabel: '⑩ 第十章', citationIndexes: [10] }
+  ], null, answer);
+  const chips = [...window.document.querySelectorAll('#aiSources .ai-source')];
+  assert.equal(chips.length, 2);
+  assert.deepEqual(chips.map((chip) => chip.querySelector('.ai-source-index')?.textContent), ['1', '10']);
+  assert.deepEqual(chips.map((chip) => chip.querySelector('.ai-source-label')?.textContent), ['第一章', '第十章']);
+  assert.equal(chips[0].getAttribute('aria-label'), '来源章节：⑦ 第一章');
+  assert.equal(chips[1].getAttribute('aria-label'), '来源章节：⑩ 第十章');
+});
+
+test('user settings persistence serializes in-flight saves and keeps the newest snapshot', async () => {
+  const { window, api } = await createReaderDom();
+  const saves = [];
+  let releaseFirstSave;
+  const firstSaveGate = new Promise((resolve) => { releaseFirstSave = resolve; });
+  let saveCount = 0;
+
+  window.browserHost = {
+    saveSettings: async (settings) => {
+      saves.push({ ...settings });
+      saveCount += 1;
+      if (saveCount === 1) await firstSaveGate;
+      return settings;
+    }
+  };
+
+  api.userStateApi.persistUserSettings();
+  const firstFlush = api.userStateApi.flushUserSettings();
+  await waitFor(() => saves.length === 1, 'first settings save did not start');
+
+  api.state.theme = 'light';
+  api.userStateApi.persistUserSettings();
+  const secondFlush = api.userStateApi.flushUserSettings();
+  releaseFirstSave();
+
+  await Promise.all([firstFlush, secondFlush]);
+  assert.equal(saves.length, 2);
+  assert.equal(saves[0].theme, 'dark');
+  assert.equal(saves[1].theme, 'light');
+});
 
 function mountDuplicateTextChapter(window) {
   const article = window.document.getElementById('article');
@@ -525,6 +811,148 @@ test('DOM Range restoration uses chapter context to distinguish identical text',
   assert.equal(ambiguous, null);
 });
 
+test('annotation styles have a backwards-compatible normalizer and rendering hook', async () => {
+  const highlightsSource = await fs.readFile(
+    path.resolve(__dirname, '../app/ui/reader/highlights.js'),
+    'utf8'
+  );
+
+  assert.match(highlightsSource, /function normalizeAnnotation\(/);
+  assert.match(highlightsSource, /data-annotation-style/);
+});
+
+test('notes panel contract exposes whole-book filters and safe list rendering', async () => {
+  const notesSource = await fs.readFile(
+    path.resolve(__dirname, '../app/ui/reader/notes-panel.js'),
+    'utf8'
+  );
+  assert.match(notesSource, /function renderNotesPanel\(/);
+  assert.match(notesSource, /data-notes-filter/);
+  assert.match(notesSource, /textContent/);
+});
+
+test('selection session opens a bounded six-action menu and rejects outside selections', async () => {
+  const { window, api } = await createReaderDom();
+  const article = window.document.getElementById('article');
+  const chapter = window.document.createElement('section');
+  chapter.className = 'epub-chapter';
+  chapter.dataset.sourcePath = 'OPS/chapter.xhtml';
+  const textNode = window.document.createTextNode('select this phrase');
+  chapter.appendChild(textNode);
+  article.appendChild(chapter);
+
+  const range = window.document.createRange();
+  range.setStart(textNode, 0);
+  range.setEnd(textNode, 17);
+  range.getBoundingClientRect = () => ({ left: 300, top: 240, bottom: 264, width: 120, height: 24 });
+  const selection = window.getSelection();
+  selection.removeAllRanges();
+  selection.addRange(range);
+
+  api.setupSelectionMenu();
+  assert.ok(api.captureSelectionSession(selection));
+  assert.equal(api.showSelectionMenuForCurrentSelection(), true);
+  const menu = window.document.getElementById('selectionMenu');
+  assert.ok(menu);
+  assert.equal(menu.hidden, false);
+  assert.equal(menu.querySelectorAll('[data-selection-action]').length, 6);
+  assert.ok(Number.parseFloat(menu.style.left) >= 8);
+  assert.ok(Number.parseFloat(menu.style.top) >= 8);
+
+  const outside = window.document.createRange();
+  const outsideText = window.document.createTextNode('outside');
+  window.document.body.appendChild(outsideText);
+  outside.selectNodeContents(outsideText);
+  selection.removeAllRanges();
+  selection.addRange(outside);
+  assert.equal(api.captureSelectionSession(selection), null);
+  api.closeSelectionMenu({ clearSelection: false });
+});
+
+test('EPUB TOC parsing preserves nested navigation depth for markdown export', async () => {
+  const { api } = await createReaderDom();
+  const nav = `
+    <nav epub:type="toc"><ol>
+      <li><a href="chapter-1.xhtml">第一章</a><ol>
+        <li><a href="chapter-1-1.xhtml">第一节</a><ol>
+          <li><a href="chapter-1-1-1.xhtml">第一小节</a></li>
+        </ol></li>
+      </ol></li>
+    </ol></nav>`;
+
+  assert.deepEqual(JSON.parse(JSON.stringify(api.parseNavToc(nav, 'OPS/nav.xhtml'))), [
+    { label: '第一章', target: 'epub-path:OPS/chapter-1.xhtml#', depth: 0 },
+    { label: '第一节', target: 'epub-path:OPS/chapter-1-1.xhtml#', depth: 1 },
+    { label: '第一小节', target: 'epub-path:OPS/chapter-1-1-1.xhtml#', depth: 2 }
+  ]);
+
+  const ncx = `
+    <navMap><navPoint><navLabel><text>第一章</text></navLabel>
+      <content src="chapter-1.xhtml"/><navPoint><navLabel><text>第一节</text></navLabel>
+        <content src="chapter-1-1.xhtml"/></navPoint>
+    </navPoint></navMap>`;
+  assert.deepEqual(JSON.parse(JSON.stringify(api.parseNcxToc(ncx, 'OPS/toc.ncx'))), [
+    { label: '第一章', target: 'epub-path:OPS/chapter-1.xhtml#', depth: 0 },
+    { label: '第一节', target: 'epub-path:OPS/chapter-1-1.xhtml#', depth: 1 }
+  ]);
+});
+
+test('markdown export groups annotations by chapter depth and quotes only marked text with thoughts', async () => {
+  const { api } = await createReaderDom();
+  api.state.currentName = '样书.epub';
+  api.state.contentType = 'epub';
+  api.state.epubMetadata = { creator: '测试作者' };
+  api.state.toc = [
+    { label: '第一章', target: 'epub-path:OPS/chapter-1.xhtml#', depth: 0 },
+    { label: '第一章·小节', target: 'epub-path:OPS/chapter-1-1.xhtml#', depth: 1 },
+    { label: '第二章', target: 'epub-path:OPS/chapter-2.xhtml#', depth: 0 }
+  ];
+
+  const markdown = api.formatHighlightsMd([
+    {
+      chapterHref: 'OPS/chapter-1.xhtml',
+      date: '2026-09-20',
+      text: '没有想法的标记',
+      thought: ''
+    },
+    {
+      chapterHref: 'OPS/chapter-1-1.xhtml',
+      date: '2026-09-21',
+      text: '有想法的标记',
+      thought: '这是普通段落形式的想法。'
+    },
+    {
+      chapterHref: 'OPS/chapter-2.xhtml',
+      text: '第二章标记',
+      note: ''
+    }
+  ]);
+
+  assert.equal(markdown, [
+    '# 《样书》标记与想法',
+    '',
+    '作者：测试作者',
+    '',
+    '---',
+    '',
+    '## 第一章',
+    '',
+    '- [2026-09-20] 没有想法的标记',
+    '',
+    '### 第一章·小节',
+    '',
+    '> [2026-09-21] 有想法的标记',
+    '',
+    '想法：这是普通段落形式的想法。',
+    '',
+    '## 第二章',
+    '',
+    '- 第二章标记',
+    '',
+    ''
+  ].join('\n'));
+});
+
 test('deleting one identical-text highlight removes only its stable ID and persists immediately', async () => {
   const { window, api } = await createReaderDom();
   mountDuplicateTextChapter(window);
@@ -572,7 +1000,7 @@ test('deleting one identical-text highlight removes only its stable ID and persi
   assert.deepEqual(persisted.highlights.map((item) => item.id), ['first-repeat']);
 });
 
-test('highlight color and note edits retain locator metadata during server persistence', async () => {
+test('highlight color and thought edits retain locator metadata during server persistence', async () => {
   const { window, api } = await createReaderDom();
   mountDuplicateTextChapter(window);
   const bookId = 'b'.repeat(64);
@@ -600,7 +1028,7 @@ test('highlight color and note edits retain locator metadata during server persi
 
   assert.equal(api.openHighlightEditor('edit-me'), true);
   window.document.getElementById('highlightEditorColor').value = 'pink';
-  window.document.getElementById('highlightEditorNote').value = '精确备注';
+  window.document.getElementById('highlightEditorThought').value = '精确想法';
   await api.saveActiveHighlightEdits();
 
   assert.equal(persisted.length, 1);
@@ -610,7 +1038,8 @@ test('highlight color and note edits retain locator metadata during server persi
   assert.equal(persisted[0].contextBefore, 'alpha ');
   assert.equal(persisted[0].contextAfter, ' middle');
   assert.equal(persisted[0].color, 'pink');
-  assert.equal(persisted[0].note, '精确备注');
+  assert.equal(persisted[0].thought, '精确想法');
+  assert.equal(persisted[0].note, '精确想法');
 });
 
 test('reader typography settings share CSS variables and generated EPUB styles', async () => {
@@ -787,7 +1216,7 @@ test('Reader Shell retains legacy DOM IDs and exposes one responsive Drawer', as
   assert.equal(document.getElementById('btnBackToLibrary').dataset.readerAction, 'backToLibrary');
   assert.equal(document.getElementById('btnSettings').dataset.readerAction, 'openSettings');
 
-  for (const id of ['btnSearch', 'btnBookmarks', 'btnNotes', 'btnAi']) {
+  for (const id of ['btnSearch', 'btnBookmarks']) {
     const control = document.getElementById(id);
     assert.ok(control);
     assert.equal(control.disabled, true);
@@ -796,8 +1225,16 @@ test('Reader Shell retains legacy DOM IDs and exposes one responsive Drawer', as
     // Icon-only: no text label, accessible name comes from aria-label.
     assert.equal(control.textContent.trim(), '');
   }
+  const aiButton = document.getElementById('btnAi');
+  assert.ok(aiButton);
+  assert.equal(aiButton.disabled, true);
+  assert.equal(aiButton.dataset.readerStatus, undefined);
+  assert.match(aiButton.getAttribute('aria-label'), /AI 阅读助手/);
+  assert.equal(aiButton.textContent.trim(), '');
   // Settings button is icon-only too.
   assert.equal(document.getElementById('btnSettings').textContent.trim(), '');
+  assert.equal(document.getElementById('btnNotes').disabled, false);
+  assert.equal(document.getElementById('btnNotes').dataset.readerStatus, undefined);
 
   const css = await fs.readFile(path.resolve(__dirname, '../app/ui/styles.css'), 'utf8');
   assert.match(css, /body\.is-epub \.reader \.article/);
@@ -827,6 +1264,29 @@ test('topbar navigation controls use icon-only SVGs without changing actions', a
   }
 });
 
+test('reader drawer separates fixed chrome from the scrollable panel viewport', async () => {
+  const { window } = await createReaderDom();
+  const document = window.document;
+  const drawer = document.getElementById('readerDrawer');
+  const header = drawer?.querySelector('.reader-drawer-header');
+  const tabs = drawer?.querySelector('.reader-drawer-tabs');
+  const viewport = drawer?.querySelector('.reader-drawer-content');
+
+  assert.ok(drawer);
+  assert.ok(header);
+  assert.ok(tabs);
+  assert.ok(viewport);
+  assert.equal(header?.parentElement, drawer);
+  assert.equal(tabs?.parentElement, drawer);
+  assert.equal(viewport?.parentElement, drawer);
+  assert.equal(viewport?.querySelector('#readerPanelToc')?.parentElement, viewport);
+  assert.equal(viewport?.querySelector('#readerPanelNotes')?.parentElement, viewport);
+
+  const css = await fs.readFile(path.resolve(__dirname, '../app/ui/styles.css'), 'utf8');
+  assert.match(css, /\.settings-panel\.reader-drawer\s*\{[\s\S]*?overflow:\s*hidden;/);
+  assert.match(css, /\.reader-drawer-content\s*\{[\s\S]*?overflow-y:\s*auto;/);
+});
+
 test('mobile continuous-scroll controls use flow chapter boundaries and a compact shared-action HUD', async () => {
   const { window, api } = await createReaderDom();
   const document = window.document;
@@ -835,7 +1295,7 @@ test('mobile continuous-scroll controls use flow chapter boundaries and a compac
   assert.equal(document.getElementById('mobileReaderChromeToggle')?.getAttribute('aria-label'), '显示阅读工具');
   assert.deepEqual(
     [...toolbar.querySelectorAll('button')].map((button) => button.dataset.readerAction),
-    ['backToLibrary', 'openToc', 'highlight', 'openSettings']
+    ['backToLibrary', 'openToc', 'openNotes', 'highlight', 'openSettings']
   );
   assert.equal(document.getElementById('btnMobilePreviousPage'), null);
   assert.equal(document.getElementById('btnMobileNextPage'), null);
@@ -912,7 +1372,7 @@ test('readerActions and readerPanels switch TOC and settings inside the single D
 
   assert.deepEqual(
     Object.keys(api.readerPanels),
-    ['toc', 'settings', 'search', 'bookmarks', 'notes', 'ai']
+    ['toc', 'settings', 'search', 'bookmarks', 'notes']
   );
   for (const action of [
     'backToLibrary',
@@ -925,11 +1385,13 @@ test('readerActions and readerPanels switch TOC and settings inside the single D
     'toggleTheme',
     'openToc',
     'openSettings',
+    'openNotes',
     'closePanel'
   ]) {
     assert.equal(typeof api.readerActions[action], 'function', `missing reader action: ${action}`);
   }
 
+  api.setupNotesPanel();
   api.setupReaderActionMapping();
   document.getElementById('btnSettings').click();
   assert.equal(document.getElementById('readerDrawer').hidden, false);
@@ -975,7 +1437,7 @@ test('Drawer keeps one active panel and restores focus to its original launcher'
   assert.equal(document.activeElement, settingsButton);
 });
 
-test('reserved reader actions stay disabled and never issue API requests', async () => {
+test('reserved reader actions stay disabled and never issue API requests while AI is EPUB-only', async () => {
   const { window, api } = await createReaderDom();
   const document = window.document;
   let requestCount = 0;
@@ -986,9 +1448,7 @@ test('reserved reader actions stay disabled and never issue API requests', async
 
   for (const [controlId, actionName, panelName] of [
     ['btnSearch', 'openSearch', 'search'],
-    ['btnBookmarks', 'openBookmarks', 'bookmarks'],
-    ['btnNotes', 'openNotes', 'notes'],
-    ['btnAi', 'openAi', 'ai']
+    ['btnBookmarks', 'openBookmarks', 'bookmarks']
   ]) {
     const control = document.getElementById(controlId);
     assert.equal(control.disabled, true);
@@ -997,8 +1457,87 @@ test('reserved reader actions stay disabled and never issue API requests', async
     assert.equal(api.readerActions[actionName](control), false);
   }
 
-  assert.equal(requestCount, 0);
+  api.state.contentType = 'epub';
+  assert.equal(typeof api.readerActions.openAi, 'function');
+  assert.equal(await api.readerActions.openAi(document.getElementById('btnAi')), true);
+
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  assert.equal(requestCount, 1);
   assert.equal(document.getElementById('readerDrawer').hidden, true);
+  assert.equal(document.getElementById('aiModal').hidden, false);
+});
+
+test('notes panel is an enabled drawer destination with whole-book filters', async () => {
+  const { window, api } = await createReaderDom();
+  const document = window.document;
+
+  assert.equal(document.getElementById('btnNotes').disabled, false);
+  api.state.contentType = 'epub';
+  assert.equal(api.readerPanels.notes.enabled(), true);
+  assert.ok(document.getElementById('drawerTabNotes'));
+  assert.equal(document.getElementById('readerPanelNotes').hidden, true);
+
+  api.state.currentBookId = 'notes-book';
+  api.state.userState.books['notes-book'] = {
+    highlights: [
+      {
+        id: 'marker-1',
+        chapterHref: 'OPS/chapter-1.xhtml',
+        text: '第一章标记',
+        kind: 'highlight',
+        style: 'marker',
+        thought: ''
+      },
+      {
+        id: 'thought-1',
+        chapterHref: 'OPS/chapter-2.xhtml',
+        text: '第二章原文',
+        kind: 'thought',
+        style: 'none',
+        thought: '这是第二章想法'
+      }
+    ]
+  };
+  api.state.toc = [
+    { label: '第一章', target: 'epub-path:OPS/chapter-1.xhtml#', depth: 0 },
+    { label: '第二章', target: 'epub-path:OPS/chapter-2.xhtml#', depth: 0 }
+  ];
+
+  api.setupNotesPanel();
+  api.setupReaderActionMapping();
+  document.getElementById('btnNotes').click();
+  assert.equal(document.getElementById('readerPanelNotes').hidden, false);
+  assert.equal(document.getElementById('readerDrawerTitle').textContent, '标记与想法');
+  assert.equal(document.querySelectorAll('#notesList [data-annotation-id]').length, 2);
+  assert.match(document.getElementById('notesPanelSummary').textContent, /1 条标记 · 1 条想法/);
+
+  document.querySelector('[data-notes-filter="thought"]').click();
+  assert.deepEqual(
+    [...document.querySelectorAll('#notesList [data-annotation-id]')].map((item) => item.dataset.annotationId),
+    ['thought-1']
+  );
+});
+
+test('notes panel keeps a row-level error when an annotation locator cannot be resolved', async () => {
+  const { window, api } = await createReaderDom();
+  const document = window.document;
+  api.state.contentType = 'epub';
+  api.state.currentBookId = 'broken-notes-book';
+  api.state.userState.books['broken-notes-book'] = {
+    highlights: [{
+      id: 'broken-note',
+      chapterHref: 'OPS/missing.xhtml',
+      text: '失效定位文本',
+      kind: 'highlight',
+      style: 'marker',
+      thought: ''
+    }]
+  };
+  api.setupNotesPanel();
+
+  assert.equal(await api.navigateToAnnotation('broken-note'), false);
+  assert.equal(document.querySelector('.notes-item-error')?.textContent, '原文位置已变化');
+  assert.equal(document.querySelector('[data-annotation-id="broken-note"]')?.dataset.notesError, 'true');
 });
 
 test('pagination geometry fixes single mode to one column and double mode to two columns', async () => {
@@ -1525,4 +2064,70 @@ test('paged CSS uses a continuous fixed-width column track instead of limiting t
   assert.match(deterministicSection, /padding-right: var\(--reader-inset-right/);
   assert.match(deterministicSection, /padding-top: var\(--reader-band-top/);
   assert.match(deterministicSection, /padding-bottom: var\(--reader-band-bottom/);
+});
+
+test('typography slider previews continuously and snaps to a common preset on commit', async () => {
+  const { window, api } = await createReaderDom();
+  const document = window.document;
+  const input = document.getElementById('settingParagraphSpacing');
+  const field = input.closest('.settings-range-field');
+  const output = document.getElementById('settingParagraphSpacingValue');
+  api.typographyApi.setupSettingsPanel();
+
+  assert.equal(output.hidden, true);
+  input.value = '1.18';
+  input.dispatchEvent(new window.Event('input', { bubbles: true }));
+  assert.equal(field.classList.contains('is-showing-value'), true);
+  assert.equal(output.hidden, false);
+  assert.equal(output.textContent, '1.18em');
+
+  input.dispatchEvent(new window.Event('change', { bubbles: true }));
+  assert.equal(input.value, '1.25');
+  assert.equal(output.textContent, '1.25em');
+  assert.match(input.getAttribute('aria-valuetext'), /1\.25em/);
+});
+
+test('typography sliders render common preset ticks and restore recommended defaults', async () => {
+  const { window, api } = await createReaderDom();
+  const document = window.document;
+  api.typographyApi.setupSettingsPanel();
+
+  for (const key of ['textIndent', 'paragraphSpacing', 'fontSize', 'lineHeight', 'pageMargin']) {
+    const input = document.querySelector(`[data-typography-slider="${key}"]`);
+    assert.equal(
+      input.closest('.settings-range-track').querySelectorAll('.settings-range-tick').length,
+      api.typographyApi.TYPOGRAPHY_SLIDER_CONFIG[key].presets.length
+    );
+  }
+
+  document.getElementById('settingTextIndent').value = '3';
+  document.getElementById('settingTextIndent').dispatchEvent(new window.Event('input', { bubbles: true }));
+  document.getElementById('settingPageMargin').value = '80';
+  document.getElementById('settingPageMargin').dispatchEvent(new window.Event('input', { bubbles: true }));
+  document.getElementById('btnResetTypography').click();
+
+  assert.equal(document.getElementById('settingFontSize').value, '100');
+  assert.equal(document.getElementById('settingLineHeight').value, '1.9');
+  assert.equal(document.getElementById('settingPageMargin').value, '40');
+  assert.equal(document.getElementById('settingTextIndent').value, '2');
+  assert.equal(document.getElementById('settingParagraphSpacing').value, '1.1');
+});
+
+test('typography slider tooltip follows a common font preset and auto-hides after interaction', async () => {
+  const { window, api } = await createReaderDom();
+  const document = window.document;
+  api.typographyApi.setupSettingsPanel();
+  const input = document.getElementById('settingFontSize');
+  const output = document.getElementById('settingFontSizeValue');
+
+  input.value = '111';
+  input.dispatchEvent(new window.Event('input', { bubbles: true }));
+  assert.equal(output.hidden, false);
+  assert.equal(output.textContent, '20px');
+  assert.match(input.getAttribute('aria-valuetext'), /20px/);
+
+  input.dispatchEvent(new window.Event('change', { bubbles: true }));
+  assert.equal(input.value, '111');
+  await new Promise((resolve) => setTimeout(resolve, 850));
+  assert.equal(output.hidden, true);
 });

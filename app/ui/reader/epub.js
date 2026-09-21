@@ -287,6 +287,13 @@ function epubPathTarget(chapterPath, fragment = '') {
   return `epub-path:${normalizeZipPath(chapterPath)}#${fragment}`;
 }
 
+function tocListDepth(markup, index) {
+  const before = String(markup || '').slice(0, index);
+  const opened = (before.match(/<(?:ol|ul)\b[^>]*>/gi) || []).length;
+  const closed = (before.match(/<\/(?:ol|ul)>/gi) || []).length;
+  return Math.max(0, opened - closed - 1);
+}
+
 function parseNavToc(navHtml, navPath) {
   const navMatch = navHtml.match(/<nav\b[^>]*(?:epub:type|type)\s*=\s*["'][^"']*\btoc\b[^"']*["'][^>]*>([\s\S]*?)<\/nav>/i)
     || navHtml.match(/<nav\b[^>]*>([\s\S]*?)<\/nav>/i);
@@ -303,7 +310,11 @@ function parseNavToc(navHtml, navPath) {
 
     const split = splitHref(rawHref);
     const chapterPath = resolveZipPath(navDir, split.path);
-    entries.push({ label, target: epubPathTarget(chapterPath, split.fragment) });
+    entries.push({
+      label,
+      target: epubPathTarget(chapterPath, split.fragment),
+      depth: tocListDepth(navMatch[1], m.index)
+    });
   }
   return entries;
 }
@@ -311,20 +322,42 @@ function parseNavToc(navHtml, navPath) {
 function parseNcxToc(ncxXml, ncxPath) {
   const ncxDir = getDirPath(ncxPath);
   const entries = [];
-  const pointRe = /<navPoint\b[^>]*>([\s\S]*?)<\/navPoint>/gi;
+  const stack = [];
+  const pointTokenRe = /<navPoint\b[^>]*>|<\/navPoint>/gi;
   let m;
-  while ((m = pointRe.exec(ncxXml)) !== null) {
-    const labelMatch = m[1].match(/<navLabel\b[^>]*>[\s\S]*?<text\b[^>]*>([\s\S]*?)<\/text>[\s\S]*?<\/navLabel>/i);
-    const contentMatch = m[1].match(/<content\b[^>]*src\s*=\s*(["'])(.*?)\1[^>]*\/?>/i);
+  while ((m = pointTokenRe.exec(ncxXml)) !== null) {
+    if (/^<navPoint\b/i.test(m[0])) {
+      stack.push({
+        start: m.index + m[0].length,
+        depth: stack.length,
+        order: m.index
+      });
+      continue;
+    }
+
+    const point = stack.pop();
+    if (!point) continue;
+    const body = ncxXml.slice(point.start, m.index);
+    const labelMatch = body.match(/<navLabel\b[^>]*>[\s\S]*?<text\b[^>]*>([\s\S]*?)<\/text>[\s\S]*?<\/navLabel>/i);
+    const contentMatch = body.match(/<content\b[^>]*src\s*=\s*(["'])(.*?)\1[^>]*\/?>/i);
     if (!labelMatch || !contentMatch) continue;
 
     const label = stripXmlTags(labelMatch[1]);
     const rawHref = decodeXmlEntities(contentMatch[2]);
     const split = splitHref(rawHref);
     const chapterPath = resolveZipPath(ncxDir, split.path);
-    if (label) entries.push({ label, target: epubPathTarget(chapterPath, split.fragment) });
+    if (label) {
+      entries.push({
+        label,
+        target: epubPathTarget(chapterPath, split.fragment),
+        depth: point.depth,
+        order: point.order
+      });
+    }
   }
-  return entries;
+  return entries
+    .sort((a, b) => a.order - b.order)
+    .map(({ order, ...entry }) => entry);
 }
 
 function base64ToArrayBuffer(base64) {
@@ -754,6 +787,39 @@ async function loadEpubChapter(archive, index) {
     href: chapter.fullPath,
     html: `<section class="epub-chapter" id="br-chapter-${index + 1}" data-source-path="${escapeHtmlAttribute(chapter.fullPath)}">${cleaned}</section>`
   };
+}
+
+// AI indexing reads only chapter text. It deliberately skips the resource
+// inlining path used by the visual renderer so indexing a whole book does not
+// decode images, fonts, CSS, or other binary assets.
+async function loadEpubChapterText(archive, index) {
+  if (!archive || !Array.isArray(archive.spine)) throw new Error('EPUB 章节档案无效');
+  if (!Number.isInteger(index) || index < 0 || index >= archive.spine.length) {
+    throw new Error(`EPUB 章节序号无效：${index}`);
+  }
+
+  const chapter = archive.spine[index];
+  const file = getZipFile(archive.zip, chapter.fullPath);
+  if (!file) throw new Error(`无法读取第 ${index + 1} 章：缺少 ${chapter.fullPath}`);
+  await yieldToBrowser();
+  const xhtml = await file.async('text');
+  const bodyMatch = xhtml.match(/<body[^>]*>([\s\S]*?)<\/body>/i);
+  const sanitizedBody = sanitizeEpubHtml(bodyMatch ? bodyMatch[1] : xhtml)
+    .replace(/<style\b[\s\S]*?<\/style>/gi, '');
+  const headings = [...sanitizedBody.matchAll(/<h[1-6]\b[^>]*>([\s\S]*?)<\/h[1-6]>/gi)]
+    .map((match) => decodeXmlEntities(match[1].replace(/<[^>]+>/g, ' ')).replace(/\s+/g, ' ').trim())
+    .filter(Boolean);
+  const body = sanitizedBody
+    .replace(/<br\s*\/?>/gi, '\n')
+    .replace(/<\/(?:p|div|h[1-6]|li|blockquote|section|tr|article)\s*>/gi, '\n');
+  const text = decodeXmlEntities(body.replace(/<[^>]+>/g, ' '))
+    .replace(/\u00a0/g, ' ')
+    .replace(/[ \t]+/g, ' ')
+    .replace(/[ \t]*\n[ \t]*/g, '\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+  await yieldToBrowser();
+  return { index, href: chapter.fullPath, text, headings };
 }
 
 /* ============================================================

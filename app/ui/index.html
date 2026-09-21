@@ -34,12 +34,12 @@
     <button class="toc-toggle" id="btnToc" type="button" hidden data-reader-action="openToc" data-reader-panel="toc" aria-controls="readerDrawer" aria-expanded="false" aria-label="打开目录" title="打开目录"></button>
     <span class="reader-toolbar-divider" aria-hidden="true"></span>
     <button class="reader-tool-btn" id="btnHighlight" type="button" hidden data-reader-action="highlight" aria-label="划线" title="划线"></button>
-    <button class="reader-tool-btn" id="btnExportHighlights" type="button" hidden data-reader-action="exportHighlights" aria-label="导出划线" title="导出划线"></button>
+    <button class="reader-tool-btn" id="btnExportHighlights" type="button" hidden data-reader-action="exportHighlights" aria-label="导出标记与想法" title="导出标记与想法"></button>
     <span class="reader-toolbar-divider" aria-hidden="true"></span>
     <button class="reader-tool-btn" id="btnSearch" type="button" data-reader-action="openSearch" data-reader-panel="search" data-reader-status="reserved" aria-controls="readerDrawer" aria-expanded="false" aria-label="搜索，预留功能，当前不可用" title="搜索，预留功能，当前不可用" disabled></button>
     <button class="reader-tool-btn" id="btnBookmarks" type="button" data-reader-action="openBookmarks" data-reader-panel="bookmarks" data-reader-status="reserved" aria-controls="readerDrawer" aria-expanded="false" aria-label="书签，预留功能，当前不可用" title="书签，预留功能，当前不可用" disabled></button>
-    <button class="reader-tool-btn" id="btnNotes" type="button" data-reader-action="openNotes" data-reader-panel="notes" data-reader-status="reserved" aria-controls="readerDrawer" aria-expanded="false" aria-label="笔记，预留功能，当前不可用" title="笔记，预留功能，当前不可用" disabled></button>
-    <button class="reader-tool-btn" id="btnAi" type="button" data-reader-action="openAi" data-reader-panel="ai" data-reader-status="reserved" aria-controls="readerDrawer" aria-expanded="false" aria-label="AI，预留功能，当前不可用" title="AI，预留功能，当前不可用" disabled></button>
+    <button class="reader-tool-btn" id="btnNotes" type="button" data-reader-action="openNotes" data-reader-panel="notes" aria-controls="readerDrawer" aria-expanded="false" aria-label="打开标记与想法" title="打开标记与想法"></button>
+    <button class="reader-tool-btn" id="btnAi" type="button" data-reader-action="openAi" data-reader-panel="ai" aria-controls="readerDrawer" aria-expanded="false" aria-label="打开 AI 阅读助手" title="打开 AI 阅读助手" disabled></button>
     <span class="reader-toolbar-divider" aria-hidden="true"></span>
     <button class="theme-btn" id="btnTheme" type="button" data-reader-action="toggleTheme" aria-label="切换浅色模式" title="切换浅色模式"></button>
     <button class="reader-tool-btn" id="btnSettings" type="button" data-reader-action="openSettings" data-reader-panel="settings" aria-controls="readerDrawer" aria-expanded="false" aria-label="打开显示设置" title="打开显示设置"></button>
@@ -53,8 +53,10 @@
     </div>
     <div class="reader-drawer-tabs" role="tablist" aria-label="阅读面板切换">
       <button type="button" id="drawerTabToc" role="tab" data-reader-panel-target="toc" aria-controls="readerPanelToc" aria-selected="false" tabindex="-1">目录</button>
+      <button type="button" id="drawerTabNotes" role="tab" data-reader-panel-target="notes" aria-controls="readerPanelNotes" aria-selected="false" tabindex="-1">标记与想法</button>
       <button type="button" id="drawerTabSettings" role="tab" data-reader-panel-target="settings" aria-controls="readerPanelSettings" aria-selected="true" tabindex="0">显示</button>
     </div>
+    <div class="reader-drawer-content" id="readerDrawerContent">
     <section class="reader-panel" id="readerPanelToc" data-reader-panel-name="toc" role="tabpanel" hidden>
       <div class="toc" id="toc">
         <div class="toc-title">目录</div>
@@ -116,32 +118,55 @@
         </div>
       </section>
       <section class="settings-group" data-settings-group="typography">
-        <h3 class="settings-group-title">排版</h3>
+        <div class="settings-group-heading">
+          <h3 class="settings-group-title">排版</h3>
+          <button type="button" class="settings-group-reset" id="btnResetTypography">恢复默认</button>
+        </div>
         <div class="settings-group-card">
-          <label class="settings-field">
-            <span>首行缩进</span>
-            <input id="settingTextIndent" type="range" min="0" max="4" step="0.5" value="2">
-            <output id="settingTextIndentValue">2 字</output>
+          <label class="settings-field settings-range-field">
+            <span class="settings-field-label">首行缩进</span>
+            <span class="settings-range-track">
+              <span class="settings-range-endpoint" data-range-end="min">无</span>
+              <input id="settingTextIndent" data-typography-slider="textIndent" data-min-label="无" data-max-label="4字" aria-label="首行缩进" type="range" min="0" max="4" step="0.5" value="2">
+              <span class="settings-range-endpoint" data-range-end="max">4字</span>
+              <output id="settingTextIndentValue" class="settings-range-tooltip" hidden aria-live="polite">2字</output>
+            </span>
           </label>
-          <label class="settings-field">
-            <span>段间距</span>
-            <input id="settingParagraphSpacing" type="range" min="0.4" max="3" step="0.1" value="1.1">
-            <output id="settingParagraphSpacingValue">1.1 em</output>
+          <label class="settings-field settings-range-field">
+            <span class="settings-field-label">段间距</span>
+            <span class="settings-range-track">
+              <span class="settings-range-endpoint" data-range-end="min">紧凑</span>
+              <input id="settingParagraphSpacing" data-typography-slider="paragraphSpacing" data-min-label="紧凑" data-max-label="宽松" aria-label="段间距" type="range" min="0.4" max="3" step="0.05" value="1.1">
+              <span class="settings-range-endpoint" data-range-end="max">宽松</span>
+              <output id="settingParagraphSpacingValue" class="settings-range-tooltip" hidden aria-live="polite">1.1em</output>
+            </span>
           </label>
-          <label class="settings-field">
-            <span>字号</span>
-            <input id="settingFontSize" type="range" min="60" max="200" step="10" value="100">
-            <output id="settingFontSizeValue">100%</output>
+          <label class="settings-field settings-range-field">
+            <span class="settings-field-label">字号</span>
+            <span class="settings-range-track">
+              <span class="settings-range-endpoint" data-range-end="min">A</span>
+              <input id="settingFontSize" data-typography-slider="fontSize" data-min-label="小" data-max-label="大" aria-label="字号" type="range" min="60" max="200" step="1" value="100">
+              <span class="settings-range-endpoint" data-range-end="max">A</span>
+              <output id="settingFontSizeValue" class="settings-range-tooltip" hidden aria-live="polite">18px</output>
+            </span>
           </label>
-          <label class="settings-field">
-            <span>行高</span>
-            <input id="settingLineHeight" type="range" min="1.2" max="2.6" step="0.1" value="1.9">
-            <output id="settingLineHeightValue">1.9</output>
+          <label class="settings-field settings-range-field">
+            <span class="settings-field-label">行高</span>
+            <span class="settings-range-track">
+              <span class="settings-range-endpoint" data-range-end="min">紧凑</span>
+              <input id="settingLineHeight" data-typography-slider="lineHeight" data-min-label="紧凑" data-max-label="宽松" aria-label="行高" type="range" min="1.2" max="2.6" step="0.05" value="1.9">
+              <span class="settings-range-endpoint" data-range-end="max">宽松</span>
+              <output id="settingLineHeightValue" class="settings-range-tooltip" hidden aria-live="polite">1.9</output>
+            </span>
           </label>
-          <label class="settings-field">
-            <span>页边距</span>
-            <input id="settingPageMargin" type="range" min="8" max="96" step="4" value="40">
-            <output id="settingPageMarginValue">40px</output>
+          <label class="settings-field settings-range-field">
+            <span class="settings-field-label">页边距</span>
+            <span class="settings-range-track">
+              <span class="settings-range-endpoint" data-range-end="min">窄</span>
+              <input id="settingPageMargin" data-typography-slider="pageMargin" data-min-label="窄" data-max-label="宽" aria-label="页边距" type="range" min="8" max="96" step="1" value="40">
+              <span class="settings-range-endpoint" data-range-end="max">宽</span>
+              <output id="settingPageMarginValue" class="settings-range-tooltip" hidden aria-live="polite">40px</output>
+            </span>
           </label>
         </div>
       </section>
@@ -150,14 +175,114 @@
     </section>
     <section class="reader-panel reader-panel-placeholder" id="readerPanelSearch" data-reader-panel-name="search" role="tabpanel" hidden><h3>搜索</h3><p>接口预留，当前版本尚未实现。</p></section>
     <section class="reader-panel reader-panel-placeholder" id="readerPanelBookmarks" data-reader-panel-name="bookmarks" role="tabpanel" hidden><h3>书签</h3><p>接口预留，当前版本尚未实现。</p></section>
-    <section class="reader-panel reader-panel-placeholder" id="readerPanelNotes" data-reader-panel-name="notes" role="tabpanel" hidden><h3>笔记</h3><p>接口预留，当前版本尚未实现。</p></section>
-    <section class="reader-panel reader-panel-placeholder" id="readerPanelAi" data-reader-panel-name="ai" role="tabpanel" hidden><h3>AI</h3><p>接口预留，当前版本尚未实现。</p></section>
+    <section class="reader-panel notes-panel" id="readerPanelNotes" data-reader-panel-name="notes" role="tabpanel" hidden aria-labelledby="drawerTabNotes">
+      <div class="notes-panel-summary" id="notesPanelSummary">0 条标记 · 0 条想法</div>
+      <div class="notes-panel-toolbar">
+        <div class="notes-panel-filters" role="tablist" aria-label="标记与想法筛选">
+          <button type="button" data-notes-filter="all" role="tab" aria-selected="true" tabindex="0">全部</button>
+          <button type="button" data-notes-filter="marker" role="tab" aria-selected="false" tabindex="-1">标记</button>
+          <button type="button" data-notes-filter="thought" role="tab" aria-selected="false" tabindex="-1">想法</button>
+        </div>
+        <label class="notes-panel-sort">
+          <span class="visually-hidden">排序方式</span>
+          <select id="notesSort" aria-label="排序方式">
+            <option value="chapter">按章节</option>
+            <option value="time">按时间</option>
+          </select>
+        </label>
+      </div>
+      <div class="notes-list" id="notesList"></div>
+      <p class="reader-panel-empty notes-empty-state" id="notesEmptyState">当前还没有标记或想法。</p>
+    </section>
+    </div>
   </aside>
+
+  <div class="ai-modal-backdrop" id="aiModalBackdrop" hidden></div>
+  <section class="ai-modal" id="aiModal" hidden role="dialog" aria-modal="true" aria-labelledby="aiModalTitle">
+    <header class="ai-modal-header">
+      <div class="ai-modal-heading">
+        <h2 id="aiModalTitle">AI 问书</h2>
+        <p>回答仅基于当前书本内容</p>
+      </div>
+      <div class="ai-modal-actions">
+        <button type="button" class="ai-icon-button ai-new-conversation" id="btnAiNewConversation" aria-label="新建对话" title="新建对话">新对话</button>
+        <button type="button" class="ai-icon-button" id="btnAiSettings" aria-label="AI 设置" title="AI 设置">设置</button>
+        <button type="button" class="ai-icon-button" id="btnCloseAiModal" aria-label="关闭 AI 问书" title="关闭">×</button>
+      </div>
+    </header>
+    <div class="ai-modal-body">
+      <section id="aiChatView" class="ai-chat-view" data-ai-view="chat">
+        <div class="ai-chat-scroll" id="aiChatScroll">
+          <div class="ai-modal-status ai-status" id="aiStatus" role="status" aria-live="polite" hidden>正在读取 AI 服务状态…</div>
+          <blockquote class="ai-selected-text" id="aiSelectedText" hidden></blockquote>
+          <div class="ai-messages" id="aiMessages" aria-live="polite">
+            <div class="ai-message ai-message-assistant ai-answer-card" id="aiInitialAnswerCard">
+              <div class="ai-answer" id="aiAnswer" hidden></div>
+              <div class="ai-sources" id="aiSources"></div>
+            </div>
+          </div>
+          <div class="ai-suggested-title">你还可以问</div>
+          <div class="ai-suggested-questions">
+            <button type="button" data-ai-prompt="这段内容的核心观点是什么？">核心观点</button>
+            <button type="button" data-ai-prompt="请解释这段内容中的关键概念。">背景解释</button>
+            <button type="button" data-ai-prompt="书中有哪些内容可以支持这段观点？">关键依据</button>
+          </div>
+        </div>
+        <div class="ai-composer">
+          <label class="ai-question-field">
+            <span class="ai-question-label">向本书提问</span>
+            <textarea id="aiQuestion" rows="2" maxlength="4000" aria-label="向本书提问" placeholder="提出问题，获取来自书籍的解答…" disabled></textarea>
+          </label>
+          <div class="ai-question-actions">
+            <span class="ai-question-hint">Enter 发送 · Shift + Enter 换行</span>
+            <button class="reader-action-button ai-send-button" type="button" id="btnAiAsk" disabled aria-label="发送问题">
+              <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M12 19V5"></path>
+                <path d="m6 11 6-6 6 6"></path>
+              </svg>
+            </button>
+          </div>
+        </div>
+      </section>
+      <section id="aiConfigView" class="ai-config-sheet" data-ai-view="config" hidden role="dialog" aria-modal="true" aria-labelledby="aiConfigTitle">
+        <button type="button" class="ai-config-sheet-backdrop" id="btnCloseAiConfigBackdrop" aria-label="关闭 AI 设置"></button>
+        <div class="ai-config-sheet-card">
+          <header class="ai-config-sheet-header">
+            <div class="ai-config-heading">
+              <h3 id="aiConfigTitle">AI 服务</h3>
+              <p>配置只保存在当前用户的服务端目录，API Key 不会回显。</p>
+            </div>
+            <button type="button" class="ai-icon-button" id="btnCloseAiConfig" aria-label="关闭 AI 设置" title="关闭">×</button>
+          </header>
+          <div class="ai-config-sheet-content">
+            <label class="ai-config-field">
+              <span>服务 URL</span>
+              <input id="aiBaseUrl" type="url" inputmode="url" autocomplete="url" placeholder="https://api.openai.com/v1">
+            </label>
+            <label class="ai-config-field">
+              <span>模型名称</span>
+              <input id="aiModel" type="text" autocomplete="off" placeholder="gpt-5.5">
+            </label>
+            <label class="ai-config-field">
+              <span>API Key</span>
+              <input id="aiApiKey" type="password" autocomplete="new-password" placeholder="留空则保留已保存的 Key">
+            </label>
+            <p class="ai-config-hint" id="aiConfigHint">支持 OpenAI 及兼容 Responses API 的服务。</p>
+          </div>
+          <footer class="ai-config-actions">
+            <button type="button" class="ai-secondary-button ai-clear-key-button" id="btnClearAiKey" aria-pressed="false" disabled>清除 Key</button>
+            <button type="button" class="ai-secondary-button" id="btnTestAiConnection">测试连接</button>
+            <button type="button" class="reader-action-button" id="btnSaveAiSettings">保存并关闭</button>
+          </footer>
+        </div>
+      </section>
+    </div>
+  </section>
 
   <section class="highlight-editor" id="highlightEditor" hidden role="dialog" aria-modal="true" aria-labelledby="highlightEditorTitle">
     <div class="highlight-editor-header">
-      <h2 id="highlightEditorTitle">划线详情</h2>
-      <button type="button" id="btnCloseHighlightEditor" aria-label="关闭划线详情">关闭</button>
+      <h2 id="highlightEditorTitle">写想法</h2>
+      <button type="button" id="btnCloseHighlightEditor" aria-label="关闭写想法">关闭</button>
     </div>
     <blockquote class="highlight-editor-text" id="highlightEditorText"></blockquote>
     <label class="highlight-editor-field">
@@ -170,11 +295,20 @@
       </select>
     </label>
     <label class="highlight-editor-field">
-      <span>备注</span>
-      <textarea id="highlightEditorNote" rows="4" maxlength="4000" placeholder="添加备注"></textarea>
+      <span>标记样式</span>
+      <select id="highlightEditorStyle">
+        <option value="none">不标记</option>
+        <option value="marker">马克笔</option>
+        <option value="wave">波浪线</option>
+        <option value="line">直线</option>
+      </select>
+    </label>
+    <label class="highlight-editor-field">
+      <span>想法</span>
+      <textarea id="highlightEditorThought" rows="4" maxlength="4000" placeholder="写下你的想法"></textarea>
     </label>
     <div class="highlight-editor-actions">
-      <button type="button" id="btnDeleteHighlight" class="danger-button">删除划线</button>
+      <button type="button" id="btnDeleteHighlight" class="danger-button">删除批注</button>
       <button type="button" id="btnSaveHighlight">保存</button>
     </div>
   </section>
@@ -183,6 +317,7 @@
   <nav class="mobile-reader-toolbar" id="mobileReaderToolbar" hidden aria-label="移动端阅读工具栏">
     <button type="button" id="btnMobileBackToLibrary" data-reader-action="backToLibrary" aria-label="返回书架">书架</button>
     <button type="button" id="btnMobileToc" data-reader-action="openToc" data-reader-panel="toc" aria-controls="readerDrawer" aria-expanded="false" aria-label="打开目录">目录</button>
+    <button type="button" id="btnMobileNotes" data-reader-action="openNotes" data-reader-panel="notes" aria-controls="readerDrawer" aria-expanded="false" aria-label="打开标记与想法">笔记</button>
     <button type="button" id="btnMobileHighlight" data-reader-action="highlight" aria-label="创建或编辑划线">划线</button>
     <button type="button" id="btnMobileSettings" data-reader-action="openSettings" data-reader-panel="settings" aria-controls="readerDrawer" aria-expanded="false" aria-label="打开显示设置">设置</button>
   </nav>
@@ -248,10 +383,13 @@
   <script src="reader/document.js?v=28"></script>
   <script src="reader/editor.js?v=28"></script>
   <script src="reader/highlights.js?v=31"></script>
+  <script src="reader/ai.js?v=1"></script>
+  <script src="reader/selection-menu.js?v=1"></script>
   <script src="reader/actions.js?v=28"></script>
+  <script src="reader/notes-panel.js?v=1"></script>
   <script src="reader/progress.js?v=31"></script>
   <script src="reader/pagination.js?v=33"></script>
-  <script src="reader/settings.js?v=28"></script>
+  <script src="reader/settings.js?v=29"></script>
   <script src="reader/navigation.js?v=28"></script>
   <script src="reader/lifecycle.js?v=31"></script>
   <script src="shell/drawer.js?v=31"></script>

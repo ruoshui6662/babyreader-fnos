@@ -6,6 +6,16 @@ const path = require('node:path');
 const { UserStorage, readJson } = require('./storage');
 const { scanLibrary } = require('./library');
 const { resolveAuthorizedPath } = require('./security');
+const { AiConfigStorage, normalizeAiSettings, publicAiConfig } = require('./ai-config');
+const { validateAiBookContext } = require('./ai-book-context');
+const { searchBook: searchAiBook } = require('./ai-fts');
+const {
+  normalizeAiConfig,
+  validateAiRequest,
+  requestOpenAiAnswer,
+  requestOpenAiStream,
+  testOpenAiConnection
+} = require('./ai-service');
 
 const APP_PREFIX = '/app/babyreader-fnos';
 const APP_ROOT = path.resolve(__dirname, '..');
@@ -17,6 +27,7 @@ const MAX_JSON_BYTES = 2 * 1024 * 1024;
 const CSP = "default-src 'self'; base-uri 'none'; object-src 'none'; frame-ancestors 'self'; form-action 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self'; media-src 'self' blob:; worker-src 'self' blob:";
 
 const storage = new UserStorage(DATA_ROOT);
+const aiConfigStorage = new AiConfigStorage(DATA_ROOT);
 const STARTED_AT = new Date().toISOString();
 let authorizedRoots = [];
 let rootDiagnostics = {
@@ -116,6 +127,57 @@ function sendJson(response, status, value) {
 
 function sendError(response, status, message) {
   sendJson(response, status, { error: String(message || 'Request failed') });
+}
+
+function aiUserError(error) {
+  const messages = {
+    AI_NOT_CONFIGURED: 'AI 服务尚未配置 API Key',
+    AI_TIMEOUT: 'AI 连接超时，请检查服务地址后重试',
+    AI_UPSTREAM_RESPONSE_TOO_LARGE: 'AI 服务返回内容过大，请稍后重试',
+    AI_UPSTREAM_FAILED: 'AI 服务拒绝了请求，请检查模型名和 API Key',
+    AI_FETCH_UNAVAILABLE: '当前运行环境不支持 AI 请求',
+    AI_EMPTY_RESPONSE: 'AI 服务未返回可读内容'
+  };
+  if (error?.code === 'AI_BOOK_CONTEXT_INVALID') return error.message;
+  if (messages[error?.code]) return messages[error.code];
+  return error?.statusCode === 400 ? String(error.message || 'AI 请求参数无效') : 'AI 服务暂时不可用，请稍后重试';
+}
+
+function sendSseHeaders(response) {
+  response.writeHead(200, {
+    'Content-Type': 'text/event-stream; charset=utf-8',
+    'Cache-Control': 'no-cache, no-store',
+    Connection: 'keep-alive',
+    'X-Accel-Buffering': 'no',
+    'X-Content-Type-Options': 'nosniff'
+  });
+}
+
+function sendSseEvent(response, event, payload) {
+  if (response.writableEnded || response.destroyed) return false;
+  response.write(`event: ${event}\ndata: ${JSON.stringify(payload)}\n\n`);
+  return true;
+}
+
+function aiSourcesFromContext(context) {
+  const sources = [];
+  for (const [index, item] of context.entries()) {
+    const key = `${item.chapterIndex ?? ''}|${item.chapterHref || ''}`;
+    const existing = sources.find((source) => source.key === key);
+    if (existing) {
+      existing.citationIndexes.push(index + 1);
+      continue;
+    }
+    sources.push({
+      key,
+      citationIndex: index + 1,
+      citationIndexes: [index + 1],
+      chapterIndex: item.chapterIndex,
+      chapterHref: item.chapterHref,
+      chapterLabel: item.chapterLabel
+    });
+  }
+  return sources.map(({ key, ...source }) => source);
 }
 
 function gatewayUser(request) {
@@ -323,6 +385,34 @@ async function handleApi(request, response, pathname) {
   if (request.method === 'GET' && pathname === `${APP_PREFIX}/api/state`) {
     return sendJson(response, 200, await storage.getState(user.uid));
   }
+  if (request.method === 'GET' && pathname === `${APP_PREFIX}/api/ai/status`) {
+    const saved = await aiConfigStorage.get(user.uid);
+    return sendJson(response, 200, publicAiConfig(saved, process.env));
+  }
+  if (request.method === 'GET' && pathname === `${APP_PREFIX}/api/ai/config`) {
+    const saved = await aiConfigStorage.get(user.uid);
+    return sendJson(response, 200, publicAiConfig(saved, process.env));
+  }
+  if (request.method === 'PUT' && pathname === `${APP_PREFIX}/api/ai/config`) {
+    const saved = await aiConfigStorage.update(user.uid, await readJsonBody(request));
+    return sendJson(response, 200, publicAiConfig(saved, process.env));
+  }
+  if (request.method === 'POST' && pathname === `${APP_PREFIX}/api/ai/test-connection`) {
+    let candidate;
+    try {
+      const saved = await aiConfigStorage.get(user.uid);
+      candidate = normalizeAiSettings(await readJsonBody(request), saved);
+    } catch (error) {
+      return sendError(response, 400, error.message);
+    }
+    try {
+      const result = await testOpenAiConnection({ env: process.env, savedConfig: candidate });
+      return sendJson(response, 200, result);
+    } catch (error) {
+      recordError(error, { operation: 'ai-test-connection', code: error.code || null });
+      return sendError(response, error.statusCode || 502, aiUserError(error));
+    }
+  }
   if (request.method === 'PUT' && pathname === `${APP_PREFIX}/api/settings`) {
     return sendJson(response, 200, await storage.updateSettings(user.uid, await readJsonBody(request)));
   }
@@ -338,6 +428,107 @@ async function handleApi(request, response, pathname) {
     await findBook(highlightsMatch[1]);
     const body = await readJsonBody(request);
     return sendJson(response, 200, await storage.replaceHighlights(user.uid, highlightsMatch[1], body.highlights));
+  }
+
+  const aiSearchMatch = pathname.match(new RegExp(`^${APP_PREFIX}/api/books/([a-f0-9]{64})/ai/search$`));
+  if (request.method === 'POST' && aiSearchMatch) {
+    const book = await findBook(aiSearchMatch[1]);
+    const body = await readJsonBody(request);
+    const question = String(body.question || '').trim();
+    const selectedText = String(body.selectedText || '').trim();
+    if (!question || question.length > 4000) return sendError(response, 400, '检索问题无效');
+    if (selectedText.length > 12000) return sendError(response, 400, '选中文本过长');
+    const chapterIndex = Number.isInteger(body.chapter?.index) ? body.chapter.index : null;
+    const result = await searchAiBook(book, DATA_ROOT, {
+      query: question,
+      selectedText,
+      currentChapterIndex: chapterIndex,
+      limit: 6
+    });
+    return sendJson(response, 200, result);
+  }
+
+  const aiStreamMatch = pathname.match(new RegExp(`^${APP_PREFIX}/api/books/([a-f0-9]{64})/ai/ask/stream$`));
+  if (request.method === 'POST' && aiStreamMatch) {
+    const book = await findBook(aiStreamMatch[1]);
+    const body = await readJsonBody(request);
+    let input;
+    try {
+      input = validateAiRequest(body);
+    } catch (error) {
+      throw Object.assign(error, { statusCode: 400 });
+    }
+    await validateAiBookContext(book, input);
+    const savedConfig = await aiConfigStorage.get(user.uid);
+    const config = publicAiConfig(savedConfig, process.env);
+    if (!config.configured) return sendError(response, 503, 'AI 服务尚未配置');
+
+    const abortController = new AbortController();
+    const abortOnClientClose = () => abortController.abort();
+    request.once('aborted', abortOnClientClose);
+    response.once('close', () => {
+      if (!response.writableEnded) abortController.abort();
+    });
+
+    sendSseHeaders(response);
+    sendSseEvent(response, 'meta', { sources: aiSourcesFromContext(input.context), model: config.model });
+    try {
+      const result = await requestOpenAiStream({
+        request: input,
+        env: process.env,
+        savedConfig,
+        signal: abortController.signal,
+        onEvent: async (event) => {
+          const delta = event?.type === 'response.output_text.delta' && typeof event.delta === 'string'
+            ? event.delta
+            : '';
+          if (delta) sendSseEvent(response, 'delta', { delta });
+        }
+      });
+      sendSseEvent(response, 'done', {
+        answer: result.answer,
+        responseId: result.responseId,
+        streamed: result.streamed,
+        sources: aiSourcesFromContext(input.context)
+      });
+    } catch (error) {
+      if (error.code !== 'AI_ABORTED' && !response.destroyed) {
+        recordError(error, { operation: 'ai-stream', bookId: aiStreamMatch[1], code: error.code || null });
+        sendSseEvent(response, 'error', {
+          code: error.code || 'AI_STREAM_FAILED',
+          message: aiUserError(error)
+        });
+      }
+    } finally {
+      request.removeListener('aborted', abortOnClientClose);
+      if (!response.writableEnded) response.end();
+    }
+    return;
+  }
+
+  const aiMatch = pathname.match(new RegExp(`^${APP_PREFIX}/api/books/([a-f0-9]{64})/ai/ask$`));
+  if (request.method === 'POST' && aiMatch) {
+    const book = await findBook(aiMatch[1]);
+    const body = await readJsonBody(request);
+    let input;
+    try {
+      input = validateAiRequest(body);
+    } catch (error) {
+      throw Object.assign(error, { statusCode: 400 });
+    }
+    await validateAiBookContext(book, input);
+    const savedConfig = await aiConfigStorage.get(user.uid);
+    const config = publicAiConfig(savedConfig, process.env);
+    if (!config.configured) return sendError(response, 503, 'AI 服务尚未配置');
+
+    try {
+      const answer = await requestOpenAiAnswer({ request: input, env: process.env, savedConfig });
+      const sources = aiSourcesFromContext(input.context);
+      return sendJson(response, 200, { answer, sources });
+    } catch (error) {
+      recordError(error, { operation: 'ai-answer', bookId: aiMatch[1], code: error.code || null });
+      return sendError(response, error.statusCode || 502, aiUserError(error));
+    }
   }
 
   const contentMatch = pathname.match(new RegExp(`^${APP_PREFIX}/api/books/([a-f0-9]{64})/content$`));

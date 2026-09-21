@@ -73,6 +73,8 @@ let _highlightSaveChain = Promise.resolve();
 let _highlightSaveRevision = 0;
 let _lastLibraryFocusBookId = null;
 let _activeHighlightEditorId = null;
+let _highlightEditorMode = 'edit';
+let _pendingThoughtSession = null;
 
 function getHighlightPill() {
   if (!_highlightPill) {
@@ -149,6 +151,8 @@ function updateTopbarState() {
   if (btnExport) {
     btnExport.hidden = !isEpub;
     btnExport.innerHTML = exportIconSvg();
+    btnExport.setAttribute('aria-label', isEpub ? '导出标记与想法' : '导出标记与想法仅支持 EPUB');
+    btnExport.setAttribute('title', isEpub ? '导出标记与想法' : '导出标记与想法仅支持 EPUB');
   }
 
   // P0: inject icon-only toolbar buttons
@@ -161,8 +165,20 @@ function updateTopbarState() {
 
   if (btnSearch) btnSearch.innerHTML = searchIconSvg();
   if (btnBookmarks) btnBookmarks.innerHTML = bookmarkIconSvg();
-  if (btnNotes) btnNotes.innerHTML = notesIconSvg();
-  if (btnAi) btnAi.innerHTML = aiIconSvg();
+  if (btnNotes) {
+    btnNotes.hidden = !isEpub;
+    btnNotes.disabled = !isEpub;
+    btnNotes.innerHTML = notesIconSvg();
+    btnNotes.setAttribute('aria-label', isEpub ? '打开标记与想法' : '标记与想法仅支持 EPUB');
+    btnNotes.setAttribute('title', isEpub ? '打开标记与想法' : '标记与想法仅支持 EPUB');
+  }
+  if (btnAi) {
+    btnAi.hidden = !isEpub;
+    btnAi.disabled = !isEpub;
+    btnAi.innerHTML = aiIconSvg();
+    btnAi.setAttribute('aria-label', isEpub ? '打开 AI 阅读助手' : 'AI 阅读助手仅支持 EPUB');
+    btnAi.setAttribute('title', isEpub ? '打开 AI 阅读助手' : 'AI 阅读助手仅支持 EPUB');
+  }
   if (btnSettings) btnSettings.innerHTML = settingsIconSvg();
   if (themeBtn) {
     const isLightOrSepia = state.theme === 'light' || state.theme === 'sepia';
@@ -181,6 +197,7 @@ function updateTopbarState() {
   const floatingToolbar = document.getElementById('readerFloatingToolbar');
   const mobileToolbar = document.getElementById('mobileReaderToolbar');
   const mobileBack = document.getElementById('btnMobileBackToLibrary');
+  const mobileNotes = document.getElementById('btnMobileNotes');
   const mobilePrevious = document.getElementById('btnMobilePreviousChapter');
   const mobileHighlight = document.getElementById('btnMobileHighlight');
   const mobileNext = document.getElementById('btnMobileNextChapter');
@@ -201,6 +218,7 @@ function updateTopbarState() {
     setMobileChromeOpen(isMobileChromeOpen());
   }
   if (mobileBack) mobileBack.disabled = !isEpub;
+  if (mobileNotes) mobileNotes.disabled = !isEpub;
   if (mobilePrevious) mobilePrevious.disabled = !isEpub || state.currentChapterIndex <= 0;
   if (mobileHighlight) mobileHighlight.disabled = !isEpub;
   if (mobileNext) {
@@ -222,7 +240,64 @@ function highlightId() {
 }
 
 function selectedTextSignature(text) {
-  return String(text || '').replace(/\s+/g, ' ').trim().slice(0, 500);
+  return String(text || '').replace(/\s+/g, ' ').trim().slice(0, 4000);
+}
+
+function createAnnotationFromSession(session, {
+  kind = 'highlight',
+  style = 'marker',
+  color = state.highlightColor,
+  thought = '',
+  note = thought
+} = {}) {
+  if (!session?.locator || !session?.range || !state.currentBookId) return null;
+
+  const now = new Date().toISOString();
+  const annotation = normalizeAnnotation({
+    id: highlightId(),
+    bookId: state.currentBookId,
+    chapterHref: session.locator.chapterHref,
+    text: selectedTextSignature(session.text),
+    contextBefore: session.locator.contextBefore,
+    contextAfter: session.locator.contextAfter,
+    domRange: session.locator,
+    kind,
+    style,
+    color,
+    thought: String(thought || note || '').slice(0, 4000),
+    createdAt: now,
+    updatedAt: now,
+    date: now.slice(0, 10)
+  });
+
+  if (annotation.style !== 'none'
+    && !drawHighlightRects(annotation.id, session.range, annotation.color, annotation.style)) {
+    return null;
+  }
+  const highlights = loadHighlights();
+  if (highlights.some((item) => item.id === annotation.id)) return null;
+  highlights.push(annotation);
+  saveHighlights(highlights);
+  if (typeof renderNotesPanel === 'function') renderNotesPanel();
+  void queueHighlightSave();
+  updateTopbarState();
+  return annotation;
+}
+
+function normalizeAnnotation(record) {
+  const annotation = record && typeof record === 'object' ? record : {};
+  const allowedKinds = ['highlight', 'thought'];
+  const allowedStyles = ['marker', 'wave', 'line', 'none'];
+  const allowedColors = ['yellow', 'green', 'blue', 'pink'];
+  return {
+    ...annotation,
+    kind: allowedKinds.includes(annotation.kind) ? annotation.kind : 'highlight',
+    style: allowedStyles.includes(annotation.style) ? annotation.style : 'marker',
+    color: allowedColors.includes(annotation.color) ? annotation.color : 'yellow',
+    thought: String(annotation.thought || annotation.note || ''),
+    // Legacy alias retained only for old clients and persisted records.
+    note: String(annotation.thought || annotation.note || '')
+  };
 }
 
 function normalizeChapterHref(value) {
@@ -393,12 +468,16 @@ function closeHighlightEditor({ restoreFocus = true } = {}) {
   const editor = document.getElementById('highlightEditor');
   if (editor) editor.hidden = true;
   _activeHighlightEditorId = null;
+  _highlightEditorMode = 'edit';
+  _pendingThoughtSession = null;
 
   if (restoreFocus) {
     const target = _highlightEditorReturnFocus;
     _highlightEditorReturnFocus = null;
     if (target?.isConnected && typeof target.focus === 'function') {
       target.focus();
+    } else if (!document.getElementById('readerPanelNotes')?.hidden) {
+      document.getElementById('drawerTabNotes')?.focus();
     } else {
       document.getElementById('btnBackToLibrary')?.focus();
     }
@@ -410,59 +489,152 @@ function openHighlightEditor(id) {
   if (!highlight) return false;
 
   const editor = document.getElementById('highlightEditor');
+  const title = document.getElementById('highlightEditorTitle');
   const text = document.getElementById('highlightEditorText');
   const color = document.getElementById('highlightEditorColor');
-  const note = document.getElementById('highlightEditorNote');
-  if (!editor || !text || !color || !note) return false;
+  const style = document.getElementById('highlightEditorStyle');
+  const thought = document.getElementById('highlightEditorThought');
+  const deleteButton = document.getElementById('btnDeleteHighlight');
+  if (!editor || !title || !text || !color || !style || !thought) return false;
 
   _highlightEditorReturnFocus = document.activeElement;
+  _highlightEditorMode = 'edit';
+  _pendingThoughtSession = null;
   _activeHighlightEditorId = id;
+  title.textContent = highlight.kind === 'thought' ? '编辑想法' : '编辑批注';
   text.textContent = highlight.text || '';
   color.value = ['yellow', 'green', 'blue', 'pink'].includes(highlight.color)
     ? highlight.color
     : 'yellow';
+  style.value = ['none', 'marker', 'wave', 'line'].includes(highlight.style)
+    ? highlight.style
+    : 'marker';
   if (typeof syncCustomSelectValue === 'function') syncCustomSelectValue(color);
-  note.value = String(highlight.note || '');
+  if (typeof syncCustomSelectValue === 'function') syncCustomSelectValue(style);
+  thought.value = String(highlight.thought || highlight.note || '');
+  if (deleteButton) deleteButton.hidden = false;
   editor.hidden = false;
-  requestAnimationFrame(() => note.focus());
+  requestAnimationFrame(() => thought.focus());
+  return true;
+}
+
+function openThoughtComposer(session) {
+  if (!session?.locator || !session?.range) return false;
+
+  const editor = document.getElementById('highlightEditor');
+  const title = document.getElementById('highlightEditorTitle');
+  const text = document.getElementById('highlightEditorText');
+  const color = document.getElementById('highlightEditorColor');
+  const style = document.getElementById('highlightEditorStyle');
+  const thought = document.getElementById('highlightEditorThought');
+  const deleteButton = document.getElementById('btnDeleteHighlight');
+  if (!editor || !title || !text || !color || !style || !thought) return false;
+
+  _highlightEditorReturnFocus = document.activeElement;
+  _highlightEditorMode = 'create-thought';
+  _pendingThoughtSession = session;
+  _activeHighlightEditorId = null;
+  title.textContent = '写想法';
+  text.textContent = session.text || '';
+  color.value = state.highlightColor;
+  style.value = 'none';
+  if (typeof syncCustomSelectValue === 'function') syncCustomSelectValue(color);
+  if (typeof syncCustomSelectValue === 'function') syncCustomSelectValue(style);
+  thought.value = '';
+  if (deleteButton) deleteButton.hidden = true;
+  editor.hidden = false;
+  requestAnimationFrame(() => thought.focus());
   return true;
 }
 
 async function saveActiveHighlightEdits() {
-  if (!_activeHighlightEditorId) return;
+  const thought = document.getElementById('highlightEditorThought');
   const color = document.getElementById('highlightEditorColor');
-  const note = document.getElementById('highlightEditorNote');
+  const style = document.getElementById('highlightEditorStyle');
+  if (!thought || !color || !style) return;
+
+  const thoughtText = String(thought.value || '').trim().slice(0, 4000);
+  const selectedColor = ['yellow', 'green', 'blue', 'pink'].includes(color.value)
+    ? color.value
+    : state.highlightColor;
+  const selectedStyle = ['none', 'marker', 'wave', 'line'].includes(style.value)
+    ? style.value
+    : 'marker';
+
+  if (_highlightEditorMode === 'create-thought') {
+    if (!thoughtText) {
+      showHighlightHint('请先写下你的想法');
+      thought.focus();
+      return;
+    }
+    const annotation = createAnnotationFromSession(_pendingThoughtSession, {
+      kind: 'thought',
+      style: selectedStyle,
+      color: selectedColor,
+      thought: thoughtText
+    });
+    if (!annotation) {
+      showHighlightHint('想法保存失败，请重新选择文本');
+      thought.focus();
+      return;
+    }
+    try {
+      // createAnnotationFromSession already queued the first persistence write;
+      // wait for that chain instead of sending the same snapshot twice.
+      await _highlightSaveChain;
+      clearReaderSelection();
+      closeHighlightEditor();
+    } catch {
+      thought.focus();
+    }
+    return;
+  }
+
+  if (!_activeHighlightEditorId) return;
   const highlights = loadHighlights();
   const index = highlights.findIndex((item) => item.id === _activeHighlightEditorId);
   if (index < 0) return closeHighlightEditor();
 
   highlights[index] = {
     ...highlights[index],
-    color: ['yellow', 'green', 'blue', 'pink'].includes(color?.value) ? color.value : 'yellow',
-    note: String(note?.value || '').slice(0, 4000)
+    color: selectedColor,
+    style: selectedStyle,
+    thought: thoughtText,
+    note: thoughtText,
+    updatedAt: new Date().toISOString()
   };
   saveHighlights(highlights);
+  if (typeof renderNotesPanel === 'function') renderNotesPanel();
   redrawDomHighlights();
   try {
     await queueHighlightSave();
     closeHighlightEditor();
   } catch {
-    note?.focus();
+    thought.focus();
+  }
+}
+
+async function deleteHighlightById(id) {
+  if (!id) return false;
+  const remaining = loadHighlights().filter((item) => item.id !== id);
+  if (remaining.length === loadHighlights().length) return false;
+  saveHighlights(remaining);
+  if (typeof renderNotesPanel === 'function') renderNotesPanel();
+  redrawDomHighlights();
+  try {
+    await queueHighlightSave();
+    return true;
+  } catch {
+    return false;
   }
 }
 
 async function deleteActiveHighlight() {
-  if (!_activeHighlightEditorId) return;
-  const id = _activeHighlightEditorId;
-  const remaining = loadHighlights().filter((item) => item.id !== id);
-  saveHighlights(remaining);
-  redrawDomHighlights();
-  try {
-    await queueHighlightSave();
-    closeHighlightEditor();
-  } catch {
-    document.getElementById('btnDeleteHighlight')?.focus();
-  }
+  if (!_activeHighlightEditorId) return false;
+  const deleted = await deleteHighlightById(_activeHighlightEditorId);
+  if (deleted) closeHighlightEditor();
+  else document.getElementById('btnDeleteHighlight')?.focus();
+  return deleted;
 }
 
 function setupHighlightEditor() {
@@ -514,13 +686,14 @@ function clearRenderedHighlights() {
   if (layer) layer.innerHTML = '';
 }
 
-function drawHighlightRects(id, range, color = 'yellow') {
+function drawHighlightRects(id, range, color = 'yellow', style = 'marker') {
   const layer = ensureHighlightLayer();
   const article = document.getElementById('article');
   if (!layer || !article || !range) return false;
 
-  const allowedColors = ['yellow', 'green', 'blue', 'pink'];
-  const normalizedColor = allowedColors.includes(color) ? color : 'yellow';
+  const annotation = normalizeAnnotation({ color, style });
+  const normalizedColor = annotation.color;
+  const normalizedStyle = annotation.style;
   const articleRect = article.getBoundingClientRect();
   // Range rects are viewport coordinates, while the highlight layer is an
   // absolutely positioned child of the scrollable article. In paged mode the
@@ -537,11 +710,29 @@ function drawHighlightRects(id, range, color = 'yellow') {
     box.className = 'br-highlight-box';
     box.dataset.highlightId = id;
     box.dataset.highlightColor = normalizedColor;
+    box.setAttribute('data-annotation-style', normalizedStyle);
     box.setAttribute('aria-label', '编辑划线');
     box.style.left = `${rect.left - articleRect.left + scrollLeft}px`;
     box.style.top = `${rect.top - articleRect.top + scrollTop}px`;
     box.style.width = `${rect.width}px`;
     box.style.height = `${rect.height}px`;
+    if (normalizedStyle === 'wave') {
+      const width = Math.max(8, Math.ceil(rect.width));
+      const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+      svg.setAttribute('class', 'br-highlight-wave');
+      svg.setAttribute('aria-hidden', 'true');
+      svg.setAttribute('viewBox', `0 0 ${width} 6`);
+      svg.setAttribute('preserveAspectRatio', 'none');
+      const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+      const points = [];
+      for (let x = 0; x <= width; x += 4) {
+        const y = 3 + (Math.floor(x / 4) % 2 === 0 ? -1.3 : 1.3);
+        points.push(`${x},${y}`);
+      }
+      path.setAttribute('d', `M ${points.join(' L ')}`);
+      svg.appendChild(path);
+      box.appendChild(svg);
+    }
     box.addEventListener('click', (event) => {
       event.preventDefault();
       event.stopPropagation();
@@ -590,12 +781,17 @@ function saveDomHighlight(id, text, range) {
     contextBefore: locator.contextBefore,
     contextAfter: locator.contextAfter,
     domRange: locator,
+    kind: 'highlight',
+    style: 'marker',
     color: state.highlightColor,
+    thought: '',
     note: '',
     createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
     date: new Date().toISOString().slice(0, 10)
   });
   saveHighlights(highlights);
+  if (typeof renderNotesPanel === 'function') renderNotesPanel();
   void queueHighlightSave();
   updateTopbarState();
   return true;
@@ -662,6 +858,8 @@ function setupDomHighlightInteraction() {
 
   const readSelection = () => {
     if (state.contentType !== 'epub') return;
+    if (typeof showSelectionMenuForCurrentSelection === 'function'
+      && showSelectionMenuForCurrentSelection()) return;
     const sel = window.getSelection?.();
     if (!sel || sel.isCollapsed || sel.rangeCount === 0) return;
     const range = sel.getRangeAt(0);
@@ -697,7 +895,10 @@ function redrawDomHighlights() {
     );
     const range = rangeFromHighlight(highlight)
       || (!hasPreciseLocator ? findRangeForHighlightText(highlight.text) : null);
-    if (range) drawHighlightRects(highlight.id, range, highlight.color);
+    const annotation = normalizeAnnotation(highlight);
+    if (range && annotation.style !== 'none') {
+      drawHighlightRects(annotation.id, range, annotation.color, annotation.style);
+    }
   }
 }
 

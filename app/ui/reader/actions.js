@@ -50,18 +50,90 @@ function saveFileBrowser() {
 /* ============================================================
    Highlight Export & Auto-save
    ============================================================ */
+function exportChapterPathKey(value) {
+  let path = String(value || '').trim();
+  if (path.startsWith('epub-path:')) path = path.slice('epub-path:'.length);
+  path = path.split('#', 1)[0].split('?', 1)[0];
+  try {
+    path = decodeURIComponent(path);
+  } catch {
+    // Keep the raw path when an EPUB contains a malformed escape sequence.
+  }
+  return path.replace(/\\/g, '/').replace(/^\.\/+/, '').replace(/\/+/g, '/').toLocaleLowerCase();
+}
+
+function exportChapterLabelFromPath(path) {
+  if (!path) return '未定位章节';
+  const name = path.split('/').pop() || path;
+  return name.replace(/\.(?:x?html?|xml)$/i, '') || '未命名章节';
+}
+
+function exportChapterInfo() {
+  const byPath = new Map();
+  for (const [order, item] of (Array.isArray(state.toc) ? state.toc : []).entries()) {
+    const key = exportChapterPathKey(item?.target);
+    if (!key || byPath.has(key)) continue;
+    byPath.set(key, {
+      label: String(item.label || '').trim() || exportChapterLabelFromPath(key),
+      depth: Math.max(0, Number(item.depth) || 0),
+      order
+    });
+  }
+  return byPath;
+}
+
+function exportAnnotationChapterKey(annotation) {
+  return exportChapterPathKey(
+    annotation?.chapterHref
+      || annotation?.domRange?.chapterHref
+      || annotation?.locatorData?.chapterHref
+  );
+}
+
+function formatExportAnnotation(annotation) {
+  const text = String(annotation.text || '').trim();
+  if (!text) return '';
+  const datePrefix = annotation.date ? `[${annotation.date}] ` : '';
+  const thought = String(annotation.thought || annotation.note || '').trim();
+  if (!thought) return `- ${datePrefix}${text}\n\n`;
+
+  const quotedText = text.split(/\r?\n/).map((line) => `> ${datePrefix}${line}`).join('\n');
+  return `${quotedText}\n\n想法：${thought}\n\n`;
+}
+
 function formatHighlightsMd(highlights) {
   const bookName = (state.currentName || '未知书籍').replace(/\.epub$/i, '');
   const author = state.epubMetadata?.creator || '';
+  const chapterInfo = exportChapterInfo();
+  const groups = new Map();
+  let fallbackOrder = chapterInfo.size;
 
-  let md = `# 《${bookName}》划线笔记\n\n`;
+  let md = `# 《${bookName}》标记与想法\n\n`;
   if (author) md += `作者：${author}\n\n`;
   md += `---\n\n`;
 
-  for (const h of highlights) {
-    if (h.text) {
-      md += h.date ? `- [${h.date}] ${h.text}\n\n` : `- ${h.text}\n\n`;
-      if (h.note) md += `  > 备注：${h.note}\n\n`;
+  for (const annotation of highlights || []) {
+    if (!annotation?.text) continue;
+    const key = exportAnnotationChapterKey(annotation) || '__unlocated__';
+    if (!groups.has(key)) {
+      const known = chapterInfo.get(key);
+      groups.set(key, {
+        key,
+        label: known?.label || '未定位章节',
+        depth: known?.depth || 0,
+        order: known?.order ?? fallbackOrder++,
+        annotations: []
+      });
+    }
+    groups.get(key).annotations.push(annotation);
+  }
+
+  const orderedGroups = [...groups.values()].sort((a, b) => a.order - b.order);
+  for (const group of orderedGroups) {
+    const headingLevel = Math.min(6, Math.max(2, group.depth + 2));
+    md += `${'#'.repeat(headingLevel)} ${group.label}\n\n`;
+    for (const annotation of group.annotations) {
+      md += formatExportAnnotation(annotation);
     }
   }
   return md;
@@ -82,11 +154,16 @@ function serializeHighlightForServer(highlight) {
     text: selectedTextSignature(highlight.text),
     contextBefore: String(highlight.contextBefore || domRange?.contextBefore || '').slice(-240),
     contextAfter: String(highlight.contextAfter || domRange?.contextAfter || '').slice(0, 240),
-    note: String(highlight.note || '').slice(0, 4000),
+    thought: String(highlight.thought || highlight.note || '').slice(0, 4000),
+    // Mirror the canonical thought into the legacy field during migration.
+    note: String(highlight.thought || highlight.note || '').slice(0, 4000),
+    kind: ['highlight', 'thought'].includes(highlight.kind) ? highlight.kind : 'highlight',
+    style: ['marker', 'wave', 'line', 'none'].includes(highlight.style) ? highlight.style : 'marker',
     color: ['yellow', 'green', 'blue', 'pink'].includes(highlight.color)
       ? highlight.color
       : state.highlightColor,
-    createdAt: highlight.createdAt || highlight.date || new Date().toISOString()
+    createdAt: highlight.createdAt || highlight.date || new Date().toISOString(),
+    updatedAt: highlight.updatedAt || highlight.createdAt || highlight.date || new Date().toISOString()
   };
 }
 
@@ -100,10 +177,10 @@ function queueHighlightSave() {
     // Persist the captured book snapshot even if navigation switched books or
     // returned to the library while this serialized write was pending.
     await window.browserHost.saveHighlights(highlights, bookId);
-    if (revision === _highlightSaveRevision) showHighlightHint('划线已保存');
+    if (revision === _highlightSaveRevision) showHighlightHint('批注已保存');
   }).catch((error) => {
     console.error('保存划线失败', { bookId, revision, error });
-    showHighlightHint(`划线保存失败：${error.message || '未知错误'}`);
+    showHighlightHint(`批注保存失败：${error.message || '未知错误'}`);
     throw error;
   });
   return _highlightSaveChain;

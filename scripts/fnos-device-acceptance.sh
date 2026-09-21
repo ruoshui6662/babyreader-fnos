@@ -3,15 +3,17 @@
 set -u
 
 APP_NAME="${BABYREADER_APP_NAME:-babyreader-fnos}"
+PKG_ROOT="${TRIM_PKGROOT:-/var/apps/$APP_NAME}"
 APP_DEST="${TRIM_APPDEST:-/var/apps/$APP_NAME/target}"
 PKG_VAR="${TRIM_PKGVAR:-/var/apps/$APP_NAME/var}"
 PKG_ETC="${TRIM_PKGETC:-/var/apps/$APP_NAME/etc}"
 PKG_TMP="${TRIM_PKGTMP:-/var/apps/$APP_NAME/tmp}"
 SOCKET_FILE="$APP_DEST/app.sock"
-MAIN="$APP_DEST/cmd/main"
+MAIN="${TRIM_MAIN:-$PKG_ROOT/cmd/main}"
 NODE_BIN="/var/apps/nodejs_v22/target/bin/node"
 PACKAGE_USER="${BABYREADER_PACKAGE_USER:-babyreader_fnos}"
 FAILURES=0
+LIFECYCLE_STATUS_DEFERRED=0
 
 pass() {
   printf 'PASS | %s\n' "$*"
@@ -101,6 +103,60 @@ compare_snapshots() {
   [ "$FAILURES" -eq 0 ]
 }
 
+check_fts_contract() {
+  if [ ! -x "$NODE_BIN" ]; then
+    skip "Node.js 22 runtime unavailable; SQLite/FTS5 contract not checked"
+    return 0
+  fi
+
+  FTS_RESULT="$(AI_FTS_INDEX_ROOT="$PKG_VAR/ai-index" "$NODE_BIN" -e '
+    const fs = require("node:fs");
+    const path = require("node:path");
+    const { DatabaseSync } = require("node:sqlite");
+    const root = process.env.AI_FTS_INDEX_ROOT;
+    const db = new DatabaseSync(":memory:");
+    db.exec("CREATE VIRTUAL TABLE ai_fts_capability_check USING fts5(value);");
+    db.close();
+    const result = { fts5: true, indexCount: 0, directoryPermission: null, badPermissions: [], temporaryFiles: [], invalidIndexes: [] };
+    if (fs.existsSync(root)) {
+      result.directoryPermission = (fs.statSync(root).mode & 0o777).toString(8);
+      for (const entry of fs.readdirSync(root, { withFileTypes: true })) {
+        if (entry.name.endsWith(".tmp")) result.temporaryFiles.push(entry.name);
+        if (!entry.isFile() || !entry.name.endsWith(".sqlite")) continue;
+        result.indexCount += 1;
+        const file = path.join(root, entry.name);
+        const mode = fs.statSync(file).mode & 0o777;
+        if (mode !== 0o600) result.badPermissions.push(`${entry.name}:${mode.toString(8)}`);
+        let index;
+        try {
+          index = new DatabaseSync(file);
+          const tables = index.prepare("SELECT name FROM sqlite_master WHERE type = ? AND name IN (?, ?, ?)").all("table", "ai_meta", "ai_chunk_text", "ai_chunks");
+          if (tables.length !== 3) result.invalidIndexes.push(entry.name);
+        } catch {
+          result.invalidIndexes.push(entry.name);
+        } finally {
+          index?.close();
+        }
+      }
+    }
+    if (result.directoryPermission && result.directoryPermission !== "700"
+      || result.badPermissions.length || result.temporaryFiles.length || result.invalidIndexes.length) process.exitCode = 1;
+    console.log(JSON.stringify(result));
+  ' 2>/dev/null)"
+  FTS_STATUS=$?
+  if [ "$FTS_STATUS" -eq 0 ]; then
+    pass "SQLite FTS5 runtime and index contract passed"
+    info "fts=$(printf '%s' "$FTS_RESULT")"
+    if printf '%s' "$FTS_RESULT" | grep -q '"indexCount":0'; then
+      skip "no SQLite book index exists yet; run one AI question before checking index permissions"
+    else
+      pass "existing SQLite indexes use 600 permissions and contain required tables"
+    fi
+  else
+    fail "SQLite FTS5 runtime or existing index contract failed: ${FTS_RESULT:-no output}"
+  fi
+}
+
 check_device() {
   ARCH="$(uname -m)"
   info "architecture=$ARCH"
@@ -124,11 +180,20 @@ check_device() {
   fi
 
   if [ -x "$MAIN" ]; then
-    if "$MAIN" status; then
+    if TRIM_APPDEST="$APP_DEST" \
+      TRIM_PKGVAR="$PKG_VAR" \
+      TRIM_PKGETC="$PKG_ETC" \
+      TRIM_PKGTMP="$PKG_TMP" \
+      "$MAIN" status; then
       pass "cmd/main status reports running"
     else
       STATUS=$?
-      fail "cmd/main status failed with code $STATUS"
+      if [ "$STATUS" -eq 3 ] && [ -S "$SOCKET_FILE" ]; then
+        LIFECYCLE_STATUS_DEFERRED=1
+        skip "cmd/main status returned 3 while the target socket exists; verifying service health"
+      else
+        fail "cmd/main status failed with code $STATUS"
+      fi
     fi
   else
     fail "lifecycle entry missing or not executable: $MAIN"
@@ -150,6 +215,9 @@ check_device() {
     if [ "$HEALTH_CODE" = "200" ]; then
       pass "direct Unix-socket health endpoint returned 200"
       info "health=$(cat "$HEALTH_BODY" 2>/dev/null || true)"
+      if [ "$LIFECYCLE_STATUS_DEFERRED" -eq 1 ]; then
+        pass "service is running under fnOS supervisor; socket health reconciled cmd/main status 3"
+      fi
     else
       fail "direct Unix-socket health endpoint returned ${HEALTH_CODE:-no response}"
     fi
@@ -222,6 +290,8 @@ check_device() {
   else
     skip "Gateway identity injection requires an authenticated fnOS session"
   fi
+
+  check_fts_contract
 
   if [ "$FAILURES" -eq 0 ]; then
     printf 'RESULT | PASS\n'

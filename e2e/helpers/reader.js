@@ -142,7 +142,7 @@ async function waitForProgressSave(page, requestPredicate = () => true) {
 
 // Select the first occurrence of `text` inside #article via a real DOM Range,
 // then dispatch pointerup/mouseup so setupDomHighlightInteraction's
-// readSelection() runs and reveals the highlight pill (same as a real mouse).
+// readSelection() runs and reveals the six-action selection menu.
 async function selectArticleText(page, text) {
   const found = await page.evaluate((target) => {
     const article = document.querySelector('#article');
@@ -206,19 +206,17 @@ async function selectNthArticleText(page, text, occurrence) {
   return true;
 }
 
-// Create a highlight from the currently selected text by clicking the pill.
+// Create a highlight from the currently selected text by clicking the marker action.
 // Waits for the /api/books/:id/highlights PUT response and returns { before, after }.
 async function commitSelectionHighlight(page) {
-  // Wait for the highlight pill to be visible after selection + pointerup events
-  await expect(page.locator('.highlight-pill.visible')).toBeVisible({ timeout: 5000 });
+  // Wait for the selection menu to be visible after selection + pointerup events
+  await expect(page.locator('#selectionMenu')).toBeVisible({ timeout: 5000 });
   const before = await readHighlightState(page);
   
-  // Click the pill to open editor and trigger save
-  await waitForHighlightsSave(page);
-  await page.locator('.highlight-pill').click();
-  // Note: click opens editor; use btnSaveHighlight in editor to save if needed
-  // For now, assume click triggers immediate save through runPendingHighlight() -> applyDomHighlightFromRange -> saveActiveHighlightEdits
-  
+  // Click marker to render and persist the annotation
+  const save = waitForHighlightsSave(page);
+  await page.locator('#selectionMenu [data-selection-action="marker"]').click();
+  await save;
   const after = await readHighlightState(page);
   return { before, after };
 }

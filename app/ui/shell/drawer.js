@@ -25,14 +25,9 @@ const readerPanels = Object.freeze({
   },
   notes: {
     id: 'readerPanelNotes',
-    title: '笔记',
-    enabled: () => false
+    title: '标记与想法',
+    enabled: () => state.contentType === 'epub'
   },
-  ai: {
-    id: 'readerPanelAi',
-    title: 'AI',
-    enabled: () => false
-  }
 });
 
 let activeReaderPanel = null;
@@ -94,6 +89,7 @@ function openReaderPanel(panelName, trigger = document.activeElement) {
   });
   if (title) title.textContent = panelConfig.title;
   if (panelName === 'settings') syncSettingsPanel();
+  if (panelName === 'notes' && typeof renderNotesPanel === 'function') renderNotesPanel();
   drawer.hidden = false;
   if (backdrop) backdrop.hidden = false;
   document.body.classList.add('reader-drawer-open');
@@ -129,7 +125,7 @@ const readerActions = Object.freeze({
   openSearch: (trigger) => openReaderPanel('search', trigger),
   openBookmarks: (trigger) => openReaderPanel('bookmarks', trigger),
   openNotes: (trigger) => openReaderPanel('notes', trigger),
-  openAi: (trigger) => openReaderPanel('ai', trigger),
+  openAi: (trigger) => typeof openAiModal === 'function' ? openAiModal(null, trigger) : false,
   closePanel: () => closeReaderPanel()
 });
 

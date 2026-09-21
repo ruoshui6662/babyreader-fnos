@@ -79,18 +79,38 @@ function applyUserState(userState) {
   updateTopbarState();
 }
 
-const persistUserSettings = debounce(() => {
-  return window.browserHost.saveSettings(currentUserSettings())
-    .then((settings) => {
-      state.userState.settings = { ...state.userState.settings, ...settings };
-      return settings;
-    })
-    .catch((error) => {
+let settingsSaveInFlight = null;
+let settingsSaveQueued = false;
+
+async function saveLatestUserSettings() {
+  settingsSaveQueued = true;
+  if (settingsSaveInFlight) return settingsSaveInFlight;
+
+  settingsSaveInFlight = (async () => {
+    try {
+      while (settingsSaveQueued) {
+        settingsSaveQueued = false;
+        const settings = await window.browserHost.saveSettings(currentUserSettings());
+        state.userState.settings = { ...state.userState.settings, ...settings };
+      }
+    } catch (error) {
       console.error('保存用户设置失败', error);
       showHighlightHint('设置保存失败');
       throw error;
-    });
-}, 250);
+    } finally {
+      settingsSaveInFlight = null;
+    }
+  })();
+
+  return settingsSaveInFlight;
+}
+
+const persistUserSettings = debounce(() => saveLatestUserSettings(), 250);
+
+async function flushUserSettings() {
+  await persistUserSettings.flush();
+  if (settingsSaveInFlight) await settingsSaveInFlight;
+}
 
 function currentServerBookState() {
   if (!state.currentBookId) return {};
@@ -199,8 +219,12 @@ function loadHighlights() {
       cfi: highlight.cfi || (locator.startsWith('epubcfi(') ? locator : undefined),
       chapterHref: normalizeChapterHref(highlight.chapterHref || domRange?.chapterHref || ''),
       color: ['yellow', 'green', 'blue', 'pink'].includes(highlight.color) ? highlight.color : 'yellow',
-      note: String(highlight.note || ''),
-      date: highlight.date || String(highlight.createdAt || '').slice(0, 10)
+      kind: ['highlight', 'thought'].includes(highlight.kind) ? highlight.kind : 'highlight',
+      style: ['marker', 'wave', 'line', 'none'].includes(highlight.style) ? highlight.style : 'marker',
+      thought: String(highlight.thought || highlight.note || ''),
+      note: String(highlight.thought || highlight.note || ''),
+      date: highlight.date || String(highlight.createdAt || '').slice(0, 10),
+      updatedAt: String(highlight.updatedAt || highlight.createdAt || '')
     };
   });
 }

@@ -53,6 +53,7 @@ test('loads split UI modules in Chromium and opens a real library book', async (
     '/app/babyreader-fnos/reader/document.js',
     '/app/babyreader-fnos/reader/editor.js',
     '/app/babyreader-fnos/reader/highlights.js',
+    '/app/babyreader-fnos/reader/ai.js',
     '/app/babyreader-fnos/reader/actions.js',
     '/app/babyreader-fnos/reader/progress.js',
     '/app/babyreader-fnos/reader/pagination.js',
@@ -66,8 +67,9 @@ test('loads split UI modules in Chromium and opens a real library book', async (
     expect(loadedScripts).toContain(modulePath);
   }
 
-  await expect(page.locator('script[src*="reader/settings.js?v=28"]')).toHaveCount(1);
+  await expect(page.locator('script[src*="reader/settings.js?v=29"]')).toHaveCount(1);
   await expect(page.locator('script[src*="reader/highlights.js?v=31"]')).toHaveCount(1);
+  await expect(page.locator('script[src*="reader/ai.js?v=1"]')).toHaveCount(1);
   await expect(page.locator('script[src*="shell/drawer.js?v=31"]')).toHaveCount(1);
 
   expect(pageErrors).toEqual([]);
@@ -148,6 +150,27 @@ test('switching EPUB to continuous scroll mounts chapter HTML instead of object 
 
   await expect(page.locator('#article .epub-chapter')).toHaveCount(1);
   await expect(page.locator('#article')).not.toContainText('[object Object]');
+});
+
+test('EPUB continuous and paged modes keep the same reading surface color', async ({ page }) => {
+  await openEpubFixture(page);
+  if (await page.locator('#readerDrawer').isVisible()) {
+    await page.locator('#btnCloseSettings').click();
+  }
+
+  for (const theme of ['dark', 'light', 'sepia']) {
+    await page.evaluate((nextTheme) => {
+      applyTheme(nextTheme, false);
+      setReadingMode('scroll', { persist: false, preserveLocator: false });
+    }, theme);
+    await expect(page.locator('body')).toHaveClass(/continuous-scroll/);
+    const continuousColor = await page.locator('#article').evaluate((element) => getComputedStyle(element).backgroundColor);
+
+    await page.evaluate(() => setReadingMode('double', { persist: false, preserveLocator: false }));
+    await expect(page.locator('body')).toHaveClass(/double-page-reading/);
+    const pagedColor = await page.locator('#article').evaluate((element) => getComputedStyle(element).backgroundColor);
+    expect(pagedColor, `theme ${theme} should keep one reading surface`).toBe(continuousColor);
+  }
 });
 
 test('continuous scroll chapter boundary renders dedicated previous and next controls', async ({ page }) => {
@@ -470,7 +493,7 @@ test('custom select choices keep the native value and change event contract', as
 
 test('custom select menus stay hidden until a trigger is activated', async ({ page }) => {
   await page.goto(APP_PATH);
-  await expect(page.locator('.custom-select-menu')).toHaveCount(4);
+  await expect(page.locator('.custom-select-menu')).toHaveCount(5);
   await expect(page.locator('[data-custom-select-for="highlightEditorColor"]')).toHaveCount(0);
   await expect(page.locator('.custom-select-menu:not([hidden])')).toHaveCount(0);
 
@@ -623,6 +646,472 @@ test('reader shell has unique IDs, reserved actions disabled, and restores Drawe
   await page.keyboard.press('Escape');
   await expect(page.locator('#readerDrawer')).toBeHidden();
   await expect(settingsButton).toBeFocused();
+});
+
+test('selected text opens book-grounded AI panel and sends bounded retrieval context', async ({ page }) => {
+  await openEpubFixture(page);
+  let askPayload = null;
+  await page.route('**/app/babyreader-fnos/api/ai/status', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ configured: true, provider: 'openai-compatible', model: 'test-model', retrieval: 'local-lexical-rag' })
+    });
+  });
+  await page.route('**/app/babyreader-fnos/api/books/*/ai/ask/stream', async (route) => {
+    askPayload = route.request().postDataJSON();
+    await route.fulfill({
+      status: 200,
+      contentType: 'text/event-stream',
+      body: [
+        'event: meta',
+        'data: {"sources":[{"chapterIndex":0,"chapterHref":"OEBPS/chapter1.xhtml","chapterLabel":"⑦ 第一章"},{"chapterIndex":1,"chapterHref":"OEBPS/chapter2.xhtml","chapterLabel":"⑧ 第二章"}]}',
+        '',
+        'event: delta',
+        'data: {"delta":"这段内容说明了本章的 **核心观点**【1】。\\n\\n- 依据一\\n- 依据二\\n\\n<script>不应执行</script>"}',
+        '',
+        'event: done',
+        'data: {"answer":"这段内容说明了本章的 **核心观点**【1】。\\n\\n- 依据一\\n- 依据二\\n\\n<script>不应执行</script>","sources":[{"chapterIndex":0,"chapterHref":"OEBPS/chapter1.xhtml","chapterLabel":"⑦ 第一章"},{"chapterIndex":1,"chapterHref":"OEBPS/chapter2.xhtml","chapterLabel":"⑧ 第二章"}]}',
+        ''
+      ].join('\n')
+    });
+  });
+
+  const selected = await require('./helpers/reader').selectArticleText(page, 'E2E EPUB Chapter 1');
+  expect(selected).toBe(true);
+  await expect(page.locator('#selectionMenu')).toBeVisible();
+  await page.locator('#selectionMenu [data-selection-action="ai"]').click();
+  await expect(page.locator('#aiModal')).toBeVisible();
+  await expect(page.locator('#aiSelectedText')).toContainText('E2E EPUB Chapter 1');
+  await page.locator('#aiQuestion').fill('这一段的核心观点是什么？');
+  await page.locator('#btnAiAsk').click();
+  await expect(page.locator('#aiAnswer')).toContainText('这段内容说明了本章的');
+  await expect(page.locator('#aiAnswer strong')).toContainText('核心观点');
+  await expect(page.locator('#aiAnswer li')).toHaveCount(2);
+  await expect(page.locator('#aiAnswer script')).toHaveCount(0);
+  await expect(page.locator('#aiSources')).toContainText('第一章');
+  await expect(page.locator('#aiAnswer [data-ai-citation="1"]')).toHaveText('①');
+  await expect(page.locator('#aiSources .ai-source')).toHaveCount(1);
+  await expect(page.locator('#aiSources')).not.toContainText('第二章');
+  await expect(page.locator('#aiSources')).not.toContainText('⑦');
+  const sourceIndexStyle = await page.locator('#aiSources .ai-source-index').evaluate((element) => {
+    const style = getComputedStyle(element);
+    const rect = element.getBoundingClientRect();
+    return { fontSize: style.fontSize, width: rect.width, height: rect.height };
+  });
+  expect(sourceIndexStyle.fontSize).toBe('9px');
+  expect(sourceIndexStyle.width).toBe(16);
+  expect(sourceIndexStyle.height).toBe(16);
+  expect(askPayload).toEqual(expect.objectContaining({ question: '这一段的核心观点是什么？' }));
+  expect(Array.isArray(askPayload.context)).toBe(true);
+  expect(askPayload.context.length).toBeLessThanOrEqual(6);
+  expect(askPayload.context.reduce((total, item) => total + item.text.length, 0)).toBeLessThanOrEqual(7200);
+});
+
+test('AI panel keeps a temporary multi-turn transcript and sends completed history', async ({ page }) => {
+  await openEpubFixture(page);
+  if (await page.locator('#readerDrawer').isVisible()) {
+    await page.locator('#btnCloseSettings').click();
+    await expect(page.locator('#readerDrawer')).toBeHidden();
+  }
+  await page.route('**/app/babyreader-fnos/api/ai/status', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ configured: true, provider: 'openai-compatible', model: 'test-model', retrieval: 'local-lexical-rag' })
+    });
+  });
+  const payloads = [];
+  await page.route('**/app/babyreader-fnos/api/books/*/ai/ask/stream', async (route) => {
+    payloads.push(route.request().postDataJSON());
+    const answer = payloads.length === 1 ? '第一轮回答' : '第二轮回答';
+    await route.fulfill({
+      status: 200,
+      contentType: 'text/event-stream',
+      body: [
+        'event: delta',
+        `data: {"delta":"${answer}"}`,
+        '',
+        'event: done',
+        `data: {"answer":"${answer}","sources":[]}`,
+        ''
+      ].join('\n')
+    });
+  });
+
+  await page.locator('#btnAi').click();
+  await page.locator('#aiQuestion').fill('第一轮问题');
+  await page.locator('#btnAiAsk').click();
+  await expect(page.locator('#aiAnswer')).toContainText('第一轮回答');
+
+  await page.locator('#aiQuestion').fill('第二轮问题');
+  await page.locator('#btnAiAsk').click();
+  await expect(page.locator('.ai-message-assistant').nth(1)).toContainText('第二轮回答');
+  await expect(page.locator('.ai-message-user')).toHaveCount(2);
+  expect(payloads).toHaveLength(2);
+  expect(payloads[1].history).toEqual([
+    { role: 'user', content: '第一轮问题' },
+    { role: 'assistant', content: '第一轮回答' }
+  ]);
+});
+
+test('AI streaming exposes a stop state and cancels the active request', async ({ page }) => {
+  await openEpubFixture(page);
+  if (await page.locator('#readerDrawer').isVisible()) {
+    await page.locator('#btnCloseSettings').click();
+    await expect(page.locator('#readerDrawer')).toBeHidden();
+  }
+  await page.route('**/app/babyreader-fnos/api/ai/status', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ configured: true, provider: 'openai-compatible', model: 'test-model', retrieval: 'local-lexical-rag' })
+    });
+  });
+  let releaseStream;
+  const streamGate = new Promise((resolve) => { releaseStream = resolve; });
+  await page.route('**/app/babyreader-fnos/api/books/*/ai/ask/stream', async (route) => {
+    await streamGate;
+    await route.fulfill({
+      status: 200,
+      contentType: 'text/event-stream',
+      body: 'event: done\ndata: {"answer":"不应在停止后显示","sources":[]}\n\n'
+    });
+  });
+
+  await page.locator('#btnAi').click();
+  await page.locator('#aiQuestion').fill('停止测试');
+  await page.locator('#btnAiAsk').click();
+  await expect(page.locator('#btnAiAsk')).toHaveAttribute('aria-label', '停止回答');
+  const stopGlyph = await page.locator('#btnAiAsk .ai-stop-glyph').evaluate((element) => {
+    const style = getComputedStyle(element);
+    const rect = element.getBoundingClientRect();
+    return { display: style.display, width: rect.width, height: rect.height };
+  });
+  expect(stopGlyph.display).toBe('block');
+  expect(stopGlyph.width).toBeGreaterThanOrEqual(8);
+  expect(stopGlyph.height).toBeGreaterThanOrEqual(8);
+  await page.locator('#btnAiAsk').click();
+  await expect(page.locator('#btnAiAsk')).toHaveAttribute('aria-label', '发送问题');
+  await expect(page.locator('#aiStatus')).toContainText('回答已停止');
+  releaseStream();
+});
+
+test('direct AI opening hides the selection hint and fills common questions into the composer', async ({ page }) => {
+  await openEpubFixture(page);
+  if (await page.locator('#readerDrawer').isVisible()) {
+    await page.locator('#btnCloseSettings').click();
+    await expect(page.locator('#readerDrawer')).toBeHidden();
+  }
+  await page.route('**/app/babyreader-fnos/api/ai/status', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ configured: true, provider: 'openai-compatible', model: 'test-model', retrieval: 'local-lexical-rag' })
+    });
+  });
+
+  await page.locator('#btnAi').click();
+  await expect(page.locator('#aiModal')).toBeVisible();
+  await expect(page.locator('#aiSelectedText')).toBeHidden();
+  await expect(page.locator('.ai-suggested-title')).toContainText('常用问题');
+
+  const commonQuestion = page.locator('[data-ai-prompt="本章主要讲了什么？"]');
+  await expect(commonQuestion).toBeVisible();
+  await commonQuestion.click();
+  await expect(page.locator('#aiQuestion')).toHaveValue('本章主要讲了什么？');
+  await expect(page.locator('#aiQuestion')).toBeFocused();
+
+  const focusStyle = await page.locator('#aiQuestion').evaluate((element) => {
+    const style = getComputedStyle(element);
+    return { outlineStyle: style.outlineStyle, outlineWidth: style.outlineWidth, borderColor: style.borderColor, boxShadow: style.boxShadow };
+  });
+  expect(focusStyle.outlineStyle).toBe('none');
+  expect(focusStyle.borderColor).toBe('rgb(184, 184, 194)');
+  expect(focusStyle.boxShadow).toContain('rgba(10, 132, 255, 0.16)');
+});
+
+test('AI composer sends on Enter, keeps Shift+Enter for newline, and uses an SVG send icon', async ({ page }) => {
+  await openEpubFixture(page);
+  if (await page.locator('#readerDrawer').isVisible()) {
+    await page.locator('#btnCloseSettings').click();
+    await expect(page.locator('#readerDrawer')).toBeHidden();
+  }
+  let askCount = 0;
+  let releaseAsk;
+  const askGate = new Promise((resolve) => { releaseAsk = resolve; });
+  await page.route('**/app/babyreader-fnos/api/ai/status', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ configured: true, provider: 'openai-compatible', model: 'test-model', retrieval: 'local-lexical-rag' })
+    });
+  });
+  await page.route('**/app/babyreader-fnos/api/books/*/ai/ask/stream', async (route) => {
+    askCount += 1;
+    await askGate;
+    await route.fulfill({
+      status: 200,
+      contentType: 'text/event-stream',
+      body: [
+        'event: delta',
+        'data: {"delta":"已发送。"}',
+        '',
+        'event: done',
+        'data: {"answer":"已发送。","sources":[]}',
+        ''
+      ].join('\n')
+    });
+  });
+
+  await page.locator('#btnAi').click();
+  await expect(page.locator('#aiModal')).toBeVisible();
+  await expect(page.locator('#btnAiAsk svg')).toHaveCount(1);
+  const iconAlignment = await page.locator('#btnAiAsk').evaluate((button) => {
+    const icon = button.querySelector('svg');
+    const buttonRect = button.getBoundingClientRect();
+    const iconRect = icon.getBoundingClientRect();
+    return {
+      horizontal: Math.abs((buttonRect.left + buttonRect.width / 2) - (iconRect.left + iconRect.width / 2)),
+      vertical: Math.abs((buttonRect.top + buttonRect.height / 2) - (iconRect.top + iconRect.height / 2))
+    };
+  });
+  expect(iconAlignment.horizontal).toBeLessThanOrEqual(1);
+  expect(iconAlignment.vertical).toBeLessThanOrEqual(1);
+  await page.locator('#aiQuestion').fill('用一句话概括本章');
+  await page.locator('#aiQuestion').press('Enter');
+  await expect.poll(() => askCount).toBe(1);
+  await expect(page.locator('#aiQuestion')).toHaveValue('');
+  await expect(page.locator('#aiStatus')).toBeVisible();
+  await expect(page.locator('#aiStatus')).toContainText('正在思考');
+  releaseAsk();
+  await expect(page.locator('#aiAnswer')).toContainText('已发送');
+  await expect(page.locator('#aiStatus')).toBeHidden();
+
+  await page.locator('#aiQuestion').fill('第一行');
+  await page.locator('#aiQuestion').press('Shift+Enter');
+  await page.locator('#aiQuestion').type('第二行');
+  await expect(page.locator('#aiQuestion')).toHaveValue('第一行\n第二行');
+  expect(askCount).toBe(1);
+
+  await page.locator('#aiQuestion').evaluate((element) => {
+    element.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', isComposing: true, bubbles: true }));
+  });
+  expect(askCount).toBe(1);
+});
+
+test('AI modal keeps configuration separate and saves endpoint/model without returning the key', async ({ page }) => {
+  await openEpubFixture(page);
+  if (await page.locator('#readerDrawer').isVisible()) {
+    await page.locator('#btnCloseSettings').click();
+    await expect(page.locator('#readerDrawer')).toBeHidden();
+  }
+  await page.route('**/app/babyreader-fnos/api/ai/status', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ configured: false, provider: 'openai-compatible', model: null, baseUrl: 'https://api.openai.com/v1', hasApiKey: false, retrieval: 'local-lexical-rag' })
+    });
+  });
+  await page.route('**/app/babyreader-fnos/api/ai/config', async (route) => {
+    if (route.request().method() === 'GET') {
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ configured: false, provider: 'openai-compatible', model: 'gpt-5.5', baseUrl: 'https://api.openai.com/v1', hasApiKey: false, retrieval: 'local-lexical-rag' }) });
+      return;
+    }
+    const payload = route.request().postDataJSON();
+    expect(payload.apiKey).toBe('test-secret');
+    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ configured: true, provider: 'openai-compatible', model: payload.model, baseUrl: payload.baseUrl, hasApiKey: true, retrieval: 'local-lexical-rag' }) });
+  });
+  await page.route('**/app/babyreader-fnos/api/ai/test-connection', async (route) => {
+    const payload = route.request().postDataJSON();
+    expect(payload.apiKey).toBe('test-secret');
+    expect(payload).not.toHaveProperty('context');
+    expect(payload).not.toHaveProperty('selectedText');
+    expect(payload).not.toHaveProperty('history');
+    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ok: true, model: payload.model }) });
+  });
+
+  await page.locator('#btnAi').click();
+  await expect(page.locator('#aiModal')).toBeVisible();
+  await expect(page.locator('#readerDrawer')).toBeHidden();
+  await page.locator('#btnAiSettings').click();
+  await expect(page.locator('#aiConfigView')).toBeVisible();
+  await expect(page.locator('#btnClearAiKey')).toBeDisabled();
+  await page.locator('#aiBaseUrl').fill('https://gateway.example/v1');
+  await page.locator('#aiModel').fill('reader-model');
+  await page.locator('#aiApiKey').fill('test-secret');
+  await page.locator('#btnTestAiConnection').click();
+  await expect(page.locator('#aiConfigHint')).toHaveText('连接成功 · reader-model');
+  await page.locator('#btnSaveAiSettings').click();
+  await expect(page.locator('#aiConfigView')).toBeHidden();
+  await expect(page.locator('#aiStatus')).toBeHidden();
+  await expect(page.locator('.ai-answer-title')).toHaveCount(0);
+  await expect(page.locator('#aiApiKey')).toHaveValue('');
+});
+
+test('AI key clear uses a unified secondary button and only persists after saving', async ({ page }) => {
+  await openEpubFixture(page);
+  if (await page.locator('#readerDrawer').isVisible()) {
+    await page.locator('#btnCloseSettings').click();
+    await expect(page.locator('#readerDrawer')).toBeHidden();
+  }
+  await page.route('**/app/babyreader-fnos/api/ai/status', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ configured: true, provider: 'openai-compatible', model: 'reader-model', baseUrl: 'https://api.example/v1', hasApiKey: true, retrieval: 'local-lexical-rag' })
+    });
+  });
+  await page.route('**/app/babyreader-fnos/api/ai/config', async (route) => {
+    if (route.request().method() === 'GET') {
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ configured: true, provider: 'openai-compatible', model: 'reader-model', baseUrl: 'https://api.example/v1', hasApiKey: true, retrieval: 'local-lexical-rag' }) });
+      return;
+    }
+    const payload = route.request().postDataJSON();
+    expect(payload.clearApiKey).toBe(true);
+    expect(payload.apiKey).toBe('');
+    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ configured: false, provider: 'openai-compatible', model: payload.model, baseUrl: payload.baseUrl, hasApiKey: false, retrieval: 'local-lexical-rag' }) });
+  });
+
+  await page.locator('#btnAi').click();
+  await page.locator('#btnAiSettings').click();
+  const clearButton = page.locator('#btnClearAiKey');
+  await expect(clearButton).toBeEnabled();
+  await expect(clearButton).toHaveClass(/ai-secondary-button/);
+  await clearButton.click();
+  await expect(clearButton).toHaveText('取消清除');
+  await expect(clearButton).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.locator('#aiConfigHint')).toHaveText('保存后将清除当前 API Key。');
+  await clearButton.click();
+  await expect(clearButton).toHaveText('清除 Key');
+  await expect(clearButton).toHaveAttribute('aria-pressed', 'false');
+  await clearButton.click();
+  await page.locator('#btnSaveAiSettings').click();
+  await expect(page.locator('#aiConfigView')).toBeHidden();
+});
+
+test('AI desktop panel floats left of the toolbar and remains open until manually closed', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await openEpubFixture(page);
+  if (await page.locator('#readerDrawer').isVisible()) {
+    await page.locator('#btnCloseSettings').click();
+    await expect(page.locator('#readerDrawer')).toBeHidden();
+  }
+
+  await page.locator('#btnAi').click();
+  await expect(page.locator('#aiModal')).toBeVisible();
+  await page.waitForFunction(() => Math.abs(Number.parseFloat(getComputedStyle(document.getElementById('readerFloatingToolbar')).right) - 20) < 1);
+  await expect(page.locator('#aiChatScroll')).toBeVisible();
+  await expect(page.locator('.ai-composer')).toBeVisible();
+
+  const layout = await page.evaluate(() => {
+    const reader = document.getElementById('reader');
+    const modal = document.getElementById('aiModal');
+    const backdrop = document.getElementById('aiModalBackdrop');
+    const toolbar = document.getElementById('readerFloatingToolbar');
+    const readerStyle = getComputedStyle(reader);
+    const modalStyle = getComputedStyle(modal);
+    const backdropStyle = getComputedStyle(backdrop);
+    return {
+      reader: reader.getBoundingClientRect().toJSON(),
+      modal: modal.getBoundingClientRect().toJSON(),
+      toolbar: toolbar.getBoundingClientRect().toJSON(),
+      drawer: document.getElementById('readerDrawer').getBoundingClientRect().toJSON(),
+      readerRight: readerStyle.right,
+      modalPosition: modalStyle.position,
+      modalWidth: modalStyle.width,
+      backdropBackground: backdropStyle.backgroundColor,
+      backdropFilter: backdropStyle.backdropFilter,
+      backdropPointerEvents: backdropStyle.pointerEvents
+    };
+  });
+
+  expect(layout.modalPosition).toBe('fixed');
+  expect(Number.parseFloat(layout.modalWidth)).toBeGreaterThanOrEqual(380);
+  expect(Number.parseFloat(layout.modalWidth)).toBeLessThanOrEqual(420);
+  expect(layout.modal.width / layout.modal.height).toBeGreaterThanOrEqual(0.58);
+  expect(layout.modal.width / layout.modal.height).toBeLessThanOrEqual(0.66);
+  expect(layout.modal.x + layout.modal.width).toBeLessThanOrEqual(layout.toolbar.x - 11);
+  expect(layout.modal.y).toBeGreaterThanOrEqual(70);
+  expect(layout.modal.height).toBeLessThanOrEqual(660);
+  expect(layout.readerRight).toBe('0px');
+  expect(layout.toolbar.x + layout.toolbar.width).toBeLessThanOrEqual(1261);
+  expect(layout.backdropBackground).toBe('rgba(0, 0, 0, 0)');
+  expect(layout.backdropFilter).toBe('none');
+  expect(layout.backdropPointerEvents).toBe('none');
+
+  await page.mouse.click(40, 400);
+  await expect(page.locator('#aiModal')).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(page.locator('#aiModal')).toBeVisible();
+
+  await page.locator('#btnSettings').click();
+  await expect(page.locator('#readerDrawer')).toBeVisible();
+  await expect(page.locator('#aiModal')).toBeVisible();
+  const coexist = await page.evaluate(() => ({
+    modal: document.getElementById('aiModal').getBoundingClientRect().toJSON(),
+    drawer: document.getElementById('readerDrawer').getBoundingClientRect().toJSON()
+  }));
+  expect(coexist.modal.x + coexist.modal.width).toBeLessThanOrEqual(coexist.drawer.x - 11);
+  await page.locator('#btnCloseSettings').click();
+  await expect(page.locator('#readerDrawer')).toBeHidden();
+  await expect(page.locator('#aiModal')).toBeVisible();
+
+  await page.locator('#btnCloseAiModal').click();
+  await expect(page.locator('#aiModal')).toBeHidden();
+  const restored = await page.locator('#reader').boundingBox();
+  expect(restored).not.toBeNull();
+  expect(Math.abs(restored.width - layout.reader.width)).toBeLessThanOrEqual(2);
+});
+
+test('AI panel keeps the composer at the bottom with a white macOS surface', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await openEpubFixture(page);
+  if (await page.locator('#readerDrawer').isVisible()) {
+    await page.locator('#btnCloseSettings').click();
+    await expect(page.locator('#readerDrawer')).toBeHidden();
+  }
+
+  await page.locator('#btnAi').click();
+  await expect(page.locator('#aiModal')).toBeVisible();
+  await page.waitForFunction(() => Math.abs(Number.parseFloat(getComputedStyle(document.getElementById('readerFloatingToolbar')).right) - 20) < 1);
+
+  const layout = await page.evaluate(() => {
+    const modal = document.getElementById('aiModal');
+    const body = document.querySelector('.ai-modal-body');
+    const scroll = document.getElementById('aiChatScroll');
+    const composer = document.querySelector('.ai-composer');
+    const field = document.querySelector('.ai-question-field');
+    const send = document.getElementById('btnAiAsk');
+    const reader = document.getElementById('reader');
+    const modalStyle = modal ? getComputedStyle(modal) : null;
+    const bodyStyle = body ? getComputedStyle(body) : null;
+    const scrollStyle = scroll ? getComputedStyle(scroll) : null;
+    const readerStyle = reader ? getComputedStyle(reader) : null;
+    return {
+      modal: modal?.getBoundingClientRect().toJSON(),
+      body: body?.getBoundingClientRect().toJSON(),
+      scroll: scroll?.getBoundingClientRect().toJSON(),
+      composer: composer?.getBoundingClientRect().toJSON(),
+      field: field?.getBoundingClientRect().toJSON(),
+      send: send?.getBoundingClientRect().toJSON(),
+      modalBackground: modalStyle?.backgroundColor,
+      bodyOverflowY: bodyStyle?.overflowY,
+      scrollOverflowY: scrollStyle?.overflowY,
+      readerScrollbarWidth: readerStyle?.scrollbarWidth
+    };
+  });
+
+  expect(layout.modalBackground).toBe('rgb(255, 255, 255)');
+  expect(layout.bodyOverflowY).toBe('hidden');
+  expect(layout.scrollOverflowY).toBe('auto');
+  expect(layout.readerScrollbarWidth).toBe('none');
+  expect(layout.composer.bottom).toBeLessThanOrEqual(layout.body.bottom + 1);
+  expect(layout.composer.bottom).toBeGreaterThan(layout.body.bottom - 90);
+  expect(layout.scroll.bottom).toBeLessThanOrEqual(layout.composer.top + 1);
+  expect(layout.send.right).toBeLessThanOrEqual(layout.field.right - 8);
+  expect(layout.send.bottom).toBeLessThanOrEqual(layout.field.bottom - 8);
+  expect(layout.send.left).toBeGreaterThanOrEqual(layout.field.left + layout.field.width - 52);
 });
 
 test('mobile viewport keeps the reader chrome collapsed until requested', async ({ page }) => {

@@ -28,6 +28,7 @@ fi
 for document in README.md CHANGELOG_WORK.md UI_INTERFACE_MAP.md; do
   cp "$ROOT/$document" "$BUILD_ROOT/app/docs/"
 done
+cp "$ROOT/scripts/fnos-device-acceptance.sh" "$BUILD_ROOT/app/docs/"
 
 cp -R "$ROOT/tests" "$BUILD_ROOT/app/tests"
 cp "$BUILD_ROOT/package.json" "$BUILD_ROOT/package-lock.json" "$BUILD_ROOT/app/server/"
