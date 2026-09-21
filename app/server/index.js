@@ -430,6 +430,24 @@ async function handleApi(request, response, pathname) {
     return sendJson(response, 200, await storage.replaceHighlights(user.uid, highlightsMatch[1], body.highlights));
   }
 
+  const bookmarksMatch = pathname.match(new RegExp(`^${APP_PREFIX}/api/books/([a-f0-9]{64})/bookmarks(?:/([^/]+))?$`));
+  if (bookmarksMatch) {
+    await findBook(bookmarksMatch[1]);
+    if (request.method === 'GET' && !bookmarksMatch[2]) {
+      return sendJson(response, 200, await storage.listBookmarks(user.uid, bookmarksMatch[1]));
+    }
+    if (request.method === 'POST' && !bookmarksMatch[2]) {
+      return sendJson(response, 201, await storage.addBookmark(user.uid, bookmarksMatch[1], await readJsonBody(request)));
+    }
+    if (request.method === 'DELETE' && bookmarksMatch[2]) {
+      return sendJson(response, 200, await storage.deleteBookmark(
+        user.uid,
+        bookmarksMatch[1],
+        decodeURIComponent(bookmarksMatch[2])
+      ));
+    }
+  }
+
   const aiSearchMatch = pathname.match(new RegExp(`^${APP_PREFIX}/api/books/([a-f0-9]{64})/ai/search$`));
   if (request.method === 'POST' && aiSearchMatch) {
     const book = await findBook(aiSearchMatch[1]);

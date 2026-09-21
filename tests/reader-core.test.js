@@ -33,6 +33,7 @@ const { validateAiBookContext } = require('../app/server/ai-book-context');
 const { isFtsAvailable, searchBook } = require('../app/server/ai-fts');
 
 const BOOK_ID = 'a'.repeat(64);
+const SECOND_BOOK_ID = 'b'.repeat(64);
 
 async function temporaryDirectory(t, prefix) {
   const directory = await fs.mkdtemp(path.join(os.tmpdir(), prefix));
@@ -175,6 +176,139 @@ test('user settings, progress, and highlights remain isolated by fnOS user ID', 
   assert.deepEqual(bob.books, {});
 });
 
+test('bookmarks default to empty, add idempotently, and delete by ID', async (t) => {
+  const dataRoot = await temporaryDirectory(t, 'babyreader-bookmarks-');
+  const storage = new UserStorage(dataRoot);
+  await storage.initialize();
+  const locator = {
+    version: 2,
+    type: 'semantic-position',
+    readingScope: 'page',
+    href: 'OPS/chapter-1.xhtml',
+    anchor: 'paragraph-1',
+    textBefore: '第一段内容',
+    pageNumber: 4,
+    percentage: 0.1
+  };
+
+  assert.deepEqual(await storage.listBookmarks('alice', BOOK_ID), []);
+  const created = await storage.addBookmark('alice', BOOK_ID, {
+    locator,
+    label: '第一章 · 第 4 页'
+  });
+  assert.match(created.id, /^[0-9a-f-]{36}$/);
+  assert.deepEqual(created.locator, locator);
+  assert.equal(created.label, '第一章 · 第 4 页');
+
+  const duplicate = await storage.addBookmark('alice', BOOK_ID, {
+    locator: { ...locator, pageNumber: 99 },
+    label: '同一语义位置'
+  });
+  assert.equal(duplicate.id, created.id);
+  assert.equal((await storage.listBookmarks('alice', BOOK_ID)).length, 1);
+
+  assert.deepEqual(await storage.deleteBookmark('alice', BOOK_ID, created.id), {
+    deleted: true,
+    id: created.id
+  });
+  assert.deepEqual(await storage.listBookmarks('alice', BOOK_ID), []);
+  assert.deepEqual(await storage.deleteBookmark('alice', BOOK_ID, created.id), {
+    deleted: false,
+    id: created.id
+  });
+});
+
+test('bookmarks validate locator fields, label size, and per-book limits', async (t) => {
+  const dataRoot = await temporaryDirectory(t, 'babyreader-bookmark-validation-');
+  const storage = new UserStorage(dataRoot);
+  await storage.initialize();
+
+  await assert.rejects(
+    storage.addBookmark('alice', BOOK_ID, {
+      locator: { version: 1, type: 'unknown', href: '../outside.xhtml' },
+      label: 'invalid'
+    }),
+    /Invalid bookmark locator/
+  );
+  await assert.rejects(
+    storage.addBookmark('alice', BOOK_ID, {
+      locator: {
+        version: 2,
+        type: 'semantic-position',
+        readingScope: 'page',
+        href: 'OPS/chapter.xhtml',
+        anchor: 'paragraph-label-limit'
+      },
+      label: 'x'.repeat(121)
+    }),
+    /Bookmark label is too long/
+  );
+
+  for (let index = 0; index < 200; index += 1) {
+    await storage.addBookmark('alice', BOOK_ID, {
+      locator: {
+        version: 2,
+        type: 'semantic-position',
+        readingScope: 'page',
+        href: 'OPS/chapter.xhtml',
+        anchor: `paragraph-${index}`
+      },
+      label: `位置 ${index}`
+    });
+  }
+  assert.equal((await storage.listBookmarks('alice', BOOK_ID)).length, 200);
+  await assert.rejects(
+    storage.addBookmark('alice', BOOK_ID, {
+      locator: {
+        version: 2,
+        type: 'semantic-position',
+        readingScope: 'page',
+        href: 'OPS/chapter.xhtml',
+        anchor: 'paragraph-200'
+      },
+      label: '位置 200'
+    }),
+    /Bookmark limit exceeded/
+  );
+});
+
+test('bookmarks remain isolated by user and book while concurrent writes stay intact', async (t) => {
+  const dataRoot = await temporaryDirectory(t, 'babyreader-bookmark-isolation-');
+  const storage = new UserStorage(dataRoot);
+  await storage.initialize();
+  const makeInput = (anchor) => ({
+    locator: {
+      version: 2,
+      type: 'semantic-position',
+      readingScope: 'chapter',
+      href: 'OPS/chapter.xhtml',
+      anchor
+    },
+    label: anchor
+  });
+
+  await Promise.all([
+    storage.addBookmark('alice', BOOK_ID, makeInput('alice-1')),
+    storage.addBookmark('alice', BOOK_ID, makeInput('alice-2')),
+    storage.addBookmark('alice', BOOK_ID, makeInput('alice-1'))
+  ]);
+  await storage.addBookmark('bob', BOOK_ID, makeInput('bob-1'));
+  await storage.addBookmark('alice', SECOND_BOOK_ID, makeInput('other-book'));
+
+  assert.deepEqual(
+    (await storage.listBookmarks('alice', BOOK_ID)).map((bookmark) => bookmark.label).sort(),
+    ['alice-1', 'alice-2']
+  );
+  assert.deepEqual(
+    (await storage.listBookmarks('bob', BOOK_ID)).map((bookmark) => bookmark.label),
+    ['bob-1']
+  );
+  assert.deepEqual(
+    (await storage.listBookmarks('alice', SECOND_BOOK_ID)).map((bookmark) => bookmark.label),
+    ['other-book']
+  );
+});
+
 test('annotation compatibility defaults old records and preserves new styles', async (t) => {
   const dataRoot = await temporaryDirectory(t, 'babyreader-annotations-');
   const storage = new UserStorage(dataRoot);
@@ -267,6 +401,10 @@ test('server exposes health, diagnostics, scan status, error log, and shared sca
   assert.match(source, /\/api\/diagnostics/);
   assert.match(source, /\/api\/errors/);
   assert.match(source, /\/api\/library\/scan\/status/);
+  assert.match(source, /bookmarksMatch/);
+  assert.match(source, /storage\.listBookmarks/);
+  assert.match(source, /storage\.addBookmark/);
+  assert.match(source, /storage\.deleteBookmark/);
   assert.match(source, /\/ai\/ask\/stream/);
   assert.match(source, /text\/event-stream/);
   assert.match(source, /sendSseEvent\(response, 'meta'/);

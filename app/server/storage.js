@@ -2,6 +2,13 @@
 
 const fs = require('node:fs/promises');
 const path = require('node:path');
+const crypto = require('node:crypto');
+
+const MAX_BOOKMARKS_PER_BOOK = 200;
+const MAX_BOOKMARK_LABEL_LENGTH = 120;
+const MAX_BOOKMARK_LOCATOR_TEXT_LENGTH = 240;
+const MAX_BOOKMARK_LOCATOR_HREF_LENGTH = 2048;
+const MAX_BOOKMARK_LOCATOR_ANCHOR_LENGTH = 512;
 
 function normalizeUserId(value) {
   const uid = String(value || '').trim();
@@ -45,6 +52,97 @@ async function readJson(filePath, fallback) {
   } catch (error) {
     if (error.code === 'ENOENT') return structuredClone(fallback);
     throw error;
+  }
+}
+
+function normalizeBookmarkLocator(value) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    throw new Error('Invalid bookmark locator');
+  }
+
+  const version = Number(value.version);
+  const type = String(value.type || '');
+  const readingScope = String(value.readingScope || '');
+  const href = String(value.href || '').replace(/\\/g, '/');
+  if (version !== 2 || type !== 'semantic-position' || !['page', 'chapter'].includes(readingScope)) {
+    throw new Error('Invalid bookmark locator');
+  }
+  if (!href || href.length > MAX_BOOKMARK_LOCATOR_HREF_LENGTH
+    || href.startsWith('/')
+    || /^[a-z]+:/i.test(href)
+    || href.split('/').includes('..')) {
+    throw new Error('Invalid bookmark locator');
+  }
+
+  const locator = { version: 2, type, readingScope, href };
+  const optionalStrings = [
+    ['anchor', MAX_BOOKMARK_LOCATOR_ANCHOR_LENGTH],
+    ['textBefore', MAX_BOOKMARK_LOCATOR_TEXT_LENGTH]
+  ];
+  for (const [key, maxLength] of optionalStrings) {
+    if (value[key] !== undefined && value[key] !== null) {
+      const normalized = String(value[key]).trim().slice(0, maxLength);
+      if (normalized) locator[key] = normalized;
+    }
+  }
+
+  const optionalNumbers = [
+    ['pageNumber', Number.isInteger],
+    ['scrollTop', Number.isFinite],
+    ['percentage', Number.isFinite],
+    ['chapterPercentage', Number.isFinite]
+  ];
+  for (const [key, validator] of optionalNumbers) {
+    if (value[key] === undefined || value[key] === null) continue;
+    const number = Number(value[key]);
+    if (!validator(number)
+      || number < 0
+      || (['percentage', 'chapterPercentage'].includes(key) && number > 1)) {
+      throw new Error('Invalid bookmark locator');
+    }
+    locator[key] = number;
+  }
+
+  if (!locator.anchor && !locator.textBefore && !Number.isFinite(locator.pageNumber)) {
+    throw new Error('Invalid bookmark locator');
+  }
+  return locator;
+}
+
+function bookmarkLocatorKey(locator) {
+  const normalized = normalizeBookmarkLocator(locator);
+  return JSON.stringify({
+    version: normalized.version,
+    type: normalized.type,
+    readingScope: normalized.readingScope,
+    href: normalized.href,
+    anchor: normalized.anchor || '',
+    textBefore: normalized.textBefore || '',
+    pageNumber: normalized.anchor || normalized.textBefore ? null : normalized.pageNumber
+  });
+}
+
+function normalizeBookmarkLabel(value) {
+  const label = String(value || '').replace(/\s+/g, ' ').trim();
+  if (label.length > MAX_BOOKMARK_LABEL_LENGTH) throw new Error('Bookmark label is too long');
+  return label || '书签';
+}
+
+function storedBookmark(item) {
+  if (!item || typeof item !== 'object' || Array.isArray(item)) return null;
+  try {
+    const locator = normalizeBookmarkLocator(item.locator);
+    const id = String(item.id || '').trim().slice(0, 128);
+    if (!id) return null;
+    return {
+      id,
+      locator,
+      label: normalizeBookmarkLabel(item.label),
+      createdAt: String(item.createdAt || '').slice(0, 64) || new Date().toISOString(),
+      updatedAt: String(item.updatedAt || item.createdAt || '').slice(0, 64) || new Date().toISOString()
+    };
+  } catch {
+    return null;
   }
 }
 
@@ -241,6 +339,78 @@ class UserStorage {
         highlightsUpdatedAt: new Date().toISOString()
       };
       return cleaned;
+    });
+  }
+
+  async listBookmarks(uid, bookId) {
+    if (!/^[a-f0-9]{64}$/.test(String(bookId || ''))) {
+      throw new Error('Invalid book ID');
+    }
+    const state = await this.getState(uid);
+    const bookmarks = state.books[bookId]?.bookmarks;
+    if (!Array.isArray(bookmarks)) return [];
+    return bookmarks.map(storedBookmark).filter(Boolean);
+  }
+
+  async addBookmark(uid, bookId, input) {
+    if (!/^[a-f0-9]{64}$/.test(String(bookId || ''))) {
+      throw new Error('Invalid book ID');
+    }
+    if (!input || typeof input !== 'object' || Array.isArray(input)) {
+      throw new Error('Invalid bookmark');
+    }
+
+    const locator = normalizeBookmarkLocator(input.locator);
+    const label = normalizeBookmarkLabel(input.label);
+    return this.mutateUserState(uid, async (state) => {
+      const previous = state.books[bookId] || {};
+      const existing = Array.isArray(previous.bookmarks)
+        ? previous.bookmarks.map(storedBookmark).filter(Boolean)
+        : [];
+      const key = bookmarkLocatorKey(locator);
+      const duplicate = existing.find((bookmark) => bookmarkLocatorKey(bookmark.locator) === key);
+      if (duplicate) return duplicate;
+      if (existing.length >= MAX_BOOKMARKS_PER_BOOK) {
+        throw new Error('Bookmark limit exceeded');
+      }
+
+      const now = new Date().toISOString();
+      const bookmark = {
+        id: crypto.randomUUID(),
+        locator,
+        label,
+        createdAt: now,
+        updatedAt: now
+      };
+      state.books[bookId] = {
+        ...previous,
+        bookmarks: [...existing, bookmark],
+        bookmarksUpdatedAt: now
+      };
+      return bookmark;
+    });
+  }
+
+  async deleteBookmark(uid, bookId, bookmarkId) {
+    if (!/^[a-f0-9]{64}$/.test(String(bookId || ''))) {
+      throw new Error('Invalid book ID');
+    }
+    const id = String(bookmarkId || '').trim();
+    if (!id || id.length > 128) throw new Error('Invalid bookmark ID');
+
+    return this.mutateUserState(uid, async (state) => {
+      const previous = state.books[bookId] || {};
+      const existing = Array.isArray(previous.bookmarks)
+        ? previous.bookmarks.map(storedBookmark).filter(Boolean)
+        : [];
+      const next = existing.filter((bookmark) => bookmark.id !== id);
+      if (next.length === existing.length) return { deleted: false, id };
+      state.books[bookId] = {
+        ...previous,
+        bookmarks: next,
+        bookmarksUpdatedAt: new Date().toISOString()
+      };
+      return { deleted: true, id };
     });
   }
 
