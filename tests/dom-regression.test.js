@@ -2575,3 +2575,24 @@ test('typography slider tooltip follows a common font preset and auto-hides afte
   await new Promise((resolve) => setTimeout(resolve, 850));
   assert.equal(output.hidden, true);
 });
+
+test('AI index manager has an admin-only independent surface contract', async () => {
+  const html = await fs.readFile(path.resolve(__dirname, '../app/ui/index.html'), 'utf8');
+  const drawer = await fs.readFile(path.resolve(__dirname, '../app/ui/shell/drawer.js'), 'utf8');
+  const api = await fs.readFile(path.resolve(__dirname, '../app/ui/core/api.js'), 'utf8');
+  const manager = await fs.readFile(path.resolve(__dirname, '../app/ui/reader/ai-index-manager.js'), 'utf8');
+  const css = await fs.readFile(path.resolve(__dirname, '../app/ui/styles.css'), 'utf8');
+
+  assert.match(html, /btnOpenAiIndexManager/);
+  assert.match(html, /aiIndexManagerSheet/);
+  assert.match(html, /ai-index-manager\.js/);
+  assert.match(drawer, /'ai-index': \{ rootId: 'aiIndexManagerSheet'/);
+  assert.match(api, /listAiIndexes/);
+  assert.match(api, /deleteAiIndex/);
+  assert.match(api, /cleanupAiIndexes/);
+  assert.match(manager, /state\.session\?\.isAdmin/);
+  assert.match(manager, /readerSurfaceController\.activate\('ai-index'/);
+  assert.match(manager, /window\.confirm/);
+  assert.match(css, /\.ai-index-manager-sheet/);
+  assert.match(css, /\.ai-index-manager-backdrop/);
+});

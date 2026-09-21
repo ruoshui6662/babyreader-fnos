@@ -74,7 +74,8 @@ const readerPanels = Object.freeze({
 const readerSurfaceDefinitions = Object.freeze({
   content: { rootId: 'readerDrawer', backdropId: 'readerDrawerBackdrop' },
   settings: { rootId: 'readerSettingsSheet', backdropId: 'readerSettingsBackdrop' },
-  search: { rootId: 'readerSearchSheet', backdropId: null }
+  search: { rootId: 'readerSearchSheet', backdropId: null },
+  'ai-index': { rootId: 'aiIndexManagerSheet', backdropId: 'aiIndexManagerBackdrop' }
 });
 
 let activeReaderPanel = null;
@@ -128,7 +129,7 @@ function setSurfaceVisibility(surface, visible) {
 }
 
 function updateSurfaceBodyState() {
-  const readerSurfaceOpen = ['content', 'settings', 'search'].includes(activeReaderSurface);
+  const readerSurfaceOpen = ['content', 'settings', 'search', 'ai-index'].includes(activeReaderSurface);
   document.body.classList.toggle('reader-drawer-open', readerSurfaceOpen);
 }
 

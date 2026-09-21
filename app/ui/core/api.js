@@ -191,6 +191,24 @@ window.browserHost = {
     })).json();
   },
 
+  async listAiIndexes() {
+    return (await apiRequest('/ai/indexes')).json();
+  },
+
+  async deleteAiIndex(bookId) {
+    if (!bookId) throw new Error('索引标识无效');
+    return (await apiRequest('/ai/indexes/' + encodeURIComponent(bookId), {
+      method: 'DELETE'
+    })).json();
+  },
+
+  async cleanupAiIndexes(kind = 'all') {
+    return (await apiRequest('/ai/indexes/cleanup', {
+      method: 'POST',
+      body: JSON.stringify({ kind, confirm: true })
+    })).json();
+  },
+
   async askAi(bookId, payload) {
     if (!bookId) throw new Error('当前没有打开的书');
     return (await apiRequest(`/books/${encodeURIComponent(bookId)}/ai/ask`, {

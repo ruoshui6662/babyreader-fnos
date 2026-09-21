@@ -84,6 +84,7 @@ manifest 只保存 bookId、大小、指纹、schemaVersion、indexedAt、lastAc
 - app/ui/core/api.js：新增管理 API 客户端封装。
 - app/ui/index.html：加载新的 index manager 模块和必要容器。
 - app/ui/reader/ai.js：AI 设置入口，保持既有问答和设置功能不变。
+- app/ui/shell/drawer.js：注册 ai-index surface，使索引管理器复用统一关闭、焦点、遮罩和无障碍控制。
 - app/ui/styles.css：复用现有 surface、sheet、按钮、状态和移动端安全区 token。
 - tests/reader-core.test.js：FTS 生命周期、索引重建和回归测试。
 - tests/dom-regression.test.js：surface、管理员入口和 UI 回归测试。

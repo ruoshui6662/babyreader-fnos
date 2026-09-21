@@ -162,6 +162,7 @@ document.addEventListener('DOMContentLoaded', () => {
   setupHighlightEditor();
   setupSelectionMenu();
   setupAiPanel();
+  setupAiIndexManager();
   setupNotesPanel();
   setupReaderNavigation();
   setupReaderActionMapping();
@@ -212,6 +213,7 @@ document.addEventListener('DOMContentLoaded', () => {
     window.browserHost.getLibrary()
   ]).then(([session, userState, library]) => {
     state.session = session;
+    syncAiIndexManagerAccess();
     applyUserState(userState);
     applyContinuousScroll();
     syncSettingsPanel();

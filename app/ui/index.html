@@ -231,6 +231,23 @@
     </div>
   </aside>
 
+  <div class="reader-drawer-backdrop ai-index-manager-backdrop" id="aiIndexManagerBackdrop" hidden></div>
+  <aside class="reader-sheet ai-index-manager-sheet" id="aiIndexManagerSheet" hidden role="dialog" aria-modal="true" aria-hidden="true" aria-labelledby="aiIndexManagerTitle">
+    <div class="settings-header reader-drawer-header">
+      <h2 id="aiIndexManagerTitle">本地检索索引</h2>
+      <button type="button" id="btnCloseAiIndexManager" data-reader-action="closePanel" aria-label="关闭本地检索索引">关闭</button>
+    </div>
+    <div class="ai-index-manager-content" id="aiIndexManagerContent">
+      <div class="ai-index-manager-summary" id="aiIndexManagerSummary" aria-live="polite"></div>
+      <div class="ai-index-manager-status" id="aiIndexManagerStatus" role="status" aria-live="polite">正在读取索引状态…</div>
+      <ul class="ai-index-manager-list" id="aiIndexManagerList"></ul>
+      <div class="ai-index-manager-actions">
+        <button type="button" class="ai-index-manager-secondary" id="btnCleanupAiIndexes">清理孤儿与临时文件</button>
+        <button type="button" class="ai-index-manager-secondary" id="btnRefreshAiIndexes">重新读取</button>
+      </div>
+    </div>
+  </aside>
+
   <div class="ai-modal-backdrop" id="aiModalBackdrop" hidden></div>
   <section class="ai-modal" id="aiModal" hidden role="dialog" aria-modal="true" aria-hidden="true" aria-labelledby="aiModalTitle">
     <header class="ai-modal-header">
@@ -302,6 +319,7 @@
               <input id="aiApiKey" type="password" autocomplete="new-password" placeholder="留空则保留已保存的 Key">
             </label>
             <p class="ai-config-hint" id="aiConfigHint">支持 OpenAI 及兼容 Responses API 的服务。</p>
+            <button type="button" class="ai-index-manager-entry" id="btnOpenAiIndexManager" hidden>管理本地检索索引</button>
           </div>
           <footer class="ai-config-actions">
             <button type="button" class="ai-secondary-button ai-clear-key-button" id="btnClearAiKey" aria-pressed="false" disabled>清除 Key</button>
@@ -420,6 +438,7 @@
   <script src="reader/editor.js?v=28"></script>
   <script src="reader/highlights.js?v=31"></script>
   <script src="reader/ai.js?v=1"></script>
+  <script src="reader/ai-index-manager.js?v=1"></script>
   <script src="reader/selection-menu.js?v=1"></script>
   <script src="reader/actions.js?v=28"></script>
   <script src="reader/notes-panel.js?v=1"></script>
