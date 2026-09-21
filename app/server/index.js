@@ -9,6 +9,7 @@ const { resolveAuthorizedPath } = require('./security');
 const { AiConfigStorage, normalizeAiSettings, publicAiConfig } = require('./ai-config');
 const { validateAiBookContext } = require('./ai-book-context');
 const { searchBook: searchAiBook } = require('./ai-fts');
+const { parseBookSearchParams, searchBookText } = require('./book-search');
 const {
   normalizeAiConfig,
   validateAiRequest,
@@ -320,7 +321,7 @@ async function serveStatic(request, response, pathname) {
   response.end(bytes);
 }
 
-async function handleApi(request, response, pathname) {
+async function handleApi(request, response, pathname, searchParams = new URLSearchParams()) {
   if (request.method === 'GET' && pathname === `${APP_PREFIX}/api/health`) {
     return sendJson(response, 200, {
       status: 'ok',
@@ -415,6 +416,13 @@ async function handleApi(request, response, pathname) {
   }
   if (request.method === 'PUT' && pathname === `${APP_PREFIX}/api/settings`) {
     return sendJson(response, 200, await storage.updateSettings(user.uid, await readJsonBody(request)));
+  }
+
+  const searchMatch = pathname.match(new RegExp(`^${APP_PREFIX}/api/books/([a-f0-9]{64})/search$`));
+  if (request.method === 'GET' && searchMatch) {
+    const book = await findBook(searchMatch[1]);
+    const options = parseBookSearchParams(searchParams);
+    return sendJson(response, 200, await searchBookText(book, DATA_ROOT, options));
   }
 
   const progressMatch = pathname.match(new RegExp(`^${APP_PREFIX}/api/books/([a-f0-9]{64})/progress$`));
@@ -589,7 +597,9 @@ async function handleRequest(request, response) {
   try {
     const url = new URL(request.url, 'http://localhost');
     if (!url.pathname.startsWith(APP_PREFIX)) return sendError(response, 404, 'Route not found');
-    if (url.pathname.startsWith(`${APP_PREFIX}/api/`)) return await handleApi(request, response, url.pathname);
+    if (url.pathname.startsWith(`${APP_PREFIX}/api/`)) {
+      return await handleApi(request, response, url.pathname, url.searchParams);
+    }
     if (request.method !== 'GET' && request.method !== 'HEAD') return sendError(response, 405, 'Method not allowed');
     return await serveStatic(request, response, url.pathname);
   } catch (error) {

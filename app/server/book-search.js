@@ -84,6 +84,18 @@ function normalizeBookSearchOptions(options = {}) {
   };
 }
 
+function parseBookSearchParams(searchParams) {
+  const params = searchParams instanceof URLSearchParams
+    ? searchParams
+    : new URLSearchParams(searchParams || '');
+  return normalizeBookSearchOptions({
+    query: params.get('q') || '',
+    scope: params.get('scope') || 'book',
+    chapterIndex: params.get('chapterIndex'),
+    limit: params.get('limit') || undefined
+  });
+}
+
 function findExactMatches(text, query) {
   const { normalized: normalizedText, offsets } = normalizedTextWithOffsets(text);
   const normalizedQuery = normalizeSearchText(query);
@@ -247,5 +259,6 @@ module.exports = {
   findExactMatches,
   makeSearchSnippet,
   normalizeBookSearchOptions,
+  parseBookSearchParams,
   searchBookText
 };
