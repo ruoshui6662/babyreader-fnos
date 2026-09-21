@@ -112,6 +112,28 @@ test('recordBuildSuccess writes only non-sensitive manifest metadata atomically'
   assert.equal(manifestText.includes('测试书'), false);
 });
 
+test('recordBuildSuccess rejects symbolic link targets', {
+  skip: process.platform === 'win32'
+}, async (t) => {
+  const dataRoot = await temporaryDirectory(t);
+  const manager = createAiIndexManager({ dataRoot });
+  const directory = path.join(dataRoot, 'ai-index');
+  const outsidePath = path.join(dataRoot, 'outside.sqlite');
+  const linkPath = manager.getIndexPath(BOOK_ID);
+  await fs.mkdir(directory, { recursive: true });
+  await fs.writeFile(outsidePath, 'outside');
+  await fs.symlink(outsidePath, linkPath);
+
+  await assert.rejects(
+    () => manager.recordBuildSuccess({ id: BOOK_ID }, {
+      filePath: linkPath,
+      fingerprint: 'fingerprint-1',
+      schemaVersion: 2
+    }),
+    (error) => error.code === 'INDEX_UNSAFE_TARGET'
+  );
+});
+
 test('listIndexes distinguishes ready, orphan, and manifest-only missing indexes', {
   skip: !DatabaseSync
 }, async (t) => {

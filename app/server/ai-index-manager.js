@@ -254,7 +254,10 @@ function createAiIndexManager({
     if (path.resolve(filePath) !== getIndexPath(bookId)) {
       throw managerError('INDEX_UNSAFE_TARGET', 'build file is outside the managed index path');
     }
-    const stat = await fs.stat(filePath);
+    const stat = await fs.lstat(filePath);
+    if (stat.isSymbolicLink()) {
+      throw managerError('INDEX_UNSAFE_TARGET', 'build target cannot be a symbolic link');
+    }
     if (!stat.isFile()) throw managerError('INDEX_UNSAFE_TARGET', 'build target is not a file');
     const manifest = await loadManifest();
     const timestamp = isoDate(metadata.indexedAt ?? now());
