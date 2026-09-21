@@ -339,7 +339,7 @@ function setupCustomSelect(select) {
 }
 
 function setupCustomSelects() {
-  document.querySelectorAll('.settings-panel select')
+  document.querySelectorAll('#readerPanelSettings select, #notesSort')
     .forEach(setupCustomSelect);
 }
 

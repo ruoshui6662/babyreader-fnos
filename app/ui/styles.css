@@ -2474,6 +2474,7 @@ body.is-epub .reader-floating-toolbar {
 
 .reader-floating-toolbar[hidden],
 .reader-drawer[hidden],
+.reader-sheet[hidden],
 .reader-drawer-backdrop[hidden],
 .reader-panel[hidden] {
   display: none !important;
@@ -4655,6 +4656,93 @@ body.is-epub .reader-floating-toolbar {
   flex: 1 0 auto;
   min-height: min-content;
   padding-bottom: 8px;
+}
+
+/* Reader surfaces are siblings. The content sheet owns the three navigation
+   tabs; settings and the future search surface never participate in that
+   tablist. Keep one scroll owner per surface so the topbar cannot cover the
+   panel body on desktop or mobile. */
+.reader-sheet {
+  position: fixed;
+  top: calc(var(--topbar-h) + 16px);
+  right: calc(74px + 16px);
+  bottom: 16px;
+  z-index: 180;
+  display: flex;
+  flex-direction: column;
+  width: min(380px, calc(100vw - 116px));
+  max-height: none;
+  overflow: hidden;
+  padding: 16px;
+  color: var(--ui-label);
+  background: var(--ui-bg);
+  border: 1px solid var(--ui-separator);
+  border-radius: var(--radius-sheet);
+  box-shadow: var(--shadow-card);
+}
+
+.reader-content-sheet .reader-drawer-header,
+.reader-settings-sheet .reader-drawer-header,
+.reader-search-sheet .reader-drawer-header {
+  flex: 0 0 auto;
+  margin-bottom: 12px;
+}
+
+.reader-content-sheet .reader-drawer-tabs {
+  flex: 0 0 auto;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  margin-bottom: 16px;
+}
+
+.reader-settings-content,
+.reader-search-content {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-color: var(--ui-separator) transparent;
+  scrollbar-width: thin;
+}
+
+.reader-settings-content::-webkit-scrollbar,
+.reader-search-content::-webkit-scrollbar {
+  width: 8px;
+}
+
+.reader-settings-content::-webkit-scrollbar-thumb,
+.reader-search-content::-webkit-scrollbar-thumb {
+  background: var(--ui-separator);
+  border: 2px solid transparent;
+  border-radius: 999px;
+  background-clip: padding-box;
+}
+
+.reader-settings-content > #readerPanelSettings {
+  flex: 1 0 auto;
+  padding-bottom: 8px;
+}
+
+.reader-sheet :focus-visible {
+  outline-color: var(--ui-focus);
+}
+
+@media (max-width: 1200px) {
+  html[data-reader-surface="mobile"] .reader-sheet {
+    top: auto;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    width: 100%;
+    max-height: min(78vh, 680px);
+    height: min(78vh, 680px);
+    padding: 16px 16px calc(16px + env(safe-area-inset-bottom, 0px));
+    border-right: 0;
+    border-bottom: 0;
+    border-left: 0;
+    border-radius: 20px 20px 0 0;
+  }
 }
 
 @media (max-width: 1200px) {

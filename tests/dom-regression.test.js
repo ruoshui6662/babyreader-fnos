@@ -1371,7 +1371,7 @@ test('Reader Shell retains legacy DOM IDs and exposes one responsive Drawer', as
   const css = await fs.readFile(path.resolve(__dirname, '../app/ui/styles.css'), 'utf8');
   assert.match(css, /body\.is-epub \.reader \.article/);
   assert.match(css, /\.reader-floating-toolbar/);
-  assert.match(css, /\.settings-panel\.reader-drawer/);
+  assert.match(css, /\.reader-sheet/);
   assert.match(css, /@media \(max-width: 1200px\)/);
   assert.match(css, /@media \(max-width: 520px\)/);
 });
@@ -1415,7 +1415,7 @@ test('reader drawer separates fixed chrome from the scrollable panel viewport', 
   assert.equal(viewport?.querySelector('#readerPanelNotes')?.parentElement, viewport);
 
   const css = await fs.readFile(path.resolve(__dirname, '../app/ui/styles.css'), 'utf8');
-  assert.match(css, /\.settings-panel\.reader-drawer\s*\{[\s\S]*?overflow:\s*hidden;/);
+  assert.match(css, /\.reader-sheet\s*\{[\s\S]*?overflow:\s*hidden;/);
   assert.match(css, /\.reader-drawer-content\s*\{[\s\S]*?overflow-y:\s*auto;/);
 });
 
@@ -1498,7 +1498,7 @@ test('mobile chapter boundary buttons use a compact size rather than the desktop
   assert.match(normalized, /html\[data-reader-surface="mobile"\]\s+\.scroll-chapter-btn\s*\{[^}]*width: min\(168px, 100%\);[^}]*min-height: 40px;/s);
 });
 
-test('readerActions and readerPanels switch TOC and settings inside the single Drawer', async () => {
+test('readerActions and readerPanels switch TOC and settings across independent surfaces', async () => {
   const { window, api } = await createReaderDom();
   const document = window.document;
 
@@ -1526,21 +1526,55 @@ test('readerActions and readerPanels switch TOC and settings inside the single D
   api.setupNotesPanel();
   api.setupReaderActionMapping();
   document.getElementById('btnSettings').click();
-  assert.equal(document.getElementById('readerDrawer').hidden, false);
+  assert.equal(document.getElementById('readerSettingsSheet').hidden, false);
+  assert.equal(document.getElementById('readerDrawer').hidden, true);
   assert.equal(document.getElementById('readerPanelSettings').hidden, false);
-  assert.equal(document.getElementById('readerPanelToc').hidden, true);
+  assert.equal(document.getElementById('readerPanelSettings').closest('#readerDrawer'), null);
 
   api.state.contentType = 'epub';
   api.state.toc = [{ label: '第一章', target: '#chapter-1', depth: 0 }];
   api.renderToc();
   document.getElementById('drawerTabToc').click();
   assert.equal(document.getElementById('readerPanelToc').hidden, false);
-  assert.equal(document.getElementById('readerPanelSettings').hidden, true);
+  assert.equal(document.getElementById('readerSettingsSheet').hidden, true);
   assert.equal(document.querySelectorAll('#tocList a[data-target]').length, 1);
 
   document.getElementById('btnCloseSettings').click();
   assert.equal(document.getElementById('readerDrawer').hidden, true);
+  assert.equal(document.getElementById('readerSettingsSheet').hidden, true);
   assert.equal(document.getElementById('readerDrawerBackdrop').hidden, true);
+});
+
+test('reader content and display settings use independent surfaces', async () => {
+  const { window, api } = await createReaderDom();
+  const document = window.document;
+
+  assert.ok(document.getElementById('readerDrawer'));
+  assert.ok(document.getElementById('readerSettingsSheet'));
+  assert.equal(document.querySelectorAll('#readerDrawer .reader-drawer-tabs [role="tab"]').length, 3);
+  assert.equal(document.querySelector('#readerDrawer #drawerTabSettings'), null);
+  assert.equal(document.querySelector('#readerDrawer #readerPanelSettings'), null);
+
+  api.setupReaderActionMapping();
+  const settingsButton = document.getElementById('btnSettings');
+  settingsButton.focus();
+  settingsButton.click();
+  assert.equal(document.getElementById('readerSettingsSheet').hidden, false);
+  assert.equal(document.getElementById('readerDrawer').hidden, true);
+  assert.equal(document.getElementById('readerSettingsSheet').querySelector('#settingsPanel') !== null, true);
+
+  api.state.contentType = 'epub';
+  api.state.toc = [{ label: '第一章', target: '#chapter-1', depth: 0 }];
+  api.renderToc();
+  document.getElementById('btnToc').click();
+  assert.equal(document.getElementById('readerDrawer').hidden, false);
+  assert.equal(document.getElementById('readerSettingsSheet').hidden, true);
+  assert.equal(document.getElementById('readerPanelToc').hidden, false);
+  assert.equal(document.querySelectorAll('#readerDrawer .reader-drawer-tabs [role="tab"]').length, 3);
+
+  document.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+  assert.equal(document.getElementById('readerDrawer').hidden, true);
+  assert.equal(document.getElementById('readerSettingsSheet').hidden, true);
 });
 
 test('Drawer keeps one active panel and restores focus to its original launcher', async () => {
@@ -1551,7 +1585,8 @@ test('Drawer keeps one active panel and restores focus to its original launcher'
   api.setupReaderActionMapping();
   settingsButton.focus();
   settingsButton.click();
-  assert.equal(document.getElementById('readerDrawer').hidden, false);
+  assert.equal(document.getElementById('readerSettingsSheet').hidden, false);
+  assert.equal(document.getElementById('readerDrawer').hidden, true);
   assert.equal(document.body.classList.contains('reader-drawer-open'), true);
   assert.equal(document.getElementById('btnSettings').getAttribute('aria-expanded'), 'true');
 

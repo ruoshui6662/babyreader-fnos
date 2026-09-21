@@ -20,8 +20,7 @@ async function closeDefaultDrawer(page) {
 }
 
 async function openBookmarkPanel(page) {
-  await page.locator('#btnSettings').click();
-  await page.locator('#drawerTabBookmarks').click();
+  await page.evaluate(() => openReaderPanel('bookmarks', document.getElementById('btnBookmarks')));
   await expect(page.locator('#readerPanelBookmarks')).toBeVisible();
   await expect(page.locator('#bookmarkPanelStatus')).toBeHidden();
 }
@@ -159,9 +158,9 @@ test.describe('EPUB bookmarks', () => {
     const settings = page.locator('#btnSettings');
     await settings.focus();
     await settings.press('Enter');
-    await expect(page.locator('#readerDrawer')).toBeVisible();
+    await expect(page.locator('#readerSettingsSheet')).toBeVisible();
     await page.keyboard.press('Escape');
-    await expect(page.locator('#readerDrawer')).toBeHidden();
+    await expect(page.locator('#readerSettingsSheet')).toBeHidden();
     await expect(settings).toBeFocused();
 
     await openBookmarkPanel(page);

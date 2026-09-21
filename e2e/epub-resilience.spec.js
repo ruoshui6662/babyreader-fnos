@@ -16,5 +16,5 @@ test('oversized EPUB resources do not block the first page in double-page mode',
   await expect(page.locator('#article')).toHaveAttribute('data-pagination-geometry', /mode=double/);
 
   await page.locator('#btnSettings').click();
-  await expect(page.locator('#readerDrawer')).toBeVisible();
+  await expect(page.locator('#readerSettingsSheet')).toBeVisible();
 });

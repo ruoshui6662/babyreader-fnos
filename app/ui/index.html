@@ -36,26 +36,25 @@
     <button class="reader-tool-btn" id="btnHighlight" type="button" hidden data-reader-action="highlight" aria-label="划线" title="划线"></button>
     <button class="reader-tool-btn" id="btnExportHighlights" type="button" hidden data-reader-action="exportHighlights" aria-label="导出标记与想法" title="导出标记与想法"></button>
     <span class="reader-toolbar-divider" aria-hidden="true"></span>
-    <button class="reader-tool-btn" id="btnSearch" type="button" data-reader-action="openSearch" data-reader-panel="search" data-reader-status="reserved" aria-controls="readerDrawer" aria-expanded="false" aria-label="搜索，预留功能，当前不可用" title="搜索，预留功能，当前不可用" disabled></button>
+    <button class="reader-tool-btn" id="btnSearch" type="button" data-reader-action="openSearch" data-reader-panel="search" data-reader-status="reserved" aria-controls="readerSearchSheet" aria-expanded="false" aria-label="搜索，预留功能，当前不可用" title="搜索，预留功能，当前不可用" disabled></button>
     <button class="reader-tool-btn" id="btnBookmarks" type="button" data-reader-action="toggleBookmark" aria-pressed="false" aria-label="书签仅支持 EPUB" title="书签仅支持 EPUB" disabled></button>
     <button class="reader-tool-btn" id="btnNotes" type="button" data-reader-action="openNotes" data-reader-panel="notes" aria-controls="readerDrawer" aria-expanded="false" aria-label="打开标记与想法" title="打开标记与想法"></button>
-    <button class="reader-tool-btn" id="btnAi" type="button" data-reader-action="openAi" data-reader-panel="ai" aria-controls="readerDrawer" aria-expanded="false" aria-label="打开 AI 阅读助手" title="打开 AI 阅读助手" disabled></button>
+    <button class="reader-tool-btn" id="btnAi" type="button" data-reader-action="openAi" data-reader-panel="ai" aria-controls="aiModal" aria-expanded="false" aria-label="打开 AI 阅读助手" title="打开 AI 阅读助手" disabled></button>
     <span class="reader-toolbar-divider" aria-hidden="true"></span>
     <button class="theme-btn" id="btnTheme" type="button" data-reader-action="toggleTheme" aria-label="切换浅色模式" title="切换浅色模式"></button>
-    <button class="reader-tool-btn" id="btnSettings" type="button" data-reader-action="openSettings" data-reader-panel="settings" aria-controls="readerDrawer" aria-expanded="false" aria-label="打开显示设置" title="打开显示设置"></button>
+    <button class="reader-tool-btn" id="btnSettings" type="button" data-reader-action="openSettings" data-reader-panel="settings" aria-controls="readerSettingsSheet" aria-expanded="false" aria-label="打开显示设置" title="打开显示设置"></button>
   </nav>
 
   <div class="reader-drawer-backdrop" id="readerDrawerBackdrop" hidden></div>
-  <aside class="reader-drawer settings-panel" id="readerDrawer" hidden aria-label="阅读面板" aria-modal="false">
+  <aside class="reader-sheet reader-content-sheet reader-drawer" id="readerDrawer" hidden aria-label="阅读内容面板" aria-modal="false">
     <div class="settings-header reader-drawer-header">
       <h2 id="readerDrawerTitle">阅读设置</h2>
-      <button type="button" id="btnCloseSettings" data-reader-action="closePanel" aria-label="关闭面板">关闭</button>
+      <button type="button" id="btnCloseSettings" data-reader-action="closePanel" aria-label="关闭阅读面板">关闭</button>
     </div>
-    <div class="reader-drawer-tabs" role="tablist" aria-label="阅读面板切换">
+    <div class="reader-drawer-tabs" role="tablist" aria-label="阅读内容切换">
       <button type="button" id="drawerTabToc" role="tab" data-reader-panel-target="toc" aria-controls="readerPanelToc" aria-selected="false" tabindex="-1">目录</button>
       <button type="button" id="drawerTabBookmarks" role="tab" data-reader-panel-target="bookmarks" aria-controls="readerPanelBookmarks" aria-selected="false" tabindex="-1">书签</button>
       <button type="button" id="drawerTabNotes" role="tab" data-reader-panel-target="notes" aria-controls="readerPanelNotes" aria-selected="false" tabindex="-1">标记与想法</button>
-      <button type="button" id="drawerTabSettings" role="tab" data-reader-panel-target="settings" aria-controls="readerPanelSettings" aria-selected="true" tabindex="0">显示</button>
     </div>
     <div class="reader-drawer-content" id="readerDrawerContent">
     <section class="reader-panel" id="readerPanelToc" data-reader-panel-name="toc" role="tabpanel" hidden>
@@ -65,7 +64,7 @@
       </div>
       <p class="reader-panel-empty" id="tocEmptyState">当前内容没有可用目录。</p>
     </section>
-    <section class="reader-panel" id="readerPanelSettings" data-reader-panel-name="settings" role="tabpanel">
+    <section class="reader-panel" id="readerPanelSettings" data-reader-settings-panel="true" role="region" aria-labelledby="readerSettingsTitle">
       <div id="settingsPanel" class="settings-panel-content">
       <section class="settings-group" data-settings-group="appearance">
         <h3 class="settings-group-title">外观</h3>
@@ -174,7 +173,6 @@
       <p class="settings-user" id="settingsUser"></p>
       </div>
     </section>
-    <section class="reader-panel reader-panel-placeholder" id="readerPanelSearch" data-reader-panel-name="search" role="tabpanel" hidden><h3>搜索</h3><p>接口预留，当前版本尚未实现。</p></section>
     <section class="reader-panel bookmarks-panel" id="readerPanelBookmarks" data-reader-panel-name="bookmarks" role="tabpanel" hidden aria-labelledby="drawerTabBookmarks">
       <div class="bookmark-list" id="bookmarkList" role="list"></div>
       <p class="reader-panel-empty bookmark-empty-state" id="bookmarkEmptyState">当前还没有书签。</p>
@@ -198,6 +196,25 @@
       <div class="notes-list" id="notesList"></div>
       <p class="reader-panel-empty notes-empty-state" id="notesEmptyState">当前还没有标记或想法。</p>
     </section>
+    </div>
+  </aside>
+
+  <div class="reader-settings-backdrop reader-drawer-backdrop" id="readerSettingsBackdrop" hidden></div>
+  <aside class="reader-sheet reader-settings-sheet" id="readerSettingsSheet" hidden role="dialog" aria-modal="true" aria-labelledby="readerSettingsTitle">
+    <div class="settings-header reader-drawer-header">
+      <h2 id="readerSettingsTitle">显示设置</h2>
+      <span data-reader-close-slot="settings"></span>
+    </div>
+    <div class="reader-settings-content" id="readerSettingsContent"></div>
+  </aside>
+
+  <aside class="reader-sheet reader-search-sheet" id="readerSearchSheet" hidden role="dialog" aria-modal="true" aria-labelledby="readerSearchTitle">
+    <div class="settings-header reader-drawer-header">
+      <h2 id="readerSearchTitle">搜索</h2>
+      <button type="button" data-reader-action="closePanel" aria-label="关闭搜索">关闭</button>
+    </div>
+    <div class="reader-search-content" id="readerSearchContent">
+      <p class="reader-panel-placeholder">接口预留，当前版本尚未实现。</p>
     </div>
   </aside>
 
@@ -324,7 +341,7 @@
     <button type="button" id="btnMobileBookmarks" data-reader-action="openBookmarks" data-reader-panel="bookmarks" aria-controls="readerDrawer" aria-expanded="false" aria-label="打开书签" disabled>书签</button>
     <button type="button" id="btnMobileNotes" data-reader-action="openNotes" data-reader-panel="notes" aria-controls="readerDrawer" aria-expanded="false" aria-label="打开标记与想法">笔记</button>
     <button type="button" id="btnMobileHighlight" data-reader-action="highlight" aria-label="创建或编辑划线">划线</button>
-    <button type="button" id="btnMobileSettings" data-reader-action="openSettings" data-reader-panel="settings" aria-controls="readerDrawer" aria-expanded="false" aria-label="打开显示设置">设置</button>
+    <button type="button" id="btnMobileSettings" data-reader-action="openSettings" data-reader-panel="settings" aria-controls="readerSettingsSheet" aria-expanded="false" aria-label="打开显示设置">设置</button>
   </nav>
 
   <!-- Reader view -->

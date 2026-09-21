@@ -141,7 +141,7 @@ test('switching EPUB to continuous scroll mounts chapter HTML instead of object 
   await page.reload({ waitUntil: 'load' });
   await openEpubFixture(page);
 
-  await page.locator('#drawerTabSettings').click();
+  await page.locator('#btnSettings').click();
   const scrollSave = page.waitForResponse((response) =>
     response.url().endsWith('/api/settings') && response.request().method() === 'PUT' && response.ok()
   );
@@ -247,7 +247,7 @@ test('continuous scroll chapter boundary renders dedicated previous and next con
 
 test('sepia reader uses the same white surface as the library', async ({ page }) => {
   await openEpubFixture(page);
-  await page.locator('#drawerTabSettings').click();
+  await page.locator('#btnSettings').click();
   await page.locator('#settingTheme').selectOption('sepia');
   await page.locator('#btnCloseSettings').click();
 
@@ -393,7 +393,7 @@ test('settings drawer changes theme and typography in a real browser', async ({ 
   await openFixtureBook(page);
 
   await page.locator('#btnSettings').click();
-  await expect(page.locator('#readerDrawer')).toBeVisible();
+  await expect(page.locator('#readerSettingsSheet')).toBeVisible();
   await expect(page.locator('#settingsUser')).toContainText('Playwright User');
 
   await page.locator('#settingTheme').selectOption('sepia');
@@ -434,14 +434,14 @@ test('settings drawer presents grouped controls and a selected segmented tab', a
   await openFixtureBook(page);
 
   await page.locator('#btnSettings').click();
-  await expect(page.locator('#readerDrawer')).toBeVisible();
+  await expect(page.locator('#readerSettingsSheet')).toBeVisible();
   await expect(page.locator('.settings-group')).toHaveCount(4);
   await expect(page.locator('.settings-group-card')).toHaveCount(4);
   await expect(page.locator('.settings-group-title').allTextContents()).resolves.toEqual([
     '外观', '阅读', '划线', '排版'
   ]);
-  await expect(page.locator('#drawerTabSettings')).toHaveAttribute('aria-selected', 'true');
-  await expect(page.locator('#drawerTabToc')).toHaveAttribute('aria-selected', 'false');
+  await expect(page.locator('#readerDrawer .reader-drawer-tabs [role="tab"]')).toHaveCount(3);
+  await expect(page.locator('#readerSettingsSheet')).toBeVisible();
   await expect(page.locator('.reader-drawer-tabs')).toHaveCSS('border-radius', '999px');
   await expect(page.locator('.settings-group-card').first()).toHaveCSS('border-radius', '16px');
   await expect(page.locator('#settingTocOpen')).toHaveCSS('width', '44px');
@@ -544,7 +544,7 @@ test('custom select closes before an expensive setting update begins', async ({ 
 
 test('highlight color change redraws highlights once after the setting is applied', async ({ page }) => {
   await openEpubFixture(page);
-  await page.locator('#drawerTabSettings').click();
+  await page.locator('#btnSettings').click();
   await page.evaluate(() => {
     window.__highlightRedrawCount = 0;
     const original = window.redrawDomHighlights;
@@ -562,7 +562,7 @@ test('highlight color change redraws highlights once after the setting is applie
 
 test('a hidden settings trigger cannot reopen its menu from the keyboard', async ({ page }) => {
   await openEpubFixture(page);
-  await page.locator('#drawerTabSettings').click();
+  await page.locator('#btnSettings').click();
 
   await page.evaluate(() => {
     const select = document.getElementById('settingHighlightColor');
@@ -577,7 +577,7 @@ test('a hidden settings trigger cannot reopen its menu from the keyboard', async
 
 test('switching drawer panels closes an open settings menu', async ({ page }) => {
   await openEpubFixture(page);
-  await page.locator('#drawerTabSettings').click();
+  await page.locator('#btnSettings').click();
 
   await page.locator('[data-custom-select-for="settingHighlightColor"] .custom-select-trigger').click();
   await expect(page.locator('#custom-options-settingHighlightColor')).toBeVisible();
@@ -644,9 +644,9 @@ test('reader shell has unique IDs, reserved actions disabled, and restores Drawe
   const settingsButton = page.locator('#btnSettings');
   await settingsButton.focus();
   await settingsButton.click();
-  await expect(page.locator('#readerDrawer')).toBeVisible();
+  await expect(page.locator('#readerSettingsSheet')).toBeVisible();
   await page.keyboard.press('Escape');
-  await expect(page.locator('#readerDrawer')).toBeHidden();
+  await expect(page.locator('#readerSettingsSheet')).toBeHidden();
   await expect(settingsButton).toBeFocused();
 });
 
@@ -1048,15 +1048,15 @@ test('AI desktop panel floats left of the toolbar and remains open until manuall
   await expect(page.locator('#aiModal')).toBeVisible();
 
   await page.locator('#btnSettings').click();
-  await expect(page.locator('#readerDrawer')).toBeVisible();
+  await expect(page.locator('#readerSettingsSheet')).toBeVisible();
   await expect(page.locator('#aiModal')).toBeVisible();
   const coexist = await page.evaluate(() => ({
     modal: document.getElementById('aiModal').getBoundingClientRect().toJSON(),
-    drawer: document.getElementById('readerDrawer').getBoundingClientRect().toJSON()
+    drawer: document.getElementById('readerSettingsSheet').getBoundingClientRect().toJSON()
   }));
   expect(coexist.modal.x + coexist.modal.width).toBeLessThanOrEqual(coexist.drawer.x - 11);
   await page.locator('#btnCloseSettings').click();
-  await expect(page.locator('#readerDrawer')).toBeHidden();
+  await expect(page.locator('#readerSettingsSheet')).toBeHidden();
   await expect(page.locator('#aiModal')).toBeVisible();
 
   await page.locator('#btnCloseAiModal').click();
@@ -1133,7 +1133,7 @@ test('mobile viewport keeps the reader chrome collapsed until requested', async 
   await page.locator('#mobileReaderChromeToggle').click();
   await expect(page.locator('#mobileReaderToolbar')).toBeVisible();
   await page.locator('#btnMobileSettings').click();
-  await expect(page.locator('#readerDrawer')).toBeVisible();
+  await expect(page.locator('#readerSettingsSheet')).toBeVisible();
   await expect(page.locator('#settingReadingMode')).toHaveValue('scroll');
   expect(pageErrors).toEqual([]);
 });
