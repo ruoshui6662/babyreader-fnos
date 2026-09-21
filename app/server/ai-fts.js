@@ -5,6 +5,7 @@ const path = require('node:path');
 const { safeUnzip } = require('./zip');
 const { normalizeBookText } = require('./ai-book-context');
 const { rankLexicalCandidates, fuseRankedMatches, assessRetrievalConfidence } = require('./ai-retrieval');
+const { createAiIndexManager } = require('./ai-index-manager');
 
 const AI_FTS_SCHEMA_VERSION = 2;
 const AI_FTS_CHUNK_SIZE = 900;
@@ -15,7 +16,7 @@ const AI_FTS_MIN_DIVERSE_DISTANCE = AI_FTS_CHUNK_SIZE;
 
 let DatabaseSync = null;
 let sqliteCapabilityChecked = false;
-const buildLocks = new Map();
+const indexManagers = new Map();
 
 function getDatabaseSync() {
   if (!sqliteCapabilityChecked) {
@@ -27,6 +28,16 @@ function getDatabaseSync() {
     }
   }
   return DatabaseSync;
+}
+
+function getIndexManager(dataRoot) {
+  const key = path.resolve(dataRoot);
+  let manager = indexManagers.get(key);
+  if (!manager) {
+    manager = createAiIndexManager({ dataRoot });
+    indexManagers.set(key, manager);
+  }
+  return manager;
 }
 
 function normalizeArchivePath(value) {
@@ -184,10 +195,10 @@ function currentFingerprint(book, stat) {
   return `${path.resolve(book.path)}\0${stat.size}\0${Math.trunc(stat.mtimeMs)}`;
 }
 
-function openDatabase(filePath) {
+function openDatabase(filePath, options = {}) {
   const Constructor = getDatabaseSync();
   if (!Constructor) return null;
-  const db = new Constructor(filePath);
+  const db = new Constructor(filePath, { timeout: 5000, ...options });
   db.exec('PRAGMA busy_timeout = 5000;');
   return db;
 }
@@ -230,9 +241,17 @@ function writeMeta(db, values) {
 
 async function readIndexMeta(filePath) {
   if (!getDatabaseSync()) return null;
+  let stat;
+  try {
+    stat = await fs.lstat(filePath);
+  } catch (error) {
+    if (error?.code === 'ENOENT') return null;
+    return null;
+  }
+  if (stat.isSymbolicLink() || !stat.isFile()) return null;
   let db;
   try {
-    db = openDatabase(filePath);
+    db = openDatabase(filePath, { readOnly: true });
     if (!db) return null;
     const rows = db.prepare('SELECT key, value FROM ai_meta').all();
     return Object.fromEntries(rows.map((row) => [row.key, row.value]));
@@ -243,7 +262,7 @@ async function readIndexMeta(filePath) {
   }
 }
 
-async function buildIndex(book, dataRoot, filePath, fingerprint) {
+async function buildIndex(book, dataRoot, filePath, fingerprint, manager) {
   const directory = path.dirname(filePath);
   await fs.mkdir(directory, { recursive: true, mode: 0o700 });
   await fs.chmod(directory, 0o700);
@@ -296,8 +315,7 @@ async function buildIndex(book, dataRoot, filePath, fingerprint) {
     db.close();
     db = null;
     await fs.chmod(temporaryPath, 0o600);
-    await fs.rm(filePath, { force: true });
-    await fs.rename(temporaryPath, filePath);
+    await manager.publishIndex(temporaryPath, filePath);
     await secureIndexPermissions(filePath);
     return true;
   } finally {
@@ -311,24 +329,26 @@ async function ensureIndex(book, dataRoot) {
   const stat = await fs.stat(book.path);
   const fingerprint = currentFingerprint(book, stat);
   const filePath = indexPath(dataRoot, book.id);
-  const metadata = await readIndexMeta(filePath);
-  if (metadata?.schemaVersion === String(AI_FTS_SCHEMA_VERSION)
-    && metadata.bookId === book.id
-    && metadata.fingerprint === fingerprint) {
-    await secureIndexPermissions(filePath);
-    return filePath;
-  }
+  const manager = getIndexManager(dataRoot);
+  return manager.withBuildLease(book.id, async () => {
+    const metadata = await readIndexMeta(filePath);
+    if (metadata?.schemaVersion === String(AI_FTS_SCHEMA_VERSION)
+      && metadata.bookId === book.id
+      && metadata.fingerprint === fingerprint) {
+      await secureIndexPermissions(filePath);
+      await manager.recordAccess(book.id).catch(() => {});
+      return filePath;
+    }
 
-  const existing = buildLocks.get(filePath);
-  if (existing) {
-    await existing;
-    return (await readIndexMeta(filePath))?.fingerprint === fingerprint ? filePath : null;
-  }
-  const build = buildIndex(book, dataRoot, filePath, fingerprint)
-    .finally(() => buildLocks.delete(filePath));
-  buildLocks.set(filePath, build);
-  const built = await build;
-  return built ? filePath : null;
+    const built = await buildIndex(book, dataRoot, filePath, fingerprint, manager);
+    if (!built) return null;
+    await manager.recordBuildSuccess(book, {
+      filePath,
+      fingerprint,
+      schemaVersion: AI_FTS_SCHEMA_VERSION
+    }).catch(() => {});
+    return filePath;
+  });
 }
 
 function normalizeLimit(value) {
@@ -376,9 +396,11 @@ async function searchBook(book, dataRoot, { query = '', selectedText = '', curre
 
   const ftsQuery = toFtsQuery(`${query} ${selectedText}`);
   if (!ftsQuery) return { available: true, matches: [], confidence: assessRetrievalConfidence([]) };
-  let db;
-  try {
-    db = openDatabase(filePath);
+  const manager = getIndexManager(dataRoot);
+  return manager.withReadLease(book.id, async () => {
+    let db;
+    try {
+      db = openDatabase(filePath, { readOnly: true });
     const rows = db.prepare(`
       SELECT
         rowid,
@@ -465,11 +487,12 @@ async function searchBook(book, dataRoot, { query = '', selectedText = '', curre
       matches,
       confidence: assessRetrievalConfidence(matches, { query, selectedText, termize: aiTerms })
     };
-  } catch {
-    return { available: false, matches: [], confidence: assessRetrievalConfidence([]) };
-  } finally {
-    db?.close();
-  }
+    } catch {
+      return { available: false, matches: [], confidence: assessRetrievalConfidence([]) };
+    } finally {
+      db?.close();
+    }
+  });
 }
 
 // Kept as a separate helper so tests and future migrations can inspect the

@@ -198,3 +198,56 @@ test('unhealthy library scan refuses to infer orphan indexes', {
   assert.equal(result.summary.orphan, 0);
   assert.equal(result.items.find((item) => item.bookId === ORPHAN_ID).status, 'unknown');
 });
+
+test('build leases serialize the same book and release after failures', async (t) => {
+  const dataRoot = await temporaryDirectory(t);
+  const manager = createAiIndexManager({ dataRoot });
+  let calls = 0;
+  let release;
+  const gate = new Promise((resolve) => {
+    release = resolve;
+  });
+  const first = manager.withBuildLease(BOOK_ID, async () => {
+    calls += 1;
+    await gate;
+    return 'built';
+  });
+  const second = manager.withBuildLease(BOOK_ID, async () => {
+    calls += 1;
+    return 'unexpected';
+  });
+
+  release();
+  assert.equal(await first, 'built');
+  assert.equal(await second, 'built');
+  assert.equal(calls, 1);
+  assert.deepEqual(manager.leaseState(BOOK_ID), { building: false, readers: 0 });
+
+  await assert.rejects(
+    () => manager.withBuildLease(BOOK_ID, async () => {
+      throw new Error('build failed');
+    }),
+    /build failed/
+  );
+  assert.deepEqual(manager.leaseState(BOOK_ID), { building: false, readers: 0 });
+});
+
+test('publishIndex replaces an existing index without deleting it on failure', async (t) => {
+  const dataRoot = await temporaryDirectory(t);
+  const manager = createAiIndexManager({ dataRoot });
+  const targetPath = manager.getIndexPath(BOOK_ID);
+  const temporaryPath = targetPath + '.build.tmp';
+  await fs.mkdir(path.dirname(targetPath), { recursive: true });
+  await fs.writeFile(targetPath, 'old-index');
+  await fs.writeFile(temporaryPath, 'new-index');
+
+  await manager.publishIndex(temporaryPath, targetPath);
+  assert.equal(await fs.readFile(targetPath, 'utf8'), 'new-index');
+  await assert.rejects(() => fs.access(temporaryPath), { code: 'ENOENT' });
+
+  await assert.rejects(
+    () => manager.publishIndex(targetPath + '.missing.tmp', targetPath),
+    (error) => error.code !== 'INDEX_UNSAFE_TARGET'
+  );
+  assert.equal(await fs.readFile(targetPath, 'utf8'), 'new-index');
+});

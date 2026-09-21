@@ -116,6 +116,7 @@ function createAiIndexManager({
   const manifestPath = path.join(directory, 'manifest.json');
   let manifestCache = null;
   let manifestRecovered = false;
+  const leases = new Map();
 
   function getIndexPath(bookId) {
     const validBookId = validateBookId(bookId);
@@ -138,6 +139,53 @@ function createAiIndexManager({
       throw managerError('INDEX_UNSAFE_TARGET', 'index path is not canonical');
     }
     return bookId;
+  }
+
+  function leaseEntry(bookId) {
+    const validBookId = validateBookId(bookId);
+    let entry = leases.get(validBookId);
+    if (!entry) {
+      entry = { buildPromise: null, readers: 0 };
+      leases.set(validBookId, entry);
+    }
+    return { bookId: validBookId, entry };
+  }
+
+  function clearLeaseIfIdle(bookId, entry) {
+    if (!entry.buildPromise && entry.readers === 0) leases.delete(bookId);
+  }
+
+  async function withBuildLease(bookId, operation) {
+    const { bookId: validBookId, entry } = leaseEntry(bookId);
+    if (entry.buildPromise) return entry.buildPromise;
+    const promise = Promise.resolve()
+      .then(() => operation())
+      .finally(() => {
+        entry.buildPromise = null;
+        clearLeaseIfIdle(validBookId, entry);
+      });
+    entry.buildPromise = promise;
+    return promise;
+  }
+
+  async function withReadLease(bookId, operation) {
+    const { bookId: validBookId, entry } = leaseEntry(bookId);
+    entry.readers += 1;
+    try {
+      return await operation();
+    } finally {
+      entry.readers -= 1;
+      clearLeaseIfIdle(validBookId, entry);
+    }
+  }
+
+  function leaseState(bookId) {
+    const validBookId = validateBookId(bookId);
+    const entry = leases.get(validBookId) || { buildPromise: null, readers: 0 };
+    return {
+      building: Boolean(entry.buildPromise),
+      readers: entry.readers
+    };
   }
 
   async function ensureDirectory() {
@@ -284,6 +332,45 @@ function createAiIndexManager({
     return true;
   }
 
+  async function publishIndex(temporaryPath, targetPath) {
+    const targetBookId = managedBookIdFromPath(targetPath);
+    const resolvedTemporaryPath = path.resolve(String(temporaryPath || ''));
+    const temporaryRelative = path.relative(directory, resolvedTemporaryPath);
+    if (!temporaryRelative || temporaryRelative.startsWith('..' + path.sep)
+      || path.isAbsolute(temporaryRelative) || resolvedTemporaryPath === getIndexPath(targetBookId)) {
+      throw managerError('INDEX_UNSAFE_TARGET', 'temporary index path is outside the managed directory');
+    }
+    const temporaryStat = await fs.lstat(resolvedTemporaryPath);
+    if (temporaryStat.isSymbolicLink() || !temporaryStat.isFile()) {
+      throw managerError('INDEX_UNSAFE_TARGET', 'temporary index target is not a regular file');
+    }
+    let targetStat = null;
+    try {
+      targetStat = await fs.lstat(targetPath);
+      if (targetStat.isSymbolicLink() || !targetStat.isFile()) {
+        throw managerError('INDEX_UNSAFE_TARGET', 'existing index target is not a regular file');
+      }
+    } catch (error) {
+      if (error?.code !== 'ENOENT') throw error;
+    }
+
+    if (process.platform !== 'win32' || !targetStat) {
+      await fs.rename(resolvedTemporaryPath, targetPath);
+      return targetPath;
+    }
+
+    const backupPath = targetPath + '.' + process.pid + '.' + Date.now() + '.bak';
+    await fs.rename(targetPath, backupPath);
+    try {
+      await fs.rename(resolvedTemporaryPath, targetPath);
+    } catch (error) {
+      await fs.rename(backupPath, targetPath).catch(() => {});
+      throw error;
+    }
+    await fs.rm(backupPath, { force: true });
+    return targetPath;
+  }
+
   async function listIndexFiles() {
     try {
       const entries = await fs.readdir(directory, { withFileTypes: true });
@@ -373,6 +460,10 @@ function createAiIndexManager({
     listIndexes,
     recordBuildSuccess,
     recordAccess,
+    withBuildLease,
+    withReadLease,
+    leaseState,
+    publishIndex,
     getManifestPath: () => manifestPath
   };
 }
