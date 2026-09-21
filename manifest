@@ -1,5 +1,5 @@
 appname=babyreader-fnos
-version=1.0.0
+version=1.1.0
 display_name=BabyReader
 desc=适用于飞牛 fnOS 的 EPUB、Markdown 和 TXT 阅读器，支持授权书库扫描、阅读进度与划线持久化。
 source=thirdparty
