@@ -61,6 +61,7 @@ test('loads split UI modules in Chromium and opens a real library book', async (
     '/app/babyreader-fnos/reader/settings.js',
     '/app/babyreader-fnos/reader/navigation.js',
     '/app/babyreader-fnos/reader/lifecycle.js',
+    '/app/babyreader-fnos/reader/search.js',
     '/app/babyreader-fnos/shell/drawer.js',
     '/app/babyreader-fnos/library/view.js',
     '/app/babyreader-fnos/app.js'
@@ -71,27 +72,42 @@ test('loads split UI modules in Chromium and opens a real library book', async (
   await expect(page.locator('script[src*="reader/settings.js?v=29"]')).toHaveCount(1);
   await expect(page.locator('script[src*="reader/highlights.js?v=31"]')).toHaveCount(1);
   await expect(page.locator('script[src*="reader/ai.js?v=1"]')).toHaveCount(1);
+  await expect(page.locator('script[src*="reader/search.js?v=1"]')).toHaveCount(1);
   await expect(page.locator('script[src*="shell/drawer.js?v=31"]')).toHaveCount(1);
 
   expect(pageErrors).toEqual([]);
 });
 
-test('keeps the independent search surface reserved without issuing search requests', async ({ page }) => {
+test('opens the independent search surface and searches the current Markdown book', async ({ page }) => {
   const searchRequests = [];
+  const aiSearchRequests = [];
   page.on('request', (request) => {
     if (request.url().includes('/api/books/') && request.url().includes('/search')) {
       searchRequests.push(request.url());
     }
+    if (request.url().includes('/api/books/') && request.url().includes('/ai/search')) {
+      aiSearchRequests.push(request.url());
+    }
   });
 
   await openFixtureBook(page);
-  await expect(page.locator('#btnSearch')).toBeDisabled();
+  await expect(page.locator('#btnSearch')).toBeEnabled();
   await expect(page.locator('#readerSearchSheet')).toBeHidden();
-  await expect(page.locator('#readerSearchQuery')).toBeDisabled();
-  await expect(page.locator('#readerSearchScope')).toBeDisabled();
-  await expect(page.locator('#readerSearchSubmit')).toBeDisabled();
+  await expect(page.locator('#readerSearchQuery')).toBeEnabled();
+  await expect(page.locator('#readerSearchScope')).toBeEnabled();
+  await expect(page.locator('#readerSearchSubmit')).toBeEnabled();
   await expect(page.locator('#readerSearchEmpty')).toBeAttached();
-  await expect(page.locator('#readerSearchEmpty')).not.toHaveAttribute('hidden');
+  await expect(page.locator('#readerSearchEmpty')).toBeHidden();
+
+  await page.locator('#btnSearch').click();
+  await expect(page.locator('#readerSearchSheet')).toBeVisible();
+  await page.locator('#readerSearchQuery').fill('E2E Reader');
+  const responsePromise = page.waitForResponse((response) =>
+    response.url().includes('/api/books/') && response.url().includes('/search') && response.ok()
+  );
+  await page.locator('#readerSearchForm').press('Enter');
+  await responsePromise;
+  await expect(page.locator('.reader-search-result')).toContainText('E2E Reader');
 
   const contract = await page.evaluate(() => ({
     endpointTemplate: readerSearchContract.endpointTemplate,
@@ -109,7 +125,9 @@ test('keeps the independent search surface reserved without issuing search reque
     scopes: ['book', 'chapter'],
     url: '/api/books/book%2F1/search?q=%E8%9B%8B%E7%99%BD%E8%B4%A8&scope=chapter&chapterIndex=1&limit=20'
   });
-  expect(searchRequests).toEqual([]);
+  expect(searchRequests).toHaveLength(1);
+  expect(searchRequests[0]).toMatch(/\/api\/books\/[a-f0-9]{64}\/search\?/);
+  expect(aiSearchRequests).toEqual([]);
 });
 
 test('library and welcome states expose the dense library structure', async ({ page }) => {
@@ -717,7 +735,7 @@ test('EPUB TOC navigates between chapters and updates semantic reading state', a
   await expect(page.locator('#readingProgress')).toContainText('2/3');
 });
 
-test('reader shell has unique IDs, reserved actions disabled, and restores Drawer focus', async ({ page }) => {
+test('reader shell has unique IDs, feature availability, and restores Drawer focus', async ({ page }) => {
   await openFixtureBook(page);
 
   const duplicateIds = await page.evaluate(() => {
@@ -729,7 +747,8 @@ test('reader shell has unique IDs, reserved actions disabled, and restores Drawe
   });
   expect(duplicateIds).toEqual([]);
 
-  for (const selector of ['#btnSearch', '#btnBookmarks', '#btnNotes', '#btnAi']) {
+  await expect(page.locator('#btnSearch')).toBeEnabled();
+  for (const selector of ['#btnBookmarks', '#btnNotes', '#btnAi']) {
     await expect(page.locator(selector)).toBeDisabled();
   }
   await expect(page.locator('#btnBookmarks')).not.toHaveAttribute('data-reader-status', 'reserved');
