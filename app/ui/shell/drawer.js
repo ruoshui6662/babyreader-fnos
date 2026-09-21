@@ -21,7 +21,7 @@ const readerPanels = Object.freeze({
   bookmarks: {
     id: 'readerPanelBookmarks',
     title: '书签',
-    enabled: () => false
+    enabled: () => state.contentType === 'epub' && Boolean(state.currentBookId)
   },
   notes: {
     id: 'readerPanelNotes',
@@ -90,6 +90,10 @@ function openReaderPanel(panelName, trigger = document.activeElement) {
   if (title) title.textContent = panelConfig.title;
   if (panelName === 'settings') syncSettingsPanel();
   if (panelName === 'notes' && typeof renderNotesPanel === 'function') renderNotesPanel();
+  if (panelName === 'bookmarks' && typeof renderBookmarkList === 'function') {
+    renderBookmarkList();
+    if (typeof refreshBookmarks === 'function') void refreshBookmarks();
+  }
   drawer.hidden = false;
   if (backdrop) backdrop.hidden = false;
   document.body.classList.add('reader-drawer-open');
@@ -115,6 +119,7 @@ const readerActions = Object.freeze({
   nextPage: () => navigatePageGroup(1),
   highlight: () => triggerHighlightAction(),
   exportHighlights: () => exportHighlights(),
+  toggleBookmark: () => toggleCurrentBookmark(),
   toggleTheme: () => {
     toggleTheme();
     syncSettingsPanel();

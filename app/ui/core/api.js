@@ -148,6 +148,27 @@ window.browserHost = {
     });
   },
 
+  async getBookmarks(bookId = state.currentBookId) {
+    if (!bookId) return [];
+    return (await apiRequest(`/books/${encodeURIComponent(bookId)}/bookmarks`)).json();
+  },
+
+  async createBookmark(bookmark, bookId = state.currentBookId) {
+    if (!bookId) return null;
+    return (await apiRequest(`/books/${encodeURIComponent(bookId)}/bookmarks`, {
+      method: 'POST',
+      body: JSON.stringify(bookmark)
+    })).json();
+  },
+
+  async deleteBookmark(bookmarkId, bookId = state.currentBookId) {
+    if (!bookId || !bookmarkId) return { deleted: false, id: bookmarkId };
+    return (await apiRequest(
+      `/books/${encodeURIComponent(bookId)}/bookmarks/${encodeURIComponent(bookmarkId)}`,
+      { method: 'DELETE' }
+    )).json();
+  },
+
   async aiStatus() {
     return (await apiRequest('/ai/status')).json();
   },

@@ -164,7 +164,19 @@ function updateTopbarState() {
   const themeBtn = document.getElementById('btnTheme');
 
   if (btnSearch) btnSearch.innerHTML = searchIconSvg();
-  if (btnBookmarks) btnBookmarks.innerHTML = bookmarkIconSvg();
+  if (btnBookmarks) {
+    btnBookmarks.innerHTML = bookmarkIconSvg();
+    const bookmarkAvailable = isEpub && Boolean(state.currentBookId);
+    const bookmarkActive = bookmarkAvailable
+      && typeof isCurrentBookmark === 'function'
+      && isCurrentBookmark();
+    btnBookmarks.disabled = !bookmarkAvailable;
+    btnBookmarks.setAttribute('aria-pressed', bookmarkActive ? 'true' : 'false');
+    const bookmarkLabel = bookmarkActive ? '取消当前书签' : '添加当前书签';
+    btnBookmarks.setAttribute('aria-label', bookmarkAvailable ? bookmarkLabel : '书签仅支持 EPUB');
+    btnBookmarks.setAttribute('title', bookmarkAvailable ? bookmarkLabel : '书签仅支持 EPUB');
+    if (typeof renderBookmarkButtonState === 'function') renderBookmarkButtonState();
+  }
   if (btnNotes) {
     btnNotes.hidden = !isEpub;
     btnNotes.disabled = !isEpub;
@@ -197,6 +209,7 @@ function updateTopbarState() {
   const floatingToolbar = document.getElementById('readerFloatingToolbar');
   const mobileToolbar = document.getElementById('mobileReaderToolbar');
   const mobileBack = document.getElementById('btnMobileBackToLibrary');
+  const mobileBookmarks = document.getElementById('btnMobileBookmarks');
   const mobileNotes = document.getElementById('btnMobileNotes');
   const mobilePrevious = document.getElementById('btnMobilePreviousChapter');
   const mobileHighlight = document.getElementById('btnMobileHighlight');
@@ -218,6 +231,7 @@ function updateTopbarState() {
     setMobileChromeOpen(isMobileChromeOpen());
   }
   if (mobileBack) mobileBack.disabled = !isEpub;
+  if (mobileBookmarks) mobileBookmarks.disabled = !(isEpub && Boolean(state.currentBookId));
   if (mobileNotes) mobileNotes.disabled = !isEpub;
   if (mobilePrevious) mobilePrevious.disabled = !isEpub || state.currentChapterIndex <= 0;
   if (mobileHighlight) mobileHighlight.disabled = !isEpub;

@@ -117,6 +117,21 @@ function currentServerBookState() {
   return state.userState.books[state.currentBookId] || {};
 }
 
+function currentServerBookBookmarks() {
+  const bookmarks = currentServerBookState().bookmarks;
+  return Array.isArray(bookmarks) ? bookmarks : [];
+}
+
+function setCurrentServerBookBookmarks(bookmarks) {
+  if (!state.currentBookId) return [];
+  const cleaned = Array.isArray(bookmarks) ? bookmarks : [];
+  state.userState.books[state.currentBookId] = {
+    ...currentServerBookState(),
+    bookmarks: cleaned
+  };
+  return cleaned;
+}
+
 function setDirty(nextDirty) {
   state.dirty = !!nextDirty;
 }

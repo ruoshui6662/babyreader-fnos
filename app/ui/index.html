@@ -37,7 +37,7 @@
     <button class="reader-tool-btn" id="btnExportHighlights" type="button" hidden data-reader-action="exportHighlights" aria-label="导出标记与想法" title="导出标记与想法"></button>
     <span class="reader-toolbar-divider" aria-hidden="true"></span>
     <button class="reader-tool-btn" id="btnSearch" type="button" data-reader-action="openSearch" data-reader-panel="search" data-reader-status="reserved" aria-controls="readerDrawer" aria-expanded="false" aria-label="搜索，预留功能，当前不可用" title="搜索，预留功能，当前不可用" disabled></button>
-    <button class="reader-tool-btn" id="btnBookmarks" type="button" data-reader-action="openBookmarks" data-reader-panel="bookmarks" data-reader-status="reserved" aria-controls="readerDrawer" aria-expanded="false" aria-label="书签，预留功能，当前不可用" title="书签，预留功能，当前不可用" disabled></button>
+    <button class="reader-tool-btn" id="btnBookmarks" type="button" data-reader-action="toggleBookmark" aria-pressed="false" aria-label="书签仅支持 EPUB" title="书签仅支持 EPUB" disabled></button>
     <button class="reader-tool-btn" id="btnNotes" type="button" data-reader-action="openNotes" data-reader-panel="notes" aria-controls="readerDrawer" aria-expanded="false" aria-label="打开标记与想法" title="打开标记与想法"></button>
     <button class="reader-tool-btn" id="btnAi" type="button" data-reader-action="openAi" data-reader-panel="ai" aria-controls="readerDrawer" aria-expanded="false" aria-label="打开 AI 阅读助手" title="打开 AI 阅读助手" disabled></button>
     <span class="reader-toolbar-divider" aria-hidden="true"></span>
@@ -53,6 +53,7 @@
     </div>
     <div class="reader-drawer-tabs" role="tablist" aria-label="阅读面板切换">
       <button type="button" id="drawerTabToc" role="tab" data-reader-panel-target="toc" aria-controls="readerPanelToc" aria-selected="false" tabindex="-1">目录</button>
+      <button type="button" id="drawerTabBookmarks" role="tab" data-reader-panel-target="bookmarks" aria-controls="readerPanelBookmarks" aria-selected="false" tabindex="-1">书签</button>
       <button type="button" id="drawerTabNotes" role="tab" data-reader-panel-target="notes" aria-controls="readerPanelNotes" aria-selected="false" tabindex="-1">标记与想法</button>
       <button type="button" id="drawerTabSettings" role="tab" data-reader-panel-target="settings" aria-controls="readerPanelSettings" aria-selected="true" tabindex="0">显示</button>
     </div>
@@ -174,7 +175,10 @@
       </div>
     </section>
     <section class="reader-panel reader-panel-placeholder" id="readerPanelSearch" data-reader-panel-name="search" role="tabpanel" hidden><h3>搜索</h3><p>接口预留，当前版本尚未实现。</p></section>
-    <section class="reader-panel reader-panel-placeholder" id="readerPanelBookmarks" data-reader-panel-name="bookmarks" role="tabpanel" hidden><h3>书签</h3><p>接口预留，当前版本尚未实现。</p></section>
+    <section class="reader-panel bookmarks-panel" id="readerPanelBookmarks" data-reader-panel-name="bookmarks" role="tabpanel" hidden aria-labelledby="drawerTabBookmarks">
+      <div class="bookmark-list" id="bookmarkList" role="list"></div>
+      <p class="reader-panel-empty bookmark-empty-state" id="bookmarkEmptyState">当前还没有书签。</p>
+    </section>
     <section class="reader-panel notes-panel" id="readerPanelNotes" data-reader-panel-name="notes" role="tabpanel" hidden aria-labelledby="drawerTabNotes">
       <div class="notes-panel-summary" id="notesPanelSummary">0 条标记 · 0 条想法</div>
       <div class="notes-panel-toolbar">
@@ -317,6 +321,7 @@
   <nav class="mobile-reader-toolbar" id="mobileReaderToolbar" hidden aria-label="移动端阅读工具栏">
     <button type="button" id="btnMobileBackToLibrary" data-reader-action="backToLibrary" aria-label="返回书架">书架</button>
     <button type="button" id="btnMobileToc" data-reader-action="openToc" data-reader-panel="toc" aria-controls="readerDrawer" aria-expanded="false" aria-label="打开目录">目录</button>
+    <button type="button" id="btnMobileBookmarks" data-reader-action="openBookmarks" data-reader-panel="bookmarks" aria-controls="readerDrawer" aria-expanded="false" aria-label="打开书签" disabled>书签</button>
     <button type="button" id="btnMobileNotes" data-reader-action="openNotes" data-reader-panel="notes" aria-controls="readerDrawer" aria-expanded="false" aria-label="打开标记与想法">笔记</button>
     <button type="button" id="btnMobileHighlight" data-reader-action="highlight" aria-label="创建或编辑划线">划线</button>
     <button type="button" id="btnMobileSettings" data-reader-action="openSettings" data-reader-panel="settings" aria-controls="readerDrawer" aria-expanded="false" aria-label="打开显示设置">设置</button>
@@ -388,6 +393,7 @@
   <script src="reader/actions.js?v=28"></script>
   <script src="reader/notes-panel.js?v=1"></script>
   <script src="reader/progress.js?v=31"></script>
+  <script src="reader/bookmarks.js?v=1"></script>
   <script src="reader/pagination.js?v=33"></script>
   <script src="reader/settings.js?v=29"></script>
   <script src="reader/navigation.js?v=28"></script>

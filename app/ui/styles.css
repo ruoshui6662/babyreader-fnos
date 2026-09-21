@@ -2507,6 +2507,15 @@ body.is-epub .reader-floating-toolbar {
   box-shadow: inset 2px 0 0 var(--color-accent);
 }
 
+.reader-floating-toolbar #btnBookmarks[data-bookmark-active="true"] {
+  color: var(--color-accent);
+  background: color-mix(in srgb, var(--color-accent) 14%, transparent);
+}
+
+.reader-floating-toolbar #btnBookmarks[data-bookmark-active="true"] svg {
+  fill: currentColor;
+}
+
 .reader-floating-toolbar button:active {
   transform: scale(.94);
 }
@@ -2577,6 +2586,82 @@ body.is-epub .reader-floating-toolbar {
   color: var(--color-text);
   background: var(--color-elevated);
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.14);
+}
+
+.bookmark-list {
+  display: grid;
+  gap: 8px;
+}
+
+.bookmark-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: stretch;
+  gap: 6px;
+  padding: 4px;
+  background: var(--color-elevated);
+  border: 1px solid var(--color-separator);
+  border-radius: var(--radius-card);
+}
+
+.bookmark-row-main,
+.bookmark-row-delete {
+  min-height: 44px;
+  border: 0;
+  border-radius: var(--radius-control);
+  font: inherit;
+  cursor: pointer;
+}
+
+.bookmark-row-main {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+  padding: 8px 10px;
+  color: var(--color-text);
+  background: transparent;
+  text-align: left;
+}
+
+.bookmark-row-main:hover,
+.bookmark-row-main:focus-visible {
+  background: var(--color-fill);
+}
+
+.bookmark-row-title,
+.bookmark-row-meta {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.bookmark-row-title {
+  font-size: 14px;
+  line-height: 1.35;
+}
+
+.bookmark-row-meta {
+  color: var(--color-text-2);
+  font-size: 12px;
+}
+
+.bookmark-row-delete {
+  align-self: center;
+  padding: 0 10px;
+  color: var(--color-text-2);
+  background: transparent;
+  font-size: 12px;
+}
+
+.bookmark-row-delete:hover,
+.bookmark-row-delete:focus-visible {
+  color: var(--color-accent);
+  background: var(--color-fill);
+}
+
+.bookmark-empty-state {
+  margin: 4px 0 0;
+  text-align: center;
 }
 
 .settings-panel-content {

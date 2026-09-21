@@ -24,6 +24,7 @@ async function createReaderDom() {
     '../app/ui/reader/actions.js',
     '../app/ui/reader/notes-panel.js',
     '../app/ui/reader/progress.js',
+    '../app/ui/reader/bookmarks.js',
     '../app/ui/reader/pagination.js',
     '../app/ui/reader/settings.js',
     '../app/ui/reader/navigation.js',
@@ -40,6 +41,7 @@ async function createReaderDom() {
   source += '\nwindow.__babyReaderUserStateApi = { applyUserState, persistUserSettings, flushUserSettings, currentUserSettings };';
   source += '\nwindow.__babyReaderActionsApi = { formatHighlightsMd };';
   source += '\nwindow.__babyReaderEpubApi = { parseNavToc, parseNcxToc };';
+  source += '\nwindow.__babyReaderBookmarkApi = { getCurrentBookmarkLocator, isCurrentBookmark, toggleCurrentBookmark, jumpToBookmark, renderBookmarkButtonState, renderBookmarkList, deleteBookmarkFromList, refreshBookmarks };';
 
   window.document.write(html.replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, ''));
   window.requestAnimationFrame = (callback) => {
@@ -89,6 +91,14 @@ async function createReaderDom() {
   window.__babyReaderTest.renderNotesPanel = window.__babyReaderNotesPanelApi.renderNotesPanel;
   window.__babyReaderTest.setupNotesPanel = window.__babyReaderNotesPanelApi.setupNotesPanel;
   window.__babyReaderTest.navigateToAnnotation = window.__babyReaderNotesPanelApi.navigateToAnnotation;
+  window.__babyReaderTest.getCurrentBookmarkLocator = window.__babyReaderBookmarkApi.getCurrentBookmarkLocator;
+  window.__babyReaderTest.isCurrentBookmark = window.__babyReaderBookmarkApi.isCurrentBookmark;
+  window.__babyReaderTest.toggleCurrentBookmark = window.__babyReaderBookmarkApi.toggleCurrentBookmark;
+  window.__babyReaderTest.jumpToBookmark = window.__babyReaderBookmarkApi.jumpToBookmark;
+  window.__babyReaderTest.renderBookmarkButtonState = window.__babyReaderBookmarkApi.renderBookmarkButtonState;
+  window.__babyReaderTest.renderBookmarkList = window.__babyReaderBookmarkApi.renderBookmarkList;
+  window.__babyReaderTest.deleteBookmarkFromList = window.__babyReaderBookmarkApi.deleteBookmarkFromList;
+  window.__babyReaderTest.refreshBookmarks = window.__babyReaderBookmarkApi.refreshBookmarks;
   return { window, api: window.__babyReaderTest };
 }
 
@@ -369,6 +379,124 @@ function mountDuplicateTextChapter(window) {
   article.appendChild(chapter);
   return chapter;
 }
+
+test('bookmarks capture the current semantic locator and compare stable position fields', async () => {
+  const { window, api } = await createReaderDom();
+  const chapter = mountDuplicateTextChapter(window);
+  const target = window.document.createElement('p');
+  target.id = 'bookmark-target';
+  target.textContent = '当前书签位置';
+  chapter.replaceChildren(target);
+
+  const reader = window.document.getElementById('reader');
+  Object.defineProperty(reader, 'clientHeight', { configurable: true, value: 100 });
+  Object.defineProperty(reader, 'scrollHeight', { configurable: true, value: 300 });
+  reader.scrollTop = 80;
+  window.HTMLElement.prototype.getBoundingClientRect = function getBoundingClientRect() {
+    if (this.id === 'reader') return { left: 0, right: 800, top: 0, bottom: 100, width: 800, height: 100 };
+    if (this.id === 'bookmark-target') return { left: 0, right: 400, top: 10, bottom: 40, width: 400, height: 30 };
+    if (this.classList?.contains('epub-chapter')) return { left: 0, right: 800, top: 0, bottom: 300, width: 800, height: 300 };
+    return { left: 0, right: 0, top: 0, bottom: 0, width: 0, height: 0 };
+  };
+
+  api.state.contentType = 'epub';
+  api.state.currentBookId = 'bookmark-book';
+  api.state.effectiveReadingMode = 'scroll';
+  api.state.epubArchive = {};
+  api.state.epubChapterCount = 4;
+  api.state.epubChapterIndex = 1;
+
+  const locator = api.getCurrentBookmarkLocator();
+  assert.equal(locator.type, 'semantic-position');
+  assert.equal(locator.href, 'OPS/chapter.xhtml');
+  assert.equal(locator.anchor, 'bookmark-target');
+  assert.equal(locator.readingScope, 'chapter');
+  assert.equal(locator.chapterPercentage, 0.4);
+  assert.equal(api.isCurrentBookmark({ locator }), false);
+  assert.equal(api.isCurrentBookmark({ locator: { ...locator, pageNumber: 99, scrollTop: 999 } }), false);
+});
+
+test('bookmark toggle persists add/remove and mirrors the current book state', async () => {
+  const { window, api } = await createReaderDom();
+  const chapter = mountDuplicateTextChapter(window);
+  const target = window.document.createElement('p');
+  target.id = 'toggle-target';
+  target.textContent = '切换书签';
+  chapter.replaceChildren(target);
+  const reader = window.document.getElementById('reader');
+  Object.defineProperty(reader, 'clientHeight', { configurable: true, value: 100 });
+  Object.defineProperty(reader, 'scrollHeight', { configurable: true, value: 200 });
+  window.HTMLElement.prototype.getBoundingClientRect = function getBoundingClientRect() {
+    if (this.id === 'reader') return { left: 0, right: 800, top: 0, bottom: 100, width: 800, height: 100 };
+    if (this.id === 'toggle-target') return { left: 0, right: 400, top: 10, bottom: 40, width: 400, height: 30 };
+    if (this.classList?.contains('epub-chapter')) return { left: 0, right: 800, top: 0, bottom: 200, width: 800, height: 200 };
+    return { left: 0, right: 0, top: 0, bottom: 0, width: 0, height: 0 };
+  };
+
+  const bookId = 'bookmark-toggle-book';
+  api.state.contentType = 'epub';
+  api.state.currentBookId = bookId;
+  api.state.currentPath = 'bookmark-toggle.epub';
+  api.state.effectiveReadingMode = 'scroll';
+  api.state.epubArchive = {};
+  api.state.epubChapterCount = 1;
+  api.state.epubChapterIndex = 0;
+  api.state.userState.books[bookId] = {};
+
+  const calls = [];
+  window.browserHost.createBookmark = async (input) => {
+    calls.push({ type: 'create', input });
+    return { id: 'bookmark-1', ...input, createdAt: '2026-09-21T00:00:00.000Z' };
+  };
+  window.browserHost.deleteBookmark = async (bookmarkId) => {
+    calls.push({ type: 'delete', bookmarkId });
+    return { deleted: true, id: bookmarkId };
+  };
+
+  const added = await api.toggleCurrentBookmark();
+  assert.equal(added.id, 'bookmark-1');
+  assert.deepEqual(calls.map((call) => call.type), ['create']);
+  assert.equal(api.state.userState.books[bookId].bookmarks.length, 1);
+  assert.equal(api.isCurrentBookmark(api.state.userState.books[bookId].bookmarks[0]), true);
+
+  const removed = await api.toggleCurrentBookmark();
+  assert.equal(removed.deleted, true);
+  assert.deepEqual(calls.map((call) => call.type), ['create', 'delete']);
+  assert.equal(api.state.userState.books[bookId].bookmarks.length, 0);
+});
+
+test('bookmark mutation failures leave button state and list state unchanged', async () => {
+  const { window, api } = await createReaderDom();
+  const chapter = mountDuplicateTextChapter(window);
+  const target = window.document.createElement('p');
+  target.id = 'mutation-target';
+  target.textContent = '变更目标';
+  chapter.replaceChildren(target);
+  const reader = window.document.getElementById('reader');
+  Object.defineProperty(reader, 'clientHeight', { configurable: true, value: 100 });
+  Object.defineProperty(reader, 'scrollHeight', { configurable: true, value: 200 });
+  window.HTMLElement.prototype.getBoundingClientRect = function getBoundingClientRect() {
+    if (this.id === 'reader') return { left: 0, right: 800, top: 0, bottom: 100, width: 800, height: 100 };
+    if (this.id === 'mutation-target') return { left: 0, right: 400, top: 10, bottom: 40, width: 400, height: 30 };
+    if (this.classList?.contains('epub-chapter')) return { left: 0, right: 800, top: 0, bottom: 200, width: 800, height: 200 };
+    return { left: 0, right: 0, top: 0, bottom: 0, width: 0, height: 0 };
+  };
+
+  const bookId = 'bookmark-mutation-book';
+  api.state.contentType = 'epub';
+  api.state.currentBookId = bookId;
+  api.state.currentPath = 'bookmark-mutation.epub';
+  api.state.effectiveReadingMode = 'scroll';
+  api.state.epubArchive = {};
+  api.state.epubChapterCount = 1;
+  api.state.epubChapterIndex = 0;
+  api.state.userState.books[bookId] = { bookmarks: [] };
+  window.browserHost.createBookmark = async () => { throw new Error('network down'); };
+
+  await assert.rejects(api.toggleCurrentBookmark(), /network down/);
+  assert.deepEqual(api.state.userState.books[bookId].bookmarks, []);
+  assert.equal(window.document.getElementById('btnBookmarks').dataset.bookmarkActive, 'false');
+});
 
 function deferred() {
   let resolve;
@@ -1216,15 +1344,19 @@ test('Reader Shell retains legacy DOM IDs and exposes one responsive Drawer', as
   assert.equal(document.getElementById('btnBackToLibrary').dataset.readerAction, 'backToLibrary');
   assert.equal(document.getElementById('btnSettings').dataset.readerAction, 'openSettings');
 
-  for (const id of ['btnSearch', 'btnBookmarks']) {
-    const control = document.getElementById(id);
-    assert.ok(control);
-    assert.equal(control.disabled, true);
-    assert.equal(control.dataset.readerStatus, 'reserved');
-    assert.match(control.getAttribute('aria-label'), /预留功能，当前不可用/);
-    // Icon-only: no text label, accessible name comes from aria-label.
-    assert.equal(control.textContent.trim(), '');
-  }
+  const searchControl = document.getElementById('btnSearch');
+  assert.ok(searchControl);
+  assert.equal(searchControl.disabled, true);
+  assert.equal(searchControl.dataset.readerStatus, 'reserved');
+  assert.match(searchControl.getAttribute('aria-label'), /预留功能，当前不可用/);
+  assert.equal(searchControl.textContent.trim(), '');
+
+  const bookmarkControl = document.getElementById('btnBookmarks');
+  assert.ok(bookmarkControl);
+  assert.equal(bookmarkControl.disabled, true);
+  assert.equal(bookmarkControl.dataset.readerStatus, undefined);
+  assert.match(bookmarkControl.getAttribute('aria-label'), /书签仅支持 EPUB/);
+  assert.equal(bookmarkControl.textContent.trim(), '');
   const aiButton = document.getElementById('btnAi');
   assert.ok(aiButton);
   assert.equal(aiButton.disabled, true);
@@ -1295,7 +1427,7 @@ test('mobile continuous-scroll controls use flow chapter boundaries and a compac
   assert.equal(document.getElementById('mobileReaderChromeToggle')?.getAttribute('aria-label'), '显示阅读工具');
   assert.deepEqual(
     [...toolbar.querySelectorAll('button')].map((button) => button.dataset.readerAction),
-    ['backToLibrary', 'openToc', 'openNotes', 'highlight', 'openSettings']
+    ['backToLibrary', 'openToc', 'openBookmarks', 'openNotes', 'highlight', 'openSettings']
   );
   assert.equal(document.getElementById('btnMobilePreviousPage'), null);
   assert.equal(document.getElementById('btnMobileNextPage'), null);
@@ -1437,6 +1569,53 @@ test('Drawer keeps one active panel and restores focus to its original launcher'
   assert.equal(document.activeElement, settingsButton);
 });
 
+test('bookmark toolbar, Drawer list, and mobile entry are enabled only for EPUB', async () => {
+  const { window, api } = await createReaderDom();
+  const document = window.document;
+  const bookId = 'bookmark-ui-book';
+  const chapter = mountDuplicateTextChapter(window);
+  const target = document.createElement('p');
+  target.id = 'bookmark-ui-target';
+  target.textContent = '书签目标';
+  chapter.replaceChildren(target);
+  api.state.currentBookId = bookId;
+  api.state.currentPath = 'bookmark-ui.epub';
+  api.state.contentType = 'epub';
+  api.state.effectiveReadingMode = 'scroll';
+  api.state.epubChapterCount = 1;
+  api.state.epubChapterIndex = 0;
+  api.state.userState.books[bookId] = {
+    bookmarks: [{
+      id: 'bookmark-ui-1',
+      label: '书签目标',
+      locator: { href: 'OPS/chapter.xhtml', anchor: 'bookmark-ui-target', readingScope: 'chapter' }
+    }]
+  };
+
+  api.renderToc();
+  const desktopButton = document.getElementById('btnBookmarks');
+  const mobileButton = document.getElementById('btnMobileBookmarks');
+  assert.equal(desktopButton.disabled, false);
+  assert.equal(desktopButton.dataset.readerStatus, undefined);
+  assert.equal(api.readerPanels.bookmarks.enabled(), true);
+  assert.ok(mobileButton);
+  assert.equal(mobileButton.disabled, false);
+
+  api.renderBookmarkList();
+  assert.equal(document.querySelectorAll('#bookmarkList [data-bookmark-id]').length, 1);
+  assert.equal(document.getElementById('bookmarkEmptyState').hidden, true);
+
+  assert.equal(api.readerActions.openBookmarks(mobileButton), true);
+  assert.equal(document.getElementById('readerPanelBookmarks').hidden, false);
+  assert.equal(document.querySelectorAll('[data-reader-panel-name]:not([hidden])').length, 1);
+
+  api.state.contentType = 'text';
+  api.renderToc();
+  assert.equal(desktopButton.disabled, true);
+  assert.equal(mobileButton.disabled, true);
+  assert.equal(api.readerPanels.bookmarks.enabled(), false);
+});
+
 test('reserved reader actions stay disabled and never issue API requests while AI is EPUB-only', async () => {
   const { window, api } = await createReaderDom();
   const document = window.document;
@@ -1446,16 +1625,20 @@ test('reserved reader actions stay disabled and never issue API requests while A
     return { ok: true, json: async () => ({}) };
   };
 
-  for (const [controlId, actionName, panelName] of [
-    ['btnSearch', 'openSearch', 'search'],
-    ['btnBookmarks', 'openBookmarks', 'bookmarks']
-  ]) {
+  const search = ['btnSearch', 'openSearch', 'search'];
+  for (const [controlId, actionName, panelName] of [search]) {
     const control = document.getElementById(controlId);
     assert.equal(control.disabled, true);
     assert.equal(control.dataset.readerStatus, 'reserved');
     assert.equal(api.readerPanels[panelName].enabled(), false);
     assert.equal(api.readerActions[actionName](control), false);
   }
+
+  const bookmarks = document.getElementById('btnBookmarks');
+  assert.equal(bookmarks.disabled, true);
+  assert.equal(bookmarks.dataset.readerStatus, undefined);
+  assert.equal(api.readerPanels.bookmarks.enabled(), false);
+  assert.equal(api.readerActions.openBookmarks(bookmarks), false);
 
   api.state.contentType = 'epub';
   assert.equal(typeof api.readerActions.openAi, 'function');
