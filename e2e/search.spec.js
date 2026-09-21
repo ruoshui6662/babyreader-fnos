@@ -16,11 +16,10 @@ async function openLibraryBook(page, title, text) {
   await expect(page.locator('#article')).toContainText(text);
 }
 
-async function runSearch(page, query, scope = 'book', launcher = '#btnSearch') {
+async function runSearch(page, query, launcher = '#btnSearch') {
   await expect(page.locator(launcher)).toBeEnabled();
   await page.locator(launcher).click();
   await expect(page.locator('#readerSearchSheet')).toBeVisible();
-  await page.locator('#readerSearchScope').selectOption(scope);
   await page.locator('#readerSearchQuery').fill(query);
   const responsePromise = page.waitForResponse((response) =>
     response.url().includes('/api/books/') && response.url().includes('/search') && response.ok()
@@ -107,6 +106,36 @@ test('renders a server snippet containing markup as plain text', async ({ page }
   await expect(page.locator('#readerSearchResults img')).toHaveCount(0);
 });
 
+test('search controls use the shared reader control treatment', async ({ page }) => {
+  await openLibraryBook(page, 'E2E Markdown', 'E2E Reader');
+  await page.locator('#btnSearch').click();
+  await expect(page.locator('#readerSearchSheet')).toBeVisible();
+
+  const metrics = await page.locator('#readerSearchForm').evaluate((form) => {
+    const input = form.querySelector('#readerSearchQuery');
+    const button = form.querySelector('#readerSearchSubmit');
+    const inputStyle = getComputedStyle(input);
+    const buttonStyle = getComputedStyle(button);
+    return {
+      inputHeight: input.getBoundingClientRect().height,
+      buttonHeight: button.getBoundingClientRect().height,
+      inputRadius: inputStyle.borderRadius,
+      buttonRadius: buttonStyle.borderRadius,
+      buttonCursor: buttonStyle.cursor,
+      buttonOpacity: buttonStyle.opacity,
+      buttonBackground: buttonStyle.backgroundColor
+    };
+  });
+
+  expect(metrics.inputHeight).toBe(44);
+  expect(metrics.buttonHeight).toBe(44);
+  expect(metrics.inputRadius).toBe('10px');
+  expect(metrics.buttonRadius).toBe('10px');
+  expect(metrics.buttonCursor).toBe('pointer');
+  expect(metrics.buttonOpacity).toBe('1');
+  expect(metrics.buttonBackground).toBe('rgb(10, 132, 255)');
+});
+
 test.describe('mobile search entry', () => {
   const { defaultBrowserType, ...pixel7 } = devices['Pixel 7'];
   test.use(pixel7);
@@ -116,7 +145,7 @@ test.describe('mobile search entry', () => {
     await expect(page.locator('#mobileReaderChromeToggle')).toBeVisible();
     await page.locator('#mobileReaderChromeToggle').click();
     await expect(page.locator('#mobileReaderToolbar')).toBeVisible();
-    await runSearch(page, 'E2E EPUB Chapter 1', 'book', '#btnMobileSearch');
+    await runSearch(page, 'E2E EPUB Chapter 1', '#btnMobileSearch');
     await expect(page.locator('.reader-search-result')).toContainText('E2E EPUB Chapter 1');
   });
 
@@ -124,7 +153,7 @@ test.describe('mobile search entry', () => {
     await openLibraryBook(page, 'E2E Markdown', 'E2E Reader');
     await expect(page.locator('#mobileReaderChromeToggle')).toBeVisible();
     await page.locator('#mobileReaderChromeToggle').click();
-    await runSearch(page, 'E2E Reader', 'book', '#btnMobileSearch');
+    await runSearch(page, 'E2E Reader', '#btnMobileSearch');
     await expect(page.locator('.reader-search-result')).toContainText('E2E Reader');
   });
 });

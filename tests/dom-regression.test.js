@@ -1393,11 +1393,7 @@ test('search surface opens, queries the book, and renders safe results', async (
   assert.equal(searchSheet.hidden, true);
   assert.equal(document.getElementById('readerSearchForm').dataset.readerSearchState, 'idle');
   assert.equal(document.getElementById('readerSearchQuery').disabled, false);
-  assert.equal(document.getElementById('readerSearchScope').disabled, false);
-  assert.deepEqual(
-    [...document.getElementById('readerSearchScope').options].map((option) => option.value),
-    ['book', 'chapter']
-  );
+  assert.equal(document.getElementById('readerSearchScope'), null);
   assert.equal(document.getElementById('readerSearchSubmit').disabled, false);
   assert.equal(document.getElementById('readerSearchLoading').hidden, true);
   assert.equal(document.getElementById('readerSearchResults').hidden, true);
@@ -1405,7 +1401,7 @@ test('search surface opens, queries the book, and renders safe results', async (
   assert.equal(document.getElementById('readerSearchEmpty').hidden, true);
 
   assert.equal(api.readerSearchContract.endpointTemplate, '/api/books/:bookId/search');
-  assert.deepEqual([...api.readerSearchContract.scopes], ['book', 'chapter']);
+  assert.deepEqual([...api.readerSearchContract.scopes], ['book']);
   assert.equal(api.readerSearchContract.defaultScope, 'book');
   assert.equal(api.readerSearchContract.defaultLimit, 20);
   assert.equal(api.readerSearchContract.maxLimit, 50);
@@ -1417,7 +1413,7 @@ test('search surface opens, queries the book, and renders safe results', async (
       chapterIndex: 2,
       limit: 100
     }),
-    '/api/books/book%2F1/search?q=%E8%9B%8B%E7%99%BD%E8%B4%A8+%E4%B8%8E+%E5%81%A5%E5%BA%B7&scope=chapter&chapterIndex=2&limit=50'
+    '/api/books/book%2F1/search?q=%E8%9B%8B%E7%99%BD%E8%B4%A8+%E4%B8%8E+%E5%81%A5%E5%BA%B7&scope=book&limit=50'
   );
 
   api.state.currentBookId = 'search-book';
@@ -1462,6 +1458,8 @@ test('search surface opens, queries the book, and renders safe results', async (
   await new Promise((resolve) => setTimeout(resolve, 0));
 
   assert.match(requestedUrl, /\/search\?q=%E8%9B%8B%E7%99%BD%E8%B4%A8/);
+  assert.match(requestedUrl, /[?&]scope=book(?:&|$)/);
+  assert.doesNotMatch(requestedUrl, /chapterIndex=/);
   assert.equal(document.getElementById('readerSearchResults').hidden, false);
   assert.equal(document.querySelectorAll('#readerSearchResults > li').length, 1);
   assert.match(document.querySelector('#readerSearchResults').textContent, /蛋白质相关内容/);

@@ -4641,58 +4641,102 @@ body.is-epub .reader-floating-toolbar {
 
 .reader-search-form {
   display: grid;
-  gap: 14px;
+  gap: 18px;
 }
 
 .reader-search-field {
   display: grid;
-  gap: 7px;
+  gap: 8px;
   min-width: 0;
 }
 
-.reader-search-field > span,
-.reader-search-options > .reader-search-field > span {
+.reader-search-field > span {
   color: var(--ui-secondary-label);
   font-size: 13px;
   font-weight: 600;
 }
 
+.reader-search-input-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+}
+
 .reader-search-field input,
-.reader-search-field select {
+.reader-search-submit {
   box-sizing: border-box;
-  width: 100%;
-  min-height: 42px;
+  min-height: 44px;
+  border-radius: var(--radius-control);
   padding: 0 12px;
-  color: var(--ui-secondary-label);
-  background: var(--ui-fill);
-  border: 1px solid var(--ui-separator);
-  border-radius: 12px;
   font: inherit;
   font-size: 14px;
 }
 
-.reader-search-field input:disabled,
-.reader-search-field select:disabled {
+.reader-search-field input {
+  width: 100%;
+  color: var(--ui-secondary-label);
+  background: var(--ui-fill);
+  border: 1px solid var(--ui-separator);
+  transition: border-color var(--dur-fast) var(--ease-out), box-shadow var(--dur-fast) var(--ease-out), background-color var(--dur-fast) var(--ease-out);
+}
+
+.reader-search-field input:focus-visible {
+  color: var(--ui-label);
+  background: var(--ui-surface);
+  border-color: var(--ui-focus);
+  outline: none;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--ui-focus) 22%, transparent);
+}
+
+.reader-search-field input::placeholder {
+  color: var(--ui-tertiary-label);
+}
+
+.reader-search-field input:disabled {
   cursor: not-allowed;
   opacity: .68;
 }
 
-.reader-search-options {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: 12px;
-  align-items: end;
+.reader-search-hint {
+  color: var(--ui-tertiary-label);
+  font-size: 12px;
+  line-height: 1.4;
 }
 
 .reader-search-submit {
-  min-height: 42px;
+  min-width: 72px;
   padding: 0 16px;
+  color: #FFFFFF;
+  background: var(--ui-accent);
+  border: 1px solid var(--ui-accent);
+  font-weight: 600;
+  cursor: pointer;
+  box-shadow: 0 2px 8px color-mix(in srgb, var(--ui-accent) 24%, transparent);
+  transition: background-color var(--dur-fast) var(--ease-out), border-color var(--dur-fast) var(--ease-out), box-shadow var(--dur-fast) var(--ease-out), transform var(--dur-fast) var(--ease-out);
+}
+
+.reader-search-submit:hover,
+.reader-search-submit:focus-visible {
+  background: color-mix(in srgb, var(--ui-accent) 88%, #000000);
+  border-color: color-mix(in srgb, var(--ui-accent) 88%, #000000);
+  box-shadow: 0 4px 12px color-mix(in srgb, var(--ui-accent) 30%, transparent);
+}
+
+.reader-search-submit:focus-visible {
+  outline: 2px solid var(--ui-focus);
+  outline-offset: 2px;
+}
+
+.reader-search-submit:active {
+  transform: scale(.96);
+}
+
+.reader-search-submit:disabled {
   color: var(--ui-tertiary-label);
   background: var(--ui-fill);
-  border: 1px solid var(--ui-separator);
-  border-radius: 12px;
-  font: inherit;
-  font-size: 14px;
+  border-color: var(--ui-separator);
+  box-shadow: none;
   cursor: not-allowed;
   opacity: .68;
 }

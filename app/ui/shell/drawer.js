@@ -4,7 +4,7 @@
 
 const readerSearchContract = Object.freeze({
   endpointTemplate: '/api/books/:bookId/search',
-  scopes: Object.freeze(['book', 'chapter']),
+  scopes: Object.freeze(['book']),
   defaultScope: 'book',
   defaultLimit: 20,
   maxLimit: 50
@@ -18,9 +18,7 @@ function buildReaderSearchUrl({
   limit = readerSearchContract.defaultLimit
 } = {}) {
   if (!bookId) throw new TypeError('bookId is required');
-  const normalizedScope = readerSearchContract.scopes.includes(scope)
-    ? scope
-    : readerSearchContract.defaultScope;
+  const normalizedScope = readerSearchContract.defaultScope;
   const requestedLimit = Number(limit);
   const boundedLimit = Math.max(
     1,

@@ -164,7 +164,6 @@ async function navigateToSearchResult(result) {
 async function submitReaderSearch(event) {
   event.preventDefault();
   const input = searchElement('readerSearchQuery');
-  const scope = searchElement('readerSearchScope');
   const query = String(input?.value || '').trim();
   if (!query) {
     setSearchState('error', '请输入要搜索的内容。');
@@ -185,8 +184,7 @@ async function submitReaderSearch(event) {
   try {
     const payload = await window.browserHost.searchBook(state.currentBookId, {
       query,
-      scope: scope?.value === 'chapter' ? 'chapter' : 'book',
-      chapterIndex: Number.isInteger(state.currentChapterIndex) ? state.currentChapterIndex : 0,
+      scope: 'book',
       limit: 20,
       signal: _readerSearchAbortController.signal
     });
@@ -206,9 +204,7 @@ function resetReaderSearch() {
   _readerSearchToken += 1;
   _readerSearchBookId = state.currentBookId || null;
   const input = searchElement('readerSearchQuery');
-  const scope = searchElement('readerSearchScope');
   if (input) input.value = '';
-  if (scope) scope.value = 'book';
   setSearchState('idle');
 }
 

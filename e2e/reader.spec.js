@@ -94,7 +94,6 @@ test('opens the independent search surface and searches the current Markdown boo
   await expect(page.locator('#btnSearch')).toBeEnabled();
   await expect(page.locator('#readerSearchSheet')).toBeHidden();
   await expect(page.locator('#readerSearchQuery')).toBeEnabled();
-  await expect(page.locator('#readerSearchScope')).toBeEnabled();
   await expect(page.locator('#readerSearchSubmit')).toBeEnabled();
   await expect(page.locator('#readerSearchEmpty')).toBeAttached();
   await expect(page.locator('#readerSearchEmpty')).toBeHidden();
@@ -122,8 +121,8 @@ test('opens the independent search surface and searches the current Markdown boo
   }));
   expect(contract).toEqual({
     endpointTemplate: '/api/books/:bookId/search',
-    scopes: ['book', 'chapter'],
-    url: '/api/books/book%2F1/search?q=%E8%9B%8B%E7%99%BD%E8%B4%A8&scope=chapter&chapterIndex=1&limit=20'
+    scopes: ['book'],
+    url: '/api/books/book%2F1/search?q=%E8%9B%8B%E7%99%BD%E8%B4%A8&scope=book&limit=20'
   });
   expect(searchRequests).toHaveLength(1);
   expect(searchRequests[0]).toMatch(/\/api\/books\/[a-f0-9]{64}\/search\?/);
