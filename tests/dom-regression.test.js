@@ -1523,6 +1523,14 @@ test('search result navigation locates text in the current document safely', asy
   assert.equal(document.querySelector('.reader-search-target')?.dataset.scrolledIntoView, 'true');
 });
 
+test('search jump feedback uses a soft highlight instead of a blue outline', async () => {
+  const css = await fs.readFile(path.resolve(__dirname, '../app/ui/styles.css'), 'utf8');
+  const targetRule = css.match(/\.reader-search-target\s*\{([^}]*)\}/s)?.[1] || '';
+  assert.match(targetRule, /background(?:-color)?:/);
+  assert.match(targetRule, /animation:/);
+  assert.doesNotMatch(targetRule, /outline:/);
+});
+
 test('topbar navigation controls use icon-only SVGs without changing actions', async () => {
   const { window } = await createReaderDom();
   const document = window.document;

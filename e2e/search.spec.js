@@ -76,6 +76,14 @@ test('searches an EPUB and navigates a result to another chapter', async ({ page
   await result.click();
   await expect(page.locator('#readerSearchSheet')).toBeHidden();
   await expect(page.locator('#article')).toContainText('E2E EPUB Chapter 2');
+  const target = page.locator('#article .reader-search-target').first();
+  await expect(target).toBeVisible();
+  const targetStyle = await target.evaluate((element) => {
+    const style = getComputedStyle(element);
+    return { outlineStyle: style.outlineStyle, animationName: style.animationName };
+  });
+  expect(targetStyle.outlineStyle).toBe('none');
+  expect(targetStyle.animationName).toBe('reader-search-target-fade');
 });
 
 test('renders a server snippet containing markup as plain text', async ({ page }) => {
