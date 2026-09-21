@@ -1,245 +1,305 @@
-# AI 索引管理器开发计划（后续执行，不在当前阶段执行）
+# Implementation Plan: AI 索引管理器
 
-## 目的
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
 
-管理 SQLite FTS 本地索引的生命周期、磁盘占用和权限，避免长期使用大量书籍后产生孤立索引或不可控的空间增长。
+## Goal
 
-本计划只处理“书本检索索引”，不处理 AI 对话历史。当前对话历史持久化仍由独立计划负责；目前也不会修改现有 FTS 行为、清理设备上的现有索引或增加设置入口。
+在不改变现有 AI 问答、全文搜索、阅读器、书签、标注和书库行为的前提下，增加管理员可用的 AI 索引管理器：可查看索引健康状态与空间占用，可安全删除单本索引，可清理确认过的孤儿和过期临时文件，并确保构建、读取、删除、重启和异常发布之间不会损坏现有索引。
 
-## 当前实现审查结论
+本计划是已批准的后续开发计划，当前状态为“尚未执行”。正式规格见 docs/superpowers/specs/2026-09-21-ai-index-manager-design.md。
 
-当前索引位于：
+## Architecture
 
-```text
-${TRIM_PKGVAR}/ai-index/<bookId>.sqlite
-```
+保留现有“一本书一个 SQLite FTS5 文件”的架构：
 
-当前行为：
+    TRIM_PKGVAR/ai-index/<bookId>.sqlite
 
-- 一本书一个 SQLite 文件；
-- 第一次 AI 检索时建立整本书索引；
-- 文件指纹或 schema 版本变化时自动重建；
-- 重建采用临时文件后替换原文件，不会为同一本书无限生成版本文件；
-- FTS 索引包含正文分块、章节路径、章节编号和章节标题；
-- 当前没有索引清单、最后访问时间、空间统计、孤立索引清理或用户手动清理入口；
-- 删除书籍后，旧索引文件目前不会自动删除；
-- 当前索引文件曾验收为 `644`，需要收紧为 `600`，索引目录需要保持 `700`；
-- 当前没有保存检索关键词和检索日志，索引管理器不应新增此类日志。
+新增 app/server/ai-index-manager.js 作为唯一索引管理边界，负责 manifest、只读检查、统计、生命周期租约、删除和清理。ai-fts.js 继续负责 FTS5 schema、分块、构建和查询，但必须通过共享的生命周期接口发布和登记索引。
 
-## 调研结论
+新增 manifest：
 
-### 1. 不建议把“索引历史版本”长期保留
+    TRIM_PKGVAR/ai-index/manifest.json
 
-当前实现已经通过“同一 bookId 的原子替换”避免版本堆积。管理器应继续沿用这个模型：
+manifest 只保存 bookId、大小、指纹、schemaVersion、indexedAt、lastAccessedAt 等管理元数据；真实路径、正文、API Key、UID、查询词和问答内容永不进入 manifest。
 
-- 不保留旧版本索引；
-- 不在索引文件名中加入时间戳；
-- 重建失败时保留旧的有效索引，不能先删除后构建；
-- 临时文件必须在成功、失败和进程异常恢复时清理。
+管理 API 只允许管理员：
 
-### 2. 空间统计应使用 SQLite 元数据和文件系统双重结果
+    GET /api/ai/indexes
+    DELETE /api/ai/indexes/<bookId>
+    POST /api/ai/indexes/cleanup
 
-索引管理器需要同时统计：
+前端在 AI 设置中增加管理员可见的“本地检索索引”入口，打开独立 surface；surface 复用现有 readerSurfaceController 的关闭、焦点、遮罩、安全区和无障碍行为。
 
-- SQLite 文件实际字节数：用于用户看到真实占用；
-- `PRAGMA page_count` 与 `PRAGMA page_size`：用于数据库内部容量分析；
-- `PRAGMA freelist_count`：用于判断文件内是否有大量可回收页。
+## Tech Stack
 
-SQLite 官方文档说明，默认 `auto_vacuum=none` 时，删除数据不会自动缩小文件，空闲页会进入 freelist；`VACUUM` 可以重建数据库回收空间，但可能需要接近原文件两倍的临时磁盘空间。因此当前“一书一文件、删除后直接删除文件、重建时原子替换”的策略比在一个总库中频繁删除再 VACUUM 更适合本项目。[SQLite PRAGMA](https://sqlite.org/pragma.html)、[SQLite VACUUM](https://www.sqlite.org/lang_vacuum.html)
+- Node.js 22.18 的 node:sqlite DatabaseSync。
+- SQLite FTS5，保持 rollback journal，不引入 WAL。
+- 现有 CommonJS 服务结构和现有 storage/security/library 适配方式。
+- 现有原生 DOM/CSS UI，不引入新的前端框架。
+- Node 内置测试、现有 Playwright E2E、fnOS 设备验收脚本与 FPK 打包流程。
 
-### 3. 先做确定性清理，再考虑自动配额
+## Spec
 
-第一版管理器优先解决确定性问题：
+完整约束、数据模型、API 响应、错误码、并发租约、发布策略、UI 和验收标准以 docs/superpowers/specs/2026-09-21-ai-index-manager-design.md 为准。实现时必须特别遵守以下边界：
 
-1. 清理书库中已不存在的 bookId 对应索引；
-2. 清理遗留的 `.tmp` 临时文件；
-3. 修复索引文件和目录权限；
-4. 提供用户主动清理指定索引和全部索引；
-5. 显示总占用和每本书的占用。
+- 书库扫描失败时孤儿清理 fail closed。
+- 客户端只提交 bookId，服务端自行解析路径。
+- 不跟随符号链接、不删除目录、不接受路径。
+- readOnly 检查不得创建不存在的 SQLite 文件。
+- 有 build/read lease 时删除返回 409。
+- 发布失败必须保留旧的可用索引；禁止先 rm 旧索引再 rename 新索引。
+- 首版不自动 LRU、配额、VACUUM、WAL 和全量删除。
 
-LRU 和容量上限放在第二步，避免首次实现误删用户刚打开或正在建立的索引。
+## Global Constraints
 
-## 产品方案
+- 先写回归测试，再修改运行代码；每个任务保持 RED → GREEN → 回归。
+- 每个任务只触及列出的文件；如果发现需要扩大边界，先补充计划并暂停实现。
+- 不改变已有 AI API 请求体、响应体和 FTS 查询排序契约。
+- 不把管理器逻辑复制到 ai-fts.js、book-search.js 和前端多个入口。
+- 所有文件写入使用同一 ai-index 目录，文件权限目录 700、SQLite 文件 600、manifest 600。
+- 所有租约释放放在 finally；所有删除前做目标类型、路径和活动状态校验。
+- 每个任务单独提交，提交前执行对应测试和 git diff --check。
+- 任何声称“完成”之前，必须有命令输出或真机记录作为证据。
 
-### 入口
+## Review Focus
 
-在现有 AI 设置弹窗内增加“本地检索索引”区域，点击后打开独立的索引管理弹窗，不与 AI 对话内容混合。
+审查重点依次为：
 
-### 页面内容
+1. 删除边界：是否可能删除用户原书、整个目录、符号链接目标或别的书籍索引。
+2. 并发边界：构建、搜索、检查、删除是否共享同一租约状态。
+3. 发布边界：构建失败或进程中断时旧索引是否仍可用。
+4. 权限边界：是否所有 API 都在服务端校验管理员身份，是否泄露路径和正文。
+5. 兼容边界：既有 FTS、AI、书签、标注、阅读器和 fnOS 启动流程是否保持稳定。
+6. 运维边界：manifest 损坏、临时文件残留、SQLite corrupt、磁盘不足、服务重启如何恢复。
 
-顶部显示：
+## File Map
 
-- 已建立索引：N 本；
-- 当前占用：N MB；
-- 可清理索引：N 本；
-- 最近统计时间。
+### Existing files to inspect or modify
 
-列表显示：
+- app/server/ai-fts.js：FTS5 schema、buildIndex、ensureIndex、查询和当前 buildLocks；需要接入共享租约和安全发布。
+- app/server/book-search.js：全文搜索调用 ensureIndex 的边界；只在需要记录访问或共享租约时改动。
+- app/server/index.js：路由、gatewayUser、findBook、管理员判断和统一错误响应。
+- app/server/library.js：健康书库清单和书籍元数据来源；不扩大格式支持。
+- app/server/security.js：认证、管理员边界和路径安全工具；优先复用现有实现。
+- app/ui/core/api.js：新增管理 API 客户端封装。
+- app/ui/index.html：加载新的 index manager 模块和必要容器。
+- app/ui/reader/ai.js：AI 设置入口，保持既有问答和设置功能不变。
+- app/ui/styles.css：复用现有 surface、sheet、按钮、状态和移动端安全区 token。
+- tests/reader-core.test.js：FTS 生命周期、索引重建和回归测试。
+- tests/dom-regression.test.js：surface、管理员入口和 UI 回归测试。
+- e2e/reader.spec.js 或新增 e2e/ai-index-manager.spec.js：浏览器验收。
+- docs/FNOS_DEVICE_ACCEPTANCE.md：增加索引管理器真机验收项。
 
-- 书名；
-- 索引大小；
-- 最后使用时间；
-- 索引状态：已就绪、建立中、待重建、不可用；
-- 单本“清除索引”操作。
+### New files
 
-底部操作：
+- app/server/ai-index-manager.js：管理器实现和唯一公共接口。
+- app/ui/reader/ai-index-manager.js：管理器 surface 和交互。
+- tests/ai-index-manager.test.js：纯管理器、manifest、统计、清理和安全边界测试。
+- tests/ai-index-api.test.js：管理员 API、错误码和信息泄露测试。
+- e2e/ai-index-manager.spec.js：Playwright 管理界面验收（如现有 reader.spec.js 不适合扩展）。
 
-- 清理已删除书籍的索引；
-- 清理长期未使用索引；
-- 清除全部索引；
-- 关闭。
+## Implementation Tasks
 
-设计上沿用当前 AI 设置弹窗的白色、圆角、浅灰分隔线和蓝色主操作按钮。删除操作使用低强调度的次要按钮，并使用确认弹窗，避免误触清空全部索引。
+### Task 1: 建立索引注册表和只读检查基础
 
-### 重要交互原则
+**Files:**
 
-- 删除索引不删除原书；
-- 删除后再次提问会自动重建；
-- 正在建立或正在使用的索引不能直接删除，先标记待删除，待任务结束后处理；
-- 清理操作显示明确结果，不用静默失败；
-- 空书库、无索引和 SQLite 不可用时都要有正常空状态；
-- 清理索引不会清除 AI 配置、API Key、阅读进度、划线、笔记或对话数据。
+- Create app/server/ai-index-manager.js
+- Create tests/ai-index-manager.test.js
+- No route or UI changes in this task.
 
-## 技术方案
+**Public interface:**
 
-### 1. 索引清单
+    createAiIndexManager({ dataRoot, getLibraryIndex, now })
 
-新增一个原子写入的索引清单，例如：
+The returned manager exposes:
 
-```text
-${TRIM_PKGVAR}/ai-index/manifest.json
-```
+    indexDirectory()
+    getIndexPath(bookId)
+    inspectIndexFile(filePath)
+    listIndexes({ libraryIndex, scanHealthy })
+    recordBuildSuccess(book, metadata)
+    recordAccess(bookId)
+    deleteIndex(bookId, options)
+    cleanup({ kind, libraryIndex, scanHealthy, confirm })
 
-每项保存：
+The manager must validate a bookId as exactly 64 lower-case hexadecimal characters, derive all paths from dataRoot, reject symlink/directory targets, and open existing SQLite files read-only for inspection. It must never create a database during list or inspect.
 
-```json
-{
-  "bookId": "...",
-  "path": "仅用于内部校验，不返回前端",
-  "title": "书名",
-  "sizeBytes": 3756032,
-  "lastAccessedAt": "2026-09-21T00:00:00.000Z",
-  "indexedAt": "2026-09-21T00:00:00.000Z",
-  "fingerprint": "...",
-  "schemaVersion": 2,
-  "status": "ready"
-}
-```
+**Steps:**
 
-前端只接收脱敏后的公共字段，不返回真实路径、正文、API Key 或用户身份信息。
+1. Write tests for valid/invalid bookId, index directory creation, read-only missing-file inspection, manifest version 1, and no path/text leakage.
+2. Write tests for manifest entry serialization, atomic manifest write, 600/700 permissions, and malformed manifest recovery.
+3. Implement path validation, manifest load/save, read-only SQLite inspection, PRAGMA statistics, and status derivation.
+4. Implement listIndexes using a supplied healthy libraryIndex; if scanHealthy is false, return a non-destructive unavailable result rather than infer orphans.
+5. Run node --test tests/ai-index-manager.test.js and git diff --check.
 
-### 2. 服务端接口
+**Commit:** feat: add ai index manager registry foundation
 
-建议增加以下接口：
+### Task 2: 接入 FTS 生命周期和安全发布
 
-```text
-GET    /api/ai/indexes
-POST   /api/ai/indexes/cleanup
-DELETE /api/ai/indexes/:bookId
-DELETE /api/ai/indexes
-```
+**Files:**
 
-接口要求：
+- Modify app/server/ai-fts.js
+- Modify app/server/book-search.js only when access registration requires it
+- Modify app/server/ai-index-manager.js
+- Extend tests/ai-index-manager.test.js
+- Extend tests/reader-core.test.js
 
-- 必须经过 fnOS 用户身份校验；
-- bookId 必须是合法索引中的书籍 ID；
-- 清理已删除书籍时，以当前 library index 为准，不能根据用户传入路径删除文件；
-- 所有删除操作限制在 `${TRIM_PKGVAR}/ai-index` 内，禁止路径拼接逃逸；
-- 删除失败返回具体状态，但不影响阅读和 AI 问答；
-- 清理接口需要防重复执行，并与索引构建锁共享状态。
+**Required behavior:**
 
-### 3. 索引访问时间
+- Replace isolated buildLocks with a shared manager lifecycle registry.
+- Build holds build lease; search/AI read path holds read lease; delete requires exclusive lease.
+- Record successful build and access only after the SQLite file is valid.
+- Change the current publish path so it never removes the old index before the new index is safely published.
+- Preserve old ready index on build, integrity-check, rename or manifest failure.
+- Clean up stale temp files only when they are not active.
 
-只在实际成功使用 FTS 结果或成功建立索引后更新 `lastAccessedAt`，不要记录每次查询文本。更新采用低频节流，避免每次提问都频繁写 manifest。
+**Steps:**
 
-### 4. 清理策略
+1. Add RED tests for concurrent build, search while build completes, delete during read/build returning busy, and release after thrown errors.
+2. Add RED test that forces publish failure and asserts the previous SQLite file remains readable.
+3. Add RED tests for stale fingerprint rebuild, repeated build, 600 file permissions and 700 directory permission.
+4. Implement shared leases, safe same-directory publish, manifest registration after successful close, and access timestamp update.
+5. Run focused tests, then npm test and existing FTS/search regression tests.
 
-#### 第一版
+**Commit:** fix: coordinate ai index lifecycle and safe publication
 
-- 自动清理 library index 中不存在的 bookId；
-- 自动清理超过安全期限的临时文件；
-- 手动清理单本；
-- 手动清理全部；
-- 修正文件权限；
-- 不启用自动 LRU 删除。
+### Task 3: 增加管理员管理 API
 
-#### 第二版
+**Files:**
 
-在真实设备观察空间增长后，再引入可配置的 LRU：
+- Modify app/server/index.js
+- Modify app/server/ai-index-manager.js if route adapter needs a narrow helper
+- Create tests/ai-index-api.test.js
 
-- 默认只清理长期未访问的索引；
-- 当前打开的书籍、最近使用的书籍和正在构建的书籍不可清理；
-- 到达容量上限前给出提示，不直接打断问答；
-- 超过上限时优先清理最久未使用的索引；
-- 每次清理记录数量和释放空间，不记录问题文本。
+**Routes and behavior:**
 
-容量上限不在本阶段直接定死，需结合 x86/ARM 设备实际磁盘容量和真实书库规模后确定。建议初始设置为可配置的软上限，而不是硬编码 512 MB。
+- GET /api/ai/indexes returns items and summary for administrators.
+- DELETE /api/ai/indexes/:bookId deletes one index idempotently unless busy.
+- POST /api/ai/indexes/cleanup accepts only kind orphans, temporary, all and confirm=true.
+- Reuse existing gatewayUser and administrator checks; do not trust a client-provided admin flag.
+- Return 401, 403, 400, 409 and 503 according to the specification.
 
-### 5. 空间回收方式
+**Steps:**
 
-由于当前是一书一 SQLite 文件：
+1. Write tests for unauthenticated, non-admin and admin requests.
+2. Write tests for response redaction: no absolute paths, file names beyond bookId, raw SQLite errors, body text, query text or API keys.
+3. Write tests for delete busy, invalid bookId, missing index idempotency, unconfirmed cleanup and unhealthy library scan.
+4. Implement routes after existing session/security routing and before generic book routes where appropriate.
+5. Run node --test tests/ai-index-api.test.js and the existing server/security tests.
 
-- 删除整本索引时直接删除文件即可；
-- 不在正常清理流程中执行 `VACUUM`；
-- 若未来需要在单个数据库内删除大量记录，再评估 `freelist_count` 和 `VACUUM`；
-- 执行 VACUUM 前必须检查临时空间，并避免在索引构建或问答期间执行；
-- 优先通过重新生成临时索引并原子替换实现压缩。
+**Commit:** feat: expose admin ai index management api
 
-## 开发阶段
+### Task 4: 增加独立索引管理 surface
 
-### 阶段 A：接口和数据模型
+**Files:**
 
-- [ ] 增加索引清单的读取、原子写入和损坏恢复；
-- [ ] 为现有 FTS 索引补充访问时间、文件大小和状态；
-- [ ] 把索引文件权限固定为 `600`，目录固定为 `700`；
-- [ ] 保证旧版本无 manifest 时可以从现有 `.sqlite` 文件重新发现。
+- Create app/ui/reader/ai-index-manager.js
+- Modify app/ui/core/api.js
+- Modify app/ui/index.html
+- Modify app/ui/reader/ai.js
+- Modify app/ui/styles.css
+- Extend tests/dom-regression.test.js
+- Create or extend e2e/ai-index-manager.spec.js
 
-### 阶段 B：服务端生命周期
+**Required UI behavior:**
 
-- [ ] 索引建立成功后登记清单；
-- [ ] FTS 成功命中后节流更新最后访问时间；
-- [ ] 书库扫描完成后识别孤立索引；
-- [ ] 清理临时文件和无效索引；
-- [ ] 删除、构建、搜索之间增加并发保护；
-- [ ] 为删除失败、索引损坏、权限不足增加错误码和日志。
+- Show “本地检索索引” only when the loaded session says isAdmin.
+- Keep the existing AI settings and answer surface unchanged.
+- Open a separate surface using readerSurfaceController.
+- Render loading, ready, stale, building, orphan, corrupt and missing states.
+- Provide per-index delete and confirmed orphan/temp cleanup.
+- Disable busy actions, show retry after failure, refresh after success, and close with Escape/backdrop/close button.
+- Use the existing Apple-style tokens, button sizes, typography, focus ring, safe area and scroll region.
 
-### 阶段 C：管理弹窗
+**Steps:**
 
-- [ ] 在 AI 设置中增加索引管理入口；
-- [ ] 实现统计卡片、索引列表、单本清除、批量清理；
-- [ ] 添加确认弹窗和清理结果提示；
-- [ ] 保持现有 AI 对话窗口和阅读页面不变；
-- [ ] 适配窄屏和移动端触摸操作。
+1. Add DOM regression tests for admin-only entry, no entry for non-admin, no duplicated surface, and cleanup confirmation.
+2. Add API adapter methods listAiIndexes, deleteAiIndex and cleanupAiIndexes with response/error mapping.
+3. Implement a small surface controller adapter that uses the existing controller instead of duplicating backdrop/focus logic.
+4. Add Playwright checks for open, close, loading, error retry, delete confirmation and responsive safe-area behavior.
+5. Run npm test, focused DOM tests and the new E2E spec.
 
-### 阶段 D：验证与发布
+**Commit:** feat: add ai index manager surface
 
-- [ ] 测试首次建索引、重复使用、书籍变化重建；
-- [ ] 测试删除单本、清理孤立索引和清空全部；
-- [ ] 测试索引建立中关闭阅读器、进程异常和权限不足；
-- [ ] 测试索引清理不影响阅读进度、划线、笔记和 AI 配置；
-- [ ] 测试 x86_64 与 ARM64 fnOS 文件权限和目录行为；
-- [ ] 完成 Node、Chromium、结构检查、FPK 和真机回归。
+### Task 5: 恢复、诊断和异常边界加固
 
-## 不在本计划内
+**Files:**
 
-- AI 对话历史持久化；
-- 用户问题文本或回答日志；
-- 修改 FTS 分词算法和召回排序；
-- MOBI、AZW3、PDF 解析器接入；
-- 向量数据库和 Embeddings；
-- 书籍原文件删除或书库管理。
+- Modify app/server/ai-index-manager.js
+- Modify app/server/ai-fts.js
+- Modify app/server/index.js
+- Extend tests/ai-index-manager.test.js
+- Extend tests/ai-index-api.test.js
 
-## 执行触发条件
+**Required cases:**
 
-本计划保持“后续、不执行”状态。待以下事项全部完成后，再提醒进入阶段 A：
+- Manifest missing or malformed: rebuild from safe file scan without deleting recognized files.
+- SQLite metadata/schema/FTS integrity failure: report corrupt; no automatic destructive repair.
+- Orphan cleanup requires healthy library scan.
+- Temporary cleanup uses a fixed documented TTL and excludes active leases.
+- Symlink, directory, malformed filename, permission denied and disk-full simulations fail closed.
+- Startup with a partially published file leaves either old valid file or a recoverable temp state.
 
-1. 当前 EPUB/TXT SQLite FTS 功能验收完成；
-2. FPK 在目标 fnOS 设备上完成 Node 22/FTS5 验收；
-3. 当前 AI 问答、流式输出、来源章节和回退检索没有回归问题；
-4. 用户明确要求开始“AI 索引管理器”开发。
+**Steps:**
 
-## 调研参考
+1. Add tests for every failure class and assert no out-of-scope path changes.
+2. Add tests for summary counts and bytes before/after idempotent cleanup.
+3. Implement bounded recovery and sanitized error mapping.
+4. Verify existing search and AI retrieval still rebuild stale indexes and do not expose manager internals.
+5. Run the complete Node test suite and inspect diff for accidental route or schema changes.
 
-- [SQLite PRAGMA：page_count、freelist_count、auto_vacuum、incremental_vacuum](https://sqlite.org/pragma.html)
-- [SQLite VACUUM](https://www.sqlite.org/lang_vacuum.html)
-- [SQLite FTS5](https://www.sqlite.org/fts5.html)
+**Commit:** harden: recover and diagnose ai index states safely
+
+### Task 6: 文档、FPK 和 fnOS 真机验收
+
+**Files:**
+
+- Modify docs/FNOS_DEVICE_ACCEPTANCE.md
+- Modify docs/superpowers/progress/2026-09-21-ai-index-manager-progress.md
+- Update package/build metadata only if required by the existing FPK workflow
+- Do not delete the device acceptance tool until the user explicitly confirms cleanup.
+
+**Acceptance matrix:**
+
+- Fresh install and upgrade from the current 1.1.1 FPK.
+- x86_64 and ARM-compatible fnOS runtime where available.
+- Admin list, delete one, cleanup orphan/temp; non-admin 403; unauthenticated 401.
+- Existing EPUB AI retrieval and full-book search still work.
+- Rebuild after delete, service restart during idle, and restart after a failed build.
+- Verify ai-index directory 700, SQLite and manifest 600, no temporary leftovers after cleanup.
+- Verify FPK contains the manager code, UI module, tests/docs needed for acceptance, and no development-only secrets.
+
+**Steps:**
+
+1. Run npm test, npm run check, focused E2E and package validation.
+2. Build the FPK using the repository’s existing packaging command; do not hand-edit generated output.
+3. Record SHA-256, source commit and dirty state.
+4. Install on fnOS and run the acceptance script with captured output.
+5. Update the progress ledger with evidence, known limitations and the next approved task.
+
+**Commit:** release: package ai index manager for fnos
+
+## Execution Order and Stop Gates
+
+Tasks must execute in order. Stop and review before proceeding if:
+
+- Task 1 cannot inspect an existing index without creating or modifying it.
+- Task 2 cannot prove old-index preservation on publish failure.
+- Task 3 exposes a path, raw error,正文、query or API key.
+- Task 4 changes the existing AI answer/settings behavior.
+- Task 5 requires automatic destructive repair to make the system appear healthy.
+- Task 6 cannot prove both admin boundary and existing AI/search regression stability.
+
+After each task, update the progress ledger and present the evidence. The next task starts only after the corresponding regression set is green.
+
+## Research References
+
+- SQLite FTS5: https://www.sqlite.org/fts5.html
+- SQLite PRAGMA: https://sqlite.org/pragma.html
+- SQLite VACUUM: https://sqlite.org/lang_vacuum.html
+- SQLite WAL: https://www.sqlite.org/wal.html
+- SQLite Atomic Commit: https://www.sqlite.org/atomiccommit.html
+- SQLite Locking: https://www.sqlite.org/lockingv3.html
+- Node.js 22.18 node:sqlite: https://nodejs.org/download/release/v22.18.0/docs/api/sqlite.html
+- Node.js 22.18 fs: https://nodejs.org/download/release/v22.18.0/docs/api/fs.html
