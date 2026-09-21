@@ -1,7 +1,7 @@
 # Reader surfaces and search progress
 
 **Last updated:** 2026-09-21
-**Current milestone:** Task 4 complete
+**Current milestone:** Task 5 complete
 
 ## Completed
 
@@ -20,13 +20,16 @@
 - [x] Regression coverage updated for desktop, mobile, AI, bookmarks, notes, settings, keyboard, backdrop, and touch entry points.
 - [x] Independent search surface exposes reserved query, book/chapter scope, loading, empty, result, and error slots without enabling user search.
 - [x] Future search URL contract is bounded and explicitly separate from the AI retrieval route; no search request is issued while reserved.
+- [x] Full regression and release validation completed; the FPK contains the current reader surfaces, search reservation, plans, progress records, and device acceptance tool.
 
 ## Verification
 
 - `npm test`: 132 passed, 3 skipped.
 - `npm run check`: passed.
 - Chromium Playwright: 69 passed, 2 optional real-EPUB tests skipped.
+- FPK package audit: passed; outer members 19, inner app members 978.
+- FPK SHA-256: `c5fc9f92e292825c1654291ba2d036e1454dc758fcf5e2c9b4656c451f563dfe`.
 
 ## Next work
 
-- Task 5: release validation and FPK packaging, followed later by the separately scoped full-text search API and SQLite FTS result semantics.
+- Follow-up: implement the separately scoped full-text search API and SQLite FTS result semantics; keep it independent from AI retrieval and token usage.

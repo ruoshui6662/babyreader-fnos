@@ -4,7 +4,7 @@
 
 **Goal:** Separate reader content navigation, display settings, and future search into independent in-app sheets while preserving all existing reader and AI behavior.
 
-**Status:** Task 4 complete; Task 5 pending
+**Status:** Task 5 complete; full-text search implementation remains a separate follow-up
 
 **Architecture:** Keep one shared surface controller for exclusivity, backdrop, Escape, focus restoration, and responsive behavior. Use separate DOM roots and state namespaces for content, settings, and search. Keep AI as the existing independent modal.
 
@@ -64,11 +64,13 @@ Task 4 boundary: the search form, scope options, status slots, and URL builder a
 
 **Files:** tests, docs, build outputs as needed
 
-1. Run `npm test` and `npm run check`.
-2. Run Playwright Chromium tests for desktop/mobile, single/double/continuous reading, AI, bookmarks, and notes.
-3. Verify no existing settings, AI, bookmark, or annotation IDs/regressions are broken.
-4. Build the FPK only after all tests pass and record the artifact hash.
+1. Run `npm test` and `npm run check`. — complete
+2. Run Playwright Chromium tests for desktop/mobile, single/double/continuous reading, AI, bookmarks, and notes. — complete
+3. Verify no existing settings, AI, bookmark, or annotation IDs/regressions are broken. — complete
+4. Build the FPK only after all tests pass and record the artifact hash. — complete
 
-## Future search implementation (not part of Task 1)
+Task 5 release record: `dist/babyreader-fnos.fpk` was built from commit `275a347be634fc907eeb7a0127c50e8e2c2d94f3`; SHA-256 is `c5fc9f92e292825c1654291ba2d036e1454dc758fcf5e2c9b4656c451f563dfe`. The Windows host used the native `fnpack.exe` equivalent of `scripts/build-fpk.sh` because WSL/bash is unavailable; package audit passed.
+
+## Future search implementation (not part of Tasks 1–5)
 
 Implement a dedicated exact full-text search endpoint over the book index/SQLite FTS infrastructure, with book/chapter scope, bounded result count, snippets, semantic locators, and lifecycle/error handling. It must not consume AI tokens and must not reuse `/api/books/:id/ai/search` as a user search endpoint.
