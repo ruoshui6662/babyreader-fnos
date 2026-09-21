@@ -39,22 +39,22 @@
 - Consumes: completed Task 4 commits, `scripts/build-fpk.sh`, `scripts/write-build-provenance.py`, and the existing structure validator.
 - Produces: a versioned FPK candidate and local evidence sufficient to continue x86_64/ARM64 fnOS installation acceptance.
 
-- [ ] **Step 1: Confirm clean source and run pre-package regression**
+- [x] **Step 1: Confirm clean source and run pre-package regression**
 
   Run `git status --short`, `npm test`, `npm run check`, and the reader/search Playwright suite. The source tree must be clean before packaging.
 
-- [ ] **Step 2: Build the FPK with the repository packaging path**
+- [x] **Step 2: Build the FPK with the repository packaging path**
 
   Run `scripts/build-fpk.sh` using the available local shell and `fnpack`. The generated artifact must be `dist/babyreader-fnos.fpk` and the manifest must remain `1.1.1`.
 
-- [ ] **Step 3: Inspect package contents and provenance**
+- [x] **Step 3: Inspect package contents and provenance**
 
   Verify `dist/build-provenance.json` identifies the current commit and `git_dirty=false`. Inspect the outer archive and nested `app.tgz` for `server/index.js`, `ui/reader/search.js`, `ui/index.html`, `tests/search-api.test.js`, and `docs/fnos-device-acceptance.sh`. Verify the SHA-256 sidecar matches the artifact; `e2e/search.spec.js` is validated from the source checkout, not expected inside the runtime package.
 
-- [ ] **Step 4: Record device acceptance boundary**
+- [x] **Step 4: Record device acceptance boundary**
 
   Confirm the package contains the device acceptance tool and record x86_64/ARM64 installation, Gateway, ACL, lifecycle, FTS, and upgrade checks as pending until logs are supplied by the fnOS device.
 
-- [ ] **Step 5: Commit release evidence metadata only when appropriate**
+- [x] **Step 5: Commit release evidence metadata only when appropriate**
 
   Keep generated FPK artifacts out of Git unless the repository release policy explicitly tracks them. Commit only the Task 5 plan/ledger if the artifact is intentionally local; do not claim a device release tag from local evidence alone.
