@@ -1,7 +1,7 @@
 # Reader surfaces and search progress
 
 **Last updated:** 2026-09-21
-**Current milestone:** Task 3 complete
+**Current milestone:** Task 4 complete
 
 ## Completed
 
@@ -18,13 +18,15 @@
 - [x] Mobile sheets share bottom-sheet geometry, full-screen backdrop coverage, and safe-area bottom padding.
 - [x] Settings custom-select initialization remains compatible after the DOM move.
 - [x] Regression coverage updated for desktop, mobile, AI, bookmarks, notes, settings, keyboard, backdrop, and touch entry points.
+- [x] Independent search surface exposes reserved query, book/chapter scope, loading, empty, result, and error slots without enabling user search.
+- [x] Future search URL contract is bounded and explicitly separate from the AI retrieval route; no search request is issued while reserved.
 
 ## Verification
 
-- `npm test`: 131 passed, 3 skipped.
+- `npm test`: 132 passed, 3 skipped.
 - `npm run check`: passed.
-- Chromium Playwright: 68 passed, 2 optional real-EPUB tests skipped.
+- Chromium Playwright: 69 passed, 2 optional real-EPUB tests skipped.
 
 ## Next work
 
-- Task 4: implement the independent search surface contract, then separately implement the full-text search API and SQLite FTS result semantics.
+- Task 5: release validation and FPK packaging, followed later by the separately scoped full-text search API and SQLite FTS result semantics.

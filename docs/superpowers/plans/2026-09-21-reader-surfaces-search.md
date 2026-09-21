@@ -4,7 +4,7 @@
 
 **Goal:** Separate reader content navigation, display settings, and future search into independent in-app sheets while preserving all existing reader and AI behavior.
 
-**Status:** Task 3 complete; Task 4 pending
+**Status:** Task 4 complete; Task 5 pending
 
 **Architecture:** Keep one shared surface controller for exclusivity, backdrop, Escape, focus restoration, and responsive behavior. Use separate DOM roots and state namespaces for content, settings, and search. Keep AI as the existing independent modal.
 
@@ -53,10 +53,12 @@ Task 3 boundary: this pass changes only sheet chrome and layout ownership. It do
 
 **Files:** `app/ui/index.html`, `app/ui/shell/drawer.js`, `app/ui/styles.css`, tests
 
-1. Add a hidden search sheet root with query, scope, result, empty, and loading slots.
-2. Keep `btnSearch` disabled and assert no network calls are made.
-3. Define the future search API adapter boundary without connecting it to the AI route.
-4. Leave the full-text implementation for the search feature task.
+1. Add a hidden search sheet root with query, scope, result, empty, and loading slots. — complete
+2. Keep `btnSearch` disabled and assert no network calls are made. — complete
+3. Define the future search API adapter boundary without connecting it to the AI route. — complete
+4. Leave the full-text implementation for the search feature task. — complete
+
+Task 4 boundary: the search form, scope options, status slots, and URL builder are reserved UI/API contracts only. Search remains unavailable, no submit handler is registered, no search endpoint is added, and the existing AI retrieval route is not reused.
 
 ## Task 5: Regression and release validation
 

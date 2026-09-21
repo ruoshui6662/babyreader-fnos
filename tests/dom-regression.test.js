@@ -68,6 +68,8 @@ async function createReaderDom() {
   window.eval(`${source}\nwindow.__babyReaderTest = {\n    state,\n    serializeDomRange,\n    rangeFromHighlight,\n    loadHighlights,\n    openHighlightEditor,\n    deleteActiveHighlight,\n    saveActiveHighlightEdits,\n    currentUserSettings,\n    applyZoom,\n    getEpubThemeCss,\n    debounce,\n    navigateChapter,\n    navigatePageGroup,\n    pageGroupForPage,\n    clampPageGroup,\n    pageLeftForGroup,\n    setPageGroup,\n    snapPaginationToNearestGroup,\n    pageNumberForElement,\n    navigateToSemanticTarget,\n    resolveEffectiveReadingMode,\n    createPaginationGeometry,\n    measurePagination,\n    setReadingMode,\n    currentReadingLocator,\n    restoreReadingLocator,\n    readerActions,\n    readerPanels,\n    openReaderPanel,\n    closeReaderPanel,\n    setupReaderActionMapping,\n    renderToc,\n    returnToLibrary\n  };`);
 
   window.__babyReaderTest.readerSurfaceController = window.readerSurfaceController;
+  window.__babyReaderTest.readerSearchContract = window.readerSearchContract;
+  window.__babyReaderTest.buildReaderSearchUrl = window.buildReaderSearchUrl;
   window.__babyReaderTest.formatHighlightsMd = window.__babyReaderActionsApi.formatHighlightsMd;
   window.__babyReaderTest.typographyApi = window.__babyReaderTypographyApi;
   window.__babyReaderTest.parseNavToc = window.__babyReaderEpubApi.parseNavToc;
@@ -1375,6 +1377,53 @@ test('Reader Shell retains legacy DOM IDs and exposes one responsive Drawer', as
   assert.match(css, /\.reader-sheet/);
   assert.match(css, /@media \(max-width: 1200px\)/);
   assert.match(css, /@media \(max-width: 520px\)/);
+});
+
+test('reserved search surface exposes a stable future contract without enabling search', async () => {
+  const { window, api } = await createReaderDom();
+  const document = window.document;
+  const searchSheet = document.getElementById('readerSearchSheet');
+
+  assert.ok(searchSheet);
+  assert.equal(searchSheet.hidden, true);
+  assert.equal(document.getElementById('readerSearchForm').dataset.readerSearchState, 'reserved');
+  assert.equal(document.getElementById('readerSearchQuery').disabled, true);
+  assert.equal(document.getElementById('readerSearchScope').disabled, true);
+  assert.deepEqual(
+    [...document.getElementById('readerSearchScope').options].map((option) => option.value),
+    ['book', 'chapter']
+  );
+  assert.equal(document.getElementById('readerSearchSubmit').disabled, true);
+  assert.equal(document.getElementById('readerSearchLoading').hidden, true);
+  assert.equal(document.getElementById('readerSearchResults').hidden, true);
+  assert.equal(document.getElementById('readerSearchError').hidden, true);
+  assert.equal(document.getElementById('readerSearchEmpty').hidden, false);
+
+  assert.equal(api.readerSearchContract.endpointTemplate, '/api/books/:bookId/search');
+  assert.deepEqual([...api.readerSearchContract.scopes], ['book', 'chapter']);
+  assert.equal(api.readerSearchContract.defaultScope, 'book');
+  assert.equal(api.readerSearchContract.defaultLimit, 20);
+  assert.equal(api.readerSearchContract.maxLimit, 50);
+  assert.equal(
+    api.buildReaderSearchUrl({
+      bookId: 'book/1',
+      query: '蛋白质 与 健康',
+      scope: 'chapter',
+      chapterIndex: 2,
+      limit: 100
+    }),
+    '/api/books/book%2F1/search?q=%E8%9B%8B%E7%99%BD%E8%B4%A8+%E4%B8%8E+%E5%81%A5%E5%BA%B7&scope=chapter&chapterIndex=2&limit=50'
+  );
+
+  let requestCount = 0;
+  window.fetch = async () => {
+    requestCount += 1;
+    return { ok: true, json: async () => ({}) };
+  };
+  assert.equal(document.getElementById('btnSearch').disabled, true);
+  assert.equal(api.readerActions.openSearch(document.getElementById('btnSearch')), false);
+  document.getElementById('readerSearchForm').dispatchEvent(new window.Event('submit', { bubbles: true, cancelable: true }));
+  assert.equal(requestCount, 0);
 });
 
 test('topbar navigation controls use icon-only SVGs without changing actions', async () => {

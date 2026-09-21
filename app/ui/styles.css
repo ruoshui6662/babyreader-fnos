@@ -4634,6 +4634,107 @@ body.is-epub .reader-floating-toolbar {
   outline-color: var(--ui-focus);
 }
 
+.reader-search-content {
+  gap: 16px;
+  padding: 4px 0 8px;
+}
+
+.reader-search-form {
+  display: grid;
+  gap: 14px;
+}
+
+.reader-search-field {
+  display: grid;
+  gap: 7px;
+  min-width: 0;
+}
+
+.reader-search-field > span,
+.reader-search-options > .reader-search-field > span {
+  color: var(--ui-secondary-label);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.reader-search-field input,
+.reader-search-field select {
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 42px;
+  padding: 0 12px;
+  color: var(--ui-secondary-label);
+  background: var(--ui-fill);
+  border: 1px solid var(--ui-separator);
+  border-radius: 12px;
+  font: inherit;
+  font-size: 14px;
+}
+
+.reader-search-field input:disabled,
+.reader-search-field select:disabled {
+  cursor: not-allowed;
+  opacity: .68;
+}
+
+.reader-search-options {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: end;
+}
+
+.reader-search-submit {
+  min-height: 42px;
+  padding: 0 16px;
+  color: var(--ui-tertiary-label);
+  background: var(--ui-fill);
+  border: 1px solid var(--ui-separator);
+  border-radius: 12px;
+  font: inherit;
+  font-size: 14px;
+  cursor: not-allowed;
+  opacity: .68;
+}
+
+.reader-search-status,
+.reader-search-loading,
+.reader-search-error {
+  padding: 10px 12px;
+  border-radius: 12px;
+  font-size: 13px;
+}
+
+.reader-search-status,
+.reader-search-loading {
+  color: var(--ui-secondary-label);
+  background: var(--ui-fill);
+}
+
+.reader-search-error {
+  color: var(--ui-destructive, #c93434);
+  background: color-mix(in srgb, var(--ui-destructive, #c93434) 8%, var(--ui-bg));
+}
+
+.reader-search-empty {
+  margin: 0;
+  padding: 18px 14px;
+  color: var(--ui-secondary-label);
+  text-align: center;
+  background: var(--ui-fill);
+  border: 1px solid var(--ui-separator);
+  border-radius: 14px;
+  font-size: 13px;
+}
+
+.reader-search-results {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
 .reader-settings-content > #readerPanelSettings {
   flex: 1 0 auto;
   padding-bottom: 8px;

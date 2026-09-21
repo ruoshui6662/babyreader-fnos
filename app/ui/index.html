@@ -214,7 +214,27 @@
       <button type="button" data-reader-action="closePanel" aria-label="关闭搜索">关闭</button>
     </div>
     <div class="reader-search-content" id="readerSearchContent">
-      <p class="reader-panel-placeholder">接口预留，当前版本尚未实现。</p>
+      <form class="reader-search-form" id="readerSearchForm" novalidate data-reader-search-state="reserved">
+        <label class="reader-search-field" for="readerSearchQuery">
+          <span>查找本书内容</span>
+          <input id="readerSearchQuery" type="search" autocomplete="off" placeholder="搜索将在功能开放后提供" disabled>
+        </label>
+        <div class="reader-search-options">
+          <label class="reader-search-field" for="readerSearchScope">
+            <span>范围</span>
+            <select id="readerSearchScope" disabled>
+              <option value="book">全书</option>
+              <option value="chapter">本章</option>
+            </select>
+          </label>
+          <button class="reader-search-submit" id="readerSearchSubmit" type="submit" disabled>搜索</button>
+        </div>
+      </form>
+      <div class="reader-search-status" id="readerSearchStatus" role="status" aria-live="polite" hidden></div>
+      <div class="reader-search-loading" id="readerSearchLoading" role="status" aria-live="polite" hidden>正在搜索…</div>
+      <p class="reader-search-empty" id="readerSearchEmpty">全文搜索将在搜索功能开放后提供。</p>
+      <ol class="reader-search-results" id="readerSearchResults" role="list" hidden></ol>
+      <div class="reader-search-error" id="readerSearchError" role="alert" hidden>搜索暂时不可用。</div>
     </div>
   </aside>
 

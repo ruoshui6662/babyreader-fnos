@@ -2,6 +2,44 @@
 
 'use strict';
 
+const readerSearchContract = Object.freeze({
+  endpointTemplate: '/api/books/:bookId/search',
+  scopes: Object.freeze(['book', 'chapter']),
+  defaultScope: 'book',
+  defaultLimit: 20,
+  maxLimit: 50
+});
+
+function buildReaderSearchUrl({
+  bookId,
+  query = '',
+  scope = readerSearchContract.defaultScope,
+  chapterIndex = null,
+  limit = readerSearchContract.defaultLimit
+} = {}) {
+  if (!bookId) throw new TypeError('bookId is required');
+  const normalizedScope = readerSearchContract.scopes.includes(scope)
+    ? scope
+    : readerSearchContract.defaultScope;
+  const requestedLimit = Number(limit);
+  const boundedLimit = Math.max(
+    1,
+    Math.min(
+      readerSearchContract.maxLimit,
+      Number.isFinite(requestedLimit) ? Math.trunc(requestedLimit) : readerSearchContract.defaultLimit
+    )
+  );
+  const url = new URL(`/api/books/${encodeURIComponent(bookId)}/search`, window.location.origin);
+  const normalizedQuery = String(query || '').trim();
+  if (normalizedQuery) url.searchParams.set('q', normalizedQuery);
+  url.searchParams.set('scope', normalizedScope);
+  if (normalizedScope === 'chapter' && Number.isInteger(chapterIndex)) {
+    url.searchParams.set('chapterIndex', String(chapterIndex));
+  }
+  url.searchParams.set('limit', String(boundedLimit));
+  return `${url.pathname}${url.search}`;
+}
+
 const readerPanels = Object.freeze({
   toc: {
     id: 'readerPanelToc',
@@ -318,3 +356,5 @@ function setupReaderActionMapping() {
 ensureSettingsSurface();
 readerSurfaceController.syncAccessibility();
 window.readerSurfaceController = readerSurfaceController;
+window.readerSearchContract = readerSearchContract;
+window.buildReaderSearchUrl = buildReaderSearchUrl;

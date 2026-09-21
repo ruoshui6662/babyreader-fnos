@@ -76,6 +76,42 @@ test('loads split UI modules in Chromium and opens a real library book', async (
   expect(pageErrors).toEqual([]);
 });
 
+test('keeps the independent search surface reserved without issuing search requests', async ({ page }) => {
+  const searchRequests = [];
+  page.on('request', (request) => {
+    if (request.url().includes('/api/books/') && request.url().includes('/search')) {
+      searchRequests.push(request.url());
+    }
+  });
+
+  await openFixtureBook(page);
+  await expect(page.locator('#btnSearch')).toBeDisabled();
+  await expect(page.locator('#readerSearchSheet')).toBeHidden();
+  await expect(page.locator('#readerSearchQuery')).toBeDisabled();
+  await expect(page.locator('#readerSearchScope')).toBeDisabled();
+  await expect(page.locator('#readerSearchSubmit')).toBeDisabled();
+  await expect(page.locator('#readerSearchEmpty')).toBeAttached();
+  await expect(page.locator('#readerSearchEmpty')).not.toHaveAttribute('hidden');
+
+  const contract = await page.evaluate(() => ({
+    endpointTemplate: readerSearchContract.endpointTemplate,
+    scopes: [...readerSearchContract.scopes],
+    url: buildReaderSearchUrl({
+      bookId: 'book/1',
+      query: '蛋白质',
+      scope: 'chapter',
+      chapterIndex: 1,
+      limit: 20
+    })
+  }));
+  expect(contract).toEqual({
+    endpointTemplate: '/api/books/:bookId/search',
+    scopes: ['book', 'chapter'],
+    url: '/api/books/book%2F1/search?q=%E8%9B%8B%E7%99%BD%E8%B4%A8&scope=chapter&chapterIndex=1&limit=20'
+  });
+  expect(searchRequests).toEqual([]);
+});
+
 test('library and welcome states expose the dense library structure', async ({ page }) => {
   await page.goto(APP_PATH);
 
