@@ -67,6 +67,7 @@ async function createReaderDom() {
 
   window.eval(`${source}\nwindow.__babyReaderTest = {\n    state,\n    serializeDomRange,\n    rangeFromHighlight,\n    loadHighlights,\n    openHighlightEditor,\n    deleteActiveHighlight,\n    saveActiveHighlightEdits,\n    currentUserSettings,\n    applyZoom,\n    getEpubThemeCss,\n    debounce,\n    navigateChapter,\n    navigatePageGroup,\n    pageGroupForPage,\n    clampPageGroup,\n    pageLeftForGroup,\n    setPageGroup,\n    snapPaginationToNearestGroup,\n    pageNumberForElement,\n    navigateToSemanticTarget,\n    resolveEffectiveReadingMode,\n    createPaginationGeometry,\n    measurePagination,\n    setReadingMode,\n    currentReadingLocator,\n    restoreReadingLocator,\n    readerActions,\n    readerPanels,\n    openReaderPanel,\n    closeReaderPanel,\n    setupReaderActionMapping,\n    renderToc,\n    returnToLibrary\n  };`);
 
+  window.__babyReaderTest.readerSurfaceController = window.readerSurfaceController;
   window.__babyReaderTest.formatHighlightsMd = window.__babyReaderActionsApi.formatHighlightsMd;
   window.__babyReaderTest.typographyApi = window.__babyReaderTypographyApi;
   window.__babyReaderTest.parseNavToc = window.__babyReaderEpubApi.parseNavToc;
@@ -1575,6 +1576,49 @@ test('reader content and display settings use independent surfaces', async () =>
   document.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
   assert.equal(document.getElementById('readerDrawer').hidden, true);
   assert.equal(document.getElementById('readerSettingsSheet').hidden, true);
+});
+
+test('reader surface controller enforces one active surface and accessible state', async () => {
+  const { window, api } = await createReaderDom();
+  const document = window.document;
+
+  api.setupReaderActionMapping();
+  api.state.contentType = 'epub';
+  api.state.currentBookId = 'surface-controller-book';
+  api.state.toc = [{ label: '第一章', target: '#chapter-1', depth: 0 }];
+  api.renderToc();
+
+  const settingsButton = document.getElementById('btnSettings');
+  settingsButton.focus();
+  settingsButton.click();
+  assert.equal(api.readerSurfaceController.activeSurface, 'settings');
+  assert.equal(document.getElementById('readerSettingsSheet').getAttribute('aria-hidden'), 'false');
+  assert.equal(document.getElementById('readerDrawer').getAttribute('aria-hidden'), 'true');
+  assert.equal(document.getElementById('readerSettingsBackdrop').hidden, false);
+  assert.equal(settingsButton.getAttribute('aria-expanded'), 'true');
+  assert.equal(document.getElementById('btnToc').getAttribute('aria-expanded'), 'false');
+
+  document.getElementById('btnToc').click();
+  assert.equal(api.readerSurfaceController.activeSurface, 'content');
+  assert.equal(document.getElementById('readerDrawer').getAttribute('aria-hidden'), 'false');
+  assert.equal(document.getElementById('readerSettingsSheet').getAttribute('aria-hidden'), 'true');
+  assert.equal(document.getElementById('readerDrawerBackdrop').hidden, false);
+  assert.equal(document.getElementById('readerSettingsBackdrop').hidden, true);
+  assert.equal(document.getElementById('btnToc').getAttribute('aria-expanded'), 'true');
+  assert.equal(settingsButton.getAttribute('aria-expanded'), 'false');
+
+  document.getElementById('readerDrawerBackdrop').click();
+  assert.equal(api.readerSurfaceController.activeSurface, null);
+  assert.equal(document.getElementById('readerDrawer').hidden, true);
+  assert.equal(document.activeElement, settingsButton);
+
+  document.getElementById('btnToc').click();
+  assert.equal(api.readerSurfaceController.activeSurface, 'content');
+  document.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+  assert.equal(api.readerSurfaceController.activeSurface, null);
+  assert.equal(document.getElementById('readerDrawer').hidden, true);
+  assert.equal(document.getElementById('readerSettingsSheet').hidden, true);
+  assert.equal(document.activeElement, document.getElementById('btnToc'));
 });
 
 test('Drawer keeps one active panel and restores focus to its original launcher', async () => {

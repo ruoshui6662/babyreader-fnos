@@ -46,7 +46,7 @@
   </nav>
 
   <div class="reader-drawer-backdrop" id="readerDrawerBackdrop" hidden></div>
-  <aside class="reader-sheet reader-content-sheet reader-drawer" id="readerDrawer" hidden aria-label="阅读内容面板" aria-modal="false">
+  <aside class="reader-sheet reader-content-sheet reader-drawer" id="readerDrawer" hidden role="dialog" aria-label="阅读内容面板" aria-modal="true" aria-hidden="true">
     <div class="settings-header reader-drawer-header">
       <h2 id="readerDrawerTitle">阅读设置</h2>
       <button type="button" id="btnCloseSettings" data-reader-action="closePanel" aria-label="关闭阅读面板">关闭</button>
@@ -200,7 +200,7 @@
   </aside>
 
   <div class="reader-settings-backdrop reader-drawer-backdrop" id="readerSettingsBackdrop" hidden></div>
-  <aside class="reader-sheet reader-settings-sheet" id="readerSettingsSheet" hidden role="dialog" aria-modal="true" aria-labelledby="readerSettingsTitle">
+  <aside class="reader-sheet reader-settings-sheet" id="readerSettingsSheet" hidden role="dialog" aria-modal="true" aria-hidden="true" aria-labelledby="readerSettingsTitle">
     <div class="settings-header reader-drawer-header">
       <h2 id="readerSettingsTitle">显示设置</h2>
       <span data-reader-close-slot="settings"></span>
@@ -208,7 +208,7 @@
     <div class="reader-settings-content" id="readerSettingsContent"></div>
   </aside>
 
-  <aside class="reader-sheet reader-search-sheet" id="readerSearchSheet" hidden role="dialog" aria-modal="true" aria-labelledby="readerSearchTitle">
+  <aside class="reader-sheet reader-search-sheet" id="readerSearchSheet" hidden role="dialog" aria-modal="true" aria-hidden="true" aria-labelledby="readerSearchTitle">
     <div class="settings-header reader-drawer-header">
       <h2 id="readerSearchTitle">搜索</h2>
       <button type="button" data-reader-action="closePanel" aria-label="关闭搜索">关闭</button>
@@ -219,7 +219,7 @@
   </aside>
 
   <div class="ai-modal-backdrop" id="aiModalBackdrop" hidden></div>
-  <section class="ai-modal" id="aiModal" hidden role="dialog" aria-modal="true" aria-labelledby="aiModalTitle">
+  <section class="ai-modal" id="aiModal" hidden role="dialog" aria-modal="true" aria-hidden="true" aria-labelledby="aiModalTitle">
     <header class="ai-modal-header">
       <div class="ai-modal-heading">
         <h2 id="aiModalTitle">AI 问书</h2>

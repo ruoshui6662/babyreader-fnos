@@ -914,7 +914,10 @@ function closeAiModal({ restoreFocus = true } = {}) {
   _aiSelection = null;
   const modal = aiElement('aiModal');
   const backdrop = aiElement('aiModalBackdrop');
-  if (modal) modal.hidden = true;
+  if (modal) {
+    modal.hidden = true;
+    modal.setAttribute('aria-hidden', 'true');
+  }
   if (backdrop) backdrop.hidden = true;
   document.body.classList.remove('ai-modal-open');
   document.getElementById('btnAi')?.setAttribute('aria-expanded', 'false');
@@ -928,11 +931,15 @@ async function openAiModal(session = null, trigger = document.activeElement) {
     showHighlightHint('AI 阅读助手仅支持 EPUB');
     return false;
   }
-  if (typeof closeReaderPanel === 'function') closeReaderPanel({ restoreFocus: false });
   const modal = aiElement('aiModal');
   const backdrop = aiElement('aiModalBackdrop');
   if (!modal) return false;
   _aiModalReturnFocus = trigger;
+  if (typeof readerSurfaceController !== 'undefined') {
+    readerSurfaceController.close({ restoreFocus: false });
+  } else if (typeof closeReaderPanel === 'function') {
+    closeReaderPanel({ restoreFocus: false });
+  }
   if (_aiBusy) stopAiQuestion();
   resetAiConversation();
   _aiSelection = session || null;
@@ -940,6 +947,7 @@ async function openAiModal(session = null, trigger = document.activeElement) {
   renderAiPromptSuggestions();
   showAiView('chat');
   modal.hidden = false;
+  modal.setAttribute('aria-hidden', 'false');
   if (backdrop) backdrop.hidden = false;
   document.body.classList.add('ai-modal-open');
   document.getElementById('btnAi')?.setAttribute('aria-expanded', 'true');
@@ -1002,6 +1010,7 @@ function setupAiPanel() {
   document.addEventListener('keydown', (event) => {
     if (event.key !== 'Escape' || aiElement('aiConfigView')?.hidden !== false) return;
     event.preventDefault();
+    event.stopPropagation();
     closeAiConfigSheet();
   });
 }

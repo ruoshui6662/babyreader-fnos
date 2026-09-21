@@ -46,14 +46,14 @@ The existing AI modal remains independent. Opening AI must continue to close or 
 
 ## 3. Interaction and state contract
 
-The controller separates:
+The reader surface controller separates:
 
 - `activeContentPanel`: `toc | bookmarks | notes | null`
-- `activeSurface`: `content | settings | search | ai | null`
+- `activeReaderSurface`: `content | settings | search | null`
 
 The shared surface primitive is responsible only for backdrop, Escape, focus restoration, mutual exclusion, and responsive presentation. Each surface owns its own content and title.
 
-Opening a new surface closes the currently visible sibling surface. Escape and backdrop close the active surface and restore focus to the launcher that opened it. Toolbar `aria-expanded` values reflect the active surface, not merely the last clicked tab.
+Opening a reader surface closes the currently visible reader sibling surface. Opening AI first closes any reader surface, but AI remains an independent persistent floating modal: opening settings or content while AI is open must not destroy the AI conversation or hide the AI panel. Escape and backdrop close the active reader surface and restore focus to the launcher that opened it. Toolbar `aria-expanded` values reflect the active reader surface, not merely the last clicked tab; AI keeps its existing modal lifecycle and trigger state.
 
 Within the content sheet, selecting a tab changes only `activeContentPanel`; it must not change the sheet launcher or focus restoration target.
 
@@ -99,4 +99,3 @@ This change does not implement full-text search, change the AI retrieval algorit
 5. The reserved search button remains disabled and does not issue requests.
 6. Existing AI, bookmark, notes, settings, and reading-mode regression tests remain green.
 7. Desktop and mobile surfaces have one scroll owner per sheet and do not allow content to be hidden by the topbar.
-

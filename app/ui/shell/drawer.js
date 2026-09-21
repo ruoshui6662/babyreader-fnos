@@ -35,9 +35,16 @@ const readerPanels = Object.freeze({
   },
 });
 
+const readerSurfaceDefinitions = Object.freeze({
+  content: { rootId: 'readerDrawer', backdropId: 'readerDrawerBackdrop' },
+  settings: { rootId: 'readerSettingsSheet', backdropId: 'readerSettingsBackdrop' },
+  search: { rootId: 'readerSearchSheet', backdropId: null }
+});
+
 let activeReaderPanel = null;
 let activeReaderSurface = null;
-let readerDrawerReturnFocus = null;
+let readerSurfaceReturnFocus = null;
+let readerSurfaceBackdropsBound = false;
 
 function ensureSettingsSurface() {
   const settingsPanel = document.getElementById('readerPanelSettings');
@@ -56,17 +63,37 @@ function placeSurfaceCloseButton(surface) {
   }
 }
 
+function surfaceDefinition(surface) {
+  return readerSurfaceDefinitions[surface] || null;
+}
+
 function surfaceElement(surface) {
-  if (surface === 'content') return document.getElementById('readerDrawer');
-  if (surface === 'settings') return document.getElementById('readerSettingsSheet');
-  if (surface === 'search') return document.getElementById('readerSearchSheet');
-  return null;
+  const definition = surfaceDefinition(surface);
+  return definition ? document.getElementById(definition.rootId) : null;
 }
 
 function surfaceBackdrop(surface) {
-  if (surface === 'content') return document.getElementById('readerDrawerBackdrop');
-  if (surface === 'settings') return document.getElementById('readerSettingsBackdrop');
-  return null;
+  const definition = surfaceDefinition(surface);
+  return definition?.backdropId ? document.getElementById(definition.backdropId) : null;
+}
+
+function setSurfaceVisibility(surface, visible) {
+  const root = surfaceElement(surface);
+  const backdrop = surfaceBackdrop(surface);
+  if (root) {
+    root.hidden = !visible;
+    root.setAttribute('aria-hidden', visible ? 'false' : 'true');
+    root.setAttribute('aria-modal', 'true');
+  }
+  if (backdrop) {
+    backdrop.hidden = !visible;
+    backdrop.setAttribute('aria-hidden', visible ? 'false' : 'true');
+  }
+}
+
+function updateSurfaceBodyState() {
+  const readerSurfaceOpen = ['content', 'settings', 'search'].includes(activeReaderSurface);
+  document.body.classList.toggle('reader-drawer-open', readerSurfaceOpen);
 }
 
 function setReaderTriggerState() {
@@ -88,27 +115,91 @@ function setReaderTriggerState() {
   });
 }
 
-function hideSurface(surface) {
-  const element = surfaceElement(surface);
-  const backdrop = surfaceBackdrop(surface);
-  if (element) element.hidden = true;
-  if (backdrop) backdrop.hidden = true;
+function focusableElements(surface) {
+  const root = surfaceElement(surface);
+  if (!root || root.hidden) return [];
+  return [...root.querySelectorAll(
+    'button:not([disabled]):not([hidden]), select:not([disabled]), input:not([disabled]), textarea:not([disabled]), [href], [tabindex]:not([tabindex="-1"])'
+  )].filter((element) => !element.closest('[hidden]'));
 }
+
+const readerSurfaceController = Object.freeze({
+  get activeSurface() {
+    return activeReaderSurface;
+  },
+
+  activate(surface, trigger = document.activeElement, { focus = true } = {}) {
+    if (!surfaceDefinition(surface) || !surfaceElement(surface)) return false;
+    ensureSettingsSurface();
+    if (!activeReaderSurface) readerSurfaceReturnFocus = trigger;
+
+    Object.keys(readerSurfaceDefinitions).forEach((name) => {
+      setSurfaceVisibility(name, false);
+    });
+    activeReaderSurface = surface;
+    setSurfaceVisibility(surface, true);
+    updateSurfaceBodyState();
+    setReaderTriggerState();
+
+    if (focus) {
+      requestAnimationFrame(() => {
+        focusableElements(surface)[0]?.focus?.();
+      });
+    }
+    return true;
+  },
+
+  close({ surface = null, restoreFocus = true } = {}) {
+    if (surface && activeReaderSurface !== surface) return false;
+    Object.keys(readerSurfaceDefinitions).forEach((name) => {
+      setSurfaceVisibility(name, false);
+    });
+    activeReaderSurface = null;
+    activeReaderPanel = null;
+    updateSurfaceBodyState();
+    setReaderTriggerState();
+
+    if (restoreFocus && readerSurfaceReturnFocus?.isConnected) {
+      readerSurfaceReturnFocus.focus();
+    }
+    readerSurfaceReturnFocus = null;
+    return true;
+  },
+
+  focusInitial(surface, panelName = null) {
+    requestAnimationFrame(() => {
+      if (surface === 'content' && panelName) {
+        document.querySelector(`#readerDrawer [data-reader-panel-target="${panelName}"]`)?.focus?.();
+        return;
+      }
+      focusableElements(surface)[0]?.focus?.();
+    });
+  },
+
+  bindBackdrops() {
+    if (readerSurfaceBackdropsBound) return;
+    readerSurfaceBackdropsBound = true;
+    Object.keys(readerSurfaceDefinitions).forEach((surface) => {
+      surfaceBackdrop(surface)?.addEventListener('click', () => {
+        this.close();
+      });
+    });
+  },
+
+  syncAccessibility() {
+    Object.keys(readerSurfaceDefinitions).forEach((surface) => {
+      const root = surfaceElement(surface);
+      if (!root) return;
+      setSurfaceVisibility(surface, !root.hidden && activeReaderSurface === surface);
+    });
+    updateSurfaceBodyState();
+    setReaderTriggerState();
+  }
+});
 
 function closeReaderPanel({ restoreFocus = true } = {}) {
   if (typeof closeAllCustomSelects === 'function') closeAllCustomSelects();
-  hideSurface('content');
-  hideSurface('settings');
-  hideSurface('search');
-  document.body.classList.remove('reader-drawer-open');
-  activeReaderPanel = null;
-  activeReaderSurface = null;
-  setReaderTriggerState();
-
-  if (restoreFocus && readerDrawerReturnFocus?.isConnected) {
-    readerDrawerReturnFocus.focus();
-  }
-  readerDrawerReturnFocus = null;
+  return readerSurfaceController.close({ restoreFocus });
 }
 
 function openReaderPanel(panelName, trigger = document.activeElement) {
@@ -123,21 +214,12 @@ function openReaderPanel(panelName, trigger = document.activeElement) {
   }
 
   ensureSettingsSurface();
-  const surface = panelConfig.surface;
-  const surfaceRoot = surfaceElement(surface);
-  if (!surfaceRoot) return false;
-
   if (typeof closeAllCustomSelects === 'function') closeAllCustomSelects();
-  if (!activeReaderSurface) readerDrawerReturnFocus = trigger;
+  activeReaderPanel = panelConfig.surface === 'content' ? panelName : null;
+  if (!readerSurfaceController.activate(panelConfig.surface, trigger, { focus: false })) return false;
+  placeSurfaceCloseButton(panelConfig.surface);
 
-  hideSurface('content');
-  hideSurface('settings');
-  hideSurface('search');
-  activeReaderSurface = surface;
-  activeReaderPanel = surface === 'content' ? panelName : null;
-  placeSurfaceCloseButton(surface);
-
-  if (surface === 'content') {
+  if (panelConfig.surface === 'content') {
     const title = document.getElementById('readerDrawerTitle');
     document.querySelectorAll('#readerDrawer [data-reader-panel-name]').forEach((panel) => {
       panel.hidden = panel.dataset.readerPanelName !== panelName;
@@ -153,23 +235,12 @@ function openReaderPanel(panelName, trigger = document.activeElement) {
       renderBookmarkList();
       if (typeof refreshBookmarks === 'function') void refreshBookmarks();
     }
-  } else if (surface === 'settings') {
+  } else if (panelConfig.surface === 'settings') {
     syncSettingsPanel();
   }
 
-  surfaceRoot.hidden = false;
-  const backdrop = surfaceBackdrop(surface);
-  if (backdrop) backdrop.hidden = false;
-  document.body.classList.add('reader-drawer-open');
   setReaderTriggerState();
-
-  requestAnimationFrame(() => {
-    if (surface === 'content') {
-      document.querySelector(`#readerDrawer [data-reader-panel-target="${panelName}"]`)?.focus?.();
-    } else {
-      surfaceRoot.querySelector('.reader-drawer-header button')?.focus?.();
-    }
-  });
+  readerSurfaceController.focusInitial(panelConfig.surface, panelName);
   return true;
 }
 
@@ -205,6 +276,7 @@ const readerActions = Object.freeze({
 
 function setupReaderActionMapping() {
   ensureSettingsSurface();
+  readerSurfaceController.bindBackdrops();
   document.addEventListener('click', (event) => {
     const panelTab = event.target.closest?.('[data-reader-panel-target]');
     if (panelTab) {
@@ -221,9 +293,6 @@ function setupReaderActionMapping() {
     action(trigger);
   });
 
-  document.getElementById('readerDrawerBackdrop')?.addEventListener('click', () => closeReaderPanel());
-  document.getElementById('readerSettingsBackdrop')?.addEventListener('click', () => closeReaderPanel());
-
   document.addEventListener('keydown', (event) => {
     if (event.key === 'Escape' && activeReaderSurface) {
       event.preventDefault();
@@ -232,14 +301,8 @@ function setupReaderActionMapping() {
     }
 
     if (event.key !== 'Tab' || !activeReaderSurface) return;
-    const surface = surfaceElement(activeReaderSurface);
-    if (!surface || surface.hidden) return;
-
-    const focusable = [...surface.querySelectorAll(
-      'button:not([disabled]):not([hidden]), select:not([disabled]), input:not([disabled]), textarea:not([disabled]), [href], [tabindex]:not([tabindex="-1"])'
-    )].filter((element) => !element.closest('[hidden]'));
+    const focusable = focusableElements(activeReaderSurface);
     if (!focusable.length) return;
-
     const first = focusable[0];
     const last = focusable[focusable.length - 1];
     if (event.shiftKey && document.activeElement === first) {
@@ -253,3 +316,5 @@ function setupReaderActionMapping() {
 }
 
 ensureSettingsSurface();
+readerSurfaceController.syncAccessibility();
+window.readerSurfaceController = readerSurfaceController;

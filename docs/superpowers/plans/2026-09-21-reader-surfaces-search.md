@@ -4,7 +4,7 @@
 
 **Goal:** Separate reader content navigation, display settings, and future search into independent in-app sheets while preserving all existing reader and AI behavior.
 
-**Status:** Task 1 complete; Task 2 pending
+**Status:** Task 2 complete; Task 3 pending
 
 **Architecture:** Keep one shared surface controller for exclusivity, backdrop, Escape, focus restoration, and responsive behavior. Use separate DOM roots and state namespaces for content, settings, and search. Keep AI as the existing independent modal.
 
@@ -31,10 +31,12 @@
 
 **Files:** `app/ui/shell/drawer.js`, `app/ui/index.html`, `app/ui/styles.css`, tests
 
-1. Add tests for Escape, backdrop, focus restoration, and sibling-surface exclusivity across content and settings.
-2. Implement a small surface registry/controller without moving AI internals.
-3. Make launcher `aria-expanded` reflect the active surface and restore focus to the original launcher.
-4. Verify keyboard and touch close behavior on desktop and mobile.
+1. Add tests for Escape, backdrop, focus restoration, and sibling-surface exclusivity across content and settings. — complete
+2. Implement a small surface registry/controller without moving AI internals. — complete
+3. Make launcher `aria-expanded` reflect the active surface and restore focus to the original launcher. — complete
+4. Verify keyboard and touch close behavior on desktop and mobile. — complete
+
+Task 2 boundary: AI remains an independent floating modal. The shared controller closes reader surfaces before AI opens, while reader surfaces can coexist with an already-open AI panel so the existing desktop AI workflow and conversation state remain stable.
 
 ## Task 3: Normalize the visual system
 
