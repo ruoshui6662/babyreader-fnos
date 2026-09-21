@@ -1,6 +1,6 @@
 # AI 索引管理器开发进度
 
-状态：Task 1～Task 5 已完成，Task 6 验收中。
+状态：Task 1～Task 5 已完成，Task 6 FPK 已生成，fnOS 真机验收待执行。
 
 更新时间：2026-09-21
 
@@ -22,7 +22,7 @@
 | Task 3 | 管理员索引管理 API | 已完成 |
 | Task 4 | 独立索引管理 surface | 已完成 |
 | Task 5 | 恢复、诊断和异常边界加固 | 已完成 |
-| Task 6 | 文档、FPK 和 fnOS 真机验收 | 进行中 |
+| Task 6 | 文档、FPK 和 fnOS 真机验收 | FPK 已生成，真机待验 |
 
 ## 当前安全边界
 
@@ -67,3 +67,12 @@
 - DOM/API 定向测试全部通过，包含独立 surface、管理员入口、失败状态、确认清理和服务端 API 适配。
 - Task 5 覆盖过期临时文件、活跃构建跳过、损坏 SQLite 保留和不做破坏性修复。
 - 当前已完成提交：4c14e29、b3bdeea、2203f8b。
+
+## Task 6 当前证据
+
+- 全量测试：168 通过、4 跳过、0 失败。
+- 结构校验：npm run check 通过。
+- FPK：dist/babyreader-fnos.fpk 已生成，manifest 版本 1.1.1。
+- FPK 内已核验包含 server/ai-index-manager.js、ui/reader/ai-index-manager.js、两组索引管理测试和 fnOS 验收文档。
+- FPK SHA-256 与构建溯源以 dist/build-provenance.json 为准；最后一次构建为 clean source commit。
+- 尚未在真实 fnOS x86_64/ARM64 设备安装、重启和执行验收脚本。
