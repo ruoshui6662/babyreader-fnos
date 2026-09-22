@@ -22,6 +22,16 @@
 - 当前提交：`6eeac3e`、`f863cba`、`b1fcd90`。
 - 真机待验：FPK 安装、健康扫描删除联动、rejected root 保留、重试、深色/浅色与 375px 移动端布局。
 
+## 2026-09-22 本地发布验证证据
+
+- `npm test`：179 passed、5 skipped、0 failed。
+- `npm run check` 与 `npm run check:portable`：通过。
+- Chromium Playwright：80 passed、2 skipped。
+- FPK：`dist/babyreader-fnos.fpk`，manifest `1.1.2`。
+- FPK SHA-256：以 `dist/build-provenance.json` 的 `archive.outer_sha256` 为准。
+- 构建溯源：`dist/build-provenance.json`，source commit `e522d79`，`git_dirty=false`。
+- 真机未完成：当前工作区无法代替 fnOS 安装、重启、权限和 Gateway 验收；需要在设备上执行文档中的 `fnos-device-acceptance.sh` 并回填结果。
+
 ## 任务状态
 
 | 任务 | 内容 | 状态 |

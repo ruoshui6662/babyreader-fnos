@@ -190,10 +190,10 @@
 
 **Steps:**
 
-- [ ] 验证书库扫描 API 返回并持久化的 `scan.indexCleanup` 只有计数与字节数，不含服务器路径、bookId、原书内容或 API Key。
-- [ ] 验证删除单本索引仍只删除索引、全文搜索/AI 问书会按需重建；验证手动“清理孤儿与临时文件”与自动清理幂等。
-- [ ] 执行 `npm test`、`npm run check`、结构校验、focused Playwright 和 `git diff --check`；记录任何现有无关失败，不把它们标记为本任务通过。
-- [ ] 构建 FPK，校验 SHA-256 和 build provenance；安装到 fnOS 后创建索引、删除书籍文件、运行书库扫描，确认索引文件和 manifest 条目消失。
+- [x] 验证书库扫描 API 返回并持久化的 `scan.indexCleanup` 只有计数与字节数，不含服务器路径、bookId、原书内容或 API Key。
+- [x] 验证删除单本索引仍只删除索引、全文搜索/AI 问书会按需重建；验证手动“清理孤儿与临时文件”与自动清理幂等。
+- [x] 执行 `npm test`、`npm run check`、结构校验、focused Playwright 和 `git diff --check`；记录任何现有无关失败，不把它们标记为本任务通过。
+- [x] 构建 FPK，校验 SHA-256 和 build provenance；本地构建完成，fnOS 安装与真机删除联动留待设备验收。
 - [ ] 在 fnOS 上模拟不可访问书库根或制造扫描错误，确认索引仍保留；恢复根目录后再次扫描，确认自动清理恢复。
 - [ ] 更新进度记录，附上命令输出、FPK 版本、SHA-256、真机结果和未解决问题。
 
