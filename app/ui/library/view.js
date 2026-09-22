@@ -5,6 +5,19 @@
 /* ============================================================
    Library View
    ============================================================ */
+function formatLibraryScanStatus(scan) {
+  if (!scan || typeof scan !== 'object') return '';
+  if (scan.status === 'running') return '正在读取授权目录…';
+
+  const count = (value) => Number.isFinite(Number(value)) ? Math.max(0, Number(value)) : 0;
+  const discovered = count(scan.discoveredCount);
+  const indexed = count(scan.indexedCount);
+  const reused = count(scan.reusedCount);
+  const errors = count(scan.errorCount);
+  const errorSummary = errors ? '，' + errors + ' 项未能读取' : '';
+  return '扫描完成：发现 ' + discovered + ' 项，新增 ' + indexed + ' 本，复用 ' + reused + ' 本' + errorSummary + '。';
+}
+
 function renderLibrary(library) {
   if (typeof clearReaderBookLocation === 'function') clearReaderBookLocation();
   if (typeof closeReaderPanel === 'function') closeReaderPanel({ restoreFocus: false });
@@ -54,19 +67,28 @@ function renderLibrary(library) {
   scanButton.type = 'button';
   scanButton.className = 'mode-btn library-scan-button';
   scanButton.textContent = '重新扫描';
+  const scanStatus = document.createElement('p');
+  scanStatus.className = 'library-scan-status';
+  scanStatus.setAttribute('aria-live', 'polite');
+  scanStatus.textContent = formatLibraryScanStatus(library?.scan);
   scanButton.addEventListener('click', async () => {
     scanButton.disabled = true;
-    scanButton.textContent = '扫描中…';
+    scanButton.textContent = '正在读取授权目录…';
+    scanStatus.textContent = '正在读取授权目录…';
     try {
       renderLibrary(await window.browserHost.scanLibrary());
     } catch (error) {
-      showHighlightHint(error.message);
+      scanStatus.textContent = '读取失败：请检查 fnOS 应用权限并重启应用后重试。';
+      if (typeof showHighlightHint === 'function') {
+        showHighlightHint('读取失败，请检查 fnOS 应用权限并重启应用后重试。');
+      }
       scanButton.disabled = false;
       scanButton.textContent = '重新扫描';
     }
   });
   header.appendChild(scanButton);
   shell.appendChild(header);
+  shell.appendChild(scanStatus);
 
   if (!validBooks.length) {
     const empty = document.createElement('section');

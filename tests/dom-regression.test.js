@@ -46,6 +46,7 @@ async function createReaderDom() {
   source += '\nwindow.__babyReaderBookmarkApi = { getCurrentBookmarkLocator, isCurrentBookmark, toggleCurrentBookmark, jumpToBookmark, renderBookmarkButtonState, renderBookmarkList, deleteBookmarkFromList, refreshBookmarks };';
   source += '\nwindow.__babyReaderSearchApi = { updateTopbarState, setupReaderSearch };';
   source += '\nwindow.__babyReaderRouteApi = { restoreReaderFromLocation };';
+  source += '\nwindow.__babyReaderLibraryApi = { renderLibrary };';
 
   window.document.write(html.replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, ''));
   window.requestAnimationFrame = (callback) => {
@@ -72,6 +73,7 @@ async function createReaderDom() {
   window.eval(`${source}\nwindow.__babyReaderTest = {\n    state,\n    serializeDomRange,\n    rangeFromHighlight,\n    loadHighlights,\n    openHighlightEditor,\n    deleteActiveHighlight,\n    saveActiveHighlightEdits,\n    currentUserSettings,\n    applyZoom,\n    getEpubThemeCss,\n    debounce,\n    navigateChapter,\n    navigatePageGroup,\n    pageGroupForPage,\n    clampPageGroup,\n    pageLeftForGroup,\n    setPageGroup,\n    snapPaginationToNearestGroup,\n    pageNumberForElement,\n    navigateToSemanticTarget,\n    resolveEffectiveReadingMode,\n    createPaginationGeometry,\n    measurePagination,\n    setReadingMode,\n    currentReadingLocator,\n    restoreReadingLocator,\n    readerActions,\n    readerPanels,\n    openReaderPanel,\n    closeReaderPanel,\n    setupReaderActionMapping,\n    renderToc,\n    returnToLibrary\n  };`);
 
   window.__babyReaderTest.updateTopbarState = window.__babyReaderSearchApi.updateTopbarState;
+  window.__babyReaderTest.renderLibrary = window.__babyReaderLibraryApi.renderLibrary;
   window.__babyReaderTest.restoreReaderFromLocation = window.__babyReaderRouteApi.restoreReaderFromLocation;
   window.__babyReaderTest.setupReaderSearch = window.__babyReaderSearchApi.setupReaderSearch;
   window.__babyReaderTest.readerSurfaceController = window.readerSurfaceController;
@@ -112,6 +114,49 @@ async function createReaderDom() {
   window.__babyReaderTest.refreshBookmarks = window.__babyReaderBookmarkApi.refreshBookmarks;
   return { window, api: window.__babyReaderTest };
 }
+
+test('library rescan shows safe progress and outcome feedback', async () => {
+  const { window } = await createReaderDom();
+  const renderLibrary = window.__babyReaderTest.renderLibrary;
+  const book = { id: 'a'.repeat(64), title: '授权目录中的书', type: 'txt' };
+  let resolveScan;
+  window.browserHost.scanLibrary = () => new Promise((resolve) => {
+    resolveScan = resolve;
+  });
+
+  renderLibrary({ books: [book] });
+  const article = window.document.getElementById('article');
+  const button = article.querySelector('.library-scan-button');
+  assert.ok(button);
+  button.click();
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  assert.equal(button.disabled, true);
+  assert.equal(button.textContent, '正在读取授权目录…');
+  assert.match(article.querySelector('.library-scan-status')?.textContent || '', /正在读取授权目录/);
+
+  resolveScan({
+    books: [book],
+    scan: { discoveredCount: 4, indexedCount: 2, reusedCount: 1, errorCount: 1 }
+  });
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  assert.match(article.textContent, /发现 4 项/);
+  assert.match(article.textContent, /新增 2 本/);
+  assert.match(article.textContent, /复用 1 本/);
+  assert.match(article.textContent, /1 项未能读取/);
+  assert.doesNotMatch(article.textContent, /root|path|\/var\/|[A-Z]:\\/i);
+
+  window.browserHost.scanLibrary = async () => {
+    throw new Error('/var/apps/babyreader-fnos/custom-library permission denied');
+  };
+  renderLibrary({ books: [book] });
+  const failedButton = article.querySelector('.library-scan-button');
+  failedButton.click();
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  assert.equal(failedButton.disabled, false);
+  assert.equal(failedButton.textContent, '重新扫描');
+  assert.match(article.querySelector('.library-scan-status')?.textContent || '', /检查 fnOS 应用权限并重启应用后重试/);
+  assert.doesNotMatch(article.textContent, /permission denied|\/var\/|root|path/i);
+});
 
 test('browser refresh restores the book selected in the reader URL', async () => {
   const { window, api } = await createReaderDom();

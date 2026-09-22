@@ -1553,6 +1553,14 @@ body.is-library.theme-sepia .topbar {
   opacity: .62;
 }
 
+.library-scan-status {
+  min-height: 18px;
+  margin: -16px 0 20px;
+  color: var(--library-text-muted, var(--color-text-2));
+  font-size: 12px;
+  line-height: 1.5;
+}
+
 .library-empty {
   display: flex;
   min-height: 280px;
