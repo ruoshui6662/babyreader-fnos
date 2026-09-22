@@ -439,6 +439,7 @@ function createAiIndexManager({
     );
     const deleted = [];
     const skipped = [];
+    const manifestRemoved = [];
     let bytesFreed = 0;
 
     if (kind === 'orphans' || kind === 'all') {
@@ -458,6 +459,24 @@ function createAiIndexManager({
           else throw error;
         }
       }
+
+      const manifest = await loadManifest();
+      let manifestChanged = false;
+      for (const bookId of Object.keys(manifest.entries)) {
+        if (books.has(bookId)) continue;
+        let exists = false;
+        try {
+          await fs.lstat(getIndexPath(bookId));
+          exists = true;
+        } catch (error) {
+          if (error?.code !== 'ENOENT') throw error;
+        }
+        if (exists) continue;
+        delete manifest.entries[bookId];
+        manifestRemoved.push(bookId);
+        manifestChanged = true;
+      }
+      if (manifestChanged) await publishManifest(manifest);
     }
 
     if (kind === 'temporary' || kind === 'all') {
@@ -484,7 +503,7 @@ function createAiIndexManager({
         bytesFreed += stat.size;
       }
     }
-    return { kind, deleted, skipped, bytesFreed };
+    return { kind, deleted, skipped, manifestRemoved, bytesFreed };
   }
 
   async function listIndexes({ libraryIndex = null, scanHealthy = true } = {}) {
