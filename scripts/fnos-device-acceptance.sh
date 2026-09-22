@@ -54,6 +54,33 @@ path_readable_as_package() {
   fi
 }
 
+check_runtime_root_list() {
+  LABEL="$1"
+  VALUE="$2"
+  if [ -z "$VALUE" ]; then
+    skip "$LABEL is not present in the acceptance process environment"
+    return 0
+  fi
+
+  ROOTS_FILE="${TMPDIR:-/tmp}/babyreader-${LABEL}.$$"
+  printf '%s\n' "$VALUE" | tr ':' '\n' | sed '/^[[:space:]]*$/d' > "$ROOTS_FILE"
+  ROOT_COUNT="$(wc -l < "$ROOTS_FILE" | tr -d ' ')"
+  info "${LABEL}_count=$ROOT_COUNT"
+  while IFS= read -r root; do
+    if path_readable_as_package "$root"; then
+      pass "package user can traverse/read ${LABEL} root: $root"
+    else
+      CODE=$?
+      if [ "$CODE" -eq 125 ]; then
+        skip "cannot switch to package user; manually verify ${LABEL} ACL for: $root"
+      else
+        fail "package user cannot traverse/read ${LABEL} root: $root"
+      fi
+    fi
+  done < "$ROOTS_FILE"
+  rm -f "$ROOTS_FILE"
+}
+
 snapshot() {
   OUTPUT="${1:-}"
   if [ -z "$OUTPUT" ]; then
@@ -311,6 +338,9 @@ check_device() {
   else
     skip "settings.json or Node.js unavailable; ACL roots not checked"
   fi
+
+  check_runtime_root_list "TRIM_DATA_ACCESSIBLE_PATHS" "${TRIM_DATA_ACCESSIBLE_PATHS:-}"
+  check_runtime_root_list "TRIM_DATA_SHARE_PATHS" "${TRIM_DATA_SHARE_PATHS:-}"
 
   if [ -n "${BABYREADER_GATEWAY_URL:-}" ]; then
     if [ -n "${BABYREADER_GATEWAY_COOKIE:-}" ]; then

@@ -79,6 +79,13 @@ test('main uses the Native FPK target layout and fnOS runtime directories', () =
   assert.match(source, /TRIM_PKGTMP="\$PKG_TMP"/);
 });
 
+test('main preserves fnOS authorized and shared path environment inherited from the supervisor', () => {
+  const source = read('cmd/main');
+  assert.doesNotMatch(source, /\benv\s+-i\b/);
+  assert.doesNotMatch(source, /\bunset\b[^\n]*(?:TRIM_DATA_ACCESSIBLE_PATHS|TRIM_DATA_SHARE_PATHS)/);
+  assert.match(source, /nohup "\$NODE_BIN" "\$SERVER_FILE"/);
+});
+
 test('POSIX fnOS lifecycle installs, starts, reports status, and stops cleanly', {
   skip: process.platform === 'win32' ? 'Unix-domain socket lifecycle requires a Linux/POSIX test host' : false,
   timeout: 60000

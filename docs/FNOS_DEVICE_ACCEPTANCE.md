@@ -65,6 +65,22 @@ sh /var/apps/babyreader-fnos/target/docs/fnos-device-acceptance.sh ai-test
 
 至少准备两个目录：A 为已授权书库，B 为未授权目录。A 中 EPUB/TXT/Markdown 必须能扫描和打开；B 不得出现在索引中；A 内符号链接指向 B 时不得越权读取；撤销 A 的授权后重新扫描必须报告不可用根目录。
 
+## 4.1 fnOS 自定义授权书库目录
+
+自定义书库目录必须通过 fnOS 应用权限授权，不要直接把未授权路径写入应用配置：
+
+1. 在 fnOS 应用中心打开 BabyReader 的“应用限制 → 访问权限”。
+2. 添加测试目录 A，并在目录中准备至少一个 EPUB、一个 TXT 和一个 Markdown 文件。
+3. 保存权限后重启 BabyReader 应用，使新的 `TRIM_DATA_ACCESSIBLE_PATHS` 进入服务进程环境。
+4. 从管理员诊断确认 `accessible` 和 `authorized` 根目录数量增加，且没有对应的 `rejected` 项。
+5. 回到书库点击“重新扫描”，确认 A 中的书籍出现并可以打开。
+6. 在同一册书上验证全文搜索、AI 问书、书签、标注和阅读进度仍可用。
+7. 撤销 A 的 fnOS 权限并重启应用，再次扫描；A 中书籍不得继续被读取，诊断应报告授权根不可用或数量减少。
+
+如果 fnOS 权限页面保存后没有自动重启服务，必须手动重启应用再扫描；“重新扫描”只会重新读取当前服务进程已经获得的授权环境，不会绕过 fnOS 权限。
+
+验收记录只保存根目录数量、状态和错误类型，不把 API Key、Cookie、书籍正文或不必要的用户路径写入报告。
+
 ## 5. SQLite FTS 验收
 
 `check` 命令现在会自动验证 Node 22 的 `node:sqlite`、SQLite FTS5 能力，以及已有 AI 索引的表结构、临时文件和权限：
