@@ -1598,6 +1598,23 @@ test('topbar navigation controls use icon-only SVGs without changing actions', a
   }
 });
 
+test('text documents keep the shared desktop and mobile return-to-library entry', async () => {
+  const { window, api } = await createReaderDom();
+  api.state.contentType = 'text';
+  api.state.currentBookId = 'a'.repeat(64);
+  api.state.currentPath = 'library/notes.md';
+
+  api.updateTopbarState();
+
+  assert.equal(window.document.getElementById('btnBackToLibrary').hidden, false);
+  assert.equal(window.document.getElementById('btnMobileBackToLibrary').disabled, false);
+
+  api.state.currentPath = '';
+  api.updateTopbarState();
+  assert.equal(window.document.getElementById('btnBackToLibrary').hidden, true);
+  assert.equal(window.document.getElementById('btnMobileBackToLibrary').disabled, true);
+});
+
 test('reader drawer separates fixed chrome from the scrollable panel viewport', async () => {
   const { window } = await createReaderDom();
   const document = window.document;

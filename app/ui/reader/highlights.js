@@ -224,7 +224,7 @@ function updateTopbarState() {
   const mobileNext = document.getElementById('btnMobileNextChapter');
   const hasDocument = Boolean(state.currentPath);
 
-  if (btnBack) btnBack.hidden = !isEpub;
+  if (btnBack) btnBack.hidden = !hasDocument;
   const isScrollMode = state.effectiveReadingMode === 'scroll';
   if (btnPrevious) btnPrevious.hidden = !isEpub || isScrollMode;
   if (btnNext) btnNext.hidden = !isEpub || isScrollMode;
@@ -238,7 +238,7 @@ function updateTopbarState() {
   if (mobileToolbar && typeof setMobileChromeOpen === 'function') {
     setMobileChromeOpen(isMobileChromeOpen());
   }
-  if (mobileBack) mobileBack.disabled = !isEpub;
+  if (mobileBack) mobileBack.disabled = !hasDocument;
   if (mobileBookmarks) mobileBookmarks.disabled = !(isEpub && Boolean(state.currentBookId));
   if (mobileSearch) mobileSearch.disabled = !searchAvailable;
   if (mobileNotes) mobileNotes.disabled = !isEpub;

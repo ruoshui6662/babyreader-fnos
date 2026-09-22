@@ -48,6 +48,16 @@ test('acceptance reconciles supervisor status 3 with a healthy target socket', (
   assert.match(source, /service is running under fnOS supervisor/);
 });
 
+test('acceptance tool exposes a server-side AI connection check without accepting an API key', () => {
+  const source = read('scripts/fnos-device-acceptance.sh');
+  assert.match(source, /ai-test/);
+  assert.match(source, /BABYREADER_GATEWAY_URL/);
+  assert.match(source, /BABYREADER_GATEWAY_COOKIE/);
+  assert.match(source, /api\/ai\/test-connection/);
+  assert.match(source, /-X POST/);
+  assert.doesNotMatch(source, /BABYREADER_AI_KEY|OPENAI_API_KEY|--api-key/);
+});
+
 test('install_callback does not start the service inside the install transaction', () => {
   const source = read('cmd/install_callback');
   const executableLines = source.split('\n').filter((line) => !line.trimStart().startsWith('#')).join('\n');

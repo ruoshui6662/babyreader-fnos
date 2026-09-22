@@ -42,6 +42,25 @@ sh scripts/fnos-device-acceptance.sh check
 
 Cookie 不得提交到 Git、报告、日志或 CI。
 
+## 3.1 AI 真实供应商连接验收
+
+AI 设置和问答的固定夹具测试不会访问真实供应商。配置真实 AI 服务后，从 fnOS Gateway 会话执行独立连接测试；该命令使用服务端已经保存的配置和 API Key，不在命令行、脚本参数或日志中接收/打印 API Key，也不携带书籍内容、选中文本或对话历史：
+
+```sh
+BABYREADER_GATEWAY_URL="https://你的-fnOS-地址" \
+BABYREADER_GATEWAY_COOKIE="实际登录 Cookie" \
+sh /var/apps/babyreader-fnos/target/docs/fnos-device-acceptance.sh ai-test
+```
+
+通过标准：
+
+- 返回 `PASS | authenticated fnOS AI provider connection test returned 200`；
+- 服务端已保存的 URL、模型和 API Key 能完成最小 Responses API 测试；
+- 测试请求不包含书籍内容、选中文本和历史对话；
+- Cookie 和 API Key 不出现在终端输出、验收文件、Git 或应用日志中。
+
+失败时先在 AI 设置中使用“测试连接”确认 URL、模型和 Key，再检查 DNS、出口网络、供应商配额和模型权限。不要把 API Key 作为脚本参数传入；完成验收后立即清除当前终端变量和临时 Cookie。
+
 ## 4. ACL 验收
 
 至少准备两个目录：A 为已授权书库，B 为未授权目录。A 中 EPUB/TXT/Markdown 必须能扫描和打开；B 不得出现在索引中；A 内符号链接指向 B 时不得越权读取；撤销 A 的授权后重新扫描必须报告不可用根目录。
@@ -129,6 +148,7 @@ sh scripts/fnos-device-acceptance.sh compare \
 | 未授权/符号链接拒绝 | 待验 | 待验 | 扫描/错误记录 |
 | SQLite/FTS5 运行时 | 待验 | 待验 | acceptance-ai-fts.txt |
 | AI 索引表结构与权限 | 待验 | 待验 | acceptance-ai-fts.txt |
+| AI 真实供应商连接 | 待验 | 待验 | ai-test 输出 |
 | AI 索引管理器管理员边界 | 待验 | 待验 | API/UI 记录 |
 | AI 索引删除/孤儿清理保护 | 待验 | 待验 | API/UI 记录 |
 | manifest/临时文件恢复 | 待验 | 待验 | 重启与清理日志 |

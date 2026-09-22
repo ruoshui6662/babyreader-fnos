@@ -103,6 +103,46 @@ compare_snapshots() {
   [ "$FAILURES" -eq 0 ]
 }
 
+ai_test_connection() {
+  if ! command -v curl >/dev/null 2>&1; then
+    fail "curl is required for the authenticated AI connection test"
+    printf 'RESULT | FAIL | count=%s\n' "$FAILURES" >&2
+    return 1
+  fi
+  if [ -z "${BABYREADER_GATEWAY_URL:-}" ]; then
+    fail "BABYREADER_GATEWAY_URL is required for ai-test"
+    printf 'RESULT | FAIL | count=%s\n' "$FAILURES" >&2
+    return 1
+  fi
+  if [ -z "${BABYREADER_GATEWAY_COOKIE:-}" ]; then
+    fail "BABYREADER_GATEWAY_COOKIE is required for ai-test"
+    printf 'RESULT | FAIL | count=%s\n' "$FAILURES" >&2
+    return 1
+  fi
+
+  AI_TEST_BODY="${TMPDIR:-/tmp}/babyreader-ai-test.$$"
+  AI_TEST_CODE="$(curl -sS -X POST \
+    -H "Cookie: $BABYREADER_GATEWAY_COOKIE" \
+    -H 'Content-Type: application/json' \
+    -d '{}' \
+    -o "$AI_TEST_BODY" \
+    -w '%{http_code}' \
+    "$BABYREADER_GATEWAY_URL/app/babyreader-fnos/api/ai/test-connection" 2>/dev/null || true)"
+  if [ "$AI_TEST_CODE" = "200" ]; then
+    pass "authenticated fnOS AI provider connection test returned 200"
+    info "ai_test_response_status=$AI_TEST_CODE"
+  else
+    fail "authenticated fnOS AI provider connection test returned ${AI_TEST_CODE:-no response}"
+  fi
+  rm -f "$AI_TEST_BODY"
+  if [ "$FAILURES" -eq 0 ]; then
+    printf 'RESULT | PASS\n'
+    return 0
+  fi
+  printf 'RESULT | FAIL | count=%s\n' "$FAILURES" >&2
+  return 1
+}
+
 check_fts_contract() {
   if [ ! -x "$NODE_BIN" ]; then
     skip "Node.js 22 runtime unavailable; SQLite/FTS5 contract not checked"
@@ -303,10 +343,11 @@ check_device() {
 
 case "${1:-check}" in
   check) check_device ;;
+  ai-test) ai_test_connection ;;
   snapshot) snapshot "${2:-}" ;;
   compare) compare_snapshots "${2:-}" "${3:-}" ;;
   *)
-    printf 'usage: %s {check|snapshot <file>|compare <before> <after>}\n' "$0" >&2
+    printf 'usage: %s {check|ai-test|snapshot <file>|compare <before> <after>}\n' "$0" >&2
     exit 2
     ;;
 esac

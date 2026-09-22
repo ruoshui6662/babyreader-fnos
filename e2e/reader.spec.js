@@ -70,12 +70,22 @@ test('loads split UI modules in Chromium and opens a real library book', async (
   }
 
   await expect(page.locator('script[src*="reader/settings.js?v=29"]')).toHaveCount(1);
-  await expect(page.locator('script[src*="reader/highlights.js?v=31"]')).toHaveCount(1);
+  await expect(page.locator('script[src*="reader/highlights.js?v=32"]')).toHaveCount(1);
   await expect(page.locator('script[src*="reader/ai.js?v=1"]')).toHaveCount(1);
   await expect(page.locator('script[src*="reader/search.js?v=1"]')).toHaveCount(1);
   await expect(page.locator('script[src*="shell/drawer.js?v=31"]')).toHaveCount(1);
 
   expect(pageErrors).toEqual([]);
+});
+
+test('Markdown reader exposes the same desktop return-to-library action as EPUB', async ({ page }) => {
+  await openFixtureBook(page);
+
+  await expect(page.locator('#btnBackToLibrary')).toBeVisible();
+  await expect(page.locator('#btnBackToLibrary')).toBeEnabled();
+  await page.locator('#btnBackToLibrary').click();
+  await expect(page.locator('.library-view h1')).toHaveText('书库');
+  await expect(page).not.toHaveURL(/book=[a-f0-9]{64}/);
 });
 
 test('opens the independent search surface and searches the current Markdown book', async ({ page }) => {
@@ -1268,4 +1278,21 @@ test('mobile viewport keeps the reader chrome collapsed until requested', async 
   expect(mobileSurface.paddingBottom).toBe('16px');
   expect(mobileSurface.backdropInset).toBe('0px');
   expect(pageErrors).toEqual([]);
+});
+
+test('mobile Markdown reader exposes an enabled return-to-library action', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.addInitScript(() => {
+    Object.defineProperty(navigator, 'userAgent', {
+      configurable: true,
+      get: () => 'Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 Chrome/120 Mobile Safari/537.36'
+    });
+  });
+
+  await openFixtureBook(page);
+  await page.locator('#mobileReaderChromeToggle').click();
+  await expect(page.locator('#mobileReaderToolbar')).toBeVisible();
+  await expect(page.locator('#btnMobileBackToLibrary')).toBeEnabled();
+  await page.locator('#btnMobileBackToLibrary').click();
+  await expect(page.locator('.library-view h1')).toHaveText('书库');
 });
