@@ -5,7 +5,7 @@
 - 读取 fnOS 注入的 TRIM_DATA_ACCESSIBLE_PATHS 与 TRIM_DATA_SHARE_PATHS，经过 realpath、目录类型、可读性、去重和父子目录裁剪后参与书库扫描；不引入 root 权限、全 NAS 扫描或文件监听。
 - 管理员诊断增加 configured/accessible/shared/authorized/rejected 数量；普通书库响应不暴露绝对路径。书库刷新显示授权目录读取状态、发现/新增/复用/失败计数，失败时提示检查 fnOS 权限并重启应用。
 - 验证：npm test 180 pass、4 Windows 条件 skip；Chromium E2E 80 pass、2 可选真实 EPUB skip；npm run check、npm run check:portable、git diff --check 通过。
-- 候选 FPK：dist/babyreader-fnos.fpk，5,332,661 bytes，SHA-256 C924554E9D658EC09584DE343F25A959D0C94B5F94E3BFAF03C261EAEFB044BA；构建溯源 source commit a14862e906354a8ed76614b3f744b1e7119bcdeb，git_dirty=false。
+- 候选 FPK：dist/babyreader-fnos.fpk；最终大小、SHA-256、源提交和 git_dirty 状态以同目录 build-provenance.json 为准。
 - 真实 fnOS 安装、访问权限添加/撤销、Gateway、ACL、x86_64/ARM64 和升级验收仍待设备侧执行；本地构建不宣称真机通过。
 
 ## 主线合并书签与 AI 阅读能力 2026-09-21
