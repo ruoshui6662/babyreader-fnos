@@ -84,6 +84,36 @@ test('read-only inspection returns required schema and SQLite size statistics', 
   assert.ok(Number.isInteger(result.freelistCount));
 });
 
+test('read-only inspection exposes the regular file mtime without creating a manifest', {
+  skip: !DatabaseSync
+}, async (t) => {
+  const dataRoot = await temporaryDirectory(t);
+  const filePath = await createValidIndex(dataRoot, BOOK_ID);
+  const expectedTime = new Date('2026-09-22T00:52:04.000Z');
+  await fs.utimes(filePath, expectedTime, expectedTime);
+  const manager = createAiIndexManager({ dataRoot });
+
+  const result = await manager.inspectIndexFile(filePath);
+
+  assert.equal(result.modifiedAt, expectedTime.toISOString());
+  assert.equal(await fs.stat(manager.getManifestPath()).then(() => true).catch(() => false), false);
+});
+
+test('unsafe and missing index inspections never report a modification time', async (t) => {
+  const dataRoot = await temporaryDirectory(t);
+  const manager = createAiIndexManager({ dataRoot });
+  const directoryPath = manager.getIndexPath(BOOK_ID);
+  await fs.mkdir(directoryPath, { recursive: true });
+
+  const unsafe = await manager.inspectIndexFile(directoryPath);
+  const missing = await manager.inspectIndexFile(manager.getIndexPath(ORPHAN_ID));
+
+  assert.equal(unsafe.status, 'unsafe');
+  assert.equal(unsafe.modifiedAt, null);
+  assert.equal(missing.status, 'missing');
+  assert.equal(missing.modifiedAt, null);
+});
+
 test('recordBuildSuccess writes only non-sensitive manifest metadata atomically', async (t) => {
   const dataRoot = await temporaryDirectory(t);
   const manager = createAiIndexManager({ dataRoot, now: () => new Date('2026-09-21T05:11:32.835Z') });
@@ -164,6 +194,26 @@ test('listIndexes distinguishes ready, orphan, and manifest-only missing indexes
   assert.equal(result.summary.ready, 1);
   assert.equal(result.summary.orphan, 1);
   assert.equal(result.summary.missing, 1);
+});
+
+test('listIndexes falls back to file mtime for legacy indexes and does not write a manifest', {
+  skip: !DatabaseSync
+}, async (t) => {
+  const dataRoot = await temporaryDirectory(t);
+  const filePath = await createValidIndex(dataRoot, BOOK_ID);
+  const expectedTime = new Date('2026-09-22T00:52:04.000Z');
+  await fs.utimes(filePath, expectedTime, expectedTime);
+  const manager = createAiIndexManager({ dataRoot });
+
+  const result = await manager.listIndexes({
+    libraryIndex: [{ id: BOOK_ID, title: '旧索引书', type: 'epub' }],
+    scanHealthy: true
+  });
+  const item = result.items.find((entry) => entry.bookId === BOOK_ID);
+
+  assert.equal(item.indexedAt, expectedTime.toISOString());
+  assert.equal(item.indexedAtSource, 'file-mtime');
+  await assert.rejects(() => fs.access(manager.getManifestPath()), { code: 'ENOENT' });
 });
 
 test('malformed manifest is recoverable without deleting a valid index', {

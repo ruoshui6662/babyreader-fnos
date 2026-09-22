@@ -2630,6 +2630,9 @@ test('AI index manager has an admin-only independent surface contract', async ()
   assert.match(manager, /state\.session\?\.isAdmin/);
   assert.match(manager, /readerSurfaceController\.activate\('ai-index'/);
   assert.match(manager, /window\.confirm/);
+  assert.match(manager, /indexedAtSource/);
+  assert.match(manager, /更新于/);
+  assert.match(manager, /索引清单缺少建立记录/);
   assert.match(css, /\.ai-index-manager-sheet/);
   assert.match(css, /\.ai-index-manager-backdrop/);
 });

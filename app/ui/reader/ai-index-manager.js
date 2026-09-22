@@ -80,7 +80,10 @@ function renderAiIndexManager(data) {
     details.append(meta);
     if (item.indexedAt) {
       const indexed = document.createElement('span');
-      indexed.textContent = '索引于 ' + new Date(item.indexedAt).toLocaleString();
+      indexed.textContent = '更新于 ' + new Date(item.indexedAt).toLocaleString();
+      if (item.indexedAtSource === 'file-mtime') {
+        indexed.title = '索引清单缺少建立记录，显示索引文件最后更新时间';
+      }
       details.append(indexed);
     }
     const actions = document.createElement('div');
