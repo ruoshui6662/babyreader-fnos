@@ -174,3 +174,14 @@ sh scripts/fnos-device-acceptance.sh compare \
 | 阅读进度/划线保留 | 待验 | 待验 | 两用户人工复核 |
 
 只有两列全部通过，才把对应 commit/tag 标记为真机验收完成。
+
+## 8.1 当前候选包记录
+
+- 源提交：a14862e906354a8ed76614b3f744b1e7119bcdeb
+- manifest 版本：1.1.2
+- 本地 FPK：dist/babyreader-fnos.fpk
+- SHA-256：C924554E9D658EC09584DE343F25A959D0C94B5F94E3BFAF03C261EAEFB044BA
+- 包大小：5,332,661 bytes
+- 本地构建环境：Windows AMD64、Node v24.20.0、本地 fnpack
+- 本地自动化：Node 180 pass / 4 条件 skip；Chromium 80 pass / 2 可选真实 EPUB skip；结构与便携校验通过
+- fnOS 真机安装、权限目录、Gateway、ACL、x86_64/ARM64 与升级结果：待验
