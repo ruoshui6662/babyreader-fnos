@@ -6,6 +6,7 @@
    Library View
    ============================================================ */
 function renderLibrary(library) {
+  if (typeof clearReaderBookLocation === 'function') clearReaderBookLocation();
   if (typeof closeReaderPanel === 'function') closeReaderPanel({ restoreFocus: false });
   else if (typeof closeAllCustomSelects === 'function') closeAllCustomSelects();
   if (typeof closeAiModal === 'function') closeAiModal({ restoreFocus: false });

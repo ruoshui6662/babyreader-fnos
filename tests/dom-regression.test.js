@@ -13,6 +13,7 @@ async function createReaderDom() {
     '../app/ui/core/state.js',
     '../app/ui/core/utils.js',
     '../app/ui/core/api.js',
+    '../app/ui/core/reader-route.js',
     '../app/ui/core/user-state.js',
     '../app/ui/reader/device-profile.js',
     '../app/ui/reader/epub.js',
@@ -44,6 +45,7 @@ async function createReaderDom() {
   source += '\nwindow.__babyReaderEpubApi = { parseNavToc, parseNcxToc };';
   source += '\nwindow.__babyReaderBookmarkApi = { getCurrentBookmarkLocator, isCurrentBookmark, toggleCurrentBookmark, jumpToBookmark, renderBookmarkButtonState, renderBookmarkList, deleteBookmarkFromList, refreshBookmarks };';
   source += '\nwindow.__babyReaderSearchApi = { updateTopbarState, setupReaderSearch };';
+  source += '\nwindow.__babyReaderRouteApi = { restoreReaderFromLocation };';
 
   window.document.write(html.replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, ''));
   window.requestAnimationFrame = (callback) => {
@@ -70,6 +72,7 @@ async function createReaderDom() {
   window.eval(`${source}\nwindow.__babyReaderTest = {\n    state,\n    serializeDomRange,\n    rangeFromHighlight,\n    loadHighlights,\n    openHighlightEditor,\n    deleteActiveHighlight,\n    saveActiveHighlightEdits,\n    currentUserSettings,\n    applyZoom,\n    getEpubThemeCss,\n    debounce,\n    navigateChapter,\n    navigatePageGroup,\n    pageGroupForPage,\n    clampPageGroup,\n    pageLeftForGroup,\n    setPageGroup,\n    snapPaginationToNearestGroup,\n    pageNumberForElement,\n    navigateToSemanticTarget,\n    resolveEffectiveReadingMode,\n    createPaginationGeometry,\n    measurePagination,\n    setReadingMode,\n    currentReadingLocator,\n    restoreReadingLocator,\n    readerActions,\n    readerPanels,\n    openReaderPanel,\n    closeReaderPanel,\n    setupReaderActionMapping,\n    renderToc,\n    returnToLibrary\n  };`);
 
   window.__babyReaderTest.updateTopbarState = window.__babyReaderSearchApi.updateTopbarState;
+  window.__babyReaderTest.restoreReaderFromLocation = window.__babyReaderRouteApi.restoreReaderFromLocation;
   window.__babyReaderTest.setupReaderSearch = window.__babyReaderSearchApi.setupReaderSearch;
   window.__babyReaderTest.readerSurfaceController = window.readerSurfaceController;
   window.__babyReaderTest.readerSearchContract = window.readerSearchContract;
@@ -109,6 +112,23 @@ async function createReaderDom() {
   window.__babyReaderTest.refreshBookmarks = window.__babyReaderBookmarkApi.refreshBookmarks;
   return { window, api: window.__babyReaderTest };
 }
+
+test('browser refresh restores the book selected in the reader URL', async () => {
+  const { window, api } = await createReaderDom();
+  const book = {
+    id: 'a'.repeat(64),
+    title: '刷新后仍在阅读',
+    type: 'txt',
+    relativePath: 'refresh.txt'
+  };
+  window.history.replaceState({}, '', `?book=${book.id}`);
+  const opened = [];
+  window.browserHost.openBook = async (selected) => opened.push(selected);
+
+  assert.equal(await api.restoreReaderFromLocation({ books: [book] }), true);
+  assert.deepEqual(opened, [book]);
+  assert.equal(new URL(window.location.href).searchParams.get('book'), book.id);
+});
 
 test('AI local retrieval chunks book text and prioritizes selected terms and current chapter', async () => {
   const { api } = await createReaderDom();

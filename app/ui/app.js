@@ -10,6 +10,55 @@ function openDefaultReaderToc() {
   return openReaderPanel('toc', trigger);
 }
 
+function replaceReaderLocation(url) {
+  if (!url || typeof window === 'undefined' || !window.history?.replaceState) return;
+  window.history.replaceState(window.history.state, '', `${url.pathname}${url.search}${url.hash}`);
+}
+
+function syncReaderBookLocation(bookId) {
+  if (!bookId || typeof setReaderBookId !== 'function') return;
+  replaceReaderLocation(setReaderBookId(bookId, window.location.href));
+}
+
+function clearReaderBookLocation() {
+  if (typeof clearReaderBookId !== 'function' || typeof window === 'undefined') return;
+  replaceReaderLocation(clearReaderBookId(window.location.href));
+}
+
+function readerBookFromLocation(library) {
+  if (typeof getReaderBookId !== 'function' || typeof window === 'undefined') return null;
+  const bookId = getReaderBookId(window.location.href);
+  if (!bookId) return null;
+  return (library?.books || []).find((book) => book?.id === bookId && !book.error) || null;
+}
+
+async function restoreReaderFromLocation(library) {
+  const bookId = typeof getReaderBookId === 'function' && typeof window !== 'undefined'
+    ? getReaderBookId(window.location.href)
+    : null;
+  if (!bookId) {
+    renderLibrary(library);
+    return false;
+  }
+
+  const book = readerBookFromLocation(library);
+  if (!book) {
+    clearReaderBookLocation();
+    renderLibrary(library);
+    return false;
+  }
+
+  try {
+    await window.browserHost.openBook(book);
+    return true;
+  } catch (error) {
+    clearReaderBookLocation();
+    renderLibrary(library);
+    showHighlightHint(error.message || '恢复阅读页面失败');
+    return false;
+  }
+}
+
 
 
 
@@ -37,6 +86,7 @@ window.appHost = {
     state.currentPath  = path;
     state.currentName  = name;
     state.contentType  = (type === 'epub') ? 'epub' : 'text';
+    syncReaderBookLocation(state.currentBookId);
     if (typeof resetReaderSearch === 'function') resetReaderSearch();
     state.toc          = [];
     _pendingCfiRange   = null;
@@ -217,6 +267,6 @@ document.addEventListener('DOMContentLoaded', () => {
     applyUserState(userState);
     applyContinuousScroll();
     syncSettingsPanel();
-    renderLibrary(library);
+    restoreReaderFromLocation(library);
   }).catch((error) => showHighlightHint(error.message));
 });
