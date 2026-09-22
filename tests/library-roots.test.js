@@ -25,6 +25,7 @@ test('parsePathList preserves Chinese and space-containing fnOS paths', () => {
   );
   assert.deepEqual(parsePathList(''), []);
   assert.deepEqual(parsePathList(undefined), []);
+  assert.deepEqual(parsePathList('C:\\Books:D:\\共享书库'), ['C:\\Books', 'D:\\共享书库']);
 });
 
 test('collectRootCandidates preserves source order and source labels', () => {

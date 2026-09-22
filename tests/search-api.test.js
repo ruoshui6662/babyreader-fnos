@@ -11,6 +11,7 @@ const SANDBOX = path.join(os.tmpdir(), `babyreader-search-api-${process.pid}`);
 const DATA_ROOT = path.join(SANDBOX, 'var');
 const CONFIG_ROOT = path.join(SANDBOX, 'etc');
 const LIBRARY_ROOT = path.join(SANDBOX, 'library');
+const CUSTOM_ROOT = path.join(SANDBOX, 'custom-library');
 const BOOK_ID = 'd'.repeat(64);
 const UNKNOWN_BOOK_ID = 'e'.repeat(64);
 const BROKEN_BOOK_ID = 'f'.repeat(64);
@@ -39,9 +40,11 @@ function request(pathname, options = {}) {
 test.before(async () => {
   await fs.rm(SANDBOX, { recursive: true, force: true });
   await fs.mkdir(LIBRARY_ROOT, { recursive: true });
+  await fs.mkdir(CUSTOM_ROOT, { recursive: true });
   await fs.mkdir(path.join(DATA_ROOT, 'index'), { recursive: true });
   await fs.mkdir(CONFIG_ROOT, { recursive: true });
   await fs.writeFile(BOOK_PATH, '前言没有命中。蛋白质出现在第二句。第三句再次提到蛋白质。', 'utf8');
+  await fs.writeFile(path.join(CUSTOM_ROOT, 'custom-book.txt'), '来自 fnOS 自定义授权目录的书籍。', 'utf8');
   await fs.writeFile(BROKEN_BOOK_PATH, '这不是有效的 EPUB 压缩包', 'utf8');
   await fs.writeFile(path.join(CONFIG_ROOT, 'settings.json'), JSON.stringify({
     libraryRoots: [LIBRARY_ROOT]
@@ -86,6 +89,49 @@ test('parseBookSearchParams maps URL parameters to the bounded service contract'
     chapterIndex: null,
     limit: 20
   });
+});
+
+test('library scan discovers an fnOS accessible root and exposes safe root counts', async () => {
+  const previousAccessible = process.env.TRIM_DATA_ACCESSIBLE_PATHS;
+  const libraryIndexPath = path.join(DATA_ROOT, 'index', 'library.json');
+  const previousLibraryIndex = await fs.readFile(libraryIndexPath, 'utf8');
+  process.env.TRIM_DATA_ACCESSIBLE_PATHS = CUSTOM_ROOT;
+  try {
+    await loadConfiguration();
+
+    const scan = await request('/app/babyreader-fnos/api/library/scan', {
+      method: 'POST',
+      headers: { 'x-trim-userid': 'admin', 'x-trim-isadmin': 'true' }
+    });
+    assert.equal(scan.status, 200);
+    assert.ok(scan.body.books.some((book) => book.title === 'custom-book'));
+
+    const diagnostics = await request('/app/babyreader-fnos/api/diagnostics', {
+      headers: { 'x-trim-userid': 'admin', 'x-trim-isadmin': 'true' }
+    });
+    assert.equal(diagnostics.status, 200);
+    assert.deepEqual(diagnostics.body.rootCounts, {
+      configured: 1,
+      accessible: 1,
+      shared: 0,
+      authorized: 2,
+      rejected: 0
+    });
+    assert.equal('root' in scan.body, false);
+
+    process.env.TRIM_DATA_ACCESSIBLE_PATHS = '';
+    await loadConfiguration();
+    const afterRevoke = await request('/app/babyreader-fnos/api/diagnostics', {
+      headers: { 'x-trim-userid': 'admin', 'x-trim-isadmin': 'true' }
+    });
+    assert.equal(afterRevoke.status, 200);
+    assert.equal(afterRevoke.body.rootCounts.accessible, 0);
+    assert.equal(afterRevoke.body.rootCounts.authorized, 1);
+  } finally {
+    process.env.TRIM_DATA_ACCESSIBLE_PATHS = previousAccessible || '';
+    await fs.writeFile(libraryIndexPath, previousLibraryIndex, 'utf8');
+    await loadConfiguration();
+  }
 });
 
 test('search API returns bounded independent results for an authenticated book', async () => {

@@ -11,6 +11,7 @@ const { validateAiBookContext } = require('./ai-book-context');
 const { searchBook: searchAiBook } = require('./ai-fts');
 const { createAiIndexManager } = require('./ai-index-manager');
 const { parseBookSearchParams, searchBookText } = require('./book-search');
+const { parsePathList, resolveLibraryRoots } = require('./library-roots');
 const {
   normalizeAiConfig,
   validateAiRequest,
@@ -228,12 +229,16 @@ function publicBook(book) {
   return safe;
 }
 
-function parseFnOSPathList(value) {
-  if (typeof value !== 'string' || !value.trim()) return [];
-  return value
-    .split(':')
-    .map((entry) => entry.trim())
-    .filter(Boolean);
+const parseFnOSPathList = parsePathList;
+
+function currentRootCounts() {
+  return {
+    configured: rootDiagnostics.configuredRoots.length,
+    accessible: rootDiagnostics.accessibleRoots.length,
+    shared: rootDiagnostics.sharedRoots.length,
+    authorized: rootDiagnostics.authorizedRoots.length,
+    rejected: rootDiagnostics.rejectedRoots.length
+  };
 }
 
 async function loadConfiguration() {
@@ -241,35 +246,19 @@ async function loadConfiguration() {
   const configured = Array.isArray(config.libraryRoots) ? config.libraryRoots : [];
   const fnOSAuthorized = parseFnOSPathList(process.env.TRIM_DATA_ACCESSIBLE_PATHS);
   const fnOSShared = parseFnOSPathList(process.env.TRIM_DATA_SHARE_PATHS);
-  const candidates = [...new Set([...configured, ...fnOSAuthorized, ...fnOSShared].map((root) => String(root).trim()).filter(Boolean))];
-
-  authorizedRoots = [];
-  const rejectedRoots = [];
-  for (const root of candidates) {
-    try {
-      const realRoot = await fs.realpath(root);
-      const stat = await fs.stat(realRoot);
-      if (!stat.isDirectory()) throw new Error('路径不是目录');
-      await fs.access(realRoot);
-      if (!authorizedRoots.includes(realRoot)) authorizedRoots.push(realRoot);
-    } catch (error) {
-      const detail = {
-        root,
-        error: String(error.message || error),
-        code: error.code ? String(error.code) : null
-      };
-      rejectedRoots.push(detail);
-      recordError(error, { operation: 'load-library-root', root });
-    }
-  }
-
-  rootDiagnostics = {
+  rootDiagnostics = await resolveLibraryRoots({
     configuredRoots: configured,
     accessibleRoots: fnOSAuthorized,
-    sharedRoots: fnOSShared,
-    authorizedRoots: authorizedRoots.slice(),
-    rejectedRoots
-  };
+    sharedRoots: fnOSShared
+  });
+  authorizedRoots = rootDiagnostics.authorizedRoots.slice();
+  for (const rejected of rootDiagnostics.rejectedRoots) {
+    recordError(new Error(rejected.error), {
+      operation: 'load-library-root',
+      root: rejected.root,
+      code: rejected.code
+    });
+  }
   return rootDiagnostics;
 }
 
@@ -381,6 +370,7 @@ async function handleApi(request, response, pathname, searchParams = new URLSear
       dataRoot: DATA_ROOT,
       configRoot: CONFIG_ROOT,
       authorizedRootCount: authorizedRoots.length,
+      rootCounts: currentRootCounts(),
       roots: rootDiagnostics,
       libraryGeneratedAt: index.generatedAt || null,
       bookCount: index.books.filter((book) => !book.error).length,

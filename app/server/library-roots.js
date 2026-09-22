@@ -13,10 +13,18 @@ function cleanRoots(value) {
 
 function parsePathList(value) {
   if (typeof value !== 'string' || !value.trim()) return [];
-  return value
-    .split(':')
-    .map((entry) => entry.trim())
-    .filter(Boolean);
+  const entries = [];
+  let current = '';
+  for (const character of value) {
+    if (character === ':' && !(current.length === 1 && /^[A-Za-z]$/.test(current))) {
+      if (current.trim()) entries.push(current.trim());
+      current = '';
+      continue;
+    }
+    current += character;
+  }
+  if (current.trim()) entries.push(current.trim());
+  return entries;
 }
 
 function collectRootCandidates({ configuredRoots = [], accessibleRoots = [], sharedRoots = [] } = {}) {
