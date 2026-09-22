@@ -2622,6 +2622,8 @@ test('AI index manager has an admin-only independent surface contract', async ()
 
   assert.match(html, /btnOpenAiIndexManager/);
   assert.match(html, /aiIndexManagerSheet/);
+  assert.match(html, /class="ai-icon-button ai-surface-close" id="btnCloseAiIndexManager"/);
+  assert.match(html, /class="ai-icon-button ai-surface-close" id="btnCloseAiModal"/);
   assert.match(html, /ai-index-manager\.js/);
   assert.match(drawer, /'ai-index': \{ rootId: 'aiIndexManagerSheet'/);
   assert.match(api, /listAiIndexes/);
@@ -2632,7 +2634,13 @@ test('AI index manager has an admin-only independent surface contract', async ()
   assert.match(manager, /window\.confirm/);
   assert.match(manager, /indexedAtSource/);
   assert.match(manager, /更新于/);
+  assert.match(manager, /更新时间未知/);
   assert.match(manager, /索引清单缺少建立记录/);
   assert.match(css, /\.ai-index-manager-sheet/);
   assert.match(css, /\.ai-index-manager-backdrop/);
+  assert.match(css, /\.settings-header \.ai-surface-close::before\s*\{\s*content:\s*none/);
+  assert.match(css, /\.ai-index-manager-sheet\s*\{[^}]*width:\s*min\(400px/s);
+  assert.match(css, /\.ai-index-manager-list\s*\{[^}]*display:\s*flex/s);
+  assert.match(css, /\.ai-index-manager-list\s*\{[^}]*align-content:\s*(?:start|flex-start)/s);
+  assert.match(css, /\.ai-index-manager-status\[data-status="normal"\]/);
 });

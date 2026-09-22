@@ -1237,7 +1237,8 @@ body:not(.toc-open) .toc {
 
 .ai-index-manager-sheet {
   z-index: 270;
-  width: min(460px, calc(100vw - 116px));
+  width: min(400px, calc(100vw - 116px));
+  max-height: min(72vh, 620px);
 }
 
 .ai-index-manager-content {
@@ -1260,6 +1261,18 @@ body:not(.toc-open) .toc {
   min-height: 20px;
 }
 
+.ai-index-manager-status[data-status="normal"] {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  border: 0;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
 .ai-index-manager-status[data-status="error"] {
   color: var(--ui-destructive, #c93434);
 }
@@ -1269,9 +1282,11 @@ body:not(.toc-open) .toc {
 }
 
 .ai-index-manager-list {
-  display: grid;
+  display: flex;
   flex: 1 1 auto;
+  flex-direction: column;
   min-height: 0;
+  align-content: flex-start;
   gap: 10px;
   overflow-y: auto;
   margin: 0;
@@ -1282,7 +1297,8 @@ body:not(.toc-open) .toc {
 
 .ai-index-manager-item,
 .ai-index-manager-empty {
-  padding: 13px;
+  flex: 0 0 auto;
+  padding: 12px;
   color: var(--ui-label);
   background: var(--ui-fill);
   border: 1px solid var(--ui-separator);
@@ -3322,6 +3338,19 @@ body.is-epub .reader-floating-toolbar {
   line-height: 1;
 }
 
+.settings-header .ai-surface-close::before {
+  content: none;
+}
+
+.settings-header .ai-surface-close {
+  width: 30px;
+  height: 30px;
+  min-height: 30px;
+  padding: 0;
+  font-size: 20px;
+  line-height: 1;
+}
+
 .ai-modal-body {
   overflow-y: auto;
   padding: 18px 20px 22px;
@@ -5041,6 +5070,11 @@ body.is-epub .reader-floating-toolbar {
   outline-color: var(--ui-focus);
 }
 
+.ai-index-manager-sheet {
+  bottom: auto;
+  height: auto;
+}
+
 @media (max-width: 1200px) {
   html[data-reader-surface="mobile"] .reader-sheet {
     top: auto;
@@ -5058,5 +5092,20 @@ body.is-epub .reader-floating-toolbar {
   }
   html[data-reader-surface="mobile"] .reader-drawer-backdrop {
     inset: 0;
+  }
+
+  html[data-reader-surface="mobile"] .ai-index-manager-sheet {
+    top: auto;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    width: 100%;
+    height: min(78vh, 680px);
+    max-height: min(78vh, 680px);
+    padding: 16px 16px calc(16px + env(safe-area-inset-bottom, 0px));
+    border-right: 0;
+    border-bottom: 0;
+    border-left: 0;
+    border-radius: 20px 20px 0 0;
   }
 }
