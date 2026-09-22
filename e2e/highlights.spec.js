@@ -17,10 +17,9 @@ const { FIXTURE_TEXT } = require('./fixtures/reader-fixtures');
 
 test.describe('Highlight CRUD', () => {
   test.beforeEach(async ({ page }) => {
-    await openEpubFixture(page);
+    await page.goto('/app/babyreader-fnos/');
     await resetReaderSettings(page);
     await resetEpubFixtureState(page);
-    await page.reload({ waitUntil: 'load' });
     await openEpubFixture(page);
     await expect(page.locator('#article')).toContainText('E2E EPUB Chapter 1');
   });

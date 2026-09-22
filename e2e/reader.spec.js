@@ -474,8 +474,8 @@ test('settings drawer changes theme and typography in a real browser', async ({ 
   await expect(page.locator('#readerDrawer')).toBeHidden();
 
   await page.reload();
-  await expect(page.locator('.library-view h1')).toHaveText('书库');
-  await page.locator('.library-book').filter({ hasText: 'E2E Markdown' }).click();
+  await expect(page).toHaveURL(/book=[a-f0-9]{64}/);
+  await expect(page.locator('#article h1')).toContainText('E2E Reader');
   await page.locator('#btnSettings').click();
   await expect(page.locator('#settingTheme')).toHaveValue('sepia');
   await expect(page.locator('#settingFontFamily')).toHaveValue('songti');

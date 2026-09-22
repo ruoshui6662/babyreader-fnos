@@ -13,10 +13,9 @@ const {
 test.describe('Reading progress persistence', () => {
   test.beforeEach(async ({ page }) => {
     await page.setViewportSize({ width: 1200, height: 800 });
-    await openEpubFixture(page);
+    await page.goto('/app/babyreader-fnos/');
     await resetReaderSettings(page);
     await resetEpubFixtureState(page);
-    await page.reload({ waitUntil: 'load' });
     await openEpubFixture(page);
   });
 
