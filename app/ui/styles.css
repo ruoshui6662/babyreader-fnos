@@ -5071,8 +5071,10 @@ body.is-epub .reader-floating-toolbar {
 }
 
 .ai-index-manager-sheet {
+  width: min(400px, calc(100vw - 116px));
   bottom: auto;
   height: auto;
+  max-height: min(72vh, 620px);
 }
 
 @media (max-width: 1200px) {
