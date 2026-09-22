@@ -79,6 +79,8 @@ sh /var/apps/babyreader-fnos/target/docs/fnos-device-acceptance.sh ai-test
 
 如果 fnOS 权限页面保存后没有自动重启服务，必须手动重启应用再扫描；“重新扫描”只会重新读取当前服务进程已经获得的授权环境，不会绕过 fnOS 权限。
 
+启动脚本会把 fnOS 注入的 TRIM_DATA_ACCESSIBLE_PATHS 和 TRIM_DATA_SHARE_PATHS 原样传给 Node 服务，不会清空、扩权或替换这些值。验收脚本在提供管理员 Gateway 会话时，会额外读取 /api/diagnostics 的 rootCounts，只输出数量和状态，不输出根目录列表。
+
 验收记录只保存根目录数量、状态和错误类型，不把 API Key、Cookie、书籍正文或不必要的用户路径写入报告。
 
 ## 5. SQLite FTS 验收

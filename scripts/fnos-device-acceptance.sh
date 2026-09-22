@@ -81,6 +81,43 @@ check_runtime_root_list() {
   rm -f "$ROOTS_FILE"
 }
 
+check_gateway_root_diagnostics() {
+  if [ -z "${BABYREADER_GATEWAY_URL:-}" ] || [ -z "${BABYREADER_GATEWAY_COOKIE:-}" ]; then
+    skip "admin root diagnostics require an authenticated fnOS Gateway session"
+    return 0
+  fi
+  if ! command -v curl >/dev/null 2>&1 || [ ! -x "$NODE_BIN" ]; then
+    skip "curl and Node.js are required for admin root diagnostics"
+    return 0
+  fi
+
+  DIAGNOSTICS_BODY="${TMPDIR:-/tmp}/babyreader-diagnostics.$$"
+  DIAGNOSTICS_CODE="$(curl -sS -H "Cookie: $BABYREADER_GATEWAY_COOKIE" \
+    -o "$DIAGNOSTICS_BODY" -w '%{http_code}' \
+    "$BABYREADER_GATEWAY_URL/app/babyreader-fnos/api/diagnostics" 2>/dev/null || true)"
+  if [ "$DIAGNOSTICS_CODE" = "403" ]; then
+    skip "authenticated fnOS session is not an administrator; root diagnostics skipped"
+  elif [ "$DIAGNOSTICS_CODE" = "200" ]; then
+    ROOT_COUNTS="$("$NODE_BIN" -e '
+      const fs=require("fs");
+      const body=JSON.parse(fs.readFileSync(process.argv[1],"utf8"));
+      const counts=body.rootCounts||{};
+      const keys=["configured","accessible","shared","authorized","rejected"];
+      if (!keys.every((key)=>Number.isInteger(counts[key]) && counts[key] >= 0)) process.exit(1);
+      console.log(keys.map((key)=>key+"="+counts[key]).join(" "));
+    ' "$DIAGNOSTICS_BODY" 2>/dev/null || true)"
+    if [ -n "$ROOT_COUNTS" ]; then
+      pass "authenticated fnOS admin diagnostics returned safe library root counts"
+      info "root_counts=$ROOT_COUNTS"
+    else
+      fail "authenticated fnOS admin diagnostics did not return valid root counts"
+    fi
+  else
+    fail "authenticated fnOS admin diagnostics returned ${DIAGNOSTICS_CODE:-no response}"
+  fi
+  rm -f "$DIAGNOSTICS_BODY"
+}
+
 snapshot() {
   OUTPUT="${1:-}"
   if [ -z "$OUTPUT" ]; then
@@ -354,6 +391,7 @@ check_device() {
         fail "authenticated fnOS Gateway session endpoint returned ${GATEWAY_CODE:-no response}"
       fi
       rm -f "$GATEWAY_BODY"
+      check_gateway_root_diagnostics
     else
       skip "BABYREADER_GATEWAY_URL supplied without BABYREADER_GATEWAY_COOKIE"
     fi

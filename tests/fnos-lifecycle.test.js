@@ -58,6 +58,14 @@ test('acceptance tool exposes a server-side AI connection check without acceptin
   assert.doesNotMatch(source, /BABYREADER_AI_KEY|OPENAI_API_KEY|--api-key/);
 });
 
+test('acceptance tool checks admin library root counts without dumping root paths', () => {
+  const source = read('scripts/fnos-device-acceptance.sh');
+  assert.match(source, /check_gateway_root_diagnostics/);
+  assert.match(source, /api\/diagnostics/);
+  assert.match(source, /root_counts=/);
+  assert.match(source, /configured.*accessible.*shared.*authorized.*rejected/);
+});
+
 test('install_callback does not start the service inside the install transaction', () => {
   const source = read('cmd/install_callback');
   const executableLines = source.split('\n').filter((line) => !line.trimStart().startsWith('#')).join('\n');
@@ -77,6 +85,8 @@ test('main uses the Native FPK target layout and fnOS runtime directories', () =
   assert.match(source, /TRIM_PKGVAR="\$PKG_VAR"/);
   assert.match(source, /TRIM_PKGETC="\$PKG_ETC"/);
   assert.match(source, /TRIM_PKGTMP="\$PKG_TMP"/);
+  assert.match(source, /TRIM_DATA_ACCESSIBLE_PATHS="\$\{TRIM_DATA_ACCESSIBLE_PATHS:-\}"/);
+  assert.match(source, /TRIM_DATA_SHARE_PATHS="\$\{TRIM_DATA_SHARE_PATHS:-\}"/);
 });
 
 test('main preserves fnOS authorized and shared path environment inherited from the supervisor', () => {
