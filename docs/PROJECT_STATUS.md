@@ -113,7 +113,8 @@ npm run build:fpk        # 需要 fnpack（本机在 C:/Users/admin/bin/fnpack�
 2. 同一页重复短语在搜索时的精确定位歧义。
 3. 视觉矩阵：浅色、深色、米黄三种主题；1/20/100 本书；窄屏；触屏长按。
 4. 删除撤销的设计：旧 ID、来源指纹、revision 冲突处理。
-5. 技术债：拖拽预览每次都重新插入全部书卡（O(n)）；AI 输入框几何差 8.8px；`pdf-ai-profile` 测试偶发失败。
+5. **MOBI/AZW3 阅读与书籍导入**：已规划，见 `docs/superpowers/plans/2026-09-30-mobi-and-book-import.md`（服务端转派生 EPUB 复用现有链路；导入写入应用共享目录；两项均默认关闭）。
+6. 技术债：拖拽预览每次都重新插入全部书卡（O(n)）；AI 输入框几何差 8.8px；`pdf-ai-profile` 测试偶发失败。
 
 ## 8. 分支与 worktree 处理记录（2026-09-30）
 
