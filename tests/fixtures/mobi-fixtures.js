@@ -142,7 +142,12 @@ function createMobiFixture({
   images = [TINY_PNG],
   coverIndex = 0,
   toc = true,
-  language = 4 // zh
+  language = 4, // zh
+  // null: MOBI6 only; 'standalone': an AZW3-style file whose record 0 says
+  // version 8; 'combo': MOBI6 followed by a BOUNDARY record and a KF8 record 0
+  // located through EXTH 121, as KindleGen emits.
+  kf8 = null,
+  exthRecordsOverride = null
 } = {}) {
   const text = buildMarkup(chapters, { toc });
   const textRecords = [];
@@ -152,7 +157,14 @@ function createMobiFixture({
   }
   const firstImageIndex = images.length ? textRecords.length + 1 : NULL_INDEX;
 
-  const exthRecords = [exthRecord(100, author), exthRecord(503, title), exthRecord(524, 'zh')];
+  const exthRecords = exthRecordsOverride || [exthRecord(100, author), exthRecord(503, title), exthRecord(524, 'zh')];
+  // Combo files: KF8 record 0 sits after text, images and a BOUNDARY record.
+  const kf8HeaderIndex = kf8 === 'combo' ? textRecords.length + 1 + images.length + 1 : null;
+  if (kf8HeaderIndex !== null) {
+    const boundary = Buffer.alloc(4);
+    boundary.writeUInt32BE(kf8HeaderIndex, 0);
+    exthRecords.push(exthRecord(121, boundary));
+  }
   if (images.length && coverIndex !== null) {
     const cover = Buffer.alloc(4);
     cover.writeUInt32BE(coverIndex, 0);
@@ -172,7 +184,7 @@ function createMobiFixture({
   record0.writeUInt32BE(2, 24); // Mobipocket book
   record0.writeUInt32BE(65001, 28); // UTF-8
   record0.writeUInt32BE(0x42524652, 32);
-  record0.writeUInt32BE(6, 36); // MOBI6
+  record0.writeUInt32BE(kf8 === 'standalone' ? 8 : 6, 36); // file version
   for (let offset = 0x28; offset <= 0x4c; offset += 4) record0.writeUInt32BE(NULL_INDEX, offset);
   record0.writeUInt32BE(textRecords.length + 1, 0x50); // first non-book record
   record0.writeUInt32BE(16 + MOBI_HEADER_LENGTH + exth.length, 0x54);
@@ -194,7 +206,14 @@ function createMobiFixture({
   record0.writeUInt32BE(NULL_INDEX, 0xf4); // no NCX index
   const header0 = Buffer.concat([record0, exth, fullName, Buffer.alloc(2 + ((4 - (fullName.length + 2) % 4) % 4))]);
 
-  const records = [header0, ...textRecords, ...images, EOF_RECORD];
+  const records = [header0, ...textRecords, ...images];
+  if (kf8HeaderIndex !== null) {
+    const kf8Header = Buffer.from(header0);
+    kf8Header.writeUInt32BE(8, 36);
+    kf8Header.writeUInt16BE(encryption, 12);
+    records.push(Buffer.from('BOUNDARY', 'ascii'), kf8Header);
+  }
+  records.push(EOF_RECORD);
   const pdbHeader = Buffer.alloc(78);
   pdbHeader.write(title.replace(/[^\x20-\x7e]/g, '_').slice(0, 31), 0, 'ascii');
   pdbHeader.write('BOOK', 60, 'ascii');
@@ -242,6 +261,7 @@ function createLargeMobiFixture({ targetBytes = 8 * 1024 * 1024, compression = '
 
 module.exports = {
   TINY_PNG,
+  exthRecord,
   palmdocCompress,
   createMobiFixture,
   createDrmMobiFixture,

@@ -30,6 +30,9 @@ function libraryBookTitle(book) {
 
 function libraryBookFormatLabel(book) {
   const type = String(book?.type || '').toLowerCase();
+  if (type === 'mobi' || book?.format === 'mobi' || book?.format === 'azw3') {
+    return book?.sourceFormat === 'kf8' || book?.format === 'azw3' ? 'AZW3' : 'MOBI';
+  }
   return LIBRARY_FORMAT_LABELS[type] || type.toUpperCase();
 }
 

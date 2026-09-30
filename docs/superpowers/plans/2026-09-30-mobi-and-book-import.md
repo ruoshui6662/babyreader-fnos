@@ -151,15 +151,15 @@
 
 ### Task 1：MOBI 扫描与元数据（约 1.5 天）
 
-- [ ] 新建 `app/server/mobi-format.js`，内容全部是纯函数：
+- [x] 新建 `app/server/mobi-format.js`，内容全部是纯函数：
   - 解析 PDB 头、MOBI 头和 EXTH，只读前 64 KiB 加上 EXTH 中指向的封面记录；
   - 识别 MOBI6 与 KF8（包括混合文件里的 KF8 边界）；
   - 从 MOBI 头的加密类型检测 DRM。
-- [ ] `library.js` 的 `SUPPORTED_EXTENSIONS` 增加 `.mobi`、`.azw`、`.azw3`。扫描时：
+- [x] `library.js` 的 `SUPPORTED_EXTENSIONS` 增加 `.mobi`、`.azw`、`.azw3`。扫描时：
   - 不解压正文，只写入 `type:"mobi"`、`sourceFormat`、标题、作者、语言，并把封面写入 covers；
   - DRM 文件作为错误项记录"受 DRM 保护"，不影响其他书籍。
-- [ ] 开关关闭时，与 PDF 一样隐藏并统计 `hiddenMobiCount`。
-- [ ] 测试：`tests/mobi-format.test.js`，另在 `tests/reader-core.test.js` 中补充"扫描混合格式书库，EPUB/PDF/TXT 条目逐字段不变"。
+- [x] 开关关闭时，与 PDF 一样隐藏并统计 `hiddenMobiCount`。
+- [x] 测试：`tests/mobi-format.test.js`，另在 `tests/reader-core.test.js` 中补充"扫描混合格式书库，EPUB/PDF/TXT 条目逐字段不变"。
 
 ### Task 2：MOBI→EPUB 转换器（约 3 天）
 

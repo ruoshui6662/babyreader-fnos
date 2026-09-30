@@ -10,6 +10,7 @@ const { fingerprintBook, scanLibrary } = require('./library');
 const { resolveAuthorizedPath } = require('./security');
 const { parseSingleByteRange } = require('./byte-range');
 const { getPdfReaderEnabled } = require('./pdf-feature-config');
+const { getMobiReaderEnabled } = require('./mobi-feature-config');
 const { AiConfigStorage, normalizeAiSettings, publicAiConfig } = require('./ai-config');
 const { validateAiBookContext } = require('./ai-book-context');
 const {
@@ -67,6 +68,34 @@ const LIBRARY_ORGANIZATION_ENABLED = ['1', 'true', 'yes', 'on'].includes(
 );
 function pdfReaderEnabled() {
   return getPdfReaderEnabled(CONFIG_ROOT, process.env.BABYREADER_PDF_ENABLED);
+}
+function mobiReaderEnabled() {
+  return getMobiReaderEnabled(CONFIG_ROOT, process.env.BABYREADER_MOBI_ENABLED);
+}
+
+// Format switches hide whole book types from every catalog response.
+function readerFormatSwitches() {
+  return { pdf: pdfReaderEnabled(), mobi: mobiReaderEnabled() };
+}
+
+function isBookVisible(book, switches = readerFormatSwitches()) {
+  if (book?.type === 'pdf') return switches.pdf;
+  if (book?.type === 'mobi') return switches.mobi;
+  return true;
+}
+
+function libraryFeatures(index, switches = readerFormatSwitches()) {
+  const books = Array.isArray(index?.books) ? index.books : [];
+  const indexedMobi = books.filter((book) => book.type === 'mobi' && !book.error).length;
+  return {
+    libraryOrganization: LIBRARY_ORGANIZATION_ENABLED,
+    pdfReader: switches.pdf,
+    hiddenPdfCount: switches.pdf ? 0 : books.filter((book) => book.type === 'pdf' && !book.error).length,
+    mobiReader: switches.mobi,
+    // Unparsed Kindle files from a switched-off scan plus any still indexed.
+    hiddenMobiCount: switches.mobi ? 0 : indexedMobi + Number(index?.scan?.hiddenMobiCount || 0),
+    drmProtectedMobiCount: switches.mobi ? Number(index?.scan?.drmProtectedCount || 0) : 0
+  };
 }
 const CSP = "default-src 'self'; base-uri 'none'; object-src 'none'; frame-ancestors 'self'; form-action 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self'; media-src 'self' blob:; worker-src 'self' blob:";
 
@@ -148,7 +177,8 @@ async function runLibraryScan() {
       const previousIndex = await storage.getLibraryIndex();
       const index = await scanLibrary(authorizedRoots, {
         coverDirectory: path.join(DATA_ROOT, 'covers'),
-        previousIndex
+        previousIndex,
+        mobiEnabled: mobiReaderEnabled()
       });
       await storage.saveLibraryIndex(index);
       if (isHealthyLibraryIndex(index) && rootDiagnostics.rejectedRoots.length === 0) {
@@ -796,8 +826,8 @@ async function getLibraryOrganizationSnapshot(uid, index = null) {
   const currentIndex = index || await storage.getLibraryIndex();
   const stored = await storage.getLibraryOrganization(uid);
   const resolved = resolveLibraryOrganization(currentIndex.books, stored);
-  const pdfEnabled = pdfReaderEnabled();
-  const visibleBooks = currentIndex.books.filter((book) => !book.error && (pdfEnabled || book.type !== 'pdf'));
+  const switches = readerFormatSwitches();
+  const visibleBooks = currentIndex.books.filter((book) => !book.error && isBookVisible(book, switches));
   const visibleIds = new Set(visibleBooks.map((book) => book.id));
   const visibleOrder = (order) => order.filter((bookId) => visibleIds.has(bookId));
   return {
@@ -814,11 +844,7 @@ async function getLibraryOrganizationSnapshot(uid, index = null) {
       .filter(([bookId]) => visibleIds.has(bookId))),
     orphanedBookIds: resolved.orphanedBookIds,
     books: visibleBooks.map(publicBook),
-    features: {
-      libraryOrganization: LIBRARY_ORGANIZATION_ENABLED,
-      pdfReader: pdfEnabled,
-      hiddenPdfCount: pdfEnabled ? 0 : currentIndex.books.filter((book) => book.type === 'pdf' && !book.error).length
-    }
+    features: libraryFeatures(currentIndex, switches)
   };
 }
 
@@ -827,9 +853,9 @@ async function mutateLibraryOrganization(user, body, mutation) {
   const revision = organizationRevision(payload);
   const index = await storage.getLibraryIndex();
   assertOrganizationCatalogHealthy(index);
-  const pdfEnabled = pdfReaderEnabled();
+  const switches = readerFormatSwitches();
   const activeBookIds = new Set(index.books
-    .filter((book) => !book.error && (pdfEnabled || book.type !== 'pdf'))
+    .filter((book) => !book.error && isBookVisible(book, switches))
     .map((book) => book.id));
   await storage.mutateLibraryOrganization(user.uid, revision, async (draft) => {
     return mutation(draft, activeBookIds);
@@ -902,6 +928,14 @@ async function findBook(bookId, options = {}) {
   }
   if (options.requirePathIdentity && book.type === 'pdf' && path.resolve(indexedPath) !== path.resolve(book.path)) {
     throw Object.assign(new Error('Book file no longer matches its indexed path'), { statusCode: 404 });
+  }
+  if (book.type === 'mobi') {
+    if (!mobiReaderEnabled()) throw Object.assign(new Error('Book not found'), { statusCode: 404 });
+    // Until the MOBI→EPUB converter is wired, raw Kindle bytes must never reach
+    // content, search or AI handlers (they would be read as plain text).
+    if (!options.allowMobiMetadata) {
+      throw Object.assign(new Error('MOBI 阅读尚未就绪'), { statusCode: 409 });
+    }
   }
   return book;
 }
@@ -1103,35 +1137,27 @@ async function handleApi(request, response, pathname, searchParams = new URLSear
   if (request.method === 'GET' && pathname === `${APP_PREFIX}/api/library`) {
     await refreshAuthorizationIfChanged();
     const index = await storage.getLibraryIndex();
-    const pdfEnabled = pdfReaderEnabled();
+    const switches = readerFormatSwitches();
     return sendJson(response, 200, {
       ...index,
-      features: {
-        libraryOrganization: LIBRARY_ORGANIZATION_ENABLED,
-        pdfReader: pdfEnabled,
-        hiddenPdfCount: pdfEnabled ? 0 : index.books.filter((book) => book.type === 'pdf' && !book.error).length
-      },
+      features: libraryFeatures(index, switches),
       configured: authorizedRoots.length > 0,
       authorizedRootCount: authorizedRoots.length,
       scanState: currentScanState(),
-      books: index.books.filter((book) => pdfEnabled || book.type !== 'pdf').map(publicBook)
+      books: index.books.filter((book) => isBookVisible(book, switches)).map(publicBook)
     });
   }
   if (request.method === 'POST' && pathname === `${APP_PREFIX}/api/library/scan`) {
     if (!user.isAdmin) return sendError(response, 403, 'Administrator access is required');
     const index = await runLibraryScan();
-    const pdfEnabled = pdfReaderEnabled();
+    const switches = readerFormatSwitches();
     return sendJson(response, 200, {
       ...index,
-      features: {
-        libraryOrganization: LIBRARY_ORGANIZATION_ENABLED,
-        pdfReader: pdfEnabled,
-        hiddenPdfCount: pdfEnabled ? 0 : index.books.filter((book) => book.type === 'pdf' && !book.error).length
-      },
+      features: libraryFeatures(index, switches),
       configured: authorizedRoots.length > 0,
       authorizedRootCount: authorizedRoots.length,
       scanState: currentScanState(),
-      books: index.books.filter((book) => pdfEnabled || book.type !== 'pdf').map(publicBook)
+      books: index.books.filter((book) => isBookVisible(book, switches)).map(publicBook)
     });
   }
 
@@ -1907,7 +1933,7 @@ async function handleApi(request, response, pathname, searchParams = new URLSear
 
   const coverMatch = pathname.match(new RegExp(`^${APP_PREFIX}/api/books/([a-f0-9]{64})/cover$`));
   if (request.method === 'GET' && coverMatch) {
-    await findBook(coverMatch[1]);
+    await findBook(coverMatch[1], { allowMobiMetadata: true });
     const entries = await fs.readdir(path.join(DATA_ROOT, 'covers')).catch(() => []);
     const name = entries.find((entry) => entry.startsWith(coverMatch[1]));
     if (!name) return sendError(response, 404, 'Cover not found');

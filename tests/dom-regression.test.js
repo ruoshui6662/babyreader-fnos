@@ -545,6 +545,30 @@ test('library rescan shows safe progress and outcome feedback', async () => {
   assert.doesNotMatch(article.textContent, /permission denied|\/var\/|root|path/i);
 });
 
+test('library explains hidden and DRM-protected Kindle books and labels MOBI/AZW3 covers', async () => {
+  const { window, api } = await createReaderDom();
+  const text = { id: 'a'.repeat(64), title: '已收录文本', type: 'txt' };
+  api.renderLibrary({
+    books: [text],
+    features: { libraryOrganization: false, pdfReader: true, mobiReader: false, hiddenMobiCount: 3 }
+  });
+  assert.match(window.document.querySelector('.library-view').textContent, /3 本 MOBI\/AZW3.*重新扫描/);
+  assert.doesNotMatch(window.document.querySelector('.library-view').textContent, /PDF 已扫描/);
+
+  const mobi6 = { id: 'b'.repeat(64), title: '旧格式', type: 'mobi', sourceFormat: 'mobi6' };
+  const kf8 = { id: 'c'.repeat(64), title: '新格式', type: 'mobi', sourceFormat: 'kf8' };
+  api.renderLibrary({
+    books: [mobi6, kf8],
+    features: { libraryOrganization: false, mobiReader: true, hiddenMobiCount: 0, drmProtectedMobiCount: 2 }
+  });
+  const view = window.document.querySelector('.library-view');
+  assert.match(view.textContent, /2 本 Kindle 书受 DRM 保护/);
+  assert.doesNotMatch(view.textContent, /启用后重新扫描/);
+  const labels = [...view.querySelectorAll('.library-grid .library-cover-format')].map((node) => node.textContent);
+  assert.deepEqual(labels.sort(), ['AZW3', 'MOBI']);
+  await window.happyDOM.close();
+});
+
 test('library explains when indexed PDFs are hidden by the fnOS reader switch', async () => {
   const { window, api } = await createReaderDom();
   const book = { id: 'a'.repeat(64), title: '已收录文本', type: 'txt' };
