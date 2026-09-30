@@ -40,6 +40,7 @@ async function createReaderDom() {
     '../app/ui/reader/search.js',
     '../app/ui/shell/drawer.js',
     '../app/ui/library/reorder.js',
+    '../app/ui/library/import.js',
     '../app/ui/library/organization.js',
     '../app/ui/library/view.js',
     '../app/ui/app.js'
@@ -61,6 +62,7 @@ async function createReaderDom() {
   source += '\nwindow.__babyReaderAiApi.pdfAiScopeInput = pdfAiScopeInput;';
   source += '\nwindow.__babyReaderRouteApi = { restoreReaderFromLocation };';
   source += '\nwindow.__babyReaderLibraryApi = { renderLibrary };';
+  source += '\nwindow.__babyReaderImportApi = { enqueueLibraryImports, libraryImportQueue };';
   source += '\nwindow.__uxApi = { showHighlightHint, setupHighlightEditor, setupCustomSelect, syncCustomSelectValue, renderReaderSearchResults, ensureSelectionMenu, startReaderSession: typeof startReaderSession === "function" ? startReaderSession : null };';
 
   window.document.write(html.replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, ''));
@@ -5533,4 +5535,117 @@ test('PDF render scheduler loads before the PDF reader controller', async () => 
 
   assert.ok(schedulerIndex >= 0, 'PDF render scheduler script must be present');
   assert.ok(readerIndex > schedulerIndex, 'PDF reader must load after its scheduler');
+});
+
+function importOrganization(books, collections = []) {
+  return {
+    version: 1, revision: 3, collections, collectionOrders: Object.fromEntries(collections.map((item) => [item.id, []])),
+    allBookOrder: books.map((book) => book.id), unassignedOrder: books.map((book) => book.id), bookAssignments: {}, books
+  };
+}
+
+test('the import button appears only for admins with import enabled, in the agreed toolbar positions', async () => {
+  const { window, api } = await createReaderDom();
+  const book = { id: 'a'.repeat(64), title: '一本书', type: 'txt' };
+  const labels = () => [...window.document.querySelectorAll('.library-header-actions button')].map((button) => button.textContent);
+
+  api.renderLibrary({ books: [book], features: { libraryOrganization: true }, organization: importOrganization([book]) });
+  assert.deepEqual(labels(), ['新建分类', '重新扫描', '整理'], 'unchanged without the feature');
+
+  api.renderLibrary({ books: [book], features: { libraryOrganization: true, bookImport: true }, organization: importOrganization([book]) });
+  assert.deepEqual(labels(), ['新建分类', '导入', '重新扫描', '整理']);
+  assert.equal(window.document.querySelector('.library-view').dataset.importDrop, 'true');
+
+  const collectionId = '11111111-1111-4111-8111-111111111111';
+  window.history.replaceState({ libraryOrganization: { mode: 'collection', collectionId } }, '');
+  api.renderLibrary({
+    books: [book], features: { libraryOrganization: true, bookImport: true },
+    organization: importOrganization([book], [{ id: collectionId, name: '小说' }])
+  });
+  assert.deepEqual(labels(), ['返回书库', '重新扫描', '添加书籍', '导入', '整理']);
+
+  window.history.replaceState({}, '');
+  api.renderLibrary({ books: [book], features: { libraryOrganization: false, bookImport: true } });
+  assert.deepEqual(labels(), ['导入', '重新扫描'], 'flat shelf');
+  await window.happyDOM.close();
+});
+
+test('the import queue prechecks files, uploads one at a time and reports each outcome', async () => {
+  const { window, api } = await createReaderDom();
+  const { enqueueLibraryImports, libraryImportQueue } = window.__babyReaderImportApi;
+  const book = { id: 'a'.repeat(64), title: '已有', type: 'txt' };
+  api.renderLibrary({ books: [book], features: { libraryOrganization: false, bookImport: true } });
+
+  const uploads = [];
+  window.browserHost.importBook = (file, { onProgress }) => {
+    let resolve;
+    let reject;
+    const promise = new Promise((ok, fail) => { resolve = ok; reject = fail; });
+    uploads.push({ file, onProgress, resolve, reject });
+    return { promise, abort: () => reject(Object.assign(new Error('已取消'), { code: 'IMPORT_CANCELLED' })) };
+  };
+  window.browserHost.getLibrary = async () => ({ books: [book], features: { libraryOrganization: false, bookImport: true } });
+  const tick = () => new Promise((resolve) => setTimeout(resolve, 0));
+
+  enqueueLibraryImports([
+    new window.File(['x'], 'virus.exe'),
+    new window.File(['a'], '第一本.epub'),
+    new window.File(['b'], '第二本.epub'),
+    new window.File(['c'], '第三本.epub')
+  ]);
+  await tick();
+  const rows = () => [...window.document.querySelectorAll('.library-import-item')];
+  assert.equal(rows()[0].dataset.status, 'rejected');
+  assert.match(rows()[0].textContent, /只支持 EPUB/);
+  assert.equal(uploads.length, 1, 'uploads run one at a time');
+
+  uploads[0].onProgress(0.5);
+  assert.match(rows()[1].textContent, /正在上传 50%/);
+  assert.equal(rows()[1].querySelector('[role="progressbar"]').getAttribute('aria-valuenow'), '50');
+  uploads[0].resolve({ book: { id: 'b'.repeat(64), title: '第一本' }, name: '第一本 (2).epub' });
+  await tick(); await tick(); await tick();
+  assert.equal(rows()[1].dataset.status, 'done');
+  assert.match(rows()[1].textContent, /已保存为“第一本 \(2\)\.epub”/);
+  assert.equal(uploads.length, 2);
+
+  uploads[1].reject(Object.assign(new Error('书库中已有这本书。'), { code: 'IMPORT_DUPLICATE', details: { bookId: 'c'.repeat(64) } }));
+  await tick(); await tick();
+  assert.equal(rows()[2].dataset.status, 'duplicate');
+  assert.equal(rows()[2].querySelector('.library-import-action').textContent, '打开');
+
+  rows()[3].querySelector('.library-import-action').click();
+  await tick(); await tick();
+  assert.equal(rows()[3].dataset.status, 'cancelled');
+  assert.match(window.document.querySelector('.library-import-summary').textContent, /已导入 1 本，3 个未导入/);
+  assert.equal(window.document.querySelector('.library-import-close').disabled, false);
+  window.document.querySelector('.library-import-close').click();
+  assert.equal(window.document.getElementById('libraryImportPanel').hidden, true);
+  assert.equal(libraryImportQueue.length, 0);
+  await window.happyDOM.close();
+});
+
+test('imports started inside a collection are filed into it, and dropped files join the queue', async () => {
+  const { window, api } = await createReaderDom();
+  const collectionId = '11111111-1111-4111-8111-111111111111';
+  const book = { id: 'a'.repeat(64), title: '已有', type: 'txt' };
+  window.history.replaceState({ libraryOrganization: { mode: 'collection', collectionId } }, '');
+  const library = { books: [book], features: { libraryOrganization: true, bookImport: true }, organization: importOrganization([book], [{ id: collectionId, name: '小说' }]) };
+  api.renderLibrary(library);
+
+  const placed = [];
+  window.browserHost.importBook = () => ({ promise: Promise.resolve({ book: { id: 'd'.repeat(64), title: '新书' }, name: '新书.epub' }), abort() {} });
+  window.browserHost.getLibraryOrganization = async () => ({ ...library.organization, revision: 7 });
+  window.browserHost.placeLibraryBook = async (...args) => { placed.push(args); return library.organization; };
+  window.browserHost.getLibrary = async () => library;
+
+  const shell = window.document.querySelector('.library-view');
+  const drop = new window.Event('drop', { bubbles: true, cancelable: true });
+  Object.defineProperty(drop, 'dataTransfer', { value: { types: ['Files'], files: [new window.File(['n'], '新书.epub')] } });
+  shell.dispatchEvent(drop);
+  assert.equal(drop.defaultPrevented, true, 'the browser never navigates to the dropped file');
+  for (let index = 0; index < 6; index += 1) await new Promise((resolve) => setTimeout(resolve, 0));
+  assert.deepEqual(placed, [['d'.repeat(64), collectionId, null, 7]]);
+  assert.match(window.document.querySelector('.library-import-item').textContent, /已放入当前分类/);
+  window.history.replaceState({}, '');
+  await window.happyDOM.close();
 });

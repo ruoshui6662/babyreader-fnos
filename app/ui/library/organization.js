@@ -1046,6 +1046,14 @@ function renderLibraryOrganization(library) {
     createButton.addEventListener('click', () => showLibraryCollectionForm(shell, library));
     actions.insertBefore(createButton, actions.querySelector('.library-scan-button'));
   }
+  // Import sits beside the other library actions for admins only; inside a
+  // collection it files new books into that collection.
+  const importContext = { collectionId: collection?.id || null };
+  if (typeof libraryImportAvailable === 'function' && libraryImportAvailable(library)) {
+    const importButton = createLibraryImportButton(library, importContext);
+    if (isDetail) actions.insertBefore(importButton, actions.querySelector('.library-mode-button'));
+    else actions.insertBefore(importButton, actions.querySelector('.library-scan-button'));
+  }
   header.appendChild(actions);
   shell.appendChild(header);
   const scanStatus = createLibraryScanStatus(library.scan);
@@ -1126,6 +1134,7 @@ function renderLibraryOrganization(library) {
   shell.appendChild(booksSection);
   article.appendChild(shell);
   setupLibraryFilter(shell);
+  if (typeof setupLibraryImportDrop === 'function') setupLibraryImportDrop(shell, library, importContext);
   return true;
 }
 

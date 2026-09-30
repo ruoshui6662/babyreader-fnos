@@ -3251,6 +3251,156 @@ html[data-reader-surface="mobile"] .reader .article.is-library {
   }
 }
 
+/* ----- Admin book import (MOBI/import plan Task 5) ----- */
+
+/* Drop target: the whole shelf, with a dashed well and a plain-language hint. */
+.library-view[data-import-drop="true"] { position: relative; }
+.library-view.is-import-drop::after {
+  position: absolute;
+  inset: -12px;
+  z-index: 20;
+  display: grid;
+  place-items: center;
+  border: 2px dashed var(--library-accent, var(--color-accent));
+  border-radius: 20px;
+  background: color-mix(in srgb, var(--library-accent, var(--color-accent)) 10%, var(--library-stage, var(--color-bg)));
+  color: var(--library-accent, var(--color-accent));
+  font: 600 17px/1.4 var(--font-ui);
+  content: '松开以导入到书库';
+  pointer-events: none;
+}
+
+.library-import-panel {
+  position: fixed;
+  right: 24px;
+  bottom: 24px;
+  z-index: 60;
+  display: grid;
+  gap: 10px;
+  width: min(380px, calc(100vw - 32px));
+  max-height: min(60vh, 520px);
+  padding: 16px;
+  border-radius: 18px;
+  background: var(--library-surface, var(--color-elevated));
+  color: var(--library-text, var(--color-text));
+  box-shadow: 0 1px 2px rgba(0, 0, 0, .06), 0 16px 40px rgba(0, 0, 0, .18);
+  font-family: var(--font-ui);
+}
+.library-import-panel[hidden] { display: none; }
+
+.library-import-header {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  gap: 2px 12px;
+}
+.library-import-header h2 {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  color: inherit;
+  font: 600 16px/1.3 var(--font-ui);
+}
+.library-import-summary {
+  grid-column: 1;
+  margin: 0;
+  color: var(--library-text-muted, var(--color-text-2));
+  font-size: 13px;
+}
+.library-import-close {
+  grid-column: 2;
+  grid-row: 1 / span 2;
+  min-height: 32px;
+  padding: 6px 14px;
+  border: 0;
+  border-radius: 999px;
+  color: var(--library-accent, var(--color-accent));
+  background: color-mix(in srgb, var(--library-accent, var(--color-accent)) 14%, transparent);
+  font: 600 13px/1.3 var(--font-ui);
+  cursor: pointer;
+}
+.library-import-close:disabled { opacity: .45; cursor: default; }
+
+.library-import-list {
+  display: grid;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+  list-style: none;
+}
+.library-import-item {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 6px 12px;
+  padding: 10px 0;
+  border-top: 1px solid var(--library-separator, var(--color-separator));
+}
+.library-import-item:first-child { border-top: 0; }
+.library-import-text { display: grid; gap: 2px; min-width: 0; }
+.library-import-text strong {
+  overflow: hidden;
+  font: 500 14px/1.35 var(--font-ui);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.library-import-status {
+  color: var(--library-text-muted, var(--color-text-2));
+  font-size: 12px;
+  line-height: 1.4;
+}
+.library-import-item[data-status="done"] .library-import-status { color: #34c759; }
+.library-import-item[data-status="failed"] .library-import-status,
+.library-import-item[data-status="rejected"] .library-import-status { color: var(--color-destructive, #ff3b30); }
+.library-import-progress {
+  grid-column: 1 / -1;
+  grid-row: 2;
+  display: block;
+  height: 4px;
+  overflow: hidden;
+  border-radius: 2px;
+  background: var(--library-fill-strong, var(--color-fill));
+}
+.library-import-progress > span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--library-accent, var(--color-accent));
+  transition: width 160ms linear;
+}
+.library-import-action {
+  min-height: 32px;
+  padding: 6px 12px;
+  border: 0;
+  border-radius: 8px;
+  color: var(--library-text, var(--color-text));
+  background: var(--library-fill, var(--color-fill));
+  font: 500 13px/1.3 var(--font-ui);
+  cursor: pointer;
+}
+.library-import-close:focus-visible,
+.library-import-action:focus-visible {
+  outline: 3px solid color-mix(in srgb, var(--library-accent, var(--color-accent)) 55%, transparent);
+  outline-offset: 2px;
+}
+
+@media (max-width: 679px) {
+  .library-import-panel {
+    right: 0;
+    bottom: 0;
+    left: 0;
+    width: auto;
+    max-height: 70vh;
+    padding: 16px 16px calc(16px + env(safe-area-inset-bottom, 0px));
+    border-radius: 18px 18px 0 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .library-import-progress > span { transition: none; }
+}
+
 .settings-header {
   display: flex;
   align-items: center;

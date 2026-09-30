@@ -116,6 +116,35 @@ window.browserHost = {
     return (await apiRequest('/library')).json();
   },
 
+  // Uploads one file to the admin import endpoint. XHR (not fetch) so the
+  // queue can show upload progress and cancel an in-flight transfer.
+  importBook(file, { onProgress } = {}) {
+    const xhr = new XMLHttpRequest();
+    const promise = new Promise((resolve, reject) => {
+      xhr.open('PUT', `${API_PREFIX}/library/imports`);
+      xhr.setRequestHeader('Content-Type', 'application/octet-stream');
+      xhr.setRequestHeader('X-BabyReader-Request', 'import');
+      xhr.setRequestHeader('X-BabyReader-Filename', encodeURIComponent(file.name));
+      xhr.upload.onprogress = (event) => {
+        if (event.lengthComputable && typeof onProgress === 'function') onProgress(event.loaded / event.total);
+      };
+      xhr.onload = () => {
+        let body = {};
+        try {
+          body = JSON.parse(xhr.responseText || '{}');
+        } catch {
+          body = {};
+        }
+        if (xhr.status >= 200 && xhr.status < 300) resolve(body);
+        else reject(Object.assign(new Error(body.error || `导入失败：${xhr.status}`), { status: xhr.status, code: body.code, details: body }));
+      };
+      xhr.onerror = () => reject(Object.assign(new Error('网络连接中断，导入未完成。'), { code: 'IMPORT_NETWORK' }));
+      xhr.onabort = () => reject(Object.assign(new Error('已取消'), { code: 'IMPORT_CANCELLED' }));
+      xhr.send(file);
+    });
+    return { promise, abort: () => xhr.abort() };
+  },
+
   async getLibraryOrganization() {
     return (await apiRequest('/library/organization')).json();
   },

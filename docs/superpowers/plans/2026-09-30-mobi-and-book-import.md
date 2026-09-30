@@ -210,10 +210,10 @@
 
 ### Task 5：导入前端（约 1.5 天）
 
-- [ ] 书库工具栏加入"导入"按钮（仅管理员且开关开启时出现），用隐藏的 `<input type=file multiple accept=...>` 选择文件，并支持拖拽到书库页面。
-- [ ] 导入队列面板：显示每个文件的进度条和结果；错误文案要可操作，例如"文件受 DRM 保护""超过 64 MB""书库中已有这本书（查看）"；可取消上传。
-- [ ] 在分类详情页导入时，自动放入当前分类。
-- [ ] 同步更新 `docs/library-home-design-contract.md`、DOM 测试和 E2E（`e2e/book-import.spec.js`）。
+- [x] 书库工具栏加入"导入"按钮（仅管理员且开关开启时出现），用隐藏的 `<input type=file multiple accept=...>` 选择文件，并支持拖拽到书库页面。
+- [x] 导入队列面板：显示每个文件的进度条和结果；错误文案要可操作，例如"文件受 DRM 保护""超过 64 MB""书库中已有这本书（查看）"；可取消上传。
+- [x] 在分类详情页导入时，自动放入当前分类。
+- [x] 同步更新 `docs/library-home-design-contract.md`、DOM 测试和 E2E（`e2e/book-import.spec.js`）。
 
 ### Task 6：FPK 审计、NAS 验收与开关决策（约 1.5 天）
 

@@ -279,6 +279,9 @@ function renderFlatLibrary(library, { organizationEnabled = false } = {}) {
   const actions = document.createElement('div');
   actions.className = 'library-header-actions';
   actions.dataset.librarySlot = 'header-actions';
+  if (typeof libraryImportAvailable === 'function' && libraryImportAvailable(library)) {
+    actions.appendChild(createLibraryImportButton(library));
+  }
   actions.appendChild(scanButton);
   header.appendChild(actions);
   shell.appendChild(header);
@@ -321,4 +324,5 @@ function renderFlatLibrary(library, { organizationEnabled = false } = {}) {
 
   article.appendChild(shell);
   setupLibraryFilter(shell);
+  if (typeof setupLibraryImportDrop === 'function') setupLibraryImportDrop(shell, library);
 }
