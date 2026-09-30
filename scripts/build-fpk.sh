@@ -3,31 +3,39 @@
 set -eu
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-BUILD_ROOT="$ROOT/.build/fpk-root"
-DIST_DIR="$ROOT/dist"
+BUILD_ID="${BABYREADER_BUILD_ID:-$(date -u +%Y%m%d%H%M%S)}"
+BUILD_ROOT="${BABYREADER_BUILD_ROOT:-$ROOT/.build/fpk-$BUILD_ID}"
+DIST_DIR="${BABYREADER_BUILD_DIST_DIR:-$ROOT/dist-fpk-$BUILD_ID}"
 
 if ! command -v fnpack >/dev/null 2>&1; then
   printf '%s\n' '错误：未找到 fnpack。请安装与当前平台匹配的 fnpack 后重试。' >&2
   exit 1
 fi
 
-rm -rf "$BUILD_ROOT"
-mkdir -p "$BUILD_ROOT" "$DIST_DIR"
-rm -f "$ROOT"/*.fpk "$DIST_DIR"/*.fpk
+case "$BUILD_ROOT" in
+  "$ROOT"/.build/*) ;;
+  *) printf '%s\n' '错误：FPK staging 目录必须位于仓库 .build/ 下。' >&2; exit 1 ;;
+esac
+case "$DIST_DIR" in
+  "$ROOT"/dist-*) ;;
+  *) printf '%s\n' '错误：FPK 输出目录必须是仓库内 dist-* 隔离目录。' >&2; exit 1 ;;
+esac
+if [ -e "$BUILD_ROOT" ] || [ -e "$DIST_DIR" ]; then
+  printf '错误：隔离构建目录已存在，拒绝覆盖：%s 或 %s\n' "$BUILD_ROOT" "$DIST_DIR" >&2
+  exit 1
+fi
 
-for item in app cmd config wizard docs manifest ICON.PNG ICON_256.PNG LICENSE UPSTREAM_BASELINES package.json package-lock.json README.md CHANGELOG_WORK.md UI_INTERFACE_MAP.md; do
+mkdir -p "$BUILD_ROOT" "$DIST_DIR"
+
+for item in app cmd config wizard manifest ICON.PNG ICON_256.PNG LICENSE package.json package-lock.json README.md; do
   if [ -e "$ROOT/$item" ]; then
     cp -R "$ROOT/$item" "$BUILD_ROOT/"
   fi
 done
 
 mkdir -p "$BUILD_ROOT/app/docs"
-if [ -d "$ROOT/docs" ]; then
-  cp -R "$ROOT/docs/." "$BUILD_ROOT/app/docs/"
-fi
-for document in README.md CHANGELOG_WORK.md UI_INTERFACE_MAP.md; do
-  cp "$ROOT/$document" "$BUILD_ROOT/app/docs/"
-done
+cp "$ROOT/docs/FNOS_DEVICE_ACCEPTANCE.md" "$BUILD_ROOT/app/docs/"
+cp "$ROOT/README.md" "$BUILD_ROOT/app/docs/"
 cp "$ROOT/scripts/fnos-device-acceptance.sh" "$BUILD_ROOT/app/docs/"
 
 cp -R "$ROOT/tests" "$BUILD_ROOT/app/tests"
@@ -79,7 +87,7 @@ def repack_app(payload):
             parts = normalized.split('/')
             if any(part.startswith('.') for part in parts):
                 continue
-            if normalized.lower().endswith(('.cmd', '.bat', '.ps1', '.exe', '.dll', '.node')):
+            if normalized.lower().endswith(('.cmd', '.bat', '.ps1', '.exe', '.dll', '.node', '.map')):
                 continue
             stream = source.extractfile(member) if member.isfile() else None
             target.addfile(normalize(member), stream)

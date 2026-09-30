@@ -1,0 +1,101 @@
+{
+  "schemaVersion": 1,
+  "notes": "Synthetic EPUB structure cases only; contains no book text or user material.",
+  "cases": [
+    {
+      "id": "multiple-chapters-one-resource",
+      "kind": "toc-fragments",
+      "spine": ["OPS/content.xhtml"],
+      "toc": [
+        { "label": "测试章甲", "href": "content.xhtml#chapter-a" },
+        { "label": "测试章乙", "href": "content.xhtml#chapter-b" }
+      ],
+      "anchors": [
+        { "href": "OPS/content.xhtml", "id": "chapter-a", "heading": "测试章甲" },
+        { "href": "OPS/content.xhtml", "id": "chapter-b", "heading": "测试章乙" }
+      ],
+      "expected": { "logicalChapters": 2, "mappingQuality": "exact" }
+    },
+    {
+      "id": "chapter-across-spine-resources",
+      "kind": "multi-resource-chapter",
+      "spine": ["OPS/part-a.xhtml", "OPS/part-b.xhtml", "OPS/next.xhtml"],
+      "toc": [
+        { "label": "连续测试章", "href": "part-a.xhtml#start" },
+        { "label": "下一测试章", "href": "next.xhtml#start" }
+      ],
+      "anchors": [
+        { "href": "OPS/part-a.xhtml", "id": "start", "heading": "连续测试章" },
+        { "href": "OPS/next.xhtml", "id": "start", "heading": "下一测试章" }
+      ],
+      "expected": { "logicalChapters": 2, "firstChapterSpineItems": 2, "mappingQuality": "exact" }
+    },
+    {
+      "id": "nested-navigation",
+      "kind": "nested-toc",
+      "spine": ["OPS/parent.xhtml", "OPS/child-a.xhtml", "OPS/child-b.xhtml"],
+      "toc": [
+        {
+          "label": "上级测试章",
+          "href": "parent.xhtml#start",
+          "children": [
+            { "label": "子节甲", "href": "child-a.xhtml#start" },
+            { "label": "子节乙", "href": "child-b.xhtml#start" }
+          ]
+        }
+      ],
+      "anchors": [],
+      "expected": { "tocDepth": 2, "preserveParent": true }
+    },
+    {
+      "id": "missing-navigation-document",
+      "kind": "no-toc",
+      "spine": ["OPS/one.xhtml", "OPS/two.xhtml"],
+      "toc": [],
+      "anchors": [
+        { "href": "OPS/one.xhtml", "id": "h-one", "heading": "推断测试章甲" },
+        { "href": "OPS/two.xhtml", "id": "h-two", "heading": "推断测试章乙" }
+      ],
+      "expected": { "mappingQuality": "inferred" }
+    },
+    {
+      "id": "percent-encoded-fragment",
+      "kind": "encoded-fragment",
+      "spine": ["OPS/content.xhtml"],
+      "toc": [{ "label": "编码测试章", "href": "content.xhtml#%E7%AB%A0%E8%8A%82" }],
+      "anchors": [{ "href": "OPS/content.xhtml", "id": "章节", "heading": "编码测试章" }],
+      "expected": { "resolvedAnchor": "章节", "mappingQuality": "exact" }
+    },
+    {
+      "id": "duplicate-and-missing-headings",
+      "kind": "ambiguous-headings",
+      "spine": ["OPS/content.xhtml"],
+      "toc": [
+        { "label": "同名测试章", "href": "content.xhtml#first" },
+        { "label": "无标题测试锚点", "href": "content.xhtml#without-title" }
+      ],
+      "anchors": [
+        { "href": "OPS/content.xhtml", "id": "first", "heading": "同名测试章" },
+        { "href": "OPS/content.xhtml", "id": "second", "heading": "同名测试章" },
+        { "href": "OPS/content.xhtml", "id": "without-title", "heading": "" }
+      ],
+      "expected": { "mappingQuality": "exact", "duplicateIdResolution": "fragment-first", "missingHeadingQuality": "inferred" }
+    },
+    {
+      "id": "front-matter-outside-toc",
+      "kind": "front-matter",
+      "spine": ["OPS/cover.xhtml", "OPS/preface.xhtml", "OPS/chapter.xhtml"],
+      "toc": [{ "label": "正文测试章", "href": "chapter.xhtml#start" }],
+      "anchors": [{ "href": "OPS/chapter.xhtml", "id": "start", "heading": "正文测试章" }],
+      "expected": { "frontMatterIsChapter": false, "chapterStartSpineIndex": 2 }
+    },
+    {
+      "id": "unmapped-current-position",
+      "kind": "position-not-in-navigation",
+      "spine": ["OPS/unknown.xhtml"],
+      "toc": [],
+      "anchors": [],
+      "expected": { "mappingQuality": "unresolved", "allowBookScopeFallback": false }
+    }
+  ]
+}

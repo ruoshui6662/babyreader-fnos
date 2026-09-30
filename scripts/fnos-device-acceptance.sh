@@ -207,6 +207,50 @@ ai_test_connection() {
   return 1
 }
 
+check_library_organization_contract() {
+  if ! command -v curl >/dev/null 2>&1; then
+    skip "curl unavailable; authenticated library-organization contract not checked"
+    return 0
+  fi
+  if [ -z "${BABYREADER_GATEWAY_URL:-}" ] || [ -z "${BABYREADER_GATEWAY_COOKIE:-}" ]; then
+    skip "authenticated fnOS session required for library-organization contract"
+    return 0
+  fi
+
+  ORGANIZATION_BODY="${TMPDIR:-/tmp}/babyreader-library-organization.$$"
+  ORGANIZATION_CODE="$(curl -sS \
+    -H "Cookie: $BABYREADER_GATEWAY_COOKIE" \
+    -o "$ORGANIZATION_BODY" \
+    -w '%{http_code}' \
+    "$BABYREADER_GATEWAY_URL/app/babyreader-fnos/api/library/organization" 2>/dev/null || true)"
+  if [ "$ORGANIZATION_CODE" != "200" ]; then
+    fail "authenticated library-organization contract returned ${ORGANIZATION_CODE:-no response}"
+    rm -f "$ORGANIZATION_BODY"
+    return 0
+  fi
+
+  if [ -x "$NODE_BIN" ] && "$NODE_BIN" - "$ORGANIZATION_BODY" <<'NODE'
+const fs = require('node:fs');
+const file = process.argv[2];
+const body = JSON.parse(fs.readFileSync(file, 'utf8'));
+const forbidden = new Set(['path', 'root']);
+function hasForbiddenKey(value) {
+  if (!value || typeof value !== 'object') return false;
+  if (Object.keys(value).some((key) => forbidden.has(key))) return true;
+  return Array.isArray(value) ? value.some(hasForbiddenKey) : Object.values(value).some(hasForbiddenKey);
+}
+if (!body || typeof body !== 'object' || hasForbiddenKey(body)
+    || body.features?.libraryOrganization !== true) process.exit(1);
+NODE
+  then
+    pass "authenticated library-organization contract returned an enabled path-free model"
+    info "library_organization_contract=ok"
+  else
+    fail "authenticated library-organization contract returned invalid or path-bearing JSON"
+  fi
+  rm -f "$ORGANIZATION_BODY"
+}
+
 check_fts_contract() {
   if [ ! -x "$NODE_BIN" ]; then
     skip "Node.js 22 runtime unavailable; SQLite/FTS5 contract not checked"
@@ -259,6 +303,191 @@ check_fts_contract() {
   else
     fail "SQLite FTS5 runtime or existing index contract failed: ${FTS_RESULT:-no output}"
   fi
+}
+
+check_pdf_runtime_contract() {
+  if [ ! -x "$NODE_BIN" ]; then
+    skip "Node.js 22 runtime unavailable; PDF parser/assets not checked"
+    return 0
+  fi
+
+  PDF_PACKAGE="$APP_DEST/server/node_modules/pdfjs-dist"
+  PDF_UI="$APP_DEST/ui/vendor/pdfjs"
+  for asset in \
+    "$APP_DEST/server/pdf-text.js" \
+    "$APP_DEST/server/pdf-text-worker.js" \
+    "$PDF_PACKAGE/package.json" \
+    "$PDF_PACKAGE/legacy/build/pdf.mjs" \
+    "$APP_DEST/ui/reader/annotations.js" \
+    "$APP_DEST/ui/reader/pdf-annotation-geometry.js" \
+    "$APP_DEST/ui/reader/pdf-annotations.js" \
+    "$APP_DEST/ui/reader/pdf-render-scheduler.js" \
+    "$APP_DEST/ui/reader/pdf.js" \
+    "$PDF_UI/UPSTREAM.md" \
+    "$PDF_UI/LICENSE" \
+    "$PDF_UI/build/pdf.mjs" \
+    "$PDF_UI/build/pdf.worker.mjs"; do
+    if [ ! -f "$asset" ]; then
+      fail "required local PDF runtime asset missing"
+      return 0
+    fi
+  done
+
+  PDF_ASSET_RESULT="$(PDF_PACKAGE="$PDF_PACKAGE" PDF_UI="$PDF_UI" "$NODE_BIN" -e '
+    const fs = require("node:fs");
+    const path = require("node:path");
+    const version = JSON.parse(fs.readFileSync(path.join(process.env.PDF_PACKAGE, "package.json"), "utf8")).version;
+    const browser = fs.readFileSync(path.join(process.env.PDF_UI, "build/pdf.mjs"), "utf8").slice(0, 2048);
+    const worker = fs.readFileSync(path.join(process.env.PDF_UI, "build/pdf.worker.mjs"), "utf8").slice(0, 2048);
+    const expected = "6.3.289";
+    const result = { packageVersion: version, browserVersionMatched: browser.includes("pdfjsVersion = " + expected), workerVersionMatched: worker.includes("pdfjsVersion = " + expected) };
+    if (version !== expected || !result.browserVersionMatched || !result.workerVersionMatched) process.exitCode = 1;
+    console.log(JSON.stringify(result));
+  ' 2>/dev/null)"
+  if [ "$?" -eq 0 ]; then
+    pass "local PDF.js Node parser and browser worker are pinned to version 6.3.289"
+    info "pdf_assets=$PDF_ASSET_RESULT"
+  else
+    fail "local PDF.js parser/module/worker version contract failed"
+  fi
+}
+
+check_pdf_gateway_contract() {
+  if ! command -v curl >/dev/null 2>&1 || [ -z "${BABYREADER_GATEWAY_URL:-}" ] \
+      || [ -z "${BABYREADER_GATEWAY_COOKIE:-}" ]; then
+    skip "authenticated fnOS Gateway session required for PDF MIME/CSP/Range/search checks"
+    return 0
+  fi
+
+  PDF_GATEWAY="${BABYREADER_GATEWAY_URL%/}"
+  PDF_HEADERS="${TMPDIR:-/tmp}/babyreader-pdf-headers.$$"
+  PDF_BODY="${TMPDIR:-/tmp}/babyreader-pdf-body.$$"
+  PDF_LIBRARY_CODE="$(curl -sS -H "Cookie: $BABYREADER_GATEWAY_COOKIE" -o "$PDF_BODY" -w '%{http_code}' \
+    "$PDF_GATEWAY/app/babyreader-fnos/api/library" 2>/dev/null || true)"
+  if [ "$PDF_LIBRARY_CODE" != "200" ] || [ ! -x "$NODE_BIN" ]; then
+    fail "authenticated PDF feature status could not be checked"
+    rm -f "$PDF_HEADERS" "$PDF_BODY"
+    return 0
+  fi
+  PDF_FEATURE="$("$NODE_BIN" -e 'try { const value = JSON.parse(require("node:fs").readFileSync(process.argv[1], "utf8")); process.stdout.write(value.features?.pdfReader === true ? "enabled" : "disabled"); } catch { process.exit(1); }' "$PDF_BODY" 2>/dev/null || true)"
+  if [ "$PDF_FEATURE" != "enabled" ]; then
+    skip "PDF feature flag is disabled; enable it only for the controlled acceptance window"
+    rm -f "$PDF_HEADERS" "$PDF_BODY"
+    return 0
+  fi
+  pass "authenticated library API reports the PDF feature enabled"
+
+  for asset in \
+    "vendor/pdfjs/build/pdf.mjs" \
+    "vendor/pdfjs/build/pdf.worker.mjs"; do
+    PDF_ASSET_CODE="$(curl -sS -H "Cookie: $BABYREADER_GATEWAY_COOKIE" -D "$PDF_HEADERS" -o /dev/null -w '%{http_code}' \
+      "$PDF_GATEWAY/app/babyreader-fnos/$asset" 2>/dev/null || true)"
+    if [ "$PDF_ASSET_CODE" = "200" ] \
+        && grep -qi '^content-type: text/javascript' "$PDF_HEADERS" \
+        && grep -qi "^content-security-policy:.*worker-src 'self' blob:" "$PDF_HEADERS" \
+        && grep -qi "^content-security-policy:.*connect-src 'self'" "$PDF_HEADERS"; then
+      pass "local PDF.js asset has JavaScript MIME and restrictive same-origin CSP"
+    else
+      fail "local PDF.js asset MIME/CSP contract failed"
+    fi
+  done
+
+  PDF_TEST_BOOK_ID="${BABYREADER_PDF_TEST_BOOK_ID:-}"
+  if [ -z "$PDF_TEST_BOOK_ID" ]; then
+    PDF_TEST_BOOK_ID="$("$NODE_BIN" -e '
+      try {
+        const data = JSON.parse(require("node:fs").readFileSync(process.argv[1], "utf8"));
+        const book = (data.books || []).find((item) => item.type === "pdf" && item.title === "BabyReader PDF Acceptance Fixture");
+        if (book && /^[a-f0-9]{64}$/.test(book.id || "")) process.stdout.write(book.id);
+      } catch {}
+    ' "$PDF_BODY" 2>/dev/null || true)"
+  fi
+  if [ "${#PDF_TEST_BOOK_ID}" -ne 64 ]; then
+    skip "dedicated BabyReader PDF Acceptance Fixture not found; synthetic PDF Range and FTS not checked"
+    rm -f "$PDF_HEADERS" "$PDF_BODY"
+    return 0
+  fi
+  case "$PDF_TEST_BOOK_ID" in
+    *[!0-9a-f]*)
+      fail "synthetic PDF book ID must be 64 lowercase hexadecimal characters"
+      rm -f "$PDF_HEADERS" "$PDF_BODY"
+      return 0
+      ;;
+  esac
+
+  PDF_CONTENT_URL="$PDF_GATEWAY/app/babyreader-fnos/api/books/$PDF_TEST_BOOK_ID/content"
+  PDF_RANGE_CODE="$(curl -sS -H "Cookie: $BABYREADER_GATEWAY_COOKIE" -H 'Range: bytes=0-0' \
+    -D "$PDF_HEADERS" -o /dev/null -w '%{http_code}' "$PDF_CONTENT_URL" 2>/dev/null || true)"
+  if [ "$PDF_RANGE_CODE" = "206" ] \
+      && grep -qi '^content-type: application/pdf' "$PDF_HEADERS" \
+      && grep -qi '^content-range: bytes 0-0/' "$PDF_HEADERS"; then
+    pass "authorized synthetic PDF Range bytes=0-0 returned 206"
+  else
+    fail "authorized synthetic PDF Range expected 206 with a single-byte Content-Range, got ${PDF_RANGE_CODE:-no response}"
+  fi
+
+  PDF_OPEN_RANGE_CODE="$(curl -sS -H "Cookie: $BABYREADER_GATEWAY_COOKIE" -H 'Range: bytes=0-' \
+    -D "$PDF_HEADERS" -o /dev/null -w '%{http_code}' "$PDF_CONTENT_URL" 2>/dev/null || true)"
+  if [ "$PDF_OPEN_RANGE_CODE" = "206" ] \
+      && grep -qi '^content-range: bytes 0-[0-9][0-9]*/[0-9][0-9]*' "$PDF_HEADERS"; then
+    pass "authorized synthetic PDF open-ended Range returned 206"
+  else
+    fail "authorized synthetic PDF open-ended Range expected 206"
+  fi
+
+  PDF_SUFFIX_RANGE_CODE="$(curl -sS -H "Cookie: $BABYREADER_GATEWAY_COOKIE" -H 'Range: bytes=-1' \
+    -D "$PDF_HEADERS" -o /dev/null -w '%{http_code}' "$PDF_CONTENT_URL" 2>/dev/null || true)"
+  if [ "$PDF_SUFFIX_RANGE_CODE" = "206" ] \
+      && grep -qi '^content-range: bytes [0-9][0-9]*-[0-9][0-9]*/[0-9][0-9]*' "$PDF_HEADERS"; then
+    pass "authorized synthetic PDF suffix Range returned 206"
+  else
+    fail "authorized synthetic PDF suffix Range expected 206"
+  fi
+
+  PDF_HEAD_CODE="$(curl -sS -I -H "Cookie: $BABYREADER_GATEWAY_COOKIE" -o /dev/null -w '%{http_code}' \
+    "$PDF_CONTENT_URL" 2>/dev/null || true)"
+  if [ "$PDF_HEAD_CODE" = "200" ]; then
+    pass "authorized synthetic PDF HEAD returned 200"
+  else
+    fail "authorized synthetic PDF HEAD expected 200, got ${PDF_HEAD_CODE:-no response}"
+  fi
+
+  PDF_FULL_CODE="$(curl -sS -H "Cookie: $BABYREADER_GATEWAY_COOKIE" -o "$PDF_BODY" -w '%{http_code}' \
+    "$PDF_CONTENT_URL" 2>/dev/null || true)"
+  if [ "$PDF_FULL_CODE" = "200" ] && [ "$(wc -c < "$PDF_BODY" | tr -d ' ')" -le 1048576 ] \
+      && head -c 1024 "$PDF_BODY" | grep -aq '%PDF-'; then
+    pass "authorized small synthetic PDF full GET returned bounded 200 content"
+  else
+    fail "authorized synthetic PDF full GET failed or exceeded 1 MiB"
+  fi
+
+  PDF_MULTIRANGE_CODE="$(curl -sS -H "Cookie: $BABYREADER_GATEWAY_COOKIE" -H 'Range: bytes=0-0,2-2' \
+    -o /dev/null -w '%{http_code}' "$PDF_CONTENT_URL" 2>/dev/null || true)"
+  if [ "$PDF_MULTIRANGE_CODE" = "416" ]; then
+    pass "multipart PDF Range is rejected with 416"
+  else
+    fail "multipart PDF Range expected 416, got ${PDF_MULTIRANGE_CODE:-no response}"
+  fi
+
+  PDF_SEARCH_CODE="$(curl -sS -H "Cookie: $BABYREADER_GATEWAY_COOKIE" -o "$PDF_BODY" -w '%{http_code}' \
+    "$PDF_GATEWAY/app/babyreader-fnos/api/books/$PDF_TEST_BOOK_ID/search?q=BabyReaderAcceptanceToken" 2>/dev/null || true)"
+  if [ "$PDF_SEARCH_CODE" = "200" ] && "$NODE_BIN" - "$PDF_BODY" <<'NODE'
+const fs = require('node:fs');
+try {
+  const body = JSON.parse(fs.readFileSync(process.argv[2], 'utf8'));
+  const result = (body.results || []).find((item) => item.matchText === 'BabyReaderAcceptanceToken');
+  if (!body.available || !result || result.locator?.type !== 'pdf'
+      || !Number.isSafeInteger(result.locator.pageIndex) || result.locator.pageIndex < 0
+      || !Number.isSafeInteger(result.locator.textOffset) || result.locator.textOffset < 0
+      || 'path' in result) process.exit(1);
+} catch { process.exit(1); }
+NODE
+  then
+    pass "synthetic PDF FTS returns a page locator without a filesystem path"
+  else
+    fail "synthetic PDF full-text search contract failed"
+  fi
+  rm -f "$PDF_HEADERS" "$PDF_BODY"
 }
 
 check_device() {
@@ -398,6 +627,8 @@ check_device() {
   else
     skip "Gateway identity injection requires an authenticated fnOS session"
   fi
+
+  check_library_organization_contract
 
   check_fts_contract
 

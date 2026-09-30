@@ -6,6 +6,7 @@ const http = require('node:http');
 const os = require('node:os');
 const path = require('node:path');
 const test = require('node:test');
+const { createCorruptPdfFixture, createPdfFixture } = require('./fixtures/pdf-fixtures');
 
 const SANDBOX = path.join(os.tmpdir(), `babyreader-search-api-${process.pid}`);
 const DATA_ROOT = path.join(SANDBOX, 'var');
@@ -15,16 +16,24 @@ const CUSTOM_ROOT = path.join(SANDBOX, 'custom-library');
 const BOOK_ID = 'd'.repeat(64);
 const UNKNOWN_BOOK_ID = 'e'.repeat(64);
 const BROKEN_BOOK_ID = 'f'.repeat(64);
+const PDF_BOOK_ID = 'a'.repeat(64);
+const TEXTLESS_PDF_BOOK_ID = 'b'.repeat(64);
+const BROKEN_PDF_BOOK_ID = 'c'.repeat(64);
 const BOOK_PATH = path.join(LIBRARY_ROOT, 'search-book.txt');
 const BROKEN_BOOK_PATH = path.join(LIBRARY_ROOT, 'broken-book.epub');
+const PDF_BOOK_PATH = path.join(LIBRARY_ROOT, 'search-book.pdf');
+const TEXTLESS_PDF_PATH = path.join(LIBRARY_ROOT, 'textless-book.pdf');
+const BROKEN_PDF_PATH = path.join(LIBRARY_ROOT, 'broken-book.pdf');
 
 process.env.TRIM_PKGVAR = DATA_ROOT;
 process.env.TRIM_PKGETC = CONFIG_ROOT;
 process.env.TRIM_DATA_ACCESSIBLE_PATHS = '';
 process.env.TRIM_DATA_SHARE_PATHS = '';
 process.env.NODE_ENV = 'development';
+process.env.BABYREADER_PDF_ENABLED = 'true';
 
 const { parseBookSearchParams } = require('../app/server/book-search');
+const { writeFnOSAuthorizedRoots } = require('../app/server/fnos-roots-config');
 const { handleRequest, loadConfiguration } = require('../app/server/index');
 
 let server;
@@ -44,6 +53,12 @@ test.before(async () => {
   await fs.mkdir(path.join(DATA_ROOT, 'index'), { recursive: true });
   await fs.mkdir(CONFIG_ROOT, { recursive: true });
   await fs.writeFile(BOOK_PATH, '前言没有命中。蛋白质出现在第二句。第三句再次提到蛋白质。', 'utf8');
+  await fs.writeFile(PDF_BOOK_PATH, createPdfFixture({ pageTexts: [
+    '第一页面。精确搜索词在这里。',
+    '第二页面。相同的精确搜索词再次出现。'
+  ] }));
+  await fs.writeFile(TEXTLESS_PDF_PATH, createPdfFixture({ pageTexts: [null, ''] }));
+  await fs.writeFile(BROKEN_PDF_PATH, createCorruptPdfFixture());
   await fs.writeFile(path.join(CUSTOM_ROOT, 'custom-book.txt'), '来自 fnOS 自定义授权目录的书籍。', 'utf8');
   await fs.writeFile(BROKEN_BOOK_PATH, '这不是有效的 EPUB 压缩包', 'utf8');
   await fs.writeFile(path.join(CONFIG_ROOT, 'settings.json'), JSON.stringify({
@@ -62,6 +77,21 @@ test.before(async () => {
       path: BROKEN_BOOK_PATH,
       type: 'epub',
       title: '损坏的 EPUB'
+    }, {
+      id: PDF_BOOK_ID,
+      path: PDF_BOOK_PATH,
+      type: 'pdf',
+      title: 'PDF 搜索书'
+    }, {
+      id: TEXTLESS_PDF_BOOK_ID,
+      path: TEXTLESS_PDF_PATH,
+      type: 'pdf',
+      title: '扫描版 PDF'
+    }, {
+      id: BROKEN_PDF_BOOK_ID,
+      path: BROKEN_PDF_PATH,
+      type: 'pdf',
+      title: '损坏 PDF'
     }]
   }));
   await loadConfiguration();
@@ -81,13 +111,14 @@ test.after(async () => {
 test('parseBookSearchParams maps URL parameters to the bounded service contract', () => {
   assert.deepEqual(
     parseBookSearchParams(new URLSearchParams('q=%E8%9B%8B%E7%99%BD%E8%B4%A8&scope=chapter&chapterIndex=2&limit=50')),
-    { query: '蛋白质', scope: 'chapter', chapterIndex: 2, limit: 50 }
+    { query: '蛋白质', scope: 'chapter', chapterIndex: 2, limit: 50, cursor: null }
   );
   assert.deepEqual(parseBookSearchParams(new URLSearchParams('q=health')), {
     query: 'health',
     scope: 'book',
     chapterIndex: null,
-    limit: 20
+    limit: 20,
+    cursor: null
   });
 });
 
@@ -134,6 +165,38 @@ test('library scan discovers an fnOS accessible root and exposes safe root count
   }
 });
 
+test('library scan uses the first fnOS permission callback result without restarting the server', async () => {
+  const snapshot = path.join(CONFIG_ROOT, 'fnos-authorized-roots.json');
+  const libraryIndexPath = path.join(DATA_ROOT, 'index', 'library.json');
+  const previousIndex = await fs.readFile(libraryIndexPath, 'utf8');
+  try {
+    assert.equal(process.env.TRIM_DATA_ACCESSIBLE_PATHS, '');
+    writeFnOSAuthorizedRoots(CONFIG_ROOT, CUSTOM_ROOT);
+    const added = await request('/app/babyreader-fnos/api/library/scan', {
+      method: 'POST', headers: { 'x-trim-userid': 'admin', 'x-trim-isadmin': 'true' }
+    });
+    assert.equal(added.status, 200);
+    assert.ok(added.body.books.some((book) => book.title === 'custom-book'));
+
+    const customBook = added.body.books.find((book) => book.title === 'custom-book');
+    writeFnOSAuthorizedRoots(CONFIG_ROOT, '');
+    const staleContent = await fetch(`${baseUrl}/app/babyreader-fnos/api/books/${customBook.id}/content`, {
+      headers: { 'x-trim-userid': 'admin', 'x-trim-isadmin': 'true' }
+    });
+    assert.equal(staleContent.status, 404);
+    await staleContent.arrayBuffer();
+    const revoked = await request('/app/babyreader-fnos/api/library/scan', {
+      method: 'POST', headers: { 'x-trim-userid': 'admin', 'x-trim-isadmin': 'true' }
+    });
+    assert.equal(revoked.status, 200);
+    assert.equal(revoked.body.books.some((book) => book.title === 'custom-book'), false);
+  } finally {
+    await fs.rm(snapshot, { force: true });
+    await fs.writeFile(libraryIndexPath, previousIndex, 'utf8');
+    await loadConfiguration();
+  }
+});
+
 test('search API returns bounded independent results for an authenticated book', async () => {
   const response = await request(
     `/app/babyreader-fnos/api/books/${BOOK_ID}/search?q=${encodeURIComponent('蛋白质')}&limit=1`
@@ -145,6 +208,7 @@ test('search API returns bounded independent results for an authenticated book',
   assert.equal(response.body.scope, 'book');
   assert.equal(response.body.results.length, 1);
   assert.equal(response.body.results[0].locator.type, 'text-search');
+  assert.equal(typeof response.body.hasMore, 'boolean');
   assert.equal('path' in response.body, false);
   assert.equal('raw' in response.body.results[0], false);
 });
@@ -157,6 +221,37 @@ test('search API reaches chapter scope without changing the AI route', async () 
   assert.equal(response.status, 200);
   assert.equal(response.body.scope, 'chapter');
   assert.ok(response.body.results.every((item) => item.chapterIndex === 0));
+});
+
+test('search API supports cursor continuation and rejects a cursor reused for another query', async () => {
+  const first = await request(
+    `/app/babyreader-fnos/api/books/${BOOK_ID}/search?q=${encodeURIComponent('蛋白质')}&limit=1`
+  );
+  assert.equal(first.status, 200);
+  assert.equal(first.body.hasMore, true);
+
+  const next = await request(
+    `/app/babyreader-fnos/api/books/${BOOK_ID}/search?q=${encodeURIComponent('蛋白质')}&limit=1&cursor=${encodeURIComponent(first.body.nextCursor)}`
+  );
+  assert.equal(next.status, 200);
+  assert.equal(next.body.results.length, 1);
+  assert.notEqual(next.body.results[0].id, first.body.results[0].id);
+
+  const previousEnvironment = process.env.NODE_ENV;
+  process.env.NODE_ENV = 'production';
+  try {
+    const unauthenticatedContinuation = await request(
+      `/app/babyreader-fnos/api/books/${BOOK_ID}/search?q=${encodeURIComponent('蛋白质')}&limit=1&cursor=${encodeURIComponent(first.body.nextCursor)}`
+    );
+    assert.equal(unauthenticatedContinuation.status, 401);
+  } finally {
+    process.env.NODE_ENV = previousEnvironment;
+  }
+
+  const mismatch = await request(
+    `/app/babyreader-fnos/api/books/${BOOK_ID}/search?q=wrong&limit=1&cursor=${encodeURIComponent(first.body.nextCursor)}`
+  );
+  assert.equal(mismatch.status, 400);
 });
 
 test('search API rejects missing or malformed parameters with 400', async () => {
@@ -198,6 +293,49 @@ test('search API returns a controlled unavailable result when FTS cannot build',
     query: '蛋白质',
     scope: 'book',
     results: [],
+    hasMore: false,
+    nextCursor: null,
     truncated: false
   });
+});
+
+test('search API returns bounded PDF page locators without exposing source text or paths', async () => {
+  const response = await request(
+    `/app/babyreader-fnos/api/books/${PDF_BOOK_ID}/search?q=${encodeURIComponent('精确搜索词')}&limit=1`
+  );
+
+  assert.equal(response.status, 200);
+  assert.equal(response.body.available, true);
+  assert.equal(response.body.results.length, 1);
+  assert.equal(response.body.results[0].locator.type, 'pdf');
+  assert.equal(response.body.results[0].locator.pageIndex, 0);
+  assert.equal(response.body.results[0].locator.textOffset, '第一页面。'.length);
+  assert.equal(response.body.results[0].locator.quote, '精确搜索词');
+  assert.equal(response.body.hasMore, true);
+  assert.equal(JSON.stringify(response.body).includes(PDF_BOOK_PATH), false);
+  assert.equal('raw' in response.body.results[0], false);
+});
+
+test('search API identifies image-only PDFs and safely rejects malformed PDFs', async () => {
+  const textless = await request(
+    `/app/babyreader-fnos/api/books/${TEXTLESS_PDF_BOOK_ID}/search?q=${encodeURIComponent('任意内容')}`
+  );
+  assert.deepEqual(textless.body, {
+    available: false,
+    query: '任意内容',
+    scope: 'book',
+    results: [],
+    hasMore: false,
+    nextCursor: null,
+    truncated: false,
+    unavailableReason: 'pdf_no_searchable_text'
+  });
+
+  const malformed = await request(
+    `/app/babyreader-fnos/api/books/${BROKEN_PDF_BOOK_ID}/search?q=${encodeURIComponent('任意内容')}`
+  );
+  assert.equal(malformed.status, 200);
+  assert.equal(malformed.body.available, false);
+  assert.equal(malformed.body.results.length, 0);
+  assert.equal('path' in malformed.body, false);
 });

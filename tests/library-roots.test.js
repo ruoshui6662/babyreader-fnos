@@ -11,6 +11,7 @@ const {
   collectRootCandidates,
   resolveLibraryRoots
 } = require('../app/server/library-roots');
+const { readFnOSAuthorizedRoots, writeFnOSAuthorizedRoots } = require('../app/server/fnos-roots-config');
 
 async function temporaryDirectory(t, prefix) {
   const directory = await fs.mkdtemp(path.join(os.tmpdir(), prefix));
@@ -26,6 +27,22 @@ test('parsePathList preserves Chinese and space-containing fnOS paths', () => {
   assert.deepEqual(parsePathList(''), []);
   assert.deepEqual(parsePathList(undefined), []);
   assert.deepEqual(parsePathList('C:\\Books:D:\\共享书库'), ['C:\\Books', 'D:\\共享书库']);
+});
+
+test('fnOS authorization snapshot applies additions and revocations without a process restart', async (t) => {
+  const configRoot = await temporaryDirectory(t, 'babyreader-fnos-roots-config-');
+  const oldRoot = path.join(configRoot, '旧书库');
+  const newRoot = path.join(configRoot, '新 书库');
+  assert.deepEqual(readFnOSAuthorizedRoots(configRoot, oldRoot), [oldRoot]);
+  writeFnOSAuthorizedRoots(configRoot, newRoot);
+  assert.deepEqual(readFnOSAuthorizedRoots(configRoot, oldRoot), [newRoot]);
+  const snapshot = path.join(configRoot, 'fnos-authorized-roots.json');
+  if (process.platform !== 'win32') assert.equal((await fs.stat(snapshot)).mode & 0o777, 0o600);
+  writeFnOSAuthorizedRoots(configRoot, '');
+  assert.deepEqual(readFnOSAuthorizedRoots(configRoot, oldRoot), []);
+
+  await fs.writeFile(snapshot, '{bad json', 'utf8');
+  assert.deepEqual(readFnOSAuthorizedRoots(configRoot, oldRoot), []);
 });
 
 test('collectRootCandidates preserves source order and source labels', () => {

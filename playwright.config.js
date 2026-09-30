@@ -19,6 +19,7 @@ module.exports = defineConfig({
   },
   webServer: {
     command: 'node e2e/start-server.js',
+    env: { BABYREADER_E2E_RUNTIME_ROOT: process.env.BABYREADER_E2E_RUNTIME_ROOT || '.runtime/e2e-resource-lifecycle' },
     url: 'http://127.0.0.1:8099/app/babyreader-fnos/api/health',
     reuseExistingServer: false,
     timeout: 30000

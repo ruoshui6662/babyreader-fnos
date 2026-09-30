@@ -5,13 +5,15 @@ const path = require('node:path');
 const { strToU8, zipSync, unzipSync } = require('fflate');
 const { randomBytes } = require('node:crypto');
 const { FIXTURE_TEXT } = require('./fixtures/reader-fixtures');
+const { createCorruptPdfFixture, createImageOnlyPdfFixture, createPdfFixture } = require('../tests/fixtures/pdf-fixtures');
 
 const root = path.resolve(__dirname, '..');
-const runtimeRoot = path.join(root, '.runtime', 'e2e');
+const runtimeRoot = path.resolve(process.env.BABYREADER_E2E_RUNTIME_ROOT || path.join(root, '.runtime', 'e2e'));
 const configRoot = path.join(runtimeRoot, 'etc');
 const dataRoot = path.join(runtimeRoot, 'var');
 const libraryRoot = path.join(runtimeRoot, 'library');
 const sampleEpubPath = process.env.BABYREADER_E2E_SAMPLE_EPUB;
+const samplePdfPath = process.env.BABYREADER_E2E_SAMPLE_PDF;
 
 fs.rmSync(runtimeRoot, { recursive: true, force: true });
 fs.mkdirSync(configRoot, { recursive: true });
@@ -36,6 +38,41 @@ fs.writeFileSync(path.join(libraryRoot, 'plain-text.txt'), [
   '',
   'A deterministic text fixture for BabyReader.'
 ].join('\n'), 'utf8');
+
+const e2ePdf = createPdfFixture({
+  pageTexts: [
+    '第一页：页面内重复检索词。第二行：标记后仍能选中的文字。重复检索词再次出现。',
+    '第二页：这一页含有第二页精确定位词。',
+    '第三页：PDF全文搜索的跨页唯一命中。',
+    `第四页：末页内容。${'用于验证局部 Range 请求的固定测试文本。'.repeat(1200)}`
+  ]
+});
+// Keep the synthetic document larger than PDF.js's two 64 KiB range chunks
+// without inflating a rendered page's text layer or changing searchable text.
+fs.writeFileSync(path.join(libraryRoot, 'e2e-reader.pdf'), Buffer.concat([
+  e2ePdf,
+  Buffer.from(`\n% Range request fixture padding\n${' '.repeat(140_000)}`, 'ascii')
+]));
+fs.writeFileSync(path.join(libraryRoot, 'e2e-annotation.pdf'), createPdfFixture({
+  pageTexts: [
+    '第一页：标记选择测试。\n第二行：标记后仍能选中的文字。',
+    '第二页：验证远离视口后，标注画布随页面回收。',
+    '第三页：覆盖层回收测试。',
+    '第四页：返回第一页时重新绘制标注。'
+  ]
+}));
+fs.writeFileSync(path.join(libraryRoot, 'e2e-columns.pdf'), createPdfFixture({
+  pageColumns: [
+    [{ text: '封面页。', x: 72, y: 720 }],
+    [{ text: '跨页左页内容。', x: 72, y: 720 }],
+    [
+      { text: '左栏重复词，左栏独有结论。', x: 72, y: 720 },
+      { text: '右栏重复词，右栏独有依据。', x: 310, y: 720 }
+    ]
+  ]
+}));
+fs.writeFileSync(path.join(libraryRoot, 'e2e-image-only.pdf'), createImageOnlyPdfFixture());
+fs.writeFileSync(path.join(libraryRoot, 'e2e-corrupt.pdf'), createCorruptPdfFixture());
 
 // Deterministic long paragraph builder. Each chapter repeats the same body
 // text so highlight tests can assert that deleting one identical-text
@@ -127,6 +164,34 @@ const stressEpub = zipSync({
 });
 fs.writeFileSync(path.join(libraryRoot, 'e2e-stress.epub'), Buffer.from(stressEpub));
 
+// The same in-limit PNG is referenced from eight spine documents. Its unique
+// payload is below the per-resource limit, while counting every reference
+// cumulatively would exceed the former 48 MiB archive-lifetime budget.
+const pngHeader = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/lZkAAAAASUVORK5CYII=', 'base64');
+const repeatedImage = Buffer.concat([pngHeader, randomBytes(7 * 1024 * 1024 - pngHeader.length)]);
+const repeatedChapters = Array.from({ length: 8 }, (_, index) => ({
+  id: `chapter${index + 1}`,
+  href: `text/chapter-${String(index + 1).padStart(2, '0')}.xhtml`,
+  body: `<!doctype html><html xmlns="http://www.w3.org/1999/xhtml"><body><h1>Repeated image chapter ${index + 1}</h1><img src="../images/shared.png" alt="Repeated shared image"/><p>Chapter ${index + 1} keeps this shared image in the active chapter.</p></body></html>`
+}));
+const repeatedImageEpub = zipSync({
+  mimetype: [strToU8('application/epub+zip'), { level: 0 }],
+  'META-INF/container.xml': strToU8(`<?xml version="1.0"?>
+<container version="1.0" xmlns="urn:oasis:names:tc:opendocument:xmlns:container"><rootfiles><rootfile full-path="OEBPS/content.opf" media-type="application/oebps-package+xml"/></rootfiles></container>`),
+  'OEBPS/content.opf': strToU8(`<?xml version="1.0" encoding="UTF-8"?>
+<package xmlns="http://www.idpf.org/2007/opf" version="3.0">
+  <metadata xmlns:dc="http://purl.org/dc/elements/1.1/"><dc:title>E2E Repeated Image EPUB</dc:title><dc:creator>Playwright</dc:creator></metadata>
+  <manifest>
+    ${repeatedChapters.map((chapter) => `<item id="${chapter.id}" href="${chapter.href}" media-type="application/xhtml+xml"/>`).join('\n    ')}
+    <item id="shared-image" href="images/shared.png" media-type="image/png"/>
+  </manifest>
+  <spine>${repeatedChapters.map((chapter) => `<itemref idref="${chapter.id}"/>`).join('')}</spine>
+</package>`),
+  ...Object.fromEntries(repeatedChapters.map((chapter) => [`OEBPS/${chapter.href}`, strToU8(chapter.body)])),
+  'OEBPS/images/shared.png': repeatedImage
+});
+fs.writeFileSync(path.join(libraryRoot, 'e2e-repeated-image.epub'), Buffer.from(repeatedImageEpub));
+
 // Optional local-only investigation fixture. It never copies a user EPUB into
 // the repository; callers opt in through an absolute path environment value.
 if (sampleEpubPath) {
@@ -160,6 +225,16 @@ if (sampleEpubPath) {
   }
 }
 
+if (samplePdfPath) {
+  if (!path.isAbsolute(samplePdfPath) || path.extname(samplePdfPath).toLowerCase() !== '.pdf') {
+    throw new Error('BABYREADER_E2E_SAMPLE_PDF must be an absolute local PDF path.');
+  }
+  if (!fs.existsSync(samplePdfPath)) {
+    throw new Error('BABYREADER_E2E_SAMPLE_PDF does not exist.');
+  }
+  fs.copyFileSync(samplePdfPath, path.join(libraryRoot, path.basename(samplePdfPath)));
+}
+
 fs.writeFileSync(
   path.join(configRoot, 'settings.json'),
   JSON.stringify({ libraryRoots: [libraryRoot] }, null, 2),
@@ -171,6 +246,7 @@ Object.assign(process.env, {
   BABYREADER_DEV_PORT: '8099',
   BABYREADER_DEV_UID: 'playwright-user',
   BABYREADER_DEV_USERNAME: 'Playwright User',
+  BABYREADER_PDF_ENABLED: '1',
   TRIM_PKGETC: configRoot,
   TRIM_PKGVAR: dataRoot,
   TRIM_PKGTMP: path.join(runtimeRoot, 'tmp')

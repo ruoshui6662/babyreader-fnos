@@ -307,3 +307,28 @@ test('corrupt SQLite files are reported without destructive repair', {
   assert.equal(result.status, 'corrupt');
   assert.equal(await fs.readFile(filePath, 'utf8'), 'not sqlite');
 });
+
+test('index deletion callback runs for direct and orphan cleanup and cannot roll back deletion', async (t) => {
+  const dataRoot = await temporaryDirectory(t);
+  const deletedIds = [];
+  const manager = createAiIndexManager({
+    dataRoot,
+    onIndexDeleted: async (bookId) => {
+      deletedIds.push(bookId);
+      if (bookId === BOOK_ID) throw new Error('cache cleanup failed');
+    }
+  });
+  const directPath = manager.getIndexPath(BOOK_ID);
+  const orphanPath = manager.getIndexPath(ORPHAN_ID);
+  await fs.mkdir(path.dirname(directPath), { recursive: true });
+  await fs.writeFile(directPath, 'direct index');
+  await fs.writeFile(orphanPath, 'orphan index');
+
+  assert.deepEqual(await manager.deleteIndex(BOOK_ID), { bookId: BOOK_ID, deleted: true });
+  const cleanup = await manager.cleanup({ kind: 'orphans', libraryIndex: [], scanHealthy: true, confirm: true });
+
+  assert.deepEqual(deletedIds, [BOOK_ID, ORPHAN_ID]);
+  assert.equal(cleanup.deleted.length, 1);
+  await assert.rejects(() => fs.access(directPath), { code: 'ENOENT' });
+  await assert.rejects(() => fs.access(orphanPath), { code: 'ENOENT' });
+});

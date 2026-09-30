@@ -38,6 +38,25 @@ def manifest_version(root):
     return "unknown"
 
 
+def pdfjs_dependency(root):
+    lock_path = os.path.join(root, "package-lock.json")
+    with open(lock_path, "r", encoding="utf-8") as handle:
+        lock = json.load(handle)
+    package = lock.get("packages", {}).get("node_modules/pdfjs-dist", {})
+    version = package.get("version")
+    resolved = package.get("resolved")
+    integrity = package.get("integrity")
+    if version != "6.3.289" or not resolved or not isinstance(integrity, str) or not integrity.startswith("sha512-"):
+        raise ValueError("package-lock.json does not contain the audited PDF.js version and integrity")
+    return {
+        "name": "pdfjs-dist",
+        "version": version,
+        "resolved": resolved,
+        "integrity": integrity,
+        "license": "Apache-2.0",
+    }
+
+
 def validate_member_names(archive, label):
     for member in archive.getmembers():
         normalized = member.name.replace("\\", "/").lstrip("./")
@@ -63,14 +82,25 @@ def archive_evidence(fpk_path):
     required_outer = ("manifest", "app.tgz", "cmd/main")
     required_app = (
         "server/index.js",
+        "server/fnos-roots-config.js",
+        "server/pdf-text.js",
+        "server/pdf-text-worker.js",
         "server/package-lock.json",
+        "server/node_modules/pdfjs-dist/package.json",
+        "server/node_modules/pdfjs-dist/legacy/build/pdf.mjs",
+        "server/node_modules/pdfjs-dist/LICENSE",
         "ui/index.html",
         "ui/styles.css",
         "ui/app.js",
+        "ui/reader/pdf.js",
+        "ui/reader/pdf-annotation-geometry.js",
+        "ui/reader/pdf-annotations.js",
+        "ui/reader/pdf-render-scheduler.js",
         "ui/core/state.js",
         "ui/core/utils.js",
         "ui/core/api.js",
         "ui/core/user-state.js",
+        "ui/reader/annotations.js",
         "ui/reader/epub.js",
         "ui/reader/document.js",
         "ui/reader/editor.js",
@@ -81,6 +111,13 @@ def archive_evidence(fpk_path):
         "ui/reader/settings.js",
         "ui/reader/navigation.js",
         "ui/reader/lifecycle.js",
+        "ui/vendor/pdfjs/UPSTREAM.md",
+        "ui/vendor/pdfjs/LICENSE",
+        "ui/vendor/pdfjs/cmaps/LICENSE",
+        "ui/vendor/pdfjs/standard_fonts/LICENSE_LIBERATION",
+        "ui/vendor/pdfjs/wasm/LICENSE_OPENJPEG",
+        "ui/vendor/pdfjs/build/pdf.mjs",
+        "ui/vendor/pdfjs/build/pdf.worker.mjs",
         "ui/shell/drawer.js",
         "ui/library/view.js",
     )
@@ -123,6 +160,7 @@ def main():
     )
     git_status = command_output(["git", "-C", root, "status", "--porcelain"], "")
     fnpack_path = command_output(["sh", "-c", "command -v fnpack"], "unknown")
+    pdfjs_dist = pdfjs_dependency(root)
 
     payload = {
         "schema": 1,
@@ -145,6 +183,7 @@ def main():
             "platform": platform.platform(),
             "machine": platform.machine(),
         },
+        "dependencies": {"pdfjs_dist": pdfjs_dist},
         "archive": archive_evidence(fpk_path),
     }
 

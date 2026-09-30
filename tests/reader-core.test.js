@@ -23,17 +23,38 @@ const {
   buildResponsesPayload,
   buildConnectionTestPayload,
   extractResponsesText,
+  sanitizeAiAnswerCitations,
   parseResponsesSseChunk,
   extractStreamDelta,
   requestOpenAiAnswer,
+  requestOpenAiChapterSummary,
   requestOpenAiStream,
   testOpenAiConnection
 } = require('../app/server/ai-service');
 const { validateAiBookContext } = require('../app/server/ai-book-context');
 const { isFtsAvailable, searchBook } = require('../app/server/ai-fts');
+const { planChapterSummary } = require('../app/server/ai-chapter-retrieval');
 
 const BOOK_ID = 'a'.repeat(64);
 const SECOND_BOOK_ID = 'b'.repeat(64);
+const PDF_SOURCE_FINGERPRINT = 'f'.repeat(64);
+
+function pdfAnnotation(id = '00000000-0000-4000-8000-000000000001', overrides = {}) {
+  return {
+    version: 1,
+    type: 'pdf',
+    id,
+    kind: 'highlight',
+    style: 'marker',
+    color: 'yellow',
+    text: 'PDF selected phrase',
+    contextBefore: 'preceding words',
+    contextAfter: 'following words',
+    thought: '',
+    targets: [{ pageIndex: 2, quads: [[0.1, 0.2, 0.2, 0.2, 0.2, 0.23, 0.1, 0.23]] }],
+    ...overrides
+  };
+}
 
 async function temporaryDirectory(t, prefix) {
   const directory = await fs.mkdtemp(path.join(os.tmpdir(), prefix));
@@ -64,15 +85,33 @@ test('recursive multi-root scan indexes epub, md, markdown, and txt files in Chi
   await fs.writeFile(path.join(secondRoot, '忽略.pdf'), 'not supported', 'utf8');
 
   const index = await scanLibrary([firstRoot, secondRoot]);
-  assert.equal(index.scan.discoveredCount, 3);
+  assert.equal(index.scan.discoveredCount, 4);
   assert.equal(index.scan.indexedCount, 3);
-  assert.equal(index.scan.errorCount, 0);
+  assert.equal(index.scan.errorCount, 1);
   assert.deepEqual(
-    new Set(index.books.map((book) => book.type)),
+    new Set(index.books.filter((book) => !book.error).map((book) => book.type)),
     new Set(['markdown', 'txt'])
   );
   assert.ok(index.books.some((book) => book.relativePath === '子目录/第一本.md'));
   assert.ok(index.books.some((book) => book.title === '第二本书'));
+  assert.match(index.books.find((book) => book.relativePath === '忽略.pdf').error, /Invalid PDF signature/);
+});
+
+test('library scan derives opaque source folder descriptors without replacing the authorized path contract', async (t) => {
+  const sandbox = await temporaryDirectory(t, 'babyreader-source-folders-');
+  const libraryRoot = path.join(sandbox, '中文 书库');
+  const nested = path.join(libraryRoot, '营养', '基础');
+  await fs.mkdir(nested, { recursive: true });
+  await fs.writeFile(path.join(nested, '第一本.txt'), '内容', 'utf8');
+
+  const index = await scanLibrary([libraryRoot]);
+  const book = index.books.find((item) => !item.error);
+  assert.ok(book);
+  assert.match(book.sourceRootId, /^[a-f0-9]{64}$/);
+  assert.deepEqual(book.sourcePathSegments, ['营养', '基础']);
+  assert.equal(book.relativePath, '营养/基础/第一本.txt');
+  assert.equal(book.root, await fs.realpath(libraryRoot));
+  assert.equal(book.path, path.join(nested, '第一本.txt'));
 });
 
 test('incremental scan reuses unchanged books and reindexes changed files with stable IDs', async (t) => {
@@ -216,6 +255,226 @@ test('bookmarks default to empty, add idempotently, and delete by ID', async (t)
     deleted: false,
     id: created.id
   });
+});
+
+test('PDF page bookmarks use a strict locator, deduplicate per page, and remain user isolated', async (t) => {
+  const dataRoot = await temporaryDirectory(t, 'babyreader-pdf-bookmarks-');
+  const storage = new UserStorage(dataRoot);
+  await storage.initialize();
+  const locator = { version: 1, type: 'pdf', pageIndex: 17 };
+
+  const created = await storage.addBookmark('alice', BOOK_ID, {
+    locator,
+    label: '第 18 页'
+  });
+  assert.deepEqual(created.locator, locator);
+  const duplicate = await storage.addBookmark('alice', BOOK_ID, {
+    locator: { ...locator, ignored: 'must not affect the page key' },
+    label: '重复页'
+  });
+  assert.equal(duplicate.id, created.id);
+  const anotherPage = await storage.addBookmark('alice', BOOK_ID, {
+    locator: { ...locator, pageIndex: 18 },
+    label: '第 19 页'
+  });
+  assert.notEqual(anotherPage.id, created.id);
+  assert.equal((await storage.listBookmarks('alice', BOOK_ID)).length, 2);
+  assert.deepEqual(await storage.listBookmarks('bob', BOOK_ID), []);
+
+  await assert.rejects(storage.addBookmark('alice', BOOK_ID, {
+    locator: { version: 1, type: 'pdf', pageIndex: -1 }, label: '负页码'
+  }), /Invalid bookmark locator/);
+  await assert.rejects(storage.addBookmark('alice', BOOK_ID, {
+    locator: { version: 1, type: 'pdf', pageIndex: 1.5 }, label: '小数页码'
+  }), /Invalid bookmark locator/);
+  await assert.rejects(storage.addBookmark('alice', BOOK_ID, {
+    locator: { version: 1, type: 'pdf', pageIndex: 10000 }, label: '超限页码'
+  }), /Invalid bookmark locator/);
+});
+
+test('PDF annotations are UID scoped, idempotent by stable ID, and never replace EPUB highlights', async (t) => {
+  const dataRoot = await temporaryDirectory(t, 'babyreader-pdf-annotations-');
+  const storage = new UserStorage(dataRoot);
+  await storage.initialize();
+  const epubHighlight = {
+    id: 'epub-highlight', locator: 'epubcfi(/6/2)', chapterHref: 'OPS/chapter.xhtml', text: 'EPUB text'
+  };
+  const savedEpubHighlights = await storage.replaceHighlights('alice', BOOK_ID, [epubHighlight]);
+
+  const input = pdfAnnotation();
+  const created = await storage.createPdfAnnotation('alice', BOOK_ID, input, PDF_SOURCE_FINGERPRINT);
+  assert.equal(created.id, input.id);
+  assert.equal(created.sourceFingerprint, PDF_SOURCE_FINGERPRINT);
+  assert.equal(created.createdAt, created.updatedAt);
+  assert.deepEqual(await storage.createPdfAnnotation('alice', BOOK_ID, input, PDF_SOURCE_FINGERPRINT), created);
+  assert.deepEqual(await storage.listPdfAnnotations('alice', BOOK_ID), [created]);
+  assert.deepEqual(await storage.listPdfAnnotations('bob', BOOK_ID), []);
+  assert.deepEqual(await storage.listPdfAnnotations('alice', SECOND_BOOK_ID), []);
+
+  await assert.rejects(
+    storage.createPdfAnnotation('alice', BOOK_ID, pdfAnnotation(input.id, { text: 'different selection' }), PDF_SOURCE_FINGERPRINT),
+    (error) => error.code === 'PDF_ANNOTATION_CONFLICT' && error.statusCode === 409
+  );
+
+  const updated = await storage.updatePdfAnnotation('alice', BOOK_ID, input.id, {
+    style: 'wave', color: 'blue', thought: '我的阅读想法'
+  });
+  assert.equal(updated.kind, 'highlight');
+  assert.equal(updated.style, 'wave');
+  assert.equal(updated.color, 'blue');
+  assert.equal(updated.thought, '我的阅读想法');
+  assert.equal(updated.sourceFingerprint, PDF_SOURCE_FINGERPRINT);
+  await assert.rejects(storage.updatePdfAnnotation('alice', BOOK_ID, input.id, { kind: 'thought' }), /Invalid PDF annotation edit/);
+  await assert.rejects(storage.updatePdfAnnotation('alice', BOOK_ID, input.id, { locator: 'forged' }), /Invalid PDF annotation edit/);
+
+  assert.deepEqual(await storage.deletePdfAnnotation('alice', BOOK_ID, input.id), { deleted: true, id: input.id });
+  assert.deepEqual(await storage.deletePdfAnnotation('alice', BOOK_ID, input.id), { deleted: false, id: input.id });
+  const savedState = await storage.getState('alice');
+  assert.deepEqual(savedState.books[BOOK_ID].highlights, savedEpubHighlights);
+  assert.deepEqual(savedState.books[BOOK_ID].pdfAnnotations, []);
+});
+
+test('PDF annotation storage rejects unsafe page geometry, oversized fields, and collection limits', async (t) => {
+  const dataRoot = await temporaryDirectory(t, 'babyreader-pdf-annotation-limits-');
+  const storage = new UserStorage(dataRoot);
+  await storage.initialize();
+
+  const invalidRecords = [
+    pdfAnnotation('00000000-0000-4000-8000-000000000010', { targets: [{ pageIndex: -1, quads: [[0, 0, 1, 0, 1, 1, 0, 1]] }] }),
+    pdfAnnotation('00000000-0000-4000-8000-000000000011', { targets: [{ pageIndex: 0, quads: [[0, 0, 0, 0, 0, 0, 0, 0]] }] }),
+    pdfAnnotation('00000000-0000-4000-8000-000000000012', { targets: [{ pageIndex: 0, quads: [[0, 0, 1.1, 0, 1, 1, 0, 1]] }] }),
+    pdfAnnotation('00000000-0000-4000-8000-000000000017', { targets: [{ pageIndex: 0, quads: [[0, 0, Number.NaN, 0, 1, 1, 0, 1]] }] }),
+    pdfAnnotation('00000000-0000-4000-8000-000000000018', { targets: [{ pageIndex: 0, quads: [[0, 0, Number.POSITIVE_INFINITY, 0, 1, 1, 0, 1]] }] }),
+    pdfAnnotation('00000000-0000-4000-8000-000000000013', { text: 'x'.repeat(4001) }),
+    pdfAnnotation('00000000-0000-4000-8000-000000000014', { thought: 'x'.repeat(4001) }),
+    pdfAnnotation('00000000-0000-4000-8000-000000000015', { targets: Array.from({ length: 9 }, (_, pageIndex) => ({ pageIndex, quads: [[0, 0, 1, 0, 1, 1, 0, 1]] })) }),
+    pdfAnnotation('00000000-0000-4000-8000-000000000016', { targets: [{ pageIndex: 0, quads: Array.from({ length: 513 }, () => [0.1, 0.1, 0.2, 0.1, 0.2, 0.2, 0.1, 0.2]) }] })
+  ];
+  for (const record of invalidRecords) {
+    await assert.rejects(storage.createPdfAnnotation('alice', BOOK_ID, record, PDF_SOURCE_FINGERPRINT));
+  }
+
+  const now = new Date().toISOString();
+  const seeded = Array.from({ length: 500 }, (_, index) => pdfAnnotation(
+    `00000000-0000-4000-8000-${String(index + 100).padStart(12, '0')}`,
+    { createdAt: now, updatedAt: now, sourceFingerprint: PDF_SOURCE_FINGERPRINT }
+  ));
+  await storage.mutateUserState('alice', async (state) => {
+    state.books[BOOK_ID] = { ...(state.books[BOOK_ID] || {}), pdfAnnotations: seeded };
+  });
+  await assert.rejects(
+    storage.createPdfAnnotation('alice', BOOK_ID, pdfAnnotation('00000000-0000-4000-8000-000000000999'), PDF_SOURCE_FINGERPRINT),
+    /PDF annotation limit exceeded/
+  );
+});
+
+test('concurrent PDF annotation writes retain every stable ID and enforce the one-megabyte book budget', async (t) => {
+  const dataRoot = await temporaryDirectory(t, 'babyreader-pdf-annotation-concurrency-');
+  const storage = new UserStorage(dataRoot);
+  await storage.initialize();
+
+  await Promise.all([
+    storage.createPdfAnnotation('alice', BOOK_ID, pdfAnnotation('00000000-0000-4000-8000-000000000101'), PDF_SOURCE_FINGERPRINT),
+    storage.createPdfAnnotation('alice', BOOK_ID, pdfAnnotation('00000000-0000-4000-8000-000000000102'), PDF_SOURCE_FINGERPRINT),
+    storage.createPdfAnnotation('alice', BOOK_ID, pdfAnnotation('00000000-0000-4000-8000-000000000103'), PDF_SOURCE_FINGERPRINT),
+    storage.createPdfAnnotation('bob', BOOK_ID, pdfAnnotation('00000000-0000-4000-8000-000000000104'), PDF_SOURCE_FINGERPRINT)
+  ]);
+  assert.deepEqual((await storage.listPdfAnnotations('alice', BOOK_ID)).map((item) => item.id).sort(), [
+    '00000000-0000-4000-8000-000000000101',
+    '00000000-0000-4000-8000-000000000102',
+    '00000000-0000-4000-8000-000000000103'
+  ]);
+  assert.deepEqual((await storage.listPdfAnnotations('bob', BOOK_ID)).map((item) => item.id), [
+    '00000000-0000-4000-8000-000000000104'
+  ]);
+
+  const now = new Date().toISOString();
+  const maxedRecord = (index) => pdfAnnotation(
+    `00000000-0000-4000-8000-${String(index + 200).padStart(12, '0')}`,
+    { text: 'x'.repeat(4000), thought: 'y'.repeat(4000), createdAt: now, updatedAt: now, sourceFingerprint: PDF_SOURCE_FINGERPRINT }
+  );
+  const nearlyFullCollection = [];
+  while (Buffer.byteLength(JSON.stringify([...nearlyFullCollection, maxedRecord(nearlyFullCollection.length)]), 'utf8') <= 1024 * 1024) {
+    nearlyFullCollection.push(maxedRecord(nearlyFullCollection.length));
+  }
+  assert.ok(nearlyFullCollection.length < 500);
+  await storage.mutateUserState('alice', async (state) => {
+    state.books[SECOND_BOOK_ID] = { pdfAnnotations: nearlyFullCollection };
+  });
+  await assert.rejects(
+    storage.createPdfAnnotation('alice', SECOND_BOOK_ID, pdfAnnotation('00000000-0000-4000-8000-000000000888', {
+      text: 'x'.repeat(4000), thought: 'y'.repeat(4000)
+    }), PDF_SOURCE_FINGERPRINT),
+    /PDF annotation limit exceeded/
+  );
+});
+
+test('interleaved same-user PDF CRUD keeps unrelated EPUB highlights and other users isolated', async (t) => {
+  const dataRoot = await temporaryDirectory(t, 'babyreader-pdf-interleaved-');
+  const storage = new UserStorage(dataRoot);
+  await storage.initialize();
+  const first = pdfAnnotation('00000000-0000-4000-8000-000000000501');
+  const second = pdfAnnotation('00000000-0000-4000-8000-000000000502');
+  const other = pdfAnnotation('00000000-0000-4000-8000-000000000503');
+  const epub = [{ id: 'epub-kept', locator: 'epubcfi(/6/2)', chapterHref: 'OPS/chapter.xhtml', text: 'EPUB content' }];
+
+  await Promise.all([
+    storage.createPdfAnnotation('alice', BOOK_ID, first, PDF_SOURCE_FINGERPRINT),
+    storage.replaceHighlights('alice', BOOK_ID, epub),
+    storage.createPdfAnnotation('alice', BOOK_ID, second, PDF_SOURCE_FINGERPRINT),
+    storage.createPdfAnnotation('bob', BOOK_ID, other, PDF_SOURCE_FINGERPRINT)
+  ]);
+  await Promise.all([
+    storage.updatePdfAnnotation('alice', BOOK_ID, first.id, { thought: 'edited in second tab' }),
+    storage.deletePdfAnnotation('alice', BOOK_ID, second.id),
+    storage.replaceHighlights('alice', BOOK_ID, epub)
+  ]);
+
+  const alice = await storage.getState('alice');
+  const bob = await storage.getState('bob');
+  assert.deepEqual(alice.books[BOOK_ID].highlights.map((item) => item.id), ['epub-kept']);
+  assert.deepEqual(alice.books[BOOK_ID].pdfAnnotations.map((item) => item.id), [first.id]);
+  assert.equal(alice.books[BOOK_ID].pdfAnnotations[0].thought, 'edited in second tab');
+  assert.deepEqual(bob.books[BOOK_ID].pdfAnnotations.map((item) => item.id), [other.id]);
+});
+
+test('failed atomic PDF annotation write leaves the previous JSON and recovered queue intact', async (t) => {
+  const dataRoot = await temporaryDirectory(t, 'babyreader-pdf-write-fail-');
+  const storage = new UserStorage(dataRoot);
+  await storage.initialize();
+  const first = pdfAnnotation('00000000-0000-4000-8000-000000000511');
+  const second = pdfAnnotation('00000000-0000-4000-8000-000000000512');
+  await storage.createPdfAnnotation('alice', BOOK_ID, first, PDF_SOURCE_FINGERPRINT);
+  const before = await fs.readFile(path.join(storage.userDirectory('alice'), 'reading-state.json'), 'utf8');
+  const originalRename = fs.rename;
+  fs.rename = async () => { throw Object.assign(new Error('synthetic rename failure'), { code: 'EIO' }); };
+  try {
+    await assert.rejects(storage.createPdfAnnotation('alice', BOOK_ID, second, PDF_SOURCE_FINGERPRINT), /synthetic rename failure/);
+  } finally {
+    fs.rename = originalRename;
+  }
+  assert.equal(await fs.readFile(path.join(storage.userDirectory('alice'), 'reading-state.json'), 'utf8'), before);
+  assert.deepEqual((await storage.listPdfAnnotations('alice', BOOK_ID)).map((item) => item.id), [first.id]);
+  await storage.createPdfAnnotation('alice', BOOK_ID, second, PDF_SOURCE_FINGERPRINT);
+  assert.deepEqual((await storage.listPdfAnnotations('alice', BOOK_ID)).map((item) => item.id), [first.id, second.id]);
+});
+
+test('corrupt stored PDF annotations fail closed without returning partially trusted records', async (t) => {
+  const dataRoot = await temporaryDirectory(t, 'babyreader-pdf-annotation-corrupt-');
+  const storage = new UserStorage(dataRoot);
+  await storage.initialize();
+  await storage.mutateUserState('alice', async (state) => {
+    state.books[BOOK_ID] = { pdfAnnotations: [{ id: 'forged', text: 'untrusted stored record' }] };
+    state.books[SECOND_BOOK_ID] = { pdfAnnotations: null };
+  });
+  await assert.rejects(
+    storage.listPdfAnnotations('alice', BOOK_ID),
+    (error) => error.code === 'PDF_ANNOTATION_STORE_CORRUPT' && error.statusCode === 500
+  );
+  await assert.rejects(
+    storage.createPdfAnnotation('alice', SECOND_BOOK_ID, pdfAnnotation('00000000-0000-4000-8000-000000000401'), PDF_SOURCE_FINGERPRINT),
+    (error) => error.code === 'PDF_ANNOTATION_STORE_CORRUPT' && error.statusCode === 500
+  );
 });
 
 test('bookmarks validate locator fields, label size, and per-book limits', async (t) => {
@@ -395,6 +654,24 @@ test('settings validation clamps font size and normalizes supported values', asy
   assert.equal(valid.theme, 'sepia');
 });
 
+test('PDF layout settings are whitelisted and isolated per user without changing EPUB mode', async (t) => {
+  const dataRoot = await temporaryDirectory(t, 'babyreader-pdf-layout-settings-');
+  const storage = new UserStorage(dataRoot);
+  await storage.initialize();
+  const first = await storage.updateSettings('reader_a', { pdfLayoutMode: 'double', readingMode: 'scroll' });
+  assert.equal(first.pdfLayoutMode, 'double');
+  assert.equal(first.readingMode, 'scroll');
+  assert.equal((await storage.getState('reader_b')).settings.pdfLayoutMode ?? 'continuous', 'continuous');
+
+  const invalid = await storage.updateSettings('reader_a', { pdfLayoutMode: '<script>', readingMode: 'scroll' });
+  assert.equal(invalid.pdfLayoutMode, 'double');
+  assert.equal(invalid.readingMode, 'scroll');
+  const oldUser = await storage.updateSettings('reader_b', { theme: 'sepia' });
+  assert.equal(oldUser.pdfLayoutMode, 'continuous');
+  const single = await storage.updateSettings('reader_b', { pdfLayoutMode: 'single' });
+  assert.equal(single.pdfLayoutMode, 'single');
+});
+
 test('server exposes health, diagnostics, scan status, error log, and shared scan control', async () => {
   const source = await fs.readFile(path.resolve(__dirname, '../app/server/index.js'), 'utf8');
   assert.match(source, /\/api\/health/);
@@ -445,7 +722,12 @@ test('AI service keeps credentials server-side and builds book-grounded Response
   const request = validateAiRequest({
     question: '这段话的观点是什么？',
     selectedText: '蛋白质是人体重要的营养物质。',
-    chapter: { index: 1, href: 'OPS/chapter-02.xhtml', label: '第二章' },
+    chapter: {
+      index: 1,
+      href: 'OPS/chapter-02.xhtml',
+      label: '第二章',
+      position: { href: 'OPS/chapter-02.xhtml', anchor: 'section-two', offset: 18, textBefore: 'must not pass through' }
+    },
     context: [{
       text: '蛋白质是人体重要的营养物质。',
       chapterIndex: 1,
@@ -455,6 +737,8 @@ test('AI service keeps credentials server-side and builds book-grounded Response
   });
   assert.equal(request.question, '这段话的观点是什么？');
   assert.equal(request.context.length, 1);
+  assert.deepEqual(request.chapter.position, { href: 'OPS/chapter-02.xhtml', anchor: 'section-two', offset: 18 });
+  assert.equal(JSON.stringify(request.chapter).includes('must not pass through'), false);
 
   const payload = buildResponsesPayload({
     model: config.model,
@@ -478,6 +762,81 @@ test('AI request carries low retrieval confidence into a stricter grounding inst
   const payload = buildResponsesPayload({ model: 'reader-model', ...request });
   assert.match(payload.instructions, /检索依据不足/);
   assert.match(payload.instructions, /不要根据常识补充/);
+});
+
+test('AI citation validation removes markers outside the current source set', () => {
+  const result = sanitizeAiAnswerCitations('有依据【1】，伪造【99】和零号〔0〕。', 2);
+  assert.equal(result.answer, '有依据【1】，伪造和零号。');
+  assert.deepEqual(result.citedIndexes, [1]);
+  assert.equal(result.invalidCitations, 2);
+  assert.equal(result.citationIntegrity, false);
+});
+
+test('long chapter summary performs bounded map-reduce calls and returns a grounded final answer', async () => {
+  const chunks = Array.from({ length: 8 }, (_, index) => ({
+    text: `章节证据${index}：${'作者论证。'.repeat(60)}`,
+    chapterHref: 'OPS/chapter.xhtml',
+    chapterLabel: '第一章',
+    chapterIndex: 0,
+    start: index * 700
+  }));
+  const plan = planChapterSummary(chunks, { completeContextChars: 500, mapInputChars: 1200 });
+  const payloads = [];
+  let callIndex = 0;
+  let mapCacheCalls = 0;
+  const result = await requestOpenAiChapterSummary({
+    request: { question: '本章讲了什么？', chapter: { index: 0, label: '第一章' }, history: [] },
+    plan,
+    mapTaskCache: async (_task, build) => {
+      mapCacheCalls += 1;
+      return build();
+    },
+    env: {},
+    savedConfig: { apiKey: 'test-key', baseUrl: 'https://api.example.test/v1', model: 'test-model' },
+    lookupImpl: async () => [{ address: '93.184.216.34', family: 4 }],
+    fetchImpl: async (_url, options) => {
+      payloads.push(JSON.parse(options.body));
+      callIndex += 1;
+      return {
+        ok: true,
+        json: async () => ({ output_text: callIndex < payloads.length ? '【1】提取证据' : `综合回答【${payloads.length - 1}】` })
+      };
+    }
+  });
+  assert.equal(payloads.length, plan.mapTasks.length + 1);
+  assert.equal(mapCacheCalls, plan.mapTasks.length);
+  assert.ok(payloads.slice(0, -1).every((payload) => payload.max_output_tokens === 300));
+  assert.equal(payloads.at(-1).max_output_tokens, 1200);
+  assert.equal(result.answer, `综合回答【${payloads.length - 1}】`);
+  assert.equal(result.summaryMode, 'map_reduce');
+  assert.ok(payloads.every((payload) => payload.store === false));
+  assert.ok(payloads.some((payload) => JSON.stringify(payload).includes('[source-1]')));
+});
+
+test('book summary explicitly reports sampled chapter coverage and refuses whole-book claims', async () => {
+  const plan = planChapterSummary([
+    { text: '第一章：共同主题证据。', logicalChapterId: 'ch-1', chapterHref: 'OPS/shared.xhtml', chapterIndex: 0, chapterLabel: '第一章', start: 0 },
+    { text: '第五章：不同观点证据。', logicalChapterId: 'ch-5', chapterHref: 'OPS/shared.xhtml', chapterIndex: 4, chapterLabel: '第五章', start: 100 }
+  ]);
+  plan.coverage = { mode: 'chapter-sample', totalChapters: 5, selectedChapters: 2, ratio: 0.4 };
+  const payloads = [];
+  let index = 0;
+  const result = await requestOpenAiChapterSummary({
+    request: { question: '总结全书主要观点', scope: 'book', history: [] },
+    plan,
+    env: {},
+    savedConfig: { apiKey: 'test-key', baseUrl: 'https://api.example.test/v1', model: 'test-model' },
+    lookupImpl: async () => [{ address: '93.184.216.34', family: 4 }],
+    fetchImpl: async (_url, options) => {
+      payloads.push(JSON.parse(options.body));
+      index += 1;
+      return { ok: true, json: async () => ({ output_text: index < 2 ? '提取章节证据' : '有限范围概述' }) };
+    }
+  });
+  const finalPrompt = JSON.stringify(payloads.at(-1));
+  assert.match(finalPrompt, /2\/5/);
+  assert.match(finalPrompt, /不得声称覆盖未提供的章节/);
+  assert.equal(result.coverage.ratio, 0.4);
 });
 
 test('AI Responses payload carries bounded multi-turn history and repeats grounding instructions', () => {
@@ -577,6 +936,37 @@ test('AI streaming request sends stream mode and accumulates Responses deltas', 
   assert.equal(result.streamed, true);
 });
 
+test('AI stream accepts completed response text and rejects interrupted or failed streams', async () => {
+  const request = { question: '问题', context: [{ text: '书本内容' }] };
+  const options = { request, env: { OPENAI_API_KEY: 'test-key' }, lookupImpl: async () => ({ address: '93.184.216.34' }) };
+  const stream = (frames) => new Response(new ReadableStream({
+    start(controller) {
+      controller.enqueue(new TextEncoder().encode(frames.map((event) => `data: ${JSON.stringify(event)}\n\n`).join('')));
+      controller.close();
+    }
+  }), { status: 200, headers: { 'Content-Type': 'text/event-stream' } });
+  const complete = await requestOpenAiStream({ ...options, fetchImpl: async () => stream([
+    { type: 'response.completed', response: { id: 'final', output_text: '完整答案' } }
+  ]) });
+  assert.equal(complete.answer, '完整答案');
+  await assert.rejects(() => requestOpenAiStream({ ...options, fetchImpl: async () => stream([
+    { type: 'response.output_text.delta', delta: '未完成' }
+  ]) }), (error) => error.code === 'AI_INCOMPLETE_RESPONSE');
+  await assert.rejects(() => requestOpenAiStream({ ...options, fetchImpl: async () => stream([
+    { type: 'response.output_text.delta', delta: '未完成' }, { type: 'response.failed', response: { status: 'failed' } }
+  ]) }), (error) => error.code === 'AI_UPSTREAM_FAILED');
+});
+
+test('AI stream distinguishes its timeout from user cancellation', async () => {
+  await assert.rejects(() => requestOpenAiStream({
+    request: { question: '问题', context: [{ text: '书本内容' }] },
+    env: { OPENAI_API_KEY: 'test-key' }, lookupImpl: async () => ({ address: '93.184.216.34' }), timeoutMs: 10,
+    fetchImpl: async (_url, { signal }) => new Promise((_resolve, reject) => {
+      signal.addEventListener('abort', () => reject(Object.assign(new Error('aborted'), { name: 'AbortError' })), { once: true });
+    })
+  }), (error) => error.code === 'AI_TIMEOUT' && error.statusCode === 504);
+});
+
 test('AI upstream requests disable redirects and reject oversized JSON responses', async () => {
   let capturedOptions = null;
   await assert.rejects(
@@ -600,6 +990,8 @@ test('AI upstream requests disable redirects and reject oversized JSON responses
 
 test('AI request validation rejects empty or oversized context before upstream access', () => {
   assert.throws(() => validateAiRequest({ question: '', context: [] }), /问题不能为空/);
+  assert.throws(() => validateAiRequest({ question: '总结全书主要观点', context: [] }), /缺少书本上下文/);
+  assert.deepEqual(validateAiRequest({ question: '总结全书主要观点', context: [] }, { allowEmptyContext: true }).context, []);
   assert.throws(() => validateAiRequest({
     question: '问题',
     context: [{ text: 'x'.repeat(3001) }]
@@ -823,6 +1215,7 @@ test('server validates EPUB chapter paths against the current archive', async (t
     context: [{ text: '维生素 B2 有助于视力健康。', chapterIndex: 0, chapterHref: 'OPS/chapter.xhtml', chapterLabel: '第一章' }]
   });
   await assert.doesNotReject(() => validateAiBookContext({ type: 'epub', path: filePath }, input));
+  assert.equal(input.context[0].chapterLabel, '书内位置 1');
   await assert.rejects(
     () => validateAiBookContext({ type: 'epub', path: filePath }, {
       ...input,
@@ -942,6 +1335,25 @@ test('typography settings use semantic range metadata and transient values', asy
   assert.match(css, /height:\s*8px/);
 });
 
+test('AI modal follows application theme tokens instead of a fixed light palette', async () => {
+  const css = await fs.readFile(path.resolve(__dirname, '../app/ui/styles.css'), 'utf8');
+  const modalStart = css.indexOf('.ai-modal {');
+  const modalEnd = css.indexOf('.ai-modal[hidden]', modalStart);
+  const modal = css.slice(modalStart, modalEnd);
+  const composerStart = css.indexOf('.ai-composer {');
+  const composerEnd = css.indexOf('.ai-question-field {', composerStart);
+  const composer = css.slice(composerStart, composerEnd);
+
+  assert.match(modal, /--color-bg:\s*var\(--ui-surface\)/);
+  assert.match(modal, /--color-fill:\s*var\(--ui-fill\)/);
+  assert.match(modal, /--color-text:\s*var\(--ui-label\)/);
+  assert.match(modal, /--color-separator:\s*var\(--ui-separator\)/);
+  assert.doesNotMatch(modal, /--color-bg:\s*#FFFFFF/);
+  assert.doesNotMatch(modal, /--color-text:\s*#1D1D1F/);
+  assert.doesNotMatch(composer, /background:\s*#FFFFFF/);
+  assert.doesNotMatch(composer, /border-top:\s*1px solid #E5E5EA/);
+});
+
 test('user settings persistence serializes in-flight saves and flushes the newest snapshot', async () => {
   const userStateSource = await fs.readFile(path.resolve(__dirname, '../app/ui/core/user-state.js'), 'utf8');
   const lifecycleSource = await fs.readFile(path.resolve(__dirname, '../app/ui/reader/lifecycle.js'), 'utf8');
@@ -959,7 +1371,7 @@ test('EPUB transport keeps binary data binary and parser protects the main threa
   assert.doesNotMatch(apiSource, /String\.fromCharCode\(\.\.\.bytes\.subarray/);
   assert.match(epubSource, /EPUB_RESOURCE_LIMITS/);
   assert.match(epubSource, /maxInlineResourceBytes/);
-  assert.match(epubSource, /maxInlineTotalBytes/);
+  assert.match(epubSource, /maxCachedResourceBytes/);
   assert.match(epubSource, /yieldToBrowser/);
 });
 
@@ -991,12 +1403,14 @@ test('EPUB parser lazily opens three spine entries and loads only the requested 
   const epubSource = await fs.readFile(path.resolve(__dirname, '../app/ui/reader/epub.js'), 'utf8');
   const context = vm.createContext({
     Buffer,
+    Blob,
+    URL: { createObjectURL: () => 'blob:test', revokeObjectURL() {} },
     JSZip: { loadAsync: async () => zip },
     console: { warn() {} },
     setTimeout,
     btoa: (binary) => Buffer.from(binary, 'binary').toString('base64')
   });
-  vm.runInContext(`${epubSource}\nglobalThis.epubTestApi = { createEpubResourceBudget, openEpubArchive, loadEpubChapter, loadEpubChapterText, resourceDataUrl };`, context);
+  vm.runInContext(`${epubSource}\nglobalThis.epubTestApi = { openEpubArchive, loadEpubChapter, loadEpubChapterText, createEpubResourceManager };`, context);
 
   const archive = await context.epubTestApi.openEpubArchive(new Uint8Array([1]));
   assert.equal(archive.spine.length, 3);
@@ -1035,16 +1449,339 @@ test('EPUB parser lazily opens three spine entries and loads only the requested 
       return new Uint8Array(0);
     }
   };
-  const oversizedResult = await context.epubTestApi.resourceDataUrl(
+  const oversizedManager = context.epubTestApi.createEpubResourceManager(
     { files: { 'OPS/images/oversized.jpg': oversizedEntry }, file: () => oversizedEntry },
-    'OPS/images/oversized.jpg',
     {},
-    context.epubTestApi.createEpubResourceBudget()
+    { maxInlineResourceBytes: 8 * 1024 * 1024 },
+    context.URL
   );
+  const oversizedResult = await oversizedManager.acquire('OPS/images/oversized.jpg', oversizedManager.createLease());
 
   assert.equal(oversizedEntryExtracted, false);
   assert.equal(oversizedResult, null);
+  assert.equal(oversizedManager.snapshot().skippedResources[0].reason, 'single-resource-limit');
+  oversizedManager.destroy();
   assert.match(epubSource, /async function openEpubArchive\s*\(/);
   assert.match(epubSource, /async function loadEpubChapter\s*\(/);
   assert.doesNotMatch(epubSource, /return \{[\s\S]*chapters\.join\(/);
+});
+
+test('EPUB chapter read failure releases its uncommitted resource lease', async () => {
+  const epubSource = await fs.readFile(path.resolve(__dirname, '../app/ui/reader/epub.js'), 'utf8');
+  const lease = { paths: new Set(), released: false };
+  const resourceManager = {
+    createLease: () => lease,
+    release(value) { value.released = true; },
+    snapshot: () => ({ cachedBytes: 0, skippedResources: [] })
+  };
+  const brokenChapter = { async: async function() { throw new Error('chapter read failed'); } };
+  const archive = {
+    spine: [{ index: 0, fullPath: 'OPS/broken.xhtml' }],
+    zip: { files: { 'OPS/broken.xhtml': brokenChapter }, file: (name) => name === 'OPS/broken.xhtml' ? brokenChapter : null },
+    mediaTypes: {},
+    resourceManager,
+    diagnostics: { inlinedResourceBytes: 0, skippedResourceCount: 0, skippedResources: [] }
+  };
+  const context = vm.createContext({ setTimeout, requestAnimationFrame: (callback) => setTimeout(callback, 0) });
+  vm.runInContext(`${epubSource}\nglobalThis.epubTestApi = { loadEpubChapter };`, context);
+
+  await assert.rejects(context.epubTestApi.loadEpubChapter(archive, 0), /chapter read failed/);
+  assert.equal(lease.released, true);
+});
+
+test('EPUB resource manager coalesces repeated loads and pins URLs per chapter lease', async () => {
+  const epubSource = await fs.readFile(path.resolve(__dirname, '../app/ui/reader/epub.js'), 'utf8');
+  let inflations = 0;
+  let nextUrl = 0;
+  const revoked = [];
+  const file = {
+    _data: { uncompressedSize: 4 },
+    async: async function(type) {
+      assert.equal(type, 'uint8array');
+      inflations += 1;
+      await new Promise((resolve) => setTimeout(resolve, 5));
+      return new Uint8Array([1, 2, 3, 4]);
+    }
+  };
+  const zip = { files: { 'OPS/images/shared.png': file }, file: (name) => name === 'OPS/images/shared.png' ? file : null };
+  const urlApi = {
+    createObjectURL(blob) {
+      assert.equal(blob.size, 4);
+      nextUrl += 1;
+      return `blob:test/${nextUrl}`;
+    },
+    revokeObjectURL(value) { revoked.push(value); }
+  };
+  const context = vm.createContext({ Blob, URL: urlApi, console: { warn() {} } });
+  vm.runInContext(`${epubSource}\nglobalThis.epubTestApi = { createEpubResourceManager };`, context);
+  const manager = context.epubTestApi.createEpubResourceManager(zip, { 'OPS/images/shared.png': 'image/png' }, {
+    maxInlineResourceBytes: 8,
+    maxCachedResourceBytes: 8,
+    maxConcurrentInflations: 1
+  }, urlApi);
+  const firstLease = manager.createLease();
+  const secondLease = manager.createLease();
+
+  const [firstUrl, simultaneousUrl] = await Promise.all([
+    manager.acquire('OPS/images/shared.png', firstLease),
+    manager.acquire('OPS/images/shared.png', firstLease)
+  ]);
+  const reusedUrl = await manager.acquire('OPS/images/shared.png', secondLease);
+
+  assert.equal(firstUrl, simultaneousUrl);
+  assert.equal(reusedUrl, firstUrl);
+  assert.equal(inflations, 1);
+  assert.equal(nextUrl, 1);
+  assert.equal(manager.snapshot().cachedBytes, 4);
+  assert.equal(manager.snapshot().resourceCount, 1);
+
+  manager.release(firstLease);
+  assert.deepEqual(revoked, []);
+  manager.release(secondLease);
+  manager.destroy();
+  assert.deepEqual(revoked, [firstUrl]);
+});
+
+test('EPUB resource manager fails closed for paths outside the archive and oversized assets', async () => {
+  const epubSource = await fs.readFile(path.resolve(__dirname, '../app/ui/reader/epub.js'), 'utf8');
+  let inflations = 0;
+  const oversized = {
+    _data: { uncompressedSize: 9 },
+    async() { inflations += 1; return new Uint8Array(9); }
+  };
+  const zip = {
+    files: { 'OPS/images/oversized.png': oversized },
+    file: (name) => name === 'OPS/images/oversized.png' ? oversized : null
+  };
+  const urlApi = { createObjectURL: () => 'blob:test/oversized', revokeObjectURL() {} };
+  const context = vm.createContext({ Blob, URL: urlApi, console: { warn() {} } });
+  vm.runInContext(`${epubSource}\nglobalThis.epubTestApi = { createEpubResourceManager };`, context);
+  const manager = context.epubTestApi.createEpubResourceManager(zip, {}, {
+    maxInlineResourceBytes: 8,
+    maxCachedResourceBytes: 16,
+    maxConcurrentInflations: 1
+  }, urlApi);
+
+  assert.equal(await manager.acquire('../outside.png', manager.createLease()), null);
+  assert.equal(await manager.acquire('OPS/images/oversized.png', manager.createLease()), null);
+  assert.equal(inflations, 0);
+  assert.deepEqual(Array.from(manager.snapshot().skippedResources, (item) => item.reason), [
+    'invalid-resource-path',
+    'single-resource-limit'
+  ]);
+  manager.destroy();
+});
+
+test('EPUB resource manager never evicts pinned URLs or exceeds its unique-byte cache limit', async () => {
+  const epubSource = await fs.readFile(path.resolve(__dirname, '../app/ui/reader/epub.js'), 'utf8');
+  const revoked = [];
+  let urlNumber = 0;
+  const entries = Object.fromEntries(['a.png', 'b.png', 'c.png'].map((name) => [`OPS/${name}`, {
+    _data: { uncompressedSize: 8 },
+    async() { return new Uint8Array(8); }
+  }]));
+  const urlApi = {
+    createObjectURL: () => `blob:test/${++urlNumber}`,
+    revokeObjectURL: (value) => revoked.push(value)
+  };
+  const zip = { files: entries, file: (name) => entries[name] || null };
+  const context = vm.createContext({ Blob, URL: urlApi, console: { warn() {} } });
+  vm.runInContext(`${epubSource}\nglobalThis.epubTestApi = { createEpubResourceManager };`, context);
+  const manager = context.epubTestApi.createEpubResourceManager(zip, {}, {
+    maxInlineResourceBytes: 8,
+    maxCachedResourceBytes: 16,
+    maxConcurrentInflations: 1
+  }, urlApi);
+  const pinned = manager.createLease();
+  await manager.acquire('OPS/a.png', pinned);
+  await manager.acquire('OPS/b.png', pinned);
+
+  assert.equal(await manager.acquire('OPS/c.png', manager.createLease()), null);
+  assert.equal(manager.snapshot().cachedBytes, 16);
+  assert.deepEqual(revoked, []);
+
+  manager.release(pinned);
+  const newest = manager.createLease();
+  assert.ok(await manager.acquire('OPS/c.png', newest));
+  assert.equal(manager.snapshot().cachedBytes, 16);
+  assert.deepEqual(revoked, ['blob:test/1']);
+  manager.destroy();
+  assert.equal(new Set(revoked).size, revoked.length);
+});
+
+test('EPUB resource manager pins a cache hit before another load can evict it', async () => {
+  const epubSource = await fs.readFile(path.resolve(__dirname, '../app/ui/reader/epub.js'), 'utf8');
+  const revoked = [];
+  let urlNumber = 0;
+  const entries = Object.fromEntries(['a.png', 'b.png'].map((name) => [`OPS/${name}`, {
+    _data: { uncompressedSize: 8 },
+    async: () => new Uint8Array(8)
+  }]));
+  const urlApi = {
+    createObjectURL: () => `blob:test/${++urlNumber}`,
+    revokeObjectURL: (value) => revoked.push(value)
+  };
+  const context = vm.createContext({ Blob, URL: urlApi, console: { warn() {} } });
+  vm.runInContext(`${epubSource}\nglobalThis.epubTestApi = { createEpubResourceManager };`, context);
+  const manager = context.epubTestApi.createEpubResourceManager(
+    { files: entries, file: (name) => entries[name] || null },
+    {},
+    { maxInlineResourceBytes: 8, maxCachedResourceBytes: 8 },
+    urlApi
+  );
+  const initialLease = manager.createLease();
+  const sharedUrl = await manager.acquire('OPS/a.png', initialLease);
+  manager.release(initialLease);
+
+  const cacheHit = manager.acquire('OPS/a.png', manager.createLease());
+  const competingMiss = manager.acquire('OPS/b.png', manager.createLease());
+  assert.equal(await cacheHit, sharedUrl);
+  assert.equal(await competingMiss, null);
+  assert.deepEqual(revoked, []);
+  assert.equal(manager.snapshot().cachedBytes, 8);
+  manager.destroy();
+});
+
+test('EPUB resource manager bounds simultaneous ZIP inflations', async () => {
+  const epubSource = await fs.readFile(path.resolve(__dirname, '../app/ui/reader/epub.js'), 'utf8');
+  let active = 0;
+  let peak = 0;
+  const entries = Object.fromEntries(['a.png', 'b.png', 'c.png'].map((name) => [`OPS/${name}`, {
+    _data: { uncompressedSize: 1 },
+    async: async function() {
+      active += 1;
+      peak = Math.max(peak, active);
+      await new Promise((resolve) => setTimeout(resolve, 5));
+      active -= 1;
+      return new Uint8Array([1]);
+    }
+  }]));
+  const urlApi = { createObjectURL: (() => { let next = 0; return () => `blob:test/${++next}`; })(), revokeObjectURL() {} };
+  const zip = { files: entries, file: (name) => entries[name] || null };
+  const context = vm.createContext({ Blob, URL: urlApi, console: { warn() {} } });
+  vm.runInContext(`${epubSource}\nglobalThis.epubTestApi = { createEpubResourceManager };`, context);
+  const manager = context.epubTestApi.createEpubResourceManager(zip, {}, {
+    maxInlineResourceBytes: 8,
+    maxCachedResourceBytes: 8,
+    maxConcurrentInflations: 1
+  }, urlApi);
+
+  await Promise.all(['OPS/a.png', 'OPS/b.png', 'OPS/c.png'].map((resourcePath) =>
+    manager.acquire(resourcePath, manager.createLease())
+  ));
+
+  assert.equal(peak, 1);
+  assert.equal(manager.snapshot().cachedBytes, 3);
+  manager.destroy();
+});
+
+test('EPUB resource manager clears failed inflation state and checks unknown sizes after reading', async () => {
+  const epubSource = await fs.readFile(path.resolve(__dirname, '../app/ui/reader/epub.js'), 'utf8');
+  let attempts = 0;
+  let urlsCreated = 0;
+  const retryEntry = {
+    _data: { uncompressedSize: 2 },
+    async: async function() {
+      attempts += 1;
+      if (attempts === 1) throw new Error('temporary ZIP read failure');
+      return new Uint8Array([1, 2]);
+    }
+  };
+  let unknownReadCount = 0;
+  const unknownEntry = {
+    async: async function() {
+      unknownReadCount += 1;
+      return new Uint8Array(9);
+    }
+  };
+  const entries = { 'OPS/retry.png': retryEntry, 'OPS/unknown.png': unknownEntry };
+  const urlApi = {
+    createObjectURL: () => `blob:test/${++urlsCreated}`,
+    revokeObjectURL() {}
+  };
+  const context = vm.createContext({ Blob, URL: urlApi, console: { warn() {} } });
+  vm.runInContext(`${epubSource}\nglobalThis.epubTestApi = { createEpubResourceManager };`, context);
+  const manager = context.epubTestApi.createEpubResourceManager(
+    { files: entries, file: (name) => entries[name] || null },
+    {},
+    { maxInlineResourceBytes: 8, maxCachedResourceBytes: 16 },
+    urlApi
+  );
+
+  assert.equal(await manager.acquire('OPS/retry.png', manager.createLease()), null);
+  assert.equal(manager.snapshot().resourceCount, 0);
+  assert.equal(manager.snapshot().cachedBytes, 0);
+  assert.match(await manager.acquire('OPS/retry.png', manager.createLease()), /^blob:test\//);
+  assert.equal(attempts, 2);
+  assert.equal(await manager.acquire('OPS/unknown.png', manager.createLease()), null);
+  assert.equal(unknownReadCount, 1);
+  assert.equal(urlsCreated, 1);
+  assert.equal(manager.snapshot().skippedResources.at(-1).reason, 'single-resource-limit');
+  manager.destroy();
+});
+
+test('EPUB XHTML and stylesheet references share a path-relative Blob resource across chapters', async () => {
+  const epubSource = await fs.readFile(path.resolve(__dirname, '../app/ui/reader/epub.js'), 'utf8');
+  const reads = [];
+  let urlNumber = 0;
+  const image = {
+    _data: { uncompressedSize: 3 },
+    async: async function(type) {
+      reads.push({ path: 'OPS/images/shared.png', type });
+      return new Uint8Array([1, 2, 3]);
+    }
+  };
+  const textEntry = (name, text) => ({
+    _data: { uncompressedSize: Buffer.byteLength(text) },
+    async: async function(type) {
+      reads.push({ path: name, type });
+      assert.equal(type, 'text');
+      return text;
+    }
+  });
+  const entries = {
+    'META-INF/container.xml': textEntry('META-INF/container.xml', '<container><rootfile full-path="OPS/content.opf"/></container>'),
+    'OPS/content.opf': textEntry('OPS/content.opf', `<package><metadata><dc:title>Fixture</dc:title></metadata><manifest>
+      <item id="c1" href="text/one.xhtml" media-type="application/xhtml+xml"/>
+      <item id="c2" href="text/two.xhtml" media-type="application/xhtml+xml"/>
+      <item id="css" href="styles/book.css" media-type="text/css"/>
+      <item id="image" href="images/shared.png" media-type="image/png"/>
+      </manifest><spine><itemref idref="c1"/><itemref idref="c2"/></spine></package>`),
+    'OPS/text/one.xhtml': textEntry('OPS/text/one.xhtml', '<html><body><link rel="stylesheet" href="../styles/book.css"/><img src="../images/shared.png"/><source src="../images/shared.png"/><video poster="../images/shared.png"></video><svg><image href="../images/shared.png"/><image xlink:href="../images/shared.png"/></svg><p>Chapter one</p></body></html>'),
+    'OPS/text/two.xhtml': textEntry('OPS/text/two.xhtml', '<html><body><link rel="stylesheet" href="../styles/book.css"/><img src="../images/shared.png"/><p>Chapter two</p></body></html>'),
+    'OPS/styles/book.css': textEntry('OPS/styles/book.css', '.cover { background-image: url("../images/shared.png"); }'),
+    'OPS/images/shared.png': image
+  };
+  const urlApi = {
+    createObjectURL(blob) {
+      assert.equal(blob.type, 'image/png');
+      return `blob:epub/${++urlNumber}`;
+    },
+    revokeObjectURL() {}
+  };
+  const context = vm.createContext({
+    Buffer,
+    Blob,
+    URL: urlApi,
+    JSZip: { loadAsync: async () => ({ files: entries, file: (name) => entries[name] || null }) },
+    console: { warn() {} },
+    setTimeout,
+    requestAnimationFrame: (callback) => setTimeout(callback, 0)
+  });
+  vm.runInContext(`${epubSource}\nglobalThis.epubTestApi = { openEpubArchive, loadEpubChapter };`, context);
+
+  const archive = await context.epubTestApi.openEpubArchive(new Uint8Array([1]));
+  const first = await context.epubTestApi.loadEpubChapter(archive, 0);
+  const second = await context.epubTestApi.loadEpubChapter(archive, 1);
+
+  assert.match(first.html, /src="blob:epub\/1"/);
+  assert.match(second.html, /src="blob:epub\/1"/);
+  assert.match(first.html, /url\("blob:epub\/1"\)/);
+  assert.match(first.html, /poster="blob:epub\/1"/);
+  assert.match(first.html, /href="blob:epub\/1"/);
+  assert.match(first.html, /xlink:href="blob:epub\/1"/);
+  assert.equal(reads.filter((item) => item.path === 'OPS/images/shared.png').length, 1);
+  assert.equal(first.resourceLease.paths.has('OPS/images/shared.png'), true);
+  assert.equal(second.resourceLease.paths.has('OPS/images/shared.png'), true);
+  archive.resourceManager.destroy();
 });

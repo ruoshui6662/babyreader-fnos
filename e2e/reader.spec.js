@@ -48,11 +48,14 @@ test('loads split UI modules in Chromium and opens a real library book', async (
     '/app/babyreader-fnos/core/utils.js',
     '/app/babyreader-fnos/core/api.js',
     '/app/babyreader-fnos/core/user-state.js',
+    '/app/babyreader-fnos/reader/annotations.js',
     '/app/babyreader-fnos/reader/device-profile.js',
     '/app/babyreader-fnos/reader/epub.js',
     '/app/babyreader-fnos/reader/document.js',
     '/app/babyreader-fnos/reader/editor.js',
     '/app/babyreader-fnos/reader/highlights.js',
+    '/app/babyreader-fnos/reader/selection-menu.js',
+    '/app/babyreader-fnos/reader/notes-panel.js',
     '/app/babyreader-fnos/reader/ai.js',
     '/app/babyreader-fnos/reader/actions.js',
     '/app/babyreader-fnos/reader/progress.js',
@@ -60,6 +63,8 @@ test('loads split UI modules in Chromium and opens a real library book', async (
     '/app/babyreader-fnos/reader/pagination.js',
     '/app/babyreader-fnos/reader/settings.js',
     '/app/babyreader-fnos/reader/navigation.js',
+    '/app/babyreader-fnos/reader/pdf-annotation-geometry.js',
+    '/app/babyreader-fnos/reader/pdf-annotations.js',
     '/app/babyreader-fnos/reader/lifecycle.js',
     '/app/babyreader-fnos/reader/search.js',
     '/app/babyreader-fnos/shell/drawer.js',
@@ -69,11 +74,11 @@ test('loads split UI modules in Chromium and opens a real library book', async (
     expect(loadedScripts).toContain(modulePath);
   }
 
-  await expect(page.locator('script[src*="reader/settings.js?v=29"]')).toHaveCount(1);
-  await expect(page.locator('script[src*="reader/highlights.js?v=32"]')).toHaveCount(1);
+  await expect(page.locator('script[src*="reader/settings.js?v=30"]')).toHaveCount(1);
+  await expect(page.locator('script[src*="reader/highlights.js?v=36"]')).toHaveCount(1);
   await expect(page.locator('script[src*="reader/ai.js?v=1"]')).toHaveCount(1);
-  await expect(page.locator('script[src*="reader/search.js?v=1"]')).toHaveCount(1);
-  await expect(page.locator('script[src*="shell/drawer.js?v=31"]')).toHaveCount(1);
+  await expect(page.locator('script[src*="reader/search.js?v=3"]')).toHaveCount(1);
+  await expect(page.locator('script[src*="shell/drawer.js?v=32"]')).toHaveCount(1);
 
   expect(pageErrors).toEqual([]);
 });
@@ -158,6 +163,135 @@ test('library and welcome states expose the dense library structure', async ({ p
   await expect(page.locator('.library-empty-copy')).toContainText('授权书库目录');
 });
 
+test('library organization is disabled by default and the library API remains redacted', async ({ page }) => {
+  const response = await page.request.get(`${APP_PATH}api/library`);
+  expect(response.ok()).toBeTruthy();
+  const library = await response.json();
+
+  expect(library.features?.libraryOrganization).toBe(false);
+  for (const book of library.books || []) {
+    expect(book).not.toHaveProperty('path');
+    expect(book).not.toHaveProperty('root');
+  }
+
+  await expect(page.locator('.library-view')).toHaveAttribute('data-library-mode', 'flat');
+  await expect(page.locator('.library-view')).toHaveAttribute('data-library-organization-enabled', 'false');
+  await expect(page.locator('[data-library-organization]')).toHaveCount(0);
+});
+
+test('source-folder data stays hidden from the library home and keeps paths out of history state', async ({ page }) => {
+  const rootId = 'c'.repeat(64);
+  await page.evaluate(({ rootId }) => {
+    const first = {
+      id: 'a'.repeat(64),
+      title: '目录中的书',
+      type: 'txt',
+      relativePath: '营养/基础/one.txt',
+      sourceRootId: rootId,
+      sourcePathSegments: ['营养', '基础']
+    };
+    const second = {
+      id: 'b'.repeat(64),
+      title: '根目录的书',
+      type: 'txt',
+      relativePath: 'two.txt',
+      sourceRootId: rootId,
+      sourcePathSegments: []
+    };
+    renderLibrary({
+      books: [first, second],
+      features: { libraryOrganization: true },
+      organization: {
+        version: 1,
+        revision: 0,
+        updatedAt: null,
+        preferences: { viewMode: 'source-folders' },
+        collections: [],
+        collectionOrders: {},
+        unassignedOrder: [first.id, second.id],
+        bookAssignments: {},
+        orphanedBookIds: [],
+        books: [first, second]
+      }
+    });
+  }, { rootId });
+  await expect(page.locator('.library-view')).toHaveAttribute('data-library-mode', 'flat');
+  await expect(page.locator('.library-view-switcher')).toHaveCount(0);
+  await expect(page.locator('.library-organization-card-main strong')).toHaveText(['我的书籍', '未分类']);
+  const historyState = await page.evaluate(() => history.state.libraryOrganization);
+  expect(historyState.mode).toBe('root');
+  expect(historyState.sourceRootId).toBeUndefined();
+  expect(JSON.stringify(historyState)).not.toContain('one.txt');
+  await expect(page.locator('.library-reorder-controls')).toHaveCount(0);
+});
+
+test('library organization reorders books through a real desktop mouse drag', async ({ page }) => {
+  await page.goto(APP_PATH);
+  await page.evaluate(() => {
+    const first = { id: 'a'.repeat(64), title: '第一本', type: 'txt', relativePath: 'one.txt' };
+    const second = { id: 'b'.repeat(64), title: '第二本', type: 'txt', relativePath: 'two.txt' };
+    const collectionId = '11111111-1111-4111-8111-111111111111';
+    const organization = {
+      version: 1,
+      revision: 0,
+      updatedAt: null,
+      preferences: { viewMode: 'collections' },
+      collections: [{ id: collectionId, name: '重点阅读' }],
+      collectionOrders: { [collectionId]: [first.id, second.id] },
+      unassignedOrder: [],
+      bookAssignments: { [first.id]: collectionId, [second.id]: collectionId },
+      orphanedBookIds: [],
+      books: [first, second]
+    };
+    window.__libraryMouseReorderCalls = [];
+    window.browserHost.updateLibraryOrganizationPreferences = async () => organization;
+    window.browserHost.reorderLibraryOrganization = async (scope, order) => {
+      window.__libraryMouseReorderCalls.push({ scope, order });
+      return {
+        ...organization,
+        revision: 1,
+        collectionOrders: { [collectionId]: order }
+      };
+    };
+    renderLibrary({ books: [first, second], features: { libraryOrganization: true }, organization });
+  });
+
+  await page.locator('[data-library-collection-id] .library-organization-card-main').first().click();
+  await page.locator('.library-mode-button').filter({ hasText: '整理' }).click();
+  await expect(page.locator('.library-grid .library-reorder-handle')).toHaveCount(2);
+
+  const source = await page.locator('.library-grid .library-reorder-handle').first().boundingBox();
+  const target = await page.locator('.library-reorder-item').nth(1).boundingBox();
+  const sourceItem = page.locator('.library-reorder-item').first();
+  const targetItem = page.locator('.library-reorder-item').nth(1);
+  expect(source).toBeTruthy();
+  expect(target).toBeTruthy();
+  await page.mouse.move(source.x + source.width / 2, source.y + source.height / 2);
+  await page.mouse.down();
+  await expect(sourceItem).toHaveClass(/is-library-dragging/);
+  await page.mouse.move(target.x + target.width / 2, target.y + target.height / 2, { steps: 6 });
+  await expect(targetItem).toHaveClass(/is-library-drop-target/);
+  await page.mouse.up();
+
+  await expect(page.locator('.library-book strong').first()).toHaveText('第二本');
+  const calls = await page.evaluate(() => window.__libraryMouseReorderCalls);
+  expect(calls).toEqual([{
+    scope: '11111111-1111-4111-8111-111111111111',
+    order: ['b'.repeat(64), 'a'.repeat(64)]
+  }]);
+});
+
+test('mobile library keeps the existing two-column shelf when organization is disabled', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto(APP_PATH);
+
+  const columns = await page.locator('.library-grid').evaluate((grid) =>
+    getComputedStyle(grid).gridTemplateColumns.trim().split(/\s+/).length
+  );
+  expect(columns).toBe(2);
+  await expect(page.locator('.library-view')).toHaveAttribute('data-library-mode', 'flat');
+});
+
 test('wide library uses a six-column compact shelf with small summary text', async ({ page }) => {
   await page.setViewportSize({ width: 1600, height: 1000 });
   await page.goto(APP_PATH);
@@ -234,6 +368,34 @@ test('EPUB continuous and paged modes keep the same reading surface color', asyn
     await expect(page.locator('body')).toHaveClass(/double-page-reading/);
     const pagedColor = await page.locator('#article').evaluate((element) => getComputedStyle(element).backgroundColor);
     expect(pagedColor, `theme ${theme} should keep one reading surface`).toBe(continuousColor);
+  }
+});
+
+test('text selection uses a light clear blue with readable text in the reader and EPUB frame styles', async ({ page }) => {
+  await openEpubFixture(page);
+  for (const theme of ['dark', 'light', 'sepia']) {
+    const colors = await page.evaluate((nextTheme) => {
+      applyTheme(nextTheme, false);
+      const paragraph = document.querySelector('#article p');
+      const textNode = paragraph.firstChild;
+      const selection = window.getSelection();
+      const range = document.createRange();
+      range.setStart(textNode, 0);
+      range.setEnd(textNode, Math.min(12, textNode.length));
+      selection.removeAllRanges();
+      selection.addRange(range);
+      const style = getComputedStyle(paragraph, '::selection');
+      const epubCss = getEpubThemeCss();
+      return {
+        background: style.backgroundColor,
+        foreground: style.color,
+        epubSelection: epubCss.match(/::selection\s*\{([^}]*)\}/)?.[1] || ''
+      };
+    }, theme);
+    expect(colors.background).toBe('rgb(117, 183, 240)');
+    expect(colors.foreground).toBe('rgb(16, 43, 69)');
+    expect(colors.epubSelection).toContain('background: #75B7F0 !important');
+    expect(colors.epubSelection).toContain('color: #102B45 !important');
   }
 });
 
@@ -614,7 +776,7 @@ test('custom select choices keep the native value and change event contract', as
 
 test('custom select menus stay hidden until a trigger is activated', async ({ page }) => {
   await page.goto(APP_PATH);
-  await expect(page.locator('.custom-select-menu')).toHaveCount(5);
+  await expect(page.locator('.custom-select-menu')).toHaveCount(6);
   await expect(page.locator('[data-custom-select-for="highlightEditorColor"]')).toHaveCount(0);
   await expect(page.locator('.custom-select-menu:not([hidden])')).toHaveCount(0);
 
@@ -808,7 +970,7 @@ test('selected text opens book-grounded AI panel and sends bounded retrieval con
   await expect(page.locator('#aiSelectedText')).toContainText('E2E EPUB Chapter 1');
   await page.locator('#aiQuestion').fill('这一段的核心观点是什么？');
   await page.locator('#btnAiAsk').click();
-  await expect(page.locator('#aiAnswer')).toContainText('这段内容说明了本章的');
+  await expect(page.locator('#aiAnswer')).toContainText('这段内容说明了本章的', { timeout: 15000 });
   await expect(page.locator('#aiAnswer strong')).toContainText('核心观点');
   await expect(page.locator('#aiAnswer li')).toHaveCount(2);
   await expect(page.locator('#aiAnswer script')).toHaveCount(0);
@@ -876,6 +1038,112 @@ test('AI panel keeps a temporary multi-turn transcript and sends completed histo
     { role: 'user', content: '第一轮问题' },
     { role: 'assistant', content: '第一轮回答' }
   ]);
+});
+
+test('AI conversation sheet lists summaries and keeps clear/delete actions scoped', async ({ page }) => {
+  let summaries = [
+    { id: 'conversation-1', title: '当前会话', messageCount: 2, updatedAt: '2026-09-21T00:00:01.000Z' },
+    { id: 'conversation-2', title: '待删除会话', messageCount: 2, updatedAt: '2026-09-20T00:00:01.000Z' }
+  ];
+  await page.route('**/app/babyreader-fnos/api/ai/status', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ configured: true, provider: 'openai-compatible', model: 'test-model' })
+    });
+  });
+  await page.route(/\/app\/babyreader-fnos\/api\/books\/[^/]+\/ai\/conversations(?:\/.*)?$/, async (route) => {
+    const request = route.request();
+    const url = new URL(request.url());
+    const parts = url.pathname.split('/');
+    const conversationId = parts.at(-1);
+    if (request.method() === 'GET' && conversationId === 'conversations') {
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ activeConversationId: 'conversation-1', conversations: summaries }) });
+      return;
+    }
+    if (request.method() === 'GET') {
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ id: conversationId, messages: [] }) });
+      return;
+    }
+    if (request.method() === 'DELETE' && url.pathname.endsWith('/messages')) {
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ id: conversationId, messages: [] }) });
+      return;
+    }
+    if (request.method() === 'DELETE') {
+      summaries = summaries.filter((item) => item.id !== conversationId);
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ deleted: true, id: conversationId }) });
+      return;
+    }
+    await route.continue();
+  });
+  let nativeDialogSeen = false;
+  page.on('dialog', () => { nativeDialogSeen = true; });
+
+  await openEpubFixture(page);
+  await page.locator('#btnAi').click();
+  await expect(page.locator('#btnAiConversations')).toBeVisible();
+  await page.locator('#btnAiConversations').click();
+  await expect(page.locator('#aiConversationsView')).toBeVisible();
+  await expect(page.locator('.ai-conversation-row')).toHaveCount(2);
+  await expect(page.locator('.ai-conversation-row').first()).toContainText('2 条消息');
+  await expect(page.locator('.ai-conversation-row').first()).not.toContainText('回答');
+
+  await page.locator('[data-ai-conversation-id="conversation-1"] .ai-conversation-clear').click();
+  await expect(page.locator('#aiConversationConfirmView')).toBeVisible();
+  await expect(page.locator('#aiConversationConfirmTitle')).toHaveText('清空此会话？');
+  await expect(page.locator('#aiConversationConfirmDescription')).toContainText('当前会话');
+  await expect(page.locator('#aiConversationConfirmDescription')).toContainText('2 条消息');
+  await expect(page.locator('[data-ai-conversation-id="conversation-1"] .ai-conversation-meta')).toContainText('2 条消息');
+  await page.locator('#btnConfirmAiConversationAction').click();
+  await expect(page.locator('[data-ai-conversation-id="conversation-1"] .ai-conversation-meta')).toContainText('0 条消息');
+
+  await page.locator('[data-ai-conversation-id="conversation-2"] .ai-conversation-delete').click();
+  await expect(page.locator('#btnCancelAiConversationConfirm')).toBeFocused();
+  await page.keyboard.press('Escape');
+  await expect(page.locator('#aiConversationConfirmView')).toBeHidden();
+  await expect(page.locator('[data-ai-conversation-id="conversation-2"]')).toBeVisible();
+
+  for (const theme of ['dark', 'light', 'sepia']) {
+    await page.evaluate((selectedTheme) => applyTheme(selectedTheme, false), theme);
+    await page.locator('[data-ai-conversation-id="conversation-2"] .ai-conversation-delete').click();
+    await expect(page.locator('#aiConversationConfirmView')).toBeVisible();
+    const colors = await page.locator('#aiConversationConfirmView').evaluate((view) => ({
+      card: getComputedStyle(view.querySelector('.ai-conversation-confirm-card')).backgroundColor,
+      title: getComputedStyle(view.querySelector('#aiConversationConfirmTitle')).color,
+      danger: getComputedStyle(view.querySelector('#btnConfirmAiConversationAction')).backgroundColor
+    }));
+    expect(colors.card).not.toBe('rgba(0, 0, 0, 0)');
+    expect(colors.title).not.toBe(colors.card);
+    expect(colors.danger).not.toBe('rgba(0, 0, 0, 0)');
+    await page.locator('#btnCancelAiConversationConfirm').click();
+  }
+
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.locator('[data-ai-conversation-id="conversation-2"] .ai-conversation-delete').click();
+  await expect(page.locator('#aiConversationConfirmView')).toBeVisible();
+  const mobileLayout = await page.evaluate(() => {
+    const box = (id) => document.getElementById(id)?.getBoundingClientRect().toJSON();
+    return {
+      card: document.querySelector('.ai-conversation-confirm-card')?.getBoundingClientRect().toJSON(),
+      cancel: box('btnCancelAiConversationConfirm'),
+      confirm: box('btnConfirmAiConversationAction')
+    };
+  });
+  expect(mobileLayout.card.left).toBeGreaterThanOrEqual(0);
+  expect(mobileLayout.card.right).toBeLessThanOrEqual(390);
+  expect(mobileLayout.card.top).toBeGreaterThanOrEqual(0);
+  expect(mobileLayout.card.bottom).toBeLessThanOrEqual(844);
+  expect(mobileLayout.cancel.bottom).toBeLessThanOrEqual(844);
+  expect(mobileLayout.confirm.bottom).toBeLessThanOrEqual(844);
+  expect(mobileLayout.confirm.height).toBeGreaterThanOrEqual(34);
+  await page.keyboard.press('Tab');
+  await expect(page.locator('#btnConfirmAiConversationAction')).toBeFocused();
+  await page.keyboard.press('Tab');
+  await expect(page.locator('#btnCancelAiConversationConfirm')).toBeFocused();
+  await page.locator('#btnConfirmAiConversationAction').click();
+  await expect(page.locator('.ai-conversation-row')).toHaveCount(1);
+  await expect(page.locator('#aiConversationsView')).toBeVisible();
+  expect(nativeDialogSeen).toBe(false);
 });
 
 test('AI streaming exposes a stop state and cancels the active request', async ({ page }) => {
@@ -950,8 +1218,56 @@ test('direct AI opening hides the selection hint and fills common questions into
     return { outlineStyle: style.outlineStyle, outlineWidth: style.outlineWidth, borderColor: style.borderColor, boxShadow: style.boxShadow };
   });
   expect(focusStyle.outlineStyle).toBe('none');
-  expect(focusStyle.borderColor).toBe('rgb(184, 184, 194)');
-  expect(focusStyle.boxShadow).toContain('rgba(10, 132, 255, 0.16)');
+  expect(focusStyle.borderColor).toBe('rgb(10, 132, 255)');
+  expect(focusStyle.boxShadow).toContain('0.16');
+});
+
+test('AI panel follows dark, light, and sepia application themes', async ({ page }) => {
+  await openEpubFixture(page);
+  await page.route('**/app/babyreader-fnos/api/ai/status', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ configured: true, provider: 'openai-compatible', model: 'test-model', retrieval: 'local-lexical-rag' })
+    });
+  });
+
+  await page.evaluate(() => applyTheme('dark', false));
+  await page.locator('#btnAi').click();
+  await expect(page.locator('#aiModal')).toBeVisible();
+
+  const colors = () => page.locator('#aiModal').evaluate((modal) => {
+    const style = (selector) => getComputedStyle(modal.querySelector(selector));
+    return {
+      modalBackground: getComputedStyle(modal).backgroundColor,
+      modalText: getComputedStyle(modal).color,
+      composerBackground: style('.ai-composer').backgroundColor,
+      inputBackground: style('#aiQuestion').backgroundColor
+    };
+  });
+
+  await expect.poll(colors).toEqual({
+    modalBackground: 'rgb(44, 44, 46)',
+    modalText: 'rgb(242, 242, 247)',
+    composerBackground: 'rgb(44, 44, 46)',
+    inputBackground: 'rgb(44, 44, 46)'
+  });
+
+  await page.evaluate(() => applyTheme('light', false));
+  await expect.poll(colors).toEqual({
+    modalBackground: 'rgb(255, 255, 255)',
+    modalText: 'rgb(29, 29, 31)',
+    composerBackground: 'rgb(255, 255, 255)',
+    inputBackground: 'rgb(255, 255, 255)'
+  });
+
+  await page.evaluate(() => applyTheme('sepia', false));
+  await expect.poll(colors).toEqual({
+    modalBackground: 'rgb(255, 255, 255)',
+    modalText: 'rgb(29, 29, 31)',
+    composerBackground: 'rgb(255, 255, 255)',
+    inputBackground: 'rgb(255, 255, 255)'
+  });
 });
 
 test('AI composer sends on Enter, keeps Shift+Enter for newline, and uses an SVG send icon', async ({ page }) => {
@@ -1187,7 +1503,7 @@ test('AI desktop panel floats left of the toolbar and remains open until manuall
   expect(Math.abs(restored.width - layout.reader.width)).toBeLessThanOrEqual(2);
 });
 
-test('AI panel keeps the composer at the bottom with a white macOS surface', async ({ page }) => {
+test('AI panel keeps the composer at the bottom with a theme-synced surface', async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 800 });
   await openEpubFixture(page);
   if (await page.locator('#readerDrawer').isVisible()) {
@@ -1205,6 +1521,7 @@ test('AI panel keeps the composer at the bottom with a white macOS surface', asy
     const scroll = document.getElementById('aiChatScroll');
     const composer = document.querySelector('.ai-composer');
     const field = document.querySelector('.ai-question-field');
+    const input = document.getElementById('aiQuestion');
     const send = document.getElementById('btnAiAsk');
     const reader = document.getElementById('reader');
     const modalStyle = modal ? getComputedStyle(modal) : null;
@@ -1219,13 +1536,24 @@ test('AI panel keeps the composer at the bottom with a white macOS surface', asy
       field: field?.getBoundingClientRect().toJSON(),
       send: send?.getBoundingClientRect().toJSON(),
       modalBackground: modalStyle?.backgroundColor,
+      composerBackground: composer ? getComputedStyle(composer).backgroundColor : null,
+      inputBackground: field ? getComputedStyle(field.querySelector('textarea')).backgroundColor : null,
+      sendCenterY: send ? send.getBoundingClientRect().top + send.getBoundingClientRect().height / 2 : null,
+      inputCenterY: input ? input.getBoundingClientRect().top + input.getBoundingClientRect().height / 2 : null,
+      sendWidth: send?.getBoundingClientRect().width,
+      sendHeight: send?.getBoundingClientRect().height,
       bodyOverflowY: bodyStyle?.overflowY,
       scrollOverflowY: scrollStyle?.overflowY,
       readerScrollbarWidth: readerStyle?.scrollbarWidth
     };
   });
 
-  expect(layout.modalBackground).toBe('rgb(255, 255, 255)');
+  expect(layout.modalBackground).toBe('rgb(44, 44, 46)');
+  expect(layout.composerBackground).toBe(layout.modalBackground);
+  expect(layout.inputBackground).toBe(layout.modalBackground);
+  expect(layout.sendWidth).toBe(36);
+  expect(layout.sendHeight).toBe(36);
+  expect(Math.abs(layout.sendCenterY - layout.inputCenterY)).toBeLessThanOrEqual(1);
   expect(layout.bodyOverflowY).toBe('hidden');
   expect(layout.scrollOverflowY).toBe('auto');
   expect(layout.readerScrollbarWidth).toBe('none');

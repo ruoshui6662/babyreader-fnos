@@ -9,6 +9,12 @@ const test = require('node:test');
 
 const root = path.resolve(__dirname, '..');
 
+function availableShell() {
+  if (process.platform !== 'win32') return 'sh';
+  const gitShell = 'C:\\Program Files\\Git\\usr\\bin\\sh.exe';
+  return fs.existsSync(gitShell) ? gitShell : null;
+}
+
 function read(relative) {
   return fs.readFileSync(path.join(root, relative), 'utf8');
 }
@@ -31,6 +37,12 @@ test('build installs production dependencies inside app/server', () => {
 test('build includes the fnOS acceptance tool in the packaged documentation', () => {
   const source = read('scripts/build-fpk.sh');
   assert.match(source, /cp \"\$ROOT\/scripts\/fnos-device-acceptance\.sh\" \"\$BUILD_ROOT\/app\/docs\/\"/);
+});
+
+test('FPK repacker excludes source maps that are not runtime assets', () => {
+  const source = read('scripts/build-fpk.sh');
+  assert.match(source, /\.map/);
+  assert.match(source, /normalized\.lower\(\)\.endswith/);
 });
 
 test('acceptance tool checks the outer FPK lifecycle entry, not target contents', () => {
@@ -66,6 +78,66 @@ test('acceptance tool checks admin library root counts without dumping root path
   assert.match(source, /configured.*accessible.*shared.*authorized.*rejected/);
 });
 
+test('acceptance tool checks the authenticated library organization contract without mutating it', () => {
+  const source = read('scripts/fnos-device-acceptance.sh');
+  assert.match(source, /library-organization/);
+  assert.match(source, /api\/library\/organization/);
+  assert.match(source, /organization contract/);
+  assert.match(source, /features\?\.libraryOrganization !== true/);
+  assert.doesNotMatch(source, /organization\/reconcile[\s\S]*confirm[^\n]*true/);
+});
+
+test('PDF acceptance checks the pinned local parser, browser assets, MIME/CSP, and authorized Range contract', () => {
+  const source = read('scripts/fnos-device-acceptance.sh');
+  assert.match(source, /check_pdf_runtime_contract/);
+  assert.match(source, /PDF_PACKAGE=.*pdfjs-dist/);
+  assert.match(source, /legacy\/build\/pdf\.mjs/);
+  assert.match(source, /PDF_UI=.*ui\/vendor\/pdfjs/);
+  assert.match(source, /\$PDF_UI\/build\/pdf\.mjs/);
+  assert.match(source, /\$PDF_UI\/build\/pdf\.worker\.mjs/);
+  assert.match(source, /BABYREADER_PDF_TEST_BOOK_ID/);
+  assert.match(source, /BabyReader PDF Acceptance Fixture/);
+  assert.match(source, /Range: bytes=0-0/);
+  assert.match(source, /Range: bytes=0-/);
+  assert.match(source, /Range: bytes=-1/);
+  assert.match(source, /curl[^\n]*-I/);
+  assert.match(source, /416/);
+  assert.match(source, /content-security-policy/);
+  assert.match(source, /text\/javascript/);
+  assert.match(source, /pdfReader/);
+});
+
+test('FPK provenance requires PDF reader, parser, worker, and license assets', () => {
+  const source = read('scripts/write-build-provenance.py');
+  for (const member of [
+    'server/pdf-text.js',
+    'server/pdf-text-worker.js',
+    'server/node_modules/pdfjs-dist/legacy/build/pdf.mjs',
+    'ui/reader/pdf.js',
+    'ui/vendor/pdfjs/build/pdf.mjs',
+    'ui/vendor/pdfjs/build/pdf.worker.mjs',
+    'ui/vendor/pdfjs/LICENSE',
+    'ui/vendor/pdfjs/cmaps/LICENSE',
+    'ui/vendor/pdfjs/standard_fonts/LICENSE_LIBERATION',
+    'ui/vendor/pdfjs/wasm/LICENSE_OPENJPEG',
+    'server/node_modules/pdfjs-dist/LICENSE',
+    'ui/vendor/pdfjs/UPSTREAM.md'
+  ]) assert.ok(source.includes(member), `missing required PDF archive member: ${member}`);
+});
+
+test('FPK provenance records the exact PDF.js tarball version and integrity', () => {
+  const source = read('scripts/write-build-provenance.py');
+  assert.match(source, /pdfjs_dist/);
+  assert.match(source, /"integrity"/);
+  assert.match(source, /"resolved"/);
+});
+
+test('structure validation requires the server PDF extractor and worker modules', () => {
+  const source = read('scripts/validate-structure.js');
+  assert.ok(source.includes("'app/server/pdf-text.js'"));
+  assert.ok(source.includes("'app/server/pdf-text-worker.js'"));
+});
+
 test('install_callback does not start the service inside the install transaction', () => {
   const source = read('cmd/install_callback');
   const executableLines = source.split('\n').filter((line) => !line.trimStart().startsWith('#')).join('\n');
@@ -94,6 +166,151 @@ test('main preserves fnOS authorized and shared path environment inherited from 
   assert.doesNotMatch(source, /\benv\s+-i\b/);
   assert.doesNotMatch(source, /\bunset\b[^\n]*(?:TRIM_DATA_ACCESSIBLE_PATHS|TRIM_DATA_SHARE_PATHS)/);
   assert.match(source, /nohup "\$NODE_BIN" "\$SERVER_FILE"/);
+});
+
+test('release enables library organization but gates new AI chapter summaries behind an explicit opt-in', () => {
+  const source = read('cmd/main');
+  assert.match(source, /BABYREADER_ENABLE_LIBRARY_ORGANIZATION="\$\{BABYREADER_ENABLE_LIBRARY_ORGANIZATION:-1\}"/);
+  assert.match(source, /BABYREADER_ENABLE_LIBRARY_ORGANIZATION="\$\{BABYREADER_ENABLE_LIBRARY_ORGANIZATION:-1\}"[\s\S]*NODE_ENV=production/);
+  assert.match(source, /BABYREADER_ENABLE_AI_CHAPTER_UNDERSTANDING="\$\{BABYREADER_ENABLE_AI_CHAPTER_UNDERSTANDING:-0\}"/);
+  const server = read('app/server/index.js');
+  assert.match(server, /function isAiChapterUnderstandingEnabled\(\)[\s\S]*BABYREADER_ENABLE_AI_CHAPTER_UNDERSTANDING === '1'/);
+  assert.match(server, /allowEmptyContext: isAiChapterUnderstandingEnabled\(\)/);
+});
+
+test('fnOS app settings expose a PDF acceptance switch that starts disabled', () => {
+  const steps = JSON.parse(read('wizard/config'));
+  const switchItem = steps.flatMap((step) => step.items || [])
+    .find((item) => item.field === 'wizard_pdf_reader_enabled');
+  assert.equal(switchItem.type, 'switch');
+  assert.equal(switchItem.initValue, 'false');
+});
+
+test('PDF configuration callback persists the setting without restarting or touching service state', {
+  skip: !availableShell() ? 'POSIX shell is unavailable' : false
+}, (t) => {
+  const sandbox = fs.mkdtempSync(path.join(os.tmpdir(), 'babyreader-pdf-config-callback-'));
+  t.after(() => fs.rmSync(sandbox, { recursive: true, force: true }));
+  const appDest = path.join(sandbox, 'target');
+  const configRoot = path.join(sandbox, 'etc');
+  const tempRoot = path.join(sandbox, 'tmp');
+  fs.mkdirSync(path.join(appDest, 'cmd'), { recursive: true });
+  fs.mkdirSync(path.join(appDest, 'server'), { recursive: true });
+  fs.mkdirSync(tempRoot);
+  fs.cpSync(path.join(root, 'cmd', 'config_callback'), path.join(appDest, 'cmd', 'config_callback'));
+  fs.cpSync(path.join(root, 'cmd', 'main'), path.join(appDest, 'cmd', 'main'));
+  fs.cpSync(path.join(root, 'app', 'server', 'pdf-feature-config.js'), path.join(appDest, 'server', 'pdf-feature-config.js'));
+  fs.cpSync(path.join(root, 'app', 'server', 'fnos-roots-config.js'), path.join(appDest, 'server', 'fnos-roots-config.js'));
+  fs.cpSync(path.join(root, 'app', 'server', 'library-roots.js'), path.join(appDest, 'server', 'library-roots.js'));
+  fs.chmodSync(path.join(appDest, 'cmd', 'main'), 0o755);
+  const socketMarker = path.join(appDest, 'app.sock');
+  const pidMarker = path.join(tempRoot, 'babyreader-fnos.pid');
+  fs.writeFileSync(socketMarker, 'existing socket marker');
+  fs.writeFileSync(pidMarker, '999999');
+  const call = (value) => spawnSync(availableShell(), [path.join(appDest, 'cmd', 'config_callback')], {
+    encoding: 'utf8',
+    env: {
+      ...process.env,
+      TRIM_APPDEST: appDest,
+      TRIM_PKGETC: configRoot,
+      TRIM_PKGTMP: tempRoot,
+      ...(value === undefined ? {} : { wizard_pdf_reader_enabled: value })
+    },
+    timeout: 10000
+  });
+
+  const enabled = call('true');
+  assert.equal(enabled.status, 0, enabled.stderr);
+  const configFile = path.join(configRoot, 'pdf-feature.json');
+  assert.deepEqual(JSON.parse(fs.readFileSync(configFile, 'utf8')), { version: 1, enabled: true });
+  assert.equal(fs.readFileSync(socketMarker, 'utf8'), 'existing socket marker');
+  assert.equal(fs.readFileSync(pidMarker, 'utf8'), '999999');
+
+  const before = fs.readFileSync(configFile, 'utf8');
+  assert.equal(call(undefined).status, 0);
+  assert.equal(fs.readFileSync(configFile, 'utf8'), before);
+  const rejected = call('invalid');
+  assert.notEqual(rejected.status, 0);
+  assert.equal(fs.readFileSync(configFile, 'utf8'), before);
+  assert.equal(fs.readFileSync(socketMarker, 'utf8'), 'existing socket marker');
+});
+
+test('fnOS library authorization changes update the private snapshot without lifecycle restart', {
+  skip: !availableShell() ? 'POSIX shell is unavailable' : false
+}, (t) => {
+  const sandbox = fs.mkdtempSync(path.join(os.tmpdir(), 'babyreader-root-config-callback-'));
+  t.after(() => fs.rmSync(sandbox, { recursive: true, force: true }));
+  const appDest = path.join(sandbox, 'target');
+  const configRoot = path.join(sandbox, 'etc');
+  const restartLog = path.join(sandbox, 'restart.log');
+  fs.mkdirSync(path.join(appDest, 'cmd'), { recursive: true });
+  fs.mkdirSync(path.join(appDest, 'server'), { recursive: true });
+  fs.cpSync(path.join(root, 'cmd', 'config_init'), path.join(appDest, 'cmd', 'config_init'));
+  fs.cpSync(path.join(root, 'cmd', 'config_callback'), path.join(appDest, 'cmd', 'config_callback'));
+  fs.cpSync(path.join(root, 'app', 'server', 'fnos-roots-config.js'), path.join(appDest, 'server', 'fnos-roots-config.js'));
+  fs.cpSync(path.join(root, 'app', 'server', 'library-roots.js'), path.join(appDest, 'server', 'library-roots.js'));
+  fs.writeFileSync(path.join(appDest, 'cmd', 'main'), [
+    '#!/bin/sh',
+    'if [ "$1" = status ]; then exit "${BABYREADER_TEST_SERVICE_STATUS:-0}"; fi',
+    'if [ "$1" = restart ]; then printf "restart\\n" >> "$BABYREADER_TEST_RESTART_LOG"; exit 0; fi',
+    'exit 2',
+    ''
+  ].join('\n'));
+  for (const script of ['config_init', 'config_callback', 'main']) {
+    fs.chmodSync(path.join(appDest, 'cmd', script), 0o755);
+  }
+
+  const call = (script, accessibleRoots, serviceStatus = '0') => {
+    const env = {
+      ...process.env,
+      PATH: '/usr/bin:/bin:/c/Program Files/Git/usr/bin:/c/Program Files/nodejs',
+      BABYREADER_TEST_RESTART_LOG: restartLog,
+      BABYREADER_TEST_SERVICE_STATUS: serviceStatus,
+      TRIM_APPDEST: appDest,
+      TRIM_PKGETC: configRoot,
+      TRIM_DATA_SHARE_PATHS: '/shared/library'
+    };
+    if (accessibleRoots === undefined) delete env.TRIM_DATA_ACCESSIBLE_PATHS;
+    else env.TRIM_DATA_ACCESSIBLE_PATHS = accessibleRoots;
+    return spawnSync(availableShell(), [path.join(appDest, 'cmd', script)], {
+      encoding: 'utf8', env, timeout: 15000
+    });
+  };
+
+  const snapshot = path.join(configRoot, 'fnos-authorized-roots.json');
+  const assertSnapshot = (suffix) => {
+    const roots = JSON.parse(fs.readFileSync(snapshot, 'utf8')).accessibleRoots;
+    assert.equal(roots.length, 1);
+    assert.ok(roots[0].replaceAll('\\', '/').endsWith(suffix), `unexpected root: ${roots[0]}`);
+  };
+  let result = call('config_callback', '/first/library');
+  assert.equal(result.status, 0, `first config_callback failed\\n${result.stderr}`);
+  assertSnapshot('/first/library');
+  assert.equal(fs.existsSync(restartLog), false);
+
+  result = call('config_init', '/first/library');
+  assert.equal(result.status, 0, `config_init failed\\n${result.stderr}`);
+  result = call('config_callback', '/new/library');
+  assert.equal(result.status, 0, `config_callback failed\\n${result.stderr}`);
+  assertSnapshot('/new/library');
+  assert.equal(fs.existsSync(restartLog), false);
+
+  result = call('config_init', '/new/library');
+  assert.equal(result.status, 0, `second config_init failed\\n${result.stderr}`);
+  result = call('config_callback', '/new/library');
+  assert.equal(result.status, 0, `unchanged config_callback failed\\n${result.stderr}`);
+  assertSnapshot('/new/library');
+  assert.equal(fs.existsSync(restartLog), false);
+
+  result = call('config_init', '/new/library');
+  assert.equal(result.status, 0, `third config_init failed\\n${result.stderr}`);
+  result = call('config_callback', '/another/library', '3');
+  assert.equal(result.status, 0, `stopped-service config_callback failed\\n${result.stderr}`);
+  assertSnapshot('/another/library');
+  assert.equal(fs.existsSync(restartLog), false);
+  result = call('config_callback', undefined);
+  assert.equal(result.status, 0, `empty authorization config_callback failed\\n${result.stderr}`);
+  assert.deepEqual(JSON.parse(fs.readFileSync(snapshot, 'utf8')).accessibleRoots, []);
 });
 
 test('POSIX fnOS lifecycle installs, starts, reports status, and stops cleanly', {

@@ -19,6 +19,7 @@ function validateDataset(dataset) {
   if (new Set(chapterIndexes).size !== chapterIndexes.length) throw new Error('评测章节索引重复');
   const knownIndexes = new Set(chapterIndexes);
   const caseIds = new Set();
+  const intentCounts = { lookup: 0, cross_chapter: 0, chapter_summary: 0 };
   let singleChapterCaseCount = 0;
   let multiChapterCaseCount = 0;
 
@@ -33,6 +34,21 @@ function validateDataset(dataset) {
     if (item.expectedChapterIndexes.some((index) => !knownIndexes.has(Number(index)))) {
       throw new Error(`评测问题引用了未登记章节：${item.id}`);
     }
+    const retrievalIntent = item.retrievalIntent
+      || (item.expectedChapterIndexes.length > 1 ? 'cross_chapter' : 'lookup');
+    if (!Object.hasOwn(intentCounts, retrievalIntent)) {
+      throw new Error(`评测问题检索意图无效：${item.id}`);
+    }
+    if (retrievalIntent === 'chapter_summary' && item.expectedChapterIndexes.length !== 1) {
+      throw new Error(`章节概述问题必须对应单一章节：${item.id}`);
+    }
+    if (item.expectedChapterHrefs !== undefined
+      && (!Array.isArray(item.expectedChapterHrefs)
+        || item.expectedChapterHrefs.length !== item.expectedChapterIndexes.length
+        || item.expectedChapterHrefs.some((href) => typeof href !== 'string' || !href.trim()))) {
+      throw new Error(`评测问题的章节资源标注无效：${item.id}`);
+    }
+    intentCounts[retrievalIntent] += 1;
     if (item.expectedChapterIndexes.length === 1) singleChapterCaseCount += 1;
     else multiChapterCaseCount += 1;
   }
@@ -42,7 +58,8 @@ function validateDataset(dataset) {
     caseCount: dataset.cases.length,
     singleChapterCaseCount,
     multiChapterCaseCount,
-    chapterIndexes
+    chapterIndexes,
+    intentCounts
   };
 }
 
@@ -56,9 +73,11 @@ function evaluateCase(item, matches, limit = 6) {
   const firstHitPosition = rankedChapterIndexes.findIndex((index) => expected.has(index));
   const firstHitRank = firstHitPosition < 0 ? null : firstHitPosition + 1;
   const falseRecallCount = uniqueRankedChapterIndexes.filter((index) => !expected.has(index)).length;
+  const retrievalIntent = item.retrievalIntent
+    || (item.expectedChapterIndexes.length > 1 ? 'cross_chapter' : 'lookup');
   return {
     id: item.id,
-    question: item.question,
+    retrievalIntent,
     expectedChapterIndexes: [...expected],
     rankedChapterIndexes,
     uniqueRankedChapterIndexes,
@@ -74,6 +93,16 @@ function evaluateCase(item, matches, limit = 6) {
 function summarizeEvaluation(results) {
   const cases = Array.isArray(results) ? results : [];
   const count = cases.length || 1;
+  const intentBreakdown = {};
+  for (const retrievalIntent of ['lookup', 'cross_chapter', 'chapter_summary']) {
+    const group = cases.filter((item) => item.retrievalIntent === retrievalIntent);
+    if (!group.length) continue;
+    intentBreakdown[retrievalIntent] = {
+      caseCount: group.length,
+      recallAt6: group.filter((item) => item.hitAt6).length / group.length,
+      meanFalseRecallRate: group.reduce((total, item) => total + item.falseRecallRate, 0) / group.length
+    };
+  }
   return {
     caseCount: cases.length,
     recallAt1: cases.filter((item) => item.hitAt1).length / count,
@@ -81,6 +110,7 @@ function summarizeEvaluation(results) {
     recallAt6: cases.filter((item) => item.hitAt6).length / count,
     mrrAt6: cases.reduce((total, item) => total + item.reciprocalRankAt6, 0) / count,
     meanFalseRecallRate: cases.reduce((total, item) => total + item.falseRecallRate, 0) / count,
+    intentBreakdown,
     cases
   };
 }

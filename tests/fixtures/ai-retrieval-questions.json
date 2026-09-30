@@ -78,6 +78,8 @@
     { "id": "q35", "question": "维生素D、钙、磷之间是什么关系？", "expectedChapterIndexes": [64, 78], "intent": "cross_chapter" },
     { "id": "q36", "question": "胆固醇为什么会在营养不足时堆积在动脉壁？", "expectedChapterIndexes": [55, 20], "intent": "cross_chapter" },
     { "id": "q37", "question": "哪些营养素和心脏、血液循环有关？", "expectedChapterIndexes": [55, 83, 92], "intent": "cross_chapter" },
-    { "id": "q38", "question": "如何从食物选择、烹饪和营养素来源三个方面设计更合理的饮食？", "expectedChapterIndexes": [107, 125], "intent": "cross_chapter" }
+    { "id": "q38", "question": "如何从食物选择、烹饪和营养素来源三个方面设计更合理的饮食？", "expectedChapterIndexes": [107, 125], "intent": "cross_chapter" },
+    { "id": "q39", "question": "第①章主要讲了什么？", "retrievalIntent": "chapter_summary", "expectedChapterIndexes": [4], "expectedChapterHrefs": ["jpg_20250905_2150_split_002.html"], "intent": "chapter_summary" },
+    { "id": "q40", "question": "第二章关于早餐的核心观点是什么？", "retrievalIntent": "chapter_summary", "expectedChapterIndexes": [7], "expectedChapterHrefs": ["jpg_20250905_2150_split_005.html"], "intent": "chapter_summary" }
   ]
 }

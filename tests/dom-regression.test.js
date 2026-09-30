@@ -15,12 +15,15 @@ async function createReaderDom() {
     '../app/ui/core/api.js',
     '../app/ui/core/reader-route.js',
     '../app/ui/core/user-state.js',
+    '../app/ui/reader/annotations.js',
     '../app/ui/reader/device-profile.js',
     '../app/ui/reader/epub.js',
     '../app/ui/reader/document.js',
     '../app/ui/reader/editor.js',
     '../app/ui/reader/highlights.js',
+    '../app/ui/reader/pdf-notes-export.js',
     '../app/ui/reader/ai.js',
+    '../app/ui/reader/ai-index-manager.js',
     '../app/ui/reader/selection-menu.js',
     '../app/ui/reader/actions.js',
     '../app/ui/reader/notes-panel.js',
@@ -29,24 +32,36 @@ async function createReaderDom() {
     '../app/ui/reader/pagination.js',
     '../app/ui/reader/settings.js',
     '../app/ui/reader/navigation.js',
+    '../app/ui/reader/pdf-annotation-geometry.js',
+    '../app/ui/reader/pdf-annotations.js',
+    '../app/ui/reader/pdf-render-scheduler.js',
+    '../app/ui/reader/pdf.js',
     '../app/ui/reader/lifecycle.js',
     '../app/ui/reader/search.js',
     '../app/ui/shell/drawer.js',
+    '../app/ui/library/reorder.js',
+    '../app/ui/library/organization.js',
     '../app/ui/library/view.js',
     '../app/ui/app.js'
   ];
   let source = (await Promise.all(
     sourceFiles.map((relative) => fs.readFile(path.resolve(__dirname, relative), 'utf8'))
   )).join('\n');
+  source += '\nwindow.__babyReaderPaginationApi = { updatePaginationControls };';
   source += '\nwindow.__babyReaderChapterApi = { renderEpubChapter, navigateToEpubChapter, isEpubChapterLoading, updateReadingProgress, restoreTextScroll, navigateEpubTarget, setupTocNavigation };\nwindow.__babyReaderDeviceApi = { getReaderDeviceProfile, setMobileChromeOpen, setupReaderNavigation };';
-  source += '\nwindow.__babyReaderTypographyApi = { TYPOGRAPHY_SLIDER_CONFIG, nearestTypographyPreset, formatTypographySliderValue, setupTypographySlider, setupSettingsPanel, resetTypographySettings };';
+  source += '\nwindow.__babyReaderTypographyApi = { TYPOGRAPHY_SLIDER_CONFIG, nearestTypographyPreset, formatTypographySliderValue, setupTypographySlider, setupSettingsPanel, syncSettingsPanel, resetTypographySettings };';
   source += '\nwindow.__babyReaderUserStateApi = { applyUserState, persistUserSettings, flushUserSettings, currentUserSettings };';
-  source += '\nwindow.__babyReaderActionsApi = { formatHighlightsMd };';
-  source += '\nwindow.__babyReaderEpubApi = { parseNavToc, parseNcxToc };';
+  source += '\nwindow.__babyReaderActionsApi = { formatHighlightsMd, exportHighlights, handleKeyboardShortcut };';
+  source += '\nwindow.__babyReaderEditorApi = { openThoughtComposer, closeHighlightEditor };';
+  source += '\nwindow.__babyReaderEpubApi = { parseNavToc, parseNcxToc, destroyEpub };';
+  source += '\nwindow.__babyReaderPdfApi = { createPdfReaderController, pdfReaderController };';
+  source += '\nwindow.__pdfProgressTestHooks = { savePdfProgress, flushPdfProgressSave, saveTextScroll };';
   source += '\nwindow.__babyReaderBookmarkApi = { getCurrentBookmarkLocator, isCurrentBookmark, toggleCurrentBookmark, jumpToBookmark, renderBookmarkButtonState, renderBookmarkList, deleteBookmarkFromList, refreshBookmarks };';
   source += '\nwindow.__babyReaderSearchApi = { updateTopbarState, setupReaderSearch };';
+  source += '\nwindow.__babyReaderAiApi.pdfAiScopeInput = pdfAiScopeInput;';
   source += '\nwindow.__babyReaderRouteApi = { restoreReaderFromLocation };';
   source += '\nwindow.__babyReaderLibraryApi = { renderLibrary };';
+  source += '\nwindow.__uxApi = { showHighlightHint, setupHighlightEditor, setupCustomSelect, syncCustomSelectValue, renderReaderSearchResults, ensureSelectionMenu, startReaderSession: typeof startReaderSession === "function" ? startReaderSession : null };';
 
   window.document.write(html.replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, ''));
   window.requestAnimationFrame = (callback) => {
@@ -69,9 +84,15 @@ async function createReaderDom() {
     setOptions: () => {}
   };
   window.JSZip = {};
+  window.confirm = () => true;
 
-  window.eval(`${source}\nwindow.__babyReaderTest = {\n    state,\n    serializeDomRange,\n    rangeFromHighlight,\n    loadHighlights,\n    openHighlightEditor,\n    deleteActiveHighlight,\n    saveActiveHighlightEdits,\n    currentUserSettings,\n    applyZoom,\n    getEpubThemeCss,\n    debounce,\n    navigateChapter,\n    navigatePageGroup,\n    pageGroupForPage,\n    clampPageGroup,\n    pageLeftForGroup,\n    setPageGroup,\n    snapPaginationToNearestGroup,\n    pageNumberForElement,\n    navigateToSemanticTarget,\n    resolveEffectiveReadingMode,\n    createPaginationGeometry,\n    measurePagination,\n    setReadingMode,\n    currentReadingLocator,\n    restoreReadingLocator,\n    readerActions,\n    readerPanels,\n    openReaderPanel,\n    closeReaderPanel,\n    setupReaderActionMapping,\n    renderToc,\n    returnToLibrary\n  };`);
+  window.eval(`${source}\nwindow.__babyReaderTest = {\n    state,\n    serializeDomRange,\n    rangeFromHighlight,\n    loadHighlights,\n    openHighlightEditor,\n    deleteActiveHighlight,\n    saveActiveHighlightEdits,\n    currentUserSettings,\n    applyZoom,\n    getEpubThemeCss,\n    debounce,\n    navigateChapter,\n    navigatePageGroup,\n    pageGroupForPage,\n    clampPageGroup,\n    pageLeftForGroup,\n    setPageGroup,\n    snapPaginationToNearestGroup,\n    pageNumberForElement,\n    navigateToSemanticTarget,\n    resolveEffectiveReadingMode,\n    createPaginationGeometry,\n    measurePagination,\n    setReadingMode,\n    currentReadingLocator,\n    restoreReadingLocator,\n    readerActions,\n    readerPanels,\n    openReaderPanel,\n    closeReaderPanel,\n    setupReaderActionMapping,\n    renderLibrary,\n    renderToc,\n    returnToLibrary\n  };`);
 
+  window.__babyReaderTest.savePdfProgress = window.__pdfProgressTestHooks.savePdfProgress;
+  window.__babyReaderTest.flushPdfProgressSave = window.__pdfProgressTestHooks.flushPdfProgressSave;
+  window.__babyReaderTest.saveTextScroll = window.__pdfProgressTestHooks.saveTextScroll;
+  delete window.__pdfProgressTestHooks;
+  window.__babyReaderTest.updatePaginationControls = window.__babyReaderPaginationApi.updatePaginationControls;
   window.__babyReaderTest.updateTopbarState = window.__babyReaderSearchApi.updateTopbarState;
   window.__babyReaderTest.renderLibrary = window.__babyReaderLibraryApi.renderLibrary;
   window.__babyReaderTest.restoreReaderFromLocation = window.__babyReaderRouteApi.restoreReaderFromLocation;
@@ -81,9 +102,15 @@ async function createReaderDom() {
   window.__babyReaderTest.buildReaderSearchUrl = window.buildReaderSearchUrl;
   window.__babyReaderTest.navigateToSearchResult = window.readerSearchApi.navigateToSearchResult;
   window.__babyReaderTest.formatHighlightsMd = window.__babyReaderActionsApi.formatHighlightsMd;
+  window.__babyReaderTest.exportHighlights = window.__babyReaderActionsApi.exportHighlights;
+  window.__babyReaderTest.handleKeyboardShortcut = window.__babyReaderActionsApi.handleKeyboardShortcut;
+  window.__babyReaderTest.openThoughtComposer = window.__babyReaderEditorApi.openThoughtComposer;
+  window.__babyReaderTest.closeHighlightEditor = window.__babyReaderEditorApi.closeHighlightEditor;
   window.__babyReaderTest.typographyApi = window.__babyReaderTypographyApi;
   window.__babyReaderTest.parseNavToc = window.__babyReaderEpubApi.parseNavToc;
   window.__babyReaderTest.parseNcxToc = window.__babyReaderEpubApi.parseNcxToc;
+  window.__babyReaderTest.destroyEpub = window.__babyReaderEpubApi.destroyEpub;
+  window.__babyReaderTest.pdfApi = window.__babyReaderPdfApi;
   window.__babyReaderTest.aiApi = window.__babyReaderAiApi;
   window.__babyReaderTest.renderEpubChapter = window.__babyReaderChapterApi.renderEpubChapter;
   window.__babyReaderTest.navigateToEpubChapter = window.__babyReaderChapterApi.navigateToEpubChapter;
@@ -98,6 +125,7 @@ async function createReaderDom() {
   window.__babyReaderTest.setMobileChromeOpen = window.__babyReaderDeviceApi.setMobileChromeOpen;
   window.__babyReaderTest.setupReaderNavigation = window.__babyReaderDeviceApi.setupReaderNavigation;
   window.__babyReaderTest.captureSelectionSession = window.__babyReaderSelectionMenuApi.captureSelectionSession;
+  window.__babyReaderTest.openSelectionMenu = window.__babyReaderSelectionMenuApi.openSelectionMenu;
   window.__babyReaderTest.setupSelectionMenu = window.__babyReaderSelectionMenuApi.setupSelectionMenu;
   window.__babyReaderTest.showSelectionMenuForCurrentSelection = window.__babyReaderSelectionMenuApi.showSelectionMenuForCurrentSelection;
   window.__babyReaderTest.closeSelectionMenu = window.__babyReaderSelectionMenuApi.closeSelectionMenu;
@@ -114,6 +142,365 @@ async function createReaderDom() {
   window.__babyReaderTest.refreshBookmarks = window.__babyReaderBookmarkApi.refreshBookmarks;
   return { window, api: window.__babyReaderTest };
 }
+
+test('UX return failure preserves PDF renderer and search; concurrent returns share one transition', async () => {
+  const { window, api } = await createReaderDom();
+  const events = [];
+  api.state.currentBookId = 'ux-book';
+  api.state.contentType = 'pdf';
+  api.pdfApi.pdfReaderController.destroyPdfReader = async () => { events.push('destroy'); };
+  const input = window.document.querySelector('#readerSearchSheet input');
+  input.value = 'unchanged';
+  window.browserHost.getLibrary = async () => { events.push('load'); throw new Error('offline'); };
+  await Promise.all([api.returnToLibrary(), api.returnToLibrary()]);
+  assert.deepEqual(events, ['load']);
+  assert.equal(input.value, 'unchanged');
+  assert.equal(api.state.currentBookId, 'ux-book');
+  assert.equal(window.document.getElementById('btnBackToLibrary').disabled, false);
+  await window.happyDOM.close();
+});
+
+test('UX search focuses the query and preserves it when closed and reopened', async () => {
+  const { window, api } = await createReaderDom();
+  api.state.currentBookId = 'ux-book';
+  api.state.currentPath = 'book.epub';
+  api.openReaderPanel('search');
+  const input = window.document.querySelector('#readerSearchSheet input');
+  assert.equal(window.document.activeElement?.id, input.id);
+  input.value = '保留搜索';
+  api.closeReaderPanel();
+  api.openReaderPanel('search');
+  assert.equal(input.value, '保留搜索');
+  await window.happyDOM.close();
+});
+
+test('UX TOC trigger describes actual panel state, not default preference', async () => {
+  const { window, api } = await createReaderDom();
+  api.state.toc = [{ label: 'chapter', href: 'chapter' }];
+  api.state.tocOpen = true;
+  api.openReaderPanel('toc');
+  api.closeReaderPanel();
+  api.updateTopbarState();
+  assert.equal(window.document.getElementById('btnToc').getAttribute('aria-label'), '显示目录');
+  await window.happyDOM.close();
+});
+
+test('UX note action keys are not intercepted as card navigation', async () => {
+  const { window, api } = await createReaderDom();
+  api.setupNotesPanel();
+  const list = window.document.getElementById('notesList');
+  list.innerHTML = '<article data-annotation-id="x" data-annotation-navigable="true"><button data-notes-action="edit">编辑</button></article>';
+  const event = new window.KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true });
+  list.querySelector('button').dispatchEvent(event);
+  assert.equal(event.defaultPrevented, false);
+  await window.happyDOM.close();
+});
+
+test('UX Escape closes visible AI main panel but does not consume unrelated Escape', async () => {
+  const { window, api } = await createReaderDom();
+  api.aiApi.setupAiPanel();
+  const modal = window.document.getElementById('aiModal');
+  modal.hidden = false;
+  window.document.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
+  assert.equal(modal.hidden, true);
+  const event = new window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true });
+  window.document.dispatchEvent(event);
+  assert.equal(event.defaultPrevented, false);
+  await window.happyDOM.close();
+});
+
+test('UX feedback never overwrites the book title and failed feedback remains dismissible', async () => {
+  const { window } = await createReaderDom();
+  window.document.getElementById('fileName').textContent = '正在读的书';
+  window.__uxApi.showHighlightHint('保存失败，请重试');
+  assert.equal(window.document.getElementById('fileName').textContent, '正在读的书');
+  const feedback = window.document.getElementById('readerFeedback');
+  assert.ok(feedback);
+  assert.match(feedback.textContent, /保存失败/);
+  feedback.querySelector('button').click();
+  assert.equal(feedback.hidden, true);
+  await window.happyDOM.close();
+});
+
+test('UX custom selects reflect changed PDF labels and disabled state', async () => {
+  const { window } = await createReaderDom();
+  const select = window.document.getElementById('notesSort');
+  window.__uxApi.setupCustomSelect(select);
+  select.querySelector('[value="chapter"]').textContent = '按页';
+  select.value = 'chapter';
+  select.disabled = true;
+  window.__uxApi.syncCustomSelectValue(select);
+  assert.equal(select._customSelect.trigger.textContent, '按页');
+  assert.equal(select._customSelect.options.find((item) => item.dataset.value === 'chapter').textContent, '按页');
+  assert.equal(select._customSelect.trigger.disabled, true);
+  await window.happyDOM.close();
+});
+
+test('UX unsaved note remains open when discard is declined; pending save cannot duplicate', async () => {
+  const { window, api } = await createReaderDom();
+  const bookId = 'a'.repeat(64);
+  api.state.currentBookId = bookId;
+  api.state.contentType = 'pdf';
+  api.state.userState.books[bookId] = { pdfAnnotations: [{ id: 'note', type: 'pdf', text: '原文', thought: '', color: 'yellow', style: 'marker', targets: [] }] };
+  api.openHighlightEditor('note');
+  window.document.getElementById('highlightEditorThought').value = '还没有保存的想法';
+  window.confirm = () => false;
+  api.closeHighlightEditor();
+  assert.equal(window.document.getElementById('highlightEditor').hidden, false);
+  let writes = 0;
+  let rejectSave;
+  window.browserHost.updatePdfAnnotation = () => { writes++; return new Promise((resolve, reject) => { rejectSave = reject; }); };
+  const first = api.saveActiveHighlightEdits();
+  const second = api.saveActiveHighlightEdits();
+  assert.equal(writes, 1);
+  rejectSave(new Error('offline'));
+  await Promise.all([first, second]);
+  assert.equal(window.document.getElementById('highlightEditor').hidden, false);
+  assert.equal(window.document.getElementById('highlightEditorThought').value, '还没有保存的想法');
+  assert.equal(window.document.getElementById('btnSaveHighlight').disabled, false);
+  await window.happyDOM.close();
+});
+
+test('UX restoring conversations cannot erase missing AI configuration feedback', async () => {
+  const { window, api } = await createReaderDom();
+  api.state.contentType = 'pdf';
+  api.state.currentBookId = 'a'.repeat(64);
+  window.browserHost.aiStatus = async () => ({ configured: false });
+  window.browserHost.getAiConversations = async () => ({ conversations: [] });
+  await api.aiApi.openAiModal();
+  assert.equal(window.document.getElementById('aiQuestion').disabled, true);
+  assert.equal(window.document.getElementById('aiStatus').hidden, false);
+  assert.match(window.document.getElementById('aiStatus').textContent, /配置/);
+  await window.happyDOM.close();
+});
+
+test('UX library filter preserves manual order and never invokes a scan', async () => {
+  const { window, api } = await createReaderDom();
+  api.renderLibrary({ books: [{ id: 'a', title: '月亮', author: '甲', type: 'epub' }, { id: 'b', title: '太阳', author: '乙', type: 'pdf' }] });
+  const filter = window.document.querySelector('.library-filter');
+  assert.ok(filter);
+  filter.value = '乙';
+  filter.dispatchEvent(new window.Event('input'));
+  const cards = [...window.document.querySelectorAll('.library-book')];
+  assert.equal(cards[0].hidden, true);
+  assert.equal(cards[1].hidden, false);
+  filter.value = '';
+  filter.dispatchEvent(new window.Event('input'));
+  assert.deepEqual(cards.map((item) => item.dataset.bookId), ['a', 'b']);
+  assert.ok(cards.every((item) => !item.hidden));
+  await window.happyDOM.close();
+});
+
+test('UX search snippets emphasize literal text safely and count loaded matches', async () => {
+  const { window } = await createReaderDom();
+  window.__uxApi.renderReaderSearchResults({ available: true, results: [{ id: 'one', snippet: '甲 <b>乙</b> 丙', matchText: '<b>乙</b>' }], hasMore: false });
+  const excerpt = window.document.querySelector('.reader-search-result-excerpt');
+  assert.equal(excerpt.querySelector('b'), null);
+  assert.equal(excerpt.querySelector('mark')?.textContent, '<b>乙</b>');
+  assert.match(window.document.getElementById('readerSearchSheet').textContent, /已加载 1/);
+  await window.happyDOM.close();
+});
+
+test('UX search next and previous select adjacent loaded matches', async () => {
+  const { window } = await createReaderDom();
+  window.readerSearchApi.setupReaderSearch();
+  window.__uxApi.renderReaderSearchResults({ available: true, results: [
+    { id: 'first', snippet: '第一处', matchText: '第一处' },
+    { id: 'second', snippet: '第二处', matchText: '第二处' }
+  ], hasMore: false });
+  const results = [...window.document.querySelectorAll('.reader-search-result')];
+  const next = window.document.getElementById('readerSearchNext');
+  const previous = window.document.getElementById('readerSearchPrevious');
+  assert.ok(next);
+  next.click();
+  assert.equal(results[0].getAttribute('aria-current'), 'true');
+  next.click();
+  assert.equal(results[1].getAttribute('aria-current'), 'true');
+  previous.click();
+  assert.equal(results[0].getAttribute('aria-current'), 'true');
+  await window.happyDOM.close();
+});
+
+test('UX a failed replacement search retains the last usable results and cursor', async () => {
+  const { window, api } = await createReaderDom();
+  api.state.currentBookId = 'a'.repeat(64);
+  let requested = 0;
+  window.browserHost.searchBook = async () => {
+    requested += 1;
+    if (requested > 1) throw new Error('网络暂不可用');
+    return { available: true, results: [{ id: 'old', snippet: '旧命中', matchText: '旧' }], hasMore: true, nextCursor: 'next' };
+  };
+  window.readerSearchApi.setupReaderSearch();
+  const input = window.document.getElementById('readerSearchQuery');
+  input.value = '旧';
+  window.document.getElementById('readerSearchForm').dispatchEvent(new window.Event('submit', { bubbles: true, cancelable: true }));
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  input.value = '新';
+  window.document.getElementById('readerSearchForm').dispatchEvent(new window.Event('submit', { bubbles: true, cancelable: true }));
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  assert.match(window.document.getElementById('readerSearchResults').textContent, /旧命中/);
+  assert.match(window.document.getElementById('readerSearchStatus').textContent, /仍显示.*旧/);
+  assert.equal(window.document.getElementById('readerSearchMore').hidden, false);
+  await window.happyDOM.close();
+});
+
+test('UX next hit loads the following result page before moving selection', async () => {
+  const { window, api } = await createReaderDom();
+  api.state.currentBookId = 'a'.repeat(64);
+  const cursors = [];
+  window.browserHost.searchBook = async (_bookId, options) => {
+    cursors.push(options.cursor || null);
+    return options.cursor
+      ? { available: true, results: [{ id: 'second', snippet: '第二处', matchText: '第二处' }], hasMore: false }
+      : { available: true, results: [{ id: 'first', snippet: '第一处', matchText: '第一处' }], hasMore: true, nextCursor: 'page-2' };
+  };
+  window.readerSearchApi.setupReaderSearch();
+  window.document.getElementById('readerSearchQuery').value = '处';
+  window.document.getElementById('readerSearchForm').dispatchEvent(new window.Event('submit', { bubbles: true, cancelable: true }));
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  const next = window.document.getElementById('readerSearchNext');
+  next.click();
+  next.click();
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  assert.deepEqual(cursors, [null, 'page-2']);
+  const active = window.document.querySelector('#readerSearchResults [aria-current="true"]');
+  assert.equal(active?.dataset.searchResultId, 'second');
+  await window.happyDOM.close();
+});
+
+test('UX AI answer does not pull a reader away from earlier messages', async () => {
+  const { window, api } = await createReaderDom();
+  api.aiApi.setupAiPanel();
+  const scroll = window.document.getElementById('aiChatScroll');
+  Object.defineProperty(scroll, 'scrollHeight', { configurable: true, value: 1200 });
+  Object.defineProperty(scroll, 'clientHeight', { configurable: true, value: 300 });
+  scroll.scrollTop = 100;
+  api.aiApi.renderAiAnswer('新的回答');
+  assert.equal(scroll.scrollTop, 100);
+  const newReply = window.document.getElementById('aiNewReply');
+  assert.equal(newReply.hidden, false);
+  newReply.click();
+  assert.equal(scroll.scrollTop, 1200);
+  assert.equal(newReply.hidden, true);
+  await window.happyDOM.close();
+});
+
+test('UX notes export is discoverable and does not copy to the clipboard', async () => {
+  const { window, api } = await createReaderDom();
+  assert.ok(window.document.querySelector('#readerPanelNotes [data-reader-action="exportHighlights"]'));
+  let copied = 0;
+  Object.defineProperty(window.navigator, 'clipboard', {
+    configurable: true, value: { writeText: async () => { copied += 1; } }
+  });
+  api.state.contentType = 'epub';
+  api.state.currentBookId = 'a'.repeat(64);
+  api.state.userState.books[api.state.currentBookId] = { highlights: [{ id: 'first', text: '一条划线' }] };
+  window.URL.createObjectURL = () => 'blob:test';
+  window.URL.revokeObjectURL = () => {};
+  api.exportHighlights();
+  assert.equal(copied, 0);
+  await window.happyDOM.close();
+});
+
+test('UX tab arrow keys select the next content panel and leave one tab stop', async () => {
+  const { window, api } = await createReaderDom();
+  api.state.contentType = 'pdf';
+  api.state.currentBookId = 'a'.repeat(64);
+  api.state.toc = [{ label: '目录', href: 'x' }];
+  api.setupReaderActionMapping();
+  api.openReaderPanel('toc');
+  const tabs = [...window.document.querySelectorAll('#readerDrawer [data-reader-panel-target]')];
+  tabs[0].dispatchEvent(new window.KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true, cancelable: true }));
+  assert.equal(tabs[1].getAttribute('aria-selected'), 'true');
+  assert.equal(tabs.filter((item) => item.tabIndex === 0).length, 1);
+  await window.happyDOM.close();
+});
+
+test('UX startup shows persistent retry after failure and recovers the library', async () => {
+  const { window } = await createReaderDom();
+  assert.equal(typeof window.__uxApi.startReaderSession, 'function');
+  window.browserHost.getSession = async () => { throw new Error('offline'); };
+  window.browserHost.getUserState = async () => ({});
+  window.browserHost.getLibrary = async () => ({ books: [] });
+  await window.__uxApi.startReaderSession();
+  const status = window.document.getElementById('readerStartupStatus');
+  assert.match(status.textContent, /重试/);
+  assert.equal(status.querySelector('button').disabled, false);
+  window.browserHost.getSession = async () => ({});
+  await window.__uxApi.startReaderSession();
+  assert.ok(window.document.querySelector('.library-view'));
+  await window.happyDOM.close();
+});
+
+test('UX selection color choice changes preference without losing the open menu', async () => {
+  const { window, api } = await createReaderDom();
+  api.state.contentType = 'pdf';
+  const menu = window.__uxApi.ensureSelectionMenu();
+  menu.hidden = false;
+  const colors = menu.querySelectorAll('[data-selection-color]');
+  assert.equal(colors.length, 4);
+  menu.querySelector('[data-selection-color="pink"]').click();
+  assert.equal(api.state.highlightColor, 'pink');
+  assert.equal(menu.hidden, false);
+  assert.equal(menu.querySelector('[data-selection-color="pink"]').getAttribute('aria-pressed'), 'true');
+  await window.happyDOM.close();
+});
+
+test('UX collapsing AI retains the in-flight answer and does not send a second request', async () => {
+  const { window, api } = await createReaderDom();
+  api.state.contentType = 'pdf';
+  api.state.currentBookId = 'a'.repeat(64);
+  window.pdfReaderController = { getPageCount: () => 9 };
+  let complete;
+  let calls = 0;
+  window.browserHost.aiStatus = async () => ({ configured: true });
+  window.browserHost.getAiConversations = async () => ({ conversations: [] });
+  window.browserHost.askAiStream = async (_book, _request, handlers) => {
+    calls++;
+    return new Promise((resolve) => { complete = () => { handlers.onDone({ answer: '合成回答', sources: [] }); resolve({ answer: '合成回答', sources: [] }); }; });
+  };
+  await api.aiApi.openAiModal();
+  window.document.getElementById('aiQuestion').value = '合成问题';
+  const asking = api.aiApi.askAiQuestion();
+  await waitFor(() => Boolean(complete));
+  api.aiApi.closeAiModal();
+  await api.aiApi.openAiModal();
+  complete();
+  await asking;
+  assert.equal(calls, 1);
+  assert.match(window.document.getElementById('aiMessages').textContent, /合成回答/);
+  await window.happyDOM.close();
+});
+
+test('UX declining annotation deletion sends no mutation', async () => {
+  const { window, api } = await createReaderDom();
+  api.state.currentBookId = 'a'.repeat(64);
+  api.state.contentType = 'pdf';
+  api.state.userState.books[api.state.currentBookId] = { pdfAnnotations: [{ id: 'note', type: 'pdf', text: '原文', thought: '', color: 'yellow', style: 'marker', targets: [] }] };
+  api.openHighlightEditor('note');
+  let calls = 0;
+  window.confirm = () => false;
+  window.browserHost.deletePdfAnnotation = async () => { calls++; return { deleted: true }; };
+  await api.deleteActiveHighlight();
+  assert.equal(calls, 0);
+  assert.equal(window.document.getElementById('highlightEditor').hidden, false);
+  await window.happyDOM.close();
+});
+
+test('UX search is nonmodal and does not trap keyboard focus', async () => {
+  const { window, api } = await createReaderDom();
+  api.state.currentBookId = 'a'.repeat(64);
+  api.state.currentPath = 'test.pdf';
+  api.setupReaderActionMapping();
+  api.openReaderPanel('search');
+  assert.equal(window.document.getElementById('readerSearchSheet').getAttribute('aria-modal'), 'false');
+  const close = window.document.querySelector('#readerSearchSheet button');
+  close.focus();
+  const event = new window.KeyboardEvent('keydown', { key: 'Tab', shiftKey: true, bubbles: true, cancelable: true });
+  close.dispatchEvent(event);
+  assert.equal(event.defaultPrevented, false);
+  await window.happyDOM.close();
+});
 
 test('library rescan shows safe progress and outcome feedback', async () => {
   const { window } = await createReaderDom();
@@ -154,8 +541,35 @@ test('library rescan shows safe progress and outcome feedback', async () => {
   await new Promise((resolve) => setTimeout(resolve, 0));
   assert.equal(failedButton.disabled, false);
   assert.equal(failedButton.textContent, '重新扫描');
-  assert.match(article.querySelector('.library-scan-status')?.textContent || '', /检查 fnOS 应用权限并重启应用后重试/);
+  assert.match(article.querySelector('.library-scan-status')?.textContent || '', /检查 fnOS 应用权限后重试/);
   assert.doesNotMatch(article.textContent, /permission denied|\/var\/|root|path/i);
+});
+
+test('library explains when indexed PDFs are hidden by the fnOS reader switch', async () => {
+  const { window, api } = await createReaderDom();
+  const book = { id: 'a'.repeat(64), title: '已收录文本', type: 'txt' };
+  api.renderLibrary({
+    books: [book],
+    features: { libraryOrganization: false, pdfReader: false, hiddenPdfCount: 2 }
+  });
+  assert.match(window.document.querySelector('.library-view')?.textContent || '', /2 本 PDF.*fnOS.*运行设置/);
+
+  api.renderLibrary({
+    books: [book],
+    features: { libraryOrganization: true, pdfReader: false, hiddenPdfCount: 2 },
+    organization: {
+      revision: 0,
+      collections: [],
+      allBookOrder: [book.id],
+      collectionOrders: {},
+      unassignedOrder: [book.id],
+      books: [book]
+    }
+  });
+  assert.match(window.document.querySelector('.library-view')?.textContent || '', /2 本 PDF.*fnOS.*运行设置/);
+
+  api.renderLibrary({ books: [book], features: { libraryOrganization: false, pdfReader: true, hiddenPdfCount: 0 } });
+  assert.doesNotMatch(window.document.querySelector('.library-view')?.textContent || '', /PDF.*运行设置/);
 });
 
 test('browser refresh restores the book selected in the reader URL', async () => {
@@ -173,6 +587,699 @@ test('browser refresh restores the book selected in the reader URL', async () =>
   assert.equal(await api.restoreReaderFromLocation({ books: [book] }), true);
   assert.deepEqual(opened, [book]);
   assert.equal(new URL(window.location.href).searchParams.get('book'), book.id);
+});
+
+test('library organization stays opt-in and falls back to the flat shelf', async () => {
+  const { window, api } = await createReaderDom();
+  const book = {
+    id: 'a'.repeat(64),
+    title: '保持现有书库入口',
+    type: 'txt',
+    relativePath: 'stable.txt'
+  };
+  const opened = [];
+  window.browserHost.openBook = async (selected) => opened.push(selected);
+
+  window.renderLibraryOrganization = () => {
+    throw new Error('organization renderer unavailable');
+  };
+  api.renderLibrary({
+    books: [book],
+    features: { libraryOrganization: true }
+  });
+
+  const shell = window.document.querySelector('.library-view');
+  assert.equal(shell?.dataset.libraryMode, 'flat');
+  assert.equal(shell?.dataset.libraryOrganizationEnabled, 'true');
+  assert.equal(window.document.querySelector('[data-library-organization]'), null);
+
+  window.document.querySelector('.library-book').click();
+  await Promise.resolve();
+  assert.deepEqual(opened, [book]);
+});
+
+test('library organization switches to a collection detail without changing book opening', async () => {
+  const { window, api } = await createReaderDom();
+  const first = { id: 'a'.repeat(64), title: '分类内书籍', type: 'txt', relativePath: 'one.txt' };
+  const second = { id: 'b'.repeat(64), title: '未分类书籍', type: 'txt', relativePath: 'two.txt' };
+  const collectionId = '11111111-1111-4111-8111-111111111111';
+  window.browserHost.openBook = async () => {};
+  const organization = {
+    version: 1,
+    revision: 0,
+    updatedAt: null,
+    preferences: { viewMode: 'collections' },
+    collections: [{ id: collectionId, name: '重点阅读' }],
+    collectionOrders: { [collectionId]: [first.id] },
+    unassignedOrder: [second.id],
+    bookAssignments: { [first.id]: collectionId },
+    orphanedBookIds: [],
+    books: [first, second]
+  };
+  api.renderLibrary({ books: [first, second], features: { libraryOrganization: true }, organization });
+
+  assert.equal(window.document.querySelector('.library-view')?.dataset.libraryMode, 'flat');
+  assert.equal(window.document.querySelectorAll('[data-library-collection-id]').length, 1);
+  window.document.querySelector('[data-library-collection-id] .library-organization-card-main').click();
+  assert.equal(window.document.querySelector('.library-view')?.dataset.libraryMode, 'collection');
+  assert.deepEqual(
+    [...window.document.querySelectorAll('.library-book strong')].map((item) => item.textContent),
+    ['分类内书籍']
+  );
+
+  window.history.back();
+  window.dispatchEvent(new window.PopStateEvent('popstate', { state: { libraryOrganization: { mode: 'root', collectionId: null } } }));
+  assert.equal(window.document.querySelector('.library-view')?.dataset.libraryMode, 'flat');
+  assert.equal(window.document.querySelector('[data-library-collection-id] .library-organization-card-main strong')?.textContent, '重点阅读');
+});
+
+test('library organization keeps rescan separate from view switching and collection creation', async () => {
+  const { window, api } = await createReaderDom();
+  const book = { id: 'a'.repeat(64), title: '组织书架扫描', type: 'txt', relativePath: 'scan.txt' };
+  const organization = {
+    version: 1, revision: 0, updatedAt: null,
+    preferences: { viewMode: 'flat' },
+    collections: [], collectionOrders: {}, unassignedOrder: [book.id],
+    bookAssignments: {}, orphanedBookIds: [], books: [book]
+  };
+  let scans = 0;
+  window.browserHost.scanLibrary = async () => {
+    scans += 1;
+    return { books: [book], features: { libraryOrganization: true } };
+  };
+  window.browserHost.getLibraryOrganization = async () => organization;
+  window.browserHost.openBook = async () => {};
+
+  api.renderLibrary({ books: [book], features: { libraryOrganization: true }, organization });
+  const create = window.document.querySelector('.library-create-button');
+  const scan = window.document.querySelector('.library-scan-button');
+  assert.equal(window.document.querySelector('.library-view-switcher'), null);
+  assert.equal(window.document.body.textContent.includes('我的分类'), false);
+  assert.equal(window.document.body.textContent.includes('按目录'), false);
+  assert.ok(create.closest('.library-header-actions'));
+  assert.equal(window.document.querySelector('.library-collections-section'), null);
+  assert.equal(window.document.querySelector('.library-category-navigation [aria-current="page"] strong')?.textContent, '我的书籍');
+  assert.ok(scan);
+
+  create.click();
+  assert.equal(
+    window.document.querySelector('.library-collection-form')?.parentElement === window.document.querySelector('.library-books-section'),
+    true
+  );
+
+  scan.click();
+  await Promise.resolve();
+  await Promise.resolve();
+  assert.equal(scans, 1);
+});
+
+test('library organization adds a book to the current collection through the existing placement API', async () => {
+  const { window, api } = await createReaderDom();
+  const first = { id: 'a'.repeat(64), title: '已归类书籍', type: 'txt', relativePath: 'one.txt' };
+  const second = { id: 'b'.repeat(64), title: '待加入书籍', type: 'txt', relativePath: 'two.txt' };
+  const collectionId = '11111111-1111-4111-8111-111111111111';
+  const organization = {
+    version: 1, revision: 4, updatedAt: null,
+    preferences: { viewMode: 'collections' },
+    collections: [{ id: collectionId, name: '重点阅读' }],
+    collectionOrders: { [collectionId]: [first.id] },
+    unassignedOrder: [second.id],
+    bookAssignments: { [first.id]: collectionId },
+    orphanedBookIds: [], books: [first, second]
+  };
+  const calls = [];
+  window.browserHost.openBook = async () => {};
+  window.browserHost.placeLibraryBook = async (bookId, targetCollectionId, beforeBookId, revision) => {
+    calls.push({ bookId, targetCollectionId, beforeBookId, revision });
+    return {
+      ...organization,
+      revision: 5,
+      collectionOrders: { [collectionId]: [first.id, second.id] },
+      unassignedOrder: [],
+      bookAssignments: { [first.id]: collectionId, [second.id]: collectionId }
+    };
+  };
+
+  api.renderLibrary({ books: [first, second], features: { libraryOrganization: true }, organization });
+  window.document.querySelector('[data-library-collection-id] .library-organization-card-main').click();
+  assert.equal(window.document.querySelector('.library-view')?.dataset.libraryMode, 'collection');
+  window.document.querySelector('.library-header-actions button.library-create-button')?.click();
+  assert.ok(window.document.querySelector('.library-book-picker'));
+  assert.equal(window.document.querySelector('.library-book-picker-title')?.textContent, '添加书籍');
+  assert.equal(window.document.querySelector('.library-book-picker strong')?.textContent, '待加入书籍');
+
+  window.document.querySelector('.library-book-picker-add').click();
+  await Promise.resolve();
+  await Promise.resolve();
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  assert.deepEqual(calls, [{
+    bookId: second.id,
+    targetCollectionId: collectionId,
+    beforeBookId: null,
+    revision: 4
+  }]);
+  assert.deepEqual(
+    [...window.document.querySelectorAll('.library-book strong')].map((item) => item.textContent),
+    ['已归类书籍', '待加入书籍']
+  );
+});
+
+test('UX book picker filters and moves multiple books with sequential revisions', async () => {
+  const { window, api } = await createReaderDom();
+  const collectionId = '11111111-1111-4111-8111-111111111111';
+  const books = [
+    { id: 'a'.repeat(64), title: '历史甲', type: 'txt' },
+    { id: 'b'.repeat(64), title: '历史乙', type: 'txt' },
+    { id: 'c'.repeat(64), title: '科学丙', type: 'txt' }
+  ];
+  const organization = {
+    version: 1, revision: 4, collections: [{ id: collectionId, name: '历史' }],
+    collectionOrders: { [collectionId]: [] }, unassignedOrder: books.map((book) => book.id),
+    bookAssignments: {}, books
+  };
+  const revisions = [];
+  window.browserHost.placeLibraryBook = async (bookId, target, before, revision) => {
+    revisions.push(revision);
+    return {
+      ...organization,
+      revision: revision + 1,
+      bookAssignments: Object.fromEntries(books.filter((item) => revisions.some((_n, index) => item.id === books[index]?.id)).map((item) => [item.id, collectionId])),
+      collectionOrders: { [collectionId]: books.slice(0, revisions.length).map((book) => book.id) },
+      unassignedOrder: books.slice(revisions.length).map((book) => book.id)
+    };
+  };
+  api.renderLibrary({ books, features: { libraryOrganization: true }, organization });
+  window.document.querySelector('[data-library-collection-id] .library-organization-card-main').click();
+  window.document.querySelector('.library-header-actions .library-create-button').click();
+  const picker = window.document.querySelector('.library-book-picker');
+  const query = picker.querySelector('input[type="search"]');
+  assert.ok(query);
+  query.value = '历史';
+  query.dispatchEvent(new window.Event('input'));
+  assert.equal(picker.querySelectorAll('.library-book-picker-row:not([hidden])').length, 2);
+  picker.querySelectorAll('.library-book-picker-row:not([hidden]) input[type="checkbox"]').forEach((item) => item.click());
+  picker.querySelector('.library-book-picker-move-selected').click();
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  assert.deepEqual(revisions, [4, 5]);
+  assert.equal(window.document.querySelector('.library-book-picker input[type="search"]')?.value, '历史');
+  await window.happyDOM.close();
+});
+
+test('UX regular shelf keeps books openable while exposing direct reorder handles', async () => {
+  const { window, api } = await createReaderDom();
+  const books = [
+    { id: 'a'.repeat(64), title: '第一本', type: 'txt' },
+    { id: 'b'.repeat(64), title: '第二本', type: 'txt' }
+  ];
+  const organization = {
+    version: 1, revision: 2, collections: [], collectionOrders: {},
+    allBookOrder: books.map((book) => book.id), unassignedOrder: books.map((book) => book.id),
+    bookAssignments: {}, books
+  };
+  let opened = 0;
+  window.browserHost.openBook = async () => { opened += 1; };
+  api.renderLibrary({ books, features: { libraryOrganization: true }, organization });
+  assert.equal(window.document.querySelectorAll('.library-grid .library-reorder-handle').length, 2);
+  window.document.querySelector('.library-book').click();
+  assert.equal(opened, 1);
+  await window.happyDOM.close();
+});
+
+test('library book cover starts a desktop drag only after movement and does not open on release', async () => {
+  const { window, api } = await createReaderDom();
+  const books = [
+    { id: 'a'.repeat(64), title: '第一本', type: 'txt' },
+    { id: 'b'.repeat(64), title: '第二本', type: 'txt' }
+  ];
+  const organization = {
+    version: 1, revision: 2, collections: [], collectionOrders: {},
+    allBookOrder: books.map(book => book.id), unassignedOrder: books.map(book => book.id),
+    bookAssignments: {}, books
+  };
+  let opened = 0;
+  window.browserHost.openBook = async () => { opened += 1; };
+  api.renderLibrary({ books, features: { libraryOrganization: true }, organization });
+  const card = window.document.querySelector('.library-grid .library-book');
+  const item = card.closest('[data-reorder-id]');
+  card.click();
+  assert.equal(opened, 1);
+  const cover = card.querySelector('.library-book-cover');
+  const pointer = (type, x) => cover.dispatchEvent(new window.PointerEvent(type, {
+    bubbles: true, pointerId: 31, pointerType: 'mouse', isPrimary: true, button: 0,
+    clientX: x, clientY: 10
+  }));
+  pointer('pointerdown', 10);
+  pointer('pointermove', 14);
+  assert.equal(item.classList.contains('is-library-dragging'), false);
+  pointer('pointermove', 18);
+  assert.equal(item.classList.contains('is-library-dragging'), true);
+  pointer('pointerup', 18);
+  card.click();
+  assert.equal(opened, 1);
+  await window.happyDOM.close();
+});
+
+test('library Escape cancellation suppresses a delayed compatibility click after release', async () => {
+  const { window, api } = await createReaderDom();
+  const books = [
+    { id: 'a'.repeat(64), title: '第一本', type: 'txt' },
+    { id: 'b'.repeat(64), title: '第二本', type: 'txt' }
+  ];
+  const organization = {
+    version: 1, revision: 2, collections: [], collectionOrders: {},
+    allBookOrder: books.map(book => book.id), unassignedOrder: books.map(book => book.id),
+    bookAssignments: {}, books
+  };
+  let opened = 0;
+  window.browserHost.openBook = async () => { opened += 1; };
+  api.renderLibrary({ books, features: { libraryOrganization: true }, organization });
+  const card = window.document.querySelector('.library-grid .library-book');
+  const cover = card.querySelector('.library-book-cover');
+  const pointer = (type, x) => cover.dispatchEvent(new window.PointerEvent(type, {
+    bubbles: true, pointerId: 32, pointerType: 'mouse', isPrimary: true, button: 0,
+    clientX: x, clientY: 10
+  }));
+  pointer('pointerdown', 10);
+  pointer('pointermove', 18);
+  assert.equal(card.closest('[data-reorder-id]').classList.contains('is-library-dragging'), true);
+  window.document.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+  await new Promise(resolve => setTimeout(resolve, 20));
+  pointer('pointerup', 18);
+  card.click();
+  assert.equal(opened, 0);
+  card.click();
+  assert.equal(opened, 1);
+  await window.happyDOM.close();
+});
+
+test('library organize mode still accepts cover drags but ignores its category selector', async () => {
+  const { window, api } = await createReaderDom();
+  const books = [{ id: 'a'.repeat(64), title: '第一本', type: 'txt' }];
+  const organization = {
+    version: 1, revision: 2, collections: [], collectionOrders: {},
+    allBookOrder: books.map(book => book.id), unassignedOrder: books.map(book => book.id),
+    bookAssignments: {}, books
+  };
+  api.renderLibrary({ books, features: { libraryOrganization: true }, organization });
+  window.document.querySelector('.library-mode-button').click();
+  const item = window.document.querySelector('.library-grid .library-reorder-item');
+  const card = item.querySelector('.library-book');
+  assert.equal(card.disabled, false);
+  assert.equal(card.getAttribute('aria-disabled'), 'true');
+  const select = item.querySelector('select');
+  const send = (node, type, id, x) => node.dispatchEvent(new window.PointerEvent(type, {
+    bubbles: true, pointerId: id, pointerType: 'mouse', isPrimary: true, button: 0,
+    clientX: x, clientY: 10
+  }));
+  send(select, 'pointerdown', 40, 10);
+  send(select, 'pointermove', 40, 18);
+  assert.equal(item.classList.contains('is-library-dragging'), false);
+  send(card.querySelector('.library-book-cover'), 'pointerdown', 41, 10);
+  send(card.querySelector('.library-book-cover'), 'pointermove', 41, 18);
+  assert.equal(item.classList.contains('is-library-dragging'), true);
+  await window.happyDOM.close();
+});
+
+test('UX shelf exposes last-read book without changing manual order', async () => {
+  const { window, api } = await createReaderDom();
+  const books = [
+    { id: 'a'.repeat(64), title: '第一本', type: 'txt' },
+    { id: 'b'.repeat(64), title: '第二本', type: 'txt', coverUrl: '/covers/second.jpg' }
+  ];
+  api.state.userState.books[books[1].id] = {
+    progress: { locator: '{"page":2}', percentage: 0.42, updatedAt: '2026-09-27T12:00:00Z' }
+  };
+  const organization = {
+    version: 1, revision: 2, collections: [], collectionOrders: {},
+    allBookOrder: books.map((book) => book.id), unassignedOrder: books.map((book) => book.id),
+    bookAssignments: {}, books
+  };
+  api.renderLibrary({ books, features: { libraryOrganization: true }, organization });
+  const recent = window.document.querySelector('.library-recent-reading');
+  assert.equal(recent?.querySelector('h2')?.textContent, '继续阅读');
+  assert.equal(recent?.querySelector('.library-recent-card strong')?.textContent, '第二本');
+  assert.equal(recent?.querySelector('.library-recent-cover img')?.getAttribute('src'), '/covers/second.jpg');
+  assert.match(recent?.textContent || '', /42%/);
+  assert.equal(window.document.querySelector('.library-continue-button'), null);
+  assert.ok(recent.compareDocumentPosition(window.document.querySelector('.library-grid')) & window.Node.DOCUMENT_POSITION_FOLLOWING);
+  assert.deepEqual([...window.document.querySelectorAll('.library-grid .library-book strong')].map((item) => item.textContent), ['第一本', '第二本']);
+  await window.happyDOM.close();
+});
+
+test('UX shelf keeps search and actions together while category navigation stays above recent books', async () => {
+  const { window, api } = await createReaderDom();
+  const book = { id: 'a'.repeat(64), title: '封面书籍', type: 'txt', coverUrl: '/covers/a.jpg' };
+  api.state.userState.books[book.id] = {
+    progress: { locator: '{"page":1}', updatedAt: '2026-09-27T12:00:00Z' }
+  };
+  const organization = {
+    version: 1, revision: 2, collections: [], collectionOrders: {},
+    allBookOrder: [book.id], unassignedOrder: [book.id], bookAssignments: {}, books: [book]
+  };
+  api.renderLibrary({ books: [book], scan: { status: 'completed', discoveredCount: 1, reusedCount: 1 },
+    features: { libraryOrganization: true }, organization });
+  const shell = window.document.querySelector('.library-view');
+  const filter = shell.querySelector('.library-filter');
+  assert.ok(filter.closest('.library-header-actions'));
+  assert.equal(shell.querySelector('.library-scan-status').hidden, true);
+  const nav = shell.querySelector('.library-category-navigation');
+  const recent = shell.querySelector('.library-recent-reading');
+  assert.ok(nav.compareDocumentPosition(recent) & window.Node.DOCUMENT_POSITION_FOLLOWING);
+  assert.ok(recent.compareDocumentPosition(shell.querySelector('.library-grid')) & window.Node.DOCUMENT_POSITION_FOLLOWING);
+  await window.happyDOM.close();
+});
+
+test('UX shelf search hides an unrelated recent book without changing its saved progress', async () => {
+  const { window, api } = await createReaderDom();
+  const books = [
+    { id: 'a'.repeat(64), title: '历史故事', type: 'txt' },
+    { id: 'b'.repeat(64), title: '科学笔记', type: 'txt' }
+  ];
+  api.state.userState.books[books[0].id] = {
+    progress: { locator: '{"page":1}', updatedAt: '2026-09-27T12:00:00Z' }
+  };
+  api.renderLibrary({ books });
+  const filter = window.document.querySelector('.library-filter');
+  const recent = window.document.querySelector('.library-recent-reading');
+  filter.value = '科学';
+  filter.dispatchEvent(new window.Event('input'));
+  assert.equal(recent.hidden, true);
+  filter.value = '历史';
+  filter.dispatchEvent(new window.Event('input'));
+  assert.equal(recent.hidden, false);
+  assert.equal(api.state.userState.books[books[0].id].progress.locator, '{"page":1}');
+  await window.happyDOM.close();
+});
+
+test('UX recent reading uses a compact cover card and completed scan feedback takes no layout space', async () => {
+  const { window, api } = await createReaderDom();
+  const style = window.document.createElement('style');
+  style.textContent = await fs.readFile(path.resolve(__dirname, '../app/ui/styles.css'), 'utf8');
+  window.document.head.appendChild(style);
+  const book = { id: 'a'.repeat(64), title: '正在读的书', type: 'epub', coverUrl: '/cover.jpg' };
+  api.state.userState.books[book.id] = {
+    progress: { locator: '{"page":1}', updatedAt: '2026-09-27T12:00:00Z' }
+  };
+  api.renderLibrary({ books: [book], scan: { status: 'completed', discoveredCount: 1, reusedCount: 1 } });
+  const card = window.document.querySelector('.library-recent-card');
+  assert.equal(window.getComputedStyle(card).display, 'flex');
+  assert.equal(window.getComputedStyle(card.querySelector('.library-book-cover')).width, '60px');
+  assert.equal(window.getComputedStyle(card.querySelector('.library-book-cover')).height, '84px');
+  assert.equal(window.getComputedStyle(window.document.querySelector('.library-scan-status')).display, 'none');
+  await window.happyDOM.close();
+});
+
+test('library home exposes stable extension regions without changing its existing sections', async () => {
+  const { window, api } = await createReaderDom();
+  const book = { id: 'a'.repeat(64), title: '扩展锚点测试', type: 'epub', coverUrl: '/cover.jpg' };
+  api.state.userState.books[book.id] = {
+    progress: { locator: '{"page":1}', updatedAt: '2026-09-27T12:00:00Z' }
+  };
+  api.renderLibrary({ books: [book], features: { libraryOrganization: true }, organization: {
+    version: 1, revision: 1, collections: [], collectionOrders: {}, allBookOrder: [book.id],
+    unassignedOrder: [book.id], bookAssignments: {}, books: [book]
+  } });
+
+  const shell = window.document.querySelector('.library-view');
+  assert.ok(shell.querySelector('[data-library-slot="header"]')?.matches('.library-header'));
+  assert.ok(shell.querySelector('[data-library-slot="header-actions"]')?.matches('.library-header-actions'));
+  assert.ok(shell.querySelector('[data-library-slot="categories"]')?.matches('.library-category-navigation'));
+  assert.ok(shell.querySelector('[data-library-slot="recent-reading"]')?.matches('.library-recent-reading'));
+  assert.ok(shell.querySelector('[data-library-slot="book-grid"]')?.matches('.library-grid'));
+  assert.deepEqual([...shell.querySelectorAll('.library-grid .library-book strong')].map((item) => item.textContent), ['扩展锚点测试']);
+  await window.happyDOM.close();
+});
+
+test('library home styling keeps the cover grid fluid and honors the approved desktop-to-mobile breakpoints', async () => {
+  const css = await fs.readFile(path.resolve(__dirname, '../app/ui/styles.css'), 'utf8');
+  assert.ok(/\.library-view\s*\{[^}]*width:\s*min\(1280px,\s*100%\)/s.test(css), 'library width should match the approved max-width');
+  assert.ok(/\.library-grid\s*\{[^}]*grid-template-columns:\s*repeat\(5,\s*minmax\(0,\s*1fr\)\)/s.test(css), 'desktop should use a fluid five-column grid');
+  assert.ok(/aspect-ratio:\s*3\s*\/\s*4\.2/.test(css), 'book covers should use the approved ratio');
+  assert.ok(/@media\s*\(max-width:\s*1099px\)[\s\S]*?grid-template-columns:\s*repeat\(4,/.test(css), 'medium desktop should use four columns');
+  assert.ok(/@media\s*\(max-width:\s*919px\)[\s\S]*?grid-template-columns:\s*repeat\(3,/.test(css), 'tablet should use three columns');
+  assert.ok(/@media\s*\(max-width:\s*679px\)[\s\S]*?grid-template-columns:\s*repeat\(2,/.test(css), 'phone should use two columns');
+});
+
+test('library root actions follow create, rescan, and organize order on one toolbar row', async () => {
+  const { window, api } = await createReaderDom();
+  const book = { id: 'a'.repeat(64), title: '工具栏顺序', type: 'txt' };
+  const organization = {
+    version: 1, revision: 0, collections: [], collectionOrders: {},
+    allBookOrder: [book.id], unassignedOrder: [book.id], bookAssignments: {}, books: [book]
+  };
+  api.renderLibrary({ books: [book], features: { libraryOrganization: true }, organization });
+  const actions = window.document.querySelector('.library-organization-view[data-library-mode="flat"] .library-header-actions');
+  assert.deepEqual([...actions.querySelectorAll('button')].map((button) => button.textContent), ['新建分类', '重新扫描', '整理']);
+  assert.ok(actions.querySelector('.library-filter'));
+  await window.happyDOM.close();
+});
+
+test('library recent-reading heading opts out of the article accent underline and separates search from its actions', async () => {
+  const css = await fs.readFile(path.resolve(__dirname, '../app/ui/styles.css'), 'utf8');
+  assert.ok(/\.article\.is-library\s+\.library-recent-reading\s+h2\s*\{[^}]*border-bottom:\s*0/s.test(css), 'library recent-reading heading should not inherit the article underline');
+  assert.ok(/\.library-organization-view\[data-library-mode="flat"\]\s+\.library-header-actions\s*\{[^}]*display:\s*grid[^}]*grid-template-columns:\s*repeat\(3,\s*max-content\)/s.test(css), 'root actions should keep the three actions on one row');
+  assert.ok(/\.library-organization-view\[data-library-mode="flat"\]\s+\.library-filter\s*\{[^}]*grid-column:\s*1\s*\/\s*-1/s.test(css), 'search should occupy its own row above the actions');
+});
+
+test('UX reorder handles stay available without dominating the resting shelf', async () => {
+  const { window, api } = await createReaderDom();
+  const style = window.document.createElement('style');
+  style.textContent = await fs.readFile(path.resolve(__dirname, '../app/ui/styles.css'), 'utf8');
+  window.document.head.appendChild(style);
+  const book = { id: 'a'.repeat(64), title: '安静的封面', type: 'txt' };
+  const collectionId = '11111111-1111-4111-8111-111111111111';
+  const organization = {
+    version: 1, revision: 2, collections: [{ id: collectionId, name: '历史' }],
+    collectionOrders: { [collectionId]: [] }, allBookOrder: [book.id],
+    unassignedOrder: [book.id], bookAssignments: {}, books: [book]
+  };
+  api.renderLibrary({ books: [book], features: { libraryOrganization: true }, organization });
+  const bookHandle = window.document.querySelector('.library-grid .library-reorder-handle');
+  const categoryHandle = window.document.querySelector('.library-category-navigation .library-reorder-handle');
+  assert.equal(bookHandle.tabIndex, 0);
+  assert.equal(window.getComputedStyle(bookHandle).opacity, '0');
+  assert.equal(window.getComputedStyle(categoryHandle).width, '28px');
+  window.document.querySelector('.library-mode-button').click();
+  assert.equal(window.getComputedStyle(window.document.querySelector('.library-grid .library-reorder-handle')).opacity, '1');
+  await window.happyDOM.close();
+});
+
+test('UX category rename saves through revision API without deleting its books', async () => {
+  const { window, api } = await createReaderDom();
+  const id = '11111111-1111-4111-8111-111111111111';
+  const book = { id: 'a'.repeat(64), title: '旧书', type: 'txt' };
+  const organization = {
+    version: 1, revision: 4, collections: [{ id, name: '旧名' }],
+    collectionOrders: { [id]: [book.id] }, unassignedOrder: [],
+    bookAssignments: { [book.id]: id }, books: [book]
+  };
+  let called;
+  window.browserHost.renameLibraryCollection = async (...args) => {
+    called = args;
+    return { ...organization, revision: 5, collections: [{ id, name: '新名' }] };
+  };
+  api.renderLibrary({ books: [book], features: { libraryOrganization: true }, organization });
+  window.document.querySelector('.library-mode-button').click();
+  window.document.querySelector('.library-organization-card-rename').click();
+  const form = window.document.querySelector('.library-collection-rename-form');
+  assert.ok(form);
+  form.querySelector('input').value = '新名';
+  form.dispatchEvent(new window.Event('submit', { bubbles: true, cancelable: true }));
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  assert.deepEqual(called, [id, '新名', 4]);
+  assert.equal(window.document.querySelector('[data-library-collection-id] strong')?.textContent, '新名');
+  await window.happyDOM.close();
+});
+
+test('library organization uses drag handles instead of visible move buttons and keeps keyboard reorder', async () => {
+  const { window, api } = await createReaderDom();
+  const first = { id: 'a'.repeat(64), title: '第一本', type: 'txt', relativePath: 'one.txt' };
+  const second = { id: 'b'.repeat(64), title: '第二本', type: 'txt', relativePath: 'two.txt' };
+  const firstCollection = '11111111-1111-4111-8111-111111111111';
+  const secondCollection = '22222222-2222-4222-8222-222222222222';
+  const baseOrganization = {
+    version: 1,
+    revision: 0,
+    updatedAt: null,
+    preferences: { viewMode: 'collections' },
+    collections: [
+      { id: firstCollection, name: '第一组' },
+      { id: secondCollection, name: '第二组' }
+    ],
+    collectionOrders: { [firstCollection]: [first.id], [secondCollection]: [second.id] },
+    unassignedOrder: [],
+    bookAssignments: { [first.id]: firstCollection, [second.id]: secondCollection },
+    orphanedBookIds: [],
+    books: [first, second]
+  };
+  const calls = [];
+  window.browserHost.reorderLibraryOrganization = async (scope, order) => {
+    calls.push({ scope, order });
+    return { ...baseOrganization, revision: 1, collections: [
+      { id: secondCollection, name: '第二组' },
+      { id: firstCollection, name: '第一组' }
+    ] };
+  };
+  api.renderLibrary({ books: [first, second], features: { libraryOrganization: true }, organization: baseOrganization });
+  assert.equal(window.document.querySelectorAll('.library-reorder-controls').length, 0);
+  window.document.querySelector('.library-mode-button').click();
+  assert.equal(window.document.querySelectorAll('.library-reorder-button').length, 0);
+  assert.ok(window.document.querySelectorAll('.library-reorder-handle').length >= 4);
+  const categoryHandle = window.document.querySelector('.library-category-navigation .library-reorder-handle');
+  categoryHandle.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }));
+  await Promise.resolve();
+  await Promise.resolve();
+  assert.deepEqual(calls, [{ scope: 'collections', order: [secondCollection, firstCollection] }]);
+});
+
+test('library organization exposes a visible drag handle and keeps book cards inert in manage mode', async () => {
+  const { window, api } = await createReaderDom();
+  const first = { id: 'a'.repeat(64), title: '第一本', type: 'txt', relativePath: 'one.txt' };
+  const second = { id: 'b'.repeat(64), title: '第二本', type: 'txt', relativePath: 'two.txt' };
+  const collectionId = '11111111-1111-4111-8111-111111111111';
+  const organization = {
+    version: 1,
+    revision: 0,
+    updatedAt: null,
+    preferences: { viewMode: 'collections' },
+    collections: [{ id: collectionId, name: '重点阅读' }],
+    collectionOrders: { [collectionId]: [first.id, second.id] },
+    unassignedOrder: [],
+    bookAssignments: { [first.id]: collectionId, [second.id]: collectionId },
+    orphanedBookIds: [],
+    books: [first, second]
+  };
+  let opened = 0;
+  window.browserHost.openBook = async () => { opened += 1; };
+
+  api.renderLibrary({ books: [first, second], features: { libraryOrganization: true }, organization });
+  window.document.querySelector('.library-mode-button').click();
+
+  const handles = window.document.querySelectorAll('.library-grid .library-reorder-handle');
+  assert.equal(handles.length, 2);
+  assert.match(handles[0].getAttribute('aria-label'), /拖动排序.*第一本/);
+  window.document.querySelector('.library-book').click();
+  assert.equal(opened, 0);
+});
+
+test('library organization activates mouse reorder only after deliberate movement', async () => {
+  const { window, api } = await createReaderDom();
+  const first = { id: 'a'.repeat(64), title: '第一本', type: 'txt', relativePath: 'one.txt' };
+  const second = { id: 'b'.repeat(64), title: '第二本', type: 'txt', relativePath: 'two.txt' };
+  const collectionId = '11111111-1111-4111-8111-111111111111';
+  const organization = {
+    version: 1,
+    revision: 0,
+    updatedAt: null,
+    preferences: { viewMode: 'collections' },
+    collections: [{ id: collectionId, name: '重点阅读' }],
+    collectionOrders: { [collectionId]: [first.id, second.id] },
+    unassignedOrder: [],
+    bookAssignments: { [first.id]: collectionId, [second.id]: collectionId },
+    orphanedBookIds: [],
+    books: [first, second]
+  };
+  window.browserHost.reorderLibraryOrganization = async () => organization;
+
+  api.renderLibrary({ books: [first, second], features: { libraryOrganization: true }, organization });
+  window.document.querySelector('.library-mode-button').click();
+
+  const handle = window.document.querySelector('.library-reorder-handle');
+  const item = handle.closest('[data-reorder-id]');
+  handle.dispatchEvent(new window.PointerEvent('pointerdown', {
+    bubbles: true,
+    pointerId: 11,
+    pointerType: 'mouse',
+    isPrimary: true,
+    clientX: 10,
+    clientY: 10
+  }));
+  assert.equal(item.classList.contains('is-library-dragging'), false);
+  handle.dispatchEvent(new window.PointerEvent('pointermove', {
+    bubbles: true, pointerId: 11, pointerType: 'mouse', clientX: 18, clientY: 10
+  }));
+  assert.equal(item.classList.contains('is-library-dragging'), true);
+  handle.dispatchEvent(new window.PointerEvent('pointerup', {
+    bubbles: true,
+    pointerId: 11,
+    pointerType: 'mouse',
+    clientX: 10,
+    clientY: 10
+  }));
+  assert.equal(item.classList.contains('is-library-dragging'), false);
+  assert.equal(item.hasAttribute('aria-grabbed'), false);
+});
+
+test('library organization keeps touch reorder delayed and cancels when the finger moves', async () => {
+  const { window, api } = await createReaderDom();
+  const first = { id: 'a'.repeat(64), title: '第一本', type: 'txt', relativePath: 'one.txt' };
+  const second = { id: 'b'.repeat(64), title: '第二本', type: 'txt', relativePath: 'two.txt' };
+  const collectionId = '11111111-1111-4111-8111-111111111111';
+  const organization = {
+    version: 1,
+    revision: 0,
+    updatedAt: null,
+    preferences: { viewMode: 'collections' },
+    collections: [{ id: collectionId, name: '重点阅读' }],
+    collectionOrders: { [collectionId]: [first.id, second.id] },
+    unassignedOrder: [],
+    bookAssignments: { [first.id]: collectionId, [second.id]: collectionId },
+    orphanedBookIds: [],
+    books: [first, second]
+  };
+  api.renderLibrary({ books: [first, second], features: { libraryOrganization: true }, organization });
+  window.document.querySelector('.library-mode-button').click();
+
+  const handle = window.document.querySelector('.library-reorder-handle');
+  const item = handle.closest('[data-reorder-id]');
+  handle.dispatchEvent(new window.PointerEvent('pointerdown', {
+    bubbles: true,
+    pointerId: 21,
+    pointerType: 'touch',
+    isPrimary: true,
+    clientX: 10,
+    clientY: 10
+  }));
+  assert.equal(item.classList.contains('is-library-dragging'), false);
+  handle.dispatchEvent(new window.PointerEvent('pointermove', {
+    bubbles: true,
+    pointerId: 21,
+    pointerType: 'touch',
+    clientX: 20,
+    clientY: 10
+  }));
+  await new Promise((resolve) => setTimeout(resolve, 380));
+  assert.equal(item.classList.contains('is-library-dragging'), false);
+
+  handle.dispatchEvent(new window.PointerEvent('pointerdown', {
+    bubbles: true,
+    pointerId: 22,
+    pointerType: 'touch',
+    isPrimary: true,
+    clientX: 10,
+    clientY: 10
+  }));
+  await new Promise((resolve) => setTimeout(resolve, 380));
+  assert.equal(item.classList.contains('is-library-dragging'), true);
+});
+
+test('source-folder mode is no longer exposed by the library home', async () => {
+  const { window, api } = await createReaderDom();
+  const rootId = 'c'.repeat(64);
+  const first = { id: 'a'.repeat(64), title: '目录中的书', type: 'txt', relativePath: '营养/基础/one.txt', sourceRootId: rootId, sourcePathSegments: ['营养', '基础'] };
+  const second = { id: 'b'.repeat(64), title: '根目录的书', type: 'txt', relativePath: 'two.txt', sourceRootId: rootId, sourcePathSegments: [] };
+  const organization = {
+    version: 1, revision: 0, updatedAt: null,
+    preferences: { viewMode: 'source-folders' },
+    collections: [], collectionOrders: {}, unassignedOrder: [first.id, second.id],
+    bookAssignments: {}, orphanedBookIds: [], books: [first, second]
+  };
+  api.renderLibrary({ books: [first, second], features: { libraryOrganization: true }, organization });
+  assert.equal(window.document.querySelector('.library-view')?.dataset.libraryMode, 'flat');
+  assert.equal(window.document.querySelector('.library-view-switcher'), null);
+  assert.equal(window.document.body.textContent.includes('按目录'), false);
+  assert.equal(window.history.state.libraryOrganization.mode, 'root');
+  assert.equal(window.document.querySelectorAll('.library-reorder-controls').length, 0);
 });
 
 test('AI local retrieval chunks book text and prioritizes selected terms and current chapter', async () => {
@@ -306,6 +1413,534 @@ test('AI settings open as a secondary sheet without replacing the conversation a
   assert.equal(window.document.getElementById('aiAnswer')?.textContent, '当前对话内容');
 });
 
+test('AI conversation survives close and restores the active server conversation on reopen', async () => {
+  const { window, api } = await createReaderDom();
+  const calls = [];
+  const bookId = 'c'.repeat(64);
+  window.browserHost = {
+    aiStatus: async () => ({ configured: true, model: 'test-model' }),
+    getAiConversations: async (requestedBookId) => {
+      calls.push(['list', requestedBookId]);
+      return {
+        activeConversationId: 'conversation-1',
+        conversations: [{
+          id: 'conversation-1',
+          title: '本书讲了什么',
+          messageCount: 2,
+          createdAt: '2026-09-21T00:00:00.000Z',
+          updatedAt: '2026-09-21T00:00:01.000Z'
+        }]
+      };
+    },
+    getAiConversation: async (conversationId, requestedBookId) => {
+      calls.push(['detail', conversationId, requestedBookId]);
+      return {
+        id: conversationId,
+        title: '本书讲了什么',
+        createdAt: '2026-09-21T00:00:00.000Z',
+        updatedAt: '2026-09-21T00:00:01.000Z',
+        messages: [
+          { id: 'user-message', role: 'user', content: '本书讲了什么？', createdAt: '2026-09-21T00:00:00.000Z' },
+          {
+            id: 'assistant-message',
+            role: 'assistant',
+            content: '本书主要讨论营养与健康。',
+            sources: [{ citationIndex: 1, chapterIndex: 0, chapterHref: '', chapterLabel: '前言' }],
+            createdAt: '2026-09-21T00:00:01.000Z'
+          }
+        ]
+      };
+    }
+  };
+  api.state.contentType = 'epub';
+  api.state.currentBookId = bookId;
+
+  await api.aiApi.openAiModal(null, window.document.body);
+  await waitFor(() => window.document.getElementById('aiAnswer')?.textContent.includes('营养与健康'), 'AI conversation did not restore');
+  assert.equal(window.document.getElementById('aiMessages')?.textContent.includes('本书讲了什么？'), true);
+  assert.deepEqual(calls.slice(0, 2), [
+    ['list', bookId],
+    ['detail', 'conversation-1', bookId]
+  ]);
+  assert.equal(api.aiApi.getAiConversationState().conversationId, 'conversation-1');
+
+  api.aiApi.closeAiModal({ restoreFocus: false });
+  assert.equal(window.document.getElementById('aiModal').hidden, true);
+  assert.match(window.document.getElementById('aiAnswer').textContent, /营养与健康/);
+
+  await api.aiApi.openAiModal(null, window.document.body);
+  await waitFor(() => calls.filter(([kind]) => kind === 'list').length === 2, 'AI conversation was not reloaded after reopen');
+  assert.match(window.document.getElementById('aiAnswer').textContent, /营养与健康/);
+});
+
+test('a delayed AI conversation restore cannot erase a newly completed PDF answer', async () => {
+  const { window, api } = await createReaderDom();
+  const bookId = '1'.repeat(64);
+  let releaseDetail;
+  api.state.contentType = 'pdf';
+  api.state.currentBookId = bookId;
+  window.pdfReaderController = { getPageCount: () => 9 };
+  window.browserHost = {
+    aiStatus: async () => ({ configured: true, model: 'test-model' }),
+    getAiConversations: async () => ({ activeConversationId: 'old', conversations: [{ id: 'old', title: '旧对话' }] }),
+    getAiConversation: async () => new Promise((resolve) => { releaseDetail = resolve; }),
+    askAiStream: async (_bookId, _request, handlers) => {
+      handlers.onDone({ answer: '新回答', sources: [] });
+      return { answer: '新回答', sources: [] };
+    }
+  };
+  const opening = api.aiApi.openAiModal(null, window.document.body);
+  await waitFor(() => typeof releaseDetail === 'function', 'conversation detail request did not start');
+  window.document.getElementById('aiQuestion').value = '新问题';
+  assert.equal(await api.aiApi.askAiQuestion(), true);
+  assert.match(window.document.getElementById('aiMessages').textContent, /新回答/);
+  releaseDetail({ id: 'old', messages: [{ role: 'assistant', content: '旧回答', sources: [] }] });
+  await opening;
+  assert.match(window.document.getElementById('aiMessages').textContent, /新回答/);
+});
+
+test('first AI answer survives delayed status loading before conversation restoration begins', async () => {
+  const { window, api } = await createReaderDom();
+  let releaseStatus;
+  let restoreCalls = 0;
+  api.state.contentType = 'pdf';
+  api.state.currentBookId = '3'.repeat(64);
+  window.pdfReaderController = { getPageCount: () => 9 };
+  window.browserHost = {
+    aiStatus: async () => new Promise((resolve) => { releaseStatus = resolve; }),
+    getAiConversations: async () => { restoreCalls += 1; return { conversations: [] }; },
+    askAiStream: async (_bookId, _request, handlers) => {
+      handlers.onDone({ answer: '首轮回答', sources: [] });
+      return { answer: '首轮回答', sources: [] };
+    }
+  };
+  const opening = api.aiApi.openAiModal(null, window.document.body);
+  await waitFor(() => typeof releaseStatus === 'function');
+  window.document.getElementById('aiQuestion').value = '首轮问题';
+  assert.equal(await api.aiApi.askAiQuestion(), true);
+  releaseStatus({ configured: true, model: 'test-model' });
+  await opening;
+  assert.equal(restoreCalls, 0);
+  assert.match(window.document.getElementById('aiMessages').textContent, /首轮回答/);
+});
+
+test('AI browser stream rejects EOF without a done event', async () => {
+  const { window } = await createReaderDom();
+  window.fetch = async () => new Response('event: meta\ndata: {}\n\nevent: delta\ndata: {"delta":"半句"}\n\n', {
+    status: 200, headers: { 'Content-Type': 'text/event-stream' }
+  });
+  await assert.rejects(() => window.browserHost.askAiStream('1'.repeat(64), { question: '问题' }), /中断/);
+});
+
+test('failed PDF AI answer restores the question and removes the empty answer card', async () => {
+  const { window, api } = await createReaderDom();
+  api.state.contentType = 'pdf';
+  api.state.currentBookId = '2'.repeat(64);
+  window.pdfReaderController = { getPageCount: () => 9 };
+  window.browserHost = {
+    aiStatus: async () => ({ configured: true, model: 'test-model' }),
+    askAiStream: async () => { throw new Error('AI 回答超时，请重试。'); }
+  };
+  await api.aiApi.openAiModal(null, window.document.body);
+  const question = window.document.getElementById('aiQuestion');
+  question.value = '这篇文章研究什么？';
+  assert.equal(await api.aiApi.askAiQuestion(), false);
+  assert.equal(question.value, '这篇文章研究什么？');
+  assert.equal(window.document.getElementById('aiInitialAnswerCard').hidden, true);
+  assert.match(window.document.getElementById('aiStatus').textContent, /超时/);
+});
+
+test('AI conversation restore failure shows retry without blocking the reader', async () => {
+  const { window, api } = await createReaderDom();
+  let attempts = 0;
+  api.state.contentType = 'epub';
+  api.state.currentBookId = 'd'.repeat(64);
+  window.browserHost = {
+    aiStatus: async () => ({ configured: true, model: 'test-model' }),
+    getAiConversations: async () => {
+      attempts += 1;
+      if (attempts === 1) throw new Error('网络暂时不可用');
+      return { activeConversationId: null, conversations: [] };
+    }
+  };
+
+  await api.aiApi.openAiModal(null, window.document.body);
+  await waitFor(() => window.document.getElementById('aiStatus')?.textContent.includes('重试'), 'restore retry state was not shown');
+  assert.equal(window.document.getElementById('aiModal').hidden, false);
+  assert.equal(window.document.getElementById('aiQuestion').disabled, false);
+  const retry = window.document.getElementById('btnAiRetryConversation');
+  assert.ok(retry);
+  retry.click();
+  await waitFor(() => attempts === 2, 'restore retry did not call the API again');
+  assert.doesNotMatch(window.document.getElementById('aiStatus').textContent, /网络暂时不可用/);
+});
+
+test('switching books clears in-memory AI conversation and never restores the previous book', async () => {
+  const { window, api } = await createReaderDom();
+  const calls = [];
+  const firstBook = 'e'.repeat(64);
+  const secondBook = 'f'.repeat(64);
+  window.browserHost = {
+    aiStatus: async () => ({ configured: true, model: 'test-model' }),
+    getAiConversations: async (bookId) => {
+      calls.push(bookId);
+      return bookId === firstBook
+        ? { activeConversationId: 'old-conversation', conversations: [{ id: 'old-conversation', title: '旧会话', messageCount: 2 }] }
+        : { activeConversationId: null, conversations: [] };
+    },
+    getAiConversation: async () => ({
+      id: 'old-conversation',
+      title: '旧会话',
+      messages: [
+        { id: 'old-user', role: 'user', content: '旧问题', createdAt: '2026-09-21T00:00:00.000Z' },
+        { id: 'old-answer', role: 'assistant', content: '旧回答', sources: [], createdAt: '2026-09-21T00:00:01.000Z' }
+      ]
+    })
+  };
+  api.state.contentType = 'epub';
+  api.state.currentBookId = firstBook;
+  await api.aiApi.openAiModal(null, window.document.body);
+  await waitFor(() => window.document.getElementById('aiAnswer')?.textContent.includes('旧回答'), 'old conversation did not restore');
+
+  await window.appHost.receiveDocument({
+    path: 'second.txt',
+    name: '第二本书',
+    type: 'text',
+    content: '第二本书内容',
+    bookId: secondBook
+  });
+  assert.equal(api.state.currentBookId, secondBook);
+  assert.equal(api.aiApi.getAiConversationState().conversationId, null);
+  assert.doesNotMatch(window.document.getElementById('aiMessages').textContent, /旧回答/);
+  assert.equal(window.document.getElementById('aiModal').hidden, true);
+});
+
+test('new AI conversation creates a new server session without deleting the old one', async () => {
+  const { window, api } = await createReaderDom();
+  const calls = [];
+  api.state.contentType = 'epub';
+  api.state.currentBookId = '1'.repeat(64);
+  window.browserHost = {
+    aiStatus: async () => ({ configured: true, model: 'test-model' }),
+    getAiConversations: async () => ({
+      activeConversationId: 'old-conversation',
+      conversations: [{ id: 'old-conversation', title: '旧会话', messageCount: 2 }]
+    }),
+    getAiConversation: async () => ({
+      id: 'old-conversation',
+      title: '旧会话',
+      messages: [
+        { id: 'old-user', role: 'user', content: '旧问题', createdAt: '2026-09-21T00:00:00.000Z' },
+        { id: 'old-answer', role: 'assistant', content: '旧回答', sources: [], createdAt: '2026-09-21T00:00:01.000Z' }
+      ]
+    }),
+    createAiConversation: async (title, bookId) => {
+      calls.push(['create', title, bookId]);
+      return { id: 'new-conversation', title: '新对话', messages: [] };
+    },
+    deleteAiConversation: async (...args) => calls.push(['delete', ...args]),
+    clearAiConversation: async (...args) => calls.push(['clear', ...args])
+  };
+  api.aiApi.setupAiPanel();
+  await api.aiApi.openAiModal(null, window.document.body);
+  await waitFor(() => window.document.getElementById('aiAnswer')?.textContent.includes('旧回答'), 'old conversation did not restore');
+  window.document.getElementById('btnAiNewConversation').click();
+  await waitFor(() => api.aiApi.getAiConversationState().conversationId === 'new-conversation', 'new conversation was not created');
+  assert.deepEqual(calls, [['create', '', '1'.repeat(64)]]);
+  assert.doesNotMatch(window.document.getElementById('aiMessages').textContent, /旧回答/);
+  assert.equal(window.document.getElementById('aiInitialAnswerCard').hidden, true);
+});
+
+test('AI conversation list shows bounded summaries and switches by loading selected details', async () => {
+  const { window, api } = await createReaderDom();
+  const calls = [];
+  const bookId = '2'.repeat(64);
+  window.browserHost = {
+    aiStatus: async () => ({ configured: true, model: 'test-model' }),
+    getAiConversations: async () => ({
+      activeConversationId: 'conversation-1',
+      conversations: [
+        {
+          id: 'conversation-1',
+          title: '第一轮问题',
+          messageCount: 2,
+          createdAt: '2026-09-21T00:00:00.000Z',
+          updatedAt: '2026-09-21T00:00:01.000Z'
+        },
+        {
+          id: 'conversation-2',
+          title: '第二轮问题',
+          messageCount: 4,
+          createdAt: '2026-09-20T00:00:00.000Z',
+          updatedAt: '2026-09-20T00:00:01.000Z'
+        }
+      ]
+    }),
+    getAiConversation: async (conversationId) => {
+      calls.push(['detail', conversationId]);
+      return {
+        id: conversationId,
+        title: conversationId === 'conversation-1' ? '第一轮问题' : '第二轮问题',
+        messages: [
+          { id: `${conversationId}-user`, role: 'user', content: `${conversationId} 的问题`, createdAt: '2026-09-21T00:00:00.000Z' },
+          { id: `${conversationId}-answer`, role: 'assistant', content: `${conversationId} 的回答`, sources: [], createdAt: '2026-09-21T00:00:01.000Z' }
+        ]
+      };
+    }
+  };
+  api.state.contentType = 'epub';
+  api.state.currentBookId = bookId;
+  api.aiApi.setupAiPanel();
+  await api.aiApi.openAiModal(null, window.document.body);
+  await waitFor(() => window.document.getElementById('aiAnswer')?.textContent.includes('conversation-1 的回答'), 'active conversation did not restore');
+
+  window.document.getElementById('btnAiConversations').click();
+  await waitFor(() => window.document.getElementById('aiConversationsView')?.hidden === false, 'conversation sheet did not open');
+  const rows = window.document.querySelectorAll('.ai-conversation-row');
+  assert.equal(rows.length, 2);
+  assert.match(rows[0].textContent, /第一轮问题/);
+  assert.match(rows[0].textContent, /2 条消息/);
+  assert.doesNotMatch(rows[0].textContent, /conversation-1 的回答/);
+
+  window.document.querySelector('[data-ai-conversation-id="conversation-2"] .ai-conversation-open').click();
+  await waitFor(() => window.document.getElementById('aiAnswer')?.textContent.includes('conversation-2 的回答'), 'selected conversation did not restore');
+  assert.equal(api.aiApi.getAiConversationState().conversationId, 'conversation-2');
+  assert.deepEqual(calls, [['detail', 'conversation-1'], ['detail', 'conversation-2']]);
+  assert.equal(window.document.getElementById('aiConversationsView').hidden, true);
+});
+
+test('AI conversation confirmation surface exposes an app-owned alertdialog contract', async () => {
+  const { window } = await createReaderDom();
+  const view = window.document.getElementById('aiConversationConfirmView');
+  assert.ok(view);
+  assert.equal(view.getAttribute('role'), 'alertdialog');
+  assert.equal(view.getAttribute('aria-modal'), 'true');
+  assert.equal(view.hidden, true);
+  assert.equal(window.document.getElementById('btnCancelAiConversationConfirm').textContent, '取消');
+  assert.ok(window.document.getElementById('btnConfirmAiConversationAction'));
+});
+
+test('AI conversation delete and clear update only the local summary after server success', async () => {
+  const { window, api } = await createReaderDom();
+  const calls = [];
+  const bookId = '3'.repeat(64);
+  window.browserHost = {
+    aiStatus: async () => ({ configured: true, model: 'test-model' }),
+    getAiConversations: async () => ({
+      activeConversationId: 'conversation-1',
+      conversations: [
+        { id: 'conversation-1', title: '当前会话', messageCount: 2, updatedAt: '2026-09-21T00:00:01.000Z' },
+        { id: 'conversation-2', title: '待删除会话', messageCount: 2, updatedAt: '2026-09-20T00:00:01.000Z' }
+      ]
+    }),
+    getAiConversation: async () => ({
+      id: 'conversation-1',
+      messages: [
+        { id: 'user', role: 'user', content: '当前问题', createdAt: '2026-09-21T00:00:00.000Z' },
+        { id: 'answer', role: 'assistant', content: '当前回答', sources: [], createdAt: '2026-09-21T00:00:01.000Z' }
+      ]
+    }),
+    deleteAiConversation: async (conversationId, requestedBookId) => {
+      calls.push(['delete', conversationId, requestedBookId]);
+      return { deleted: true, id: conversationId };
+    },
+    clearAiConversation: async (conversationId, requestedBookId) => {
+      calls.push(['clear', conversationId, requestedBookId]);
+      return { id: conversationId, messages: [] };
+    }
+  };
+  api.state.contentType = 'epub';
+  api.state.currentBookId = bookId;
+  api.aiApi.setupAiPanel();
+  await api.aiApi.openAiModal(null, window.document.body);
+  await waitFor(() => window.document.getElementById('aiAnswer')?.textContent.includes('当前回答'), 'current conversation did not restore');
+  window.document.getElementById('btnAiConversations').click();
+  await waitFor(() => window.document.querySelectorAll('.ai-conversation-row').length === 2, 'conversation list did not render');
+
+  const clear = window.document.querySelector('[data-ai-conversation-id="conversation-1"] .ai-conversation-clear');
+  const remove = window.document.querySelector('[data-ai-conversation-id="conversation-2"] .ai-conversation-delete');
+  clear.click();
+  assert.equal(calls.length, 0);
+  assert.equal(window.document.getElementById('aiConversationConfirmView').hidden, false);
+  assert.equal(window.document.getElementById('aiConversationConfirmTitle').textContent, '清空此会话？');
+  assert.match(window.document.getElementById('aiConversationConfirmDescription').textContent, /当前会话.*2 条消息/);
+  window.document.getElementById('btnCancelAiConversationConfirm').click();
+  assert.equal(calls.length, 0);
+  assert.equal(window.document.getElementById('aiConversationConfirmView').hidden, true);
+  assert.equal(window.document.activeElement, clear);
+
+  remove.click();
+  window.document.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+  assert.equal(calls.length, 0);
+  assert.equal(window.document.getElementById('aiConversationConfirmView').hidden, true);
+  assert.equal(window.document.activeElement, remove);
+
+  clear.click();
+  window.document.getElementById('btnCloseAiConversationConfirmBackdrop').click();
+  assert.equal(calls.length, 0);
+  assert.equal(window.document.getElementById('aiConversationConfirmView').hidden, true);
+
+  clear.click();
+  window.document.getElementById('btnConfirmAiConversationAction').click();
+  await waitFor(() => calls.some(([kind]) => kind === 'clear'), 'clear conversation did not call the server');
+  await waitFor(() => window.document.getElementById('aiAnswer').hidden === true, 'cleared conversation answer stayed visible');
+  assert.equal(api.aiApi.getAiConversationState().conversationId, 'conversation-1');
+  assert.equal(window.document.getElementById('aiAnswer').hidden, true);
+  assert.match(window.document.querySelector('[data-ai-conversation-id="conversation-1"]').textContent, /0 条消息/);
+
+  const removeAfterClear = window.document.querySelector('[data-ai-conversation-id="conversation-2"] .ai-conversation-delete');
+  removeAfterClear.click();
+  window.document.getElementById('btnConfirmAiConversationAction').click();
+  await waitFor(() => window.document.querySelectorAll('.ai-conversation-row').length === 1, 'deleted conversation stayed in the list');
+  assert.deepEqual(calls, [
+    ['clear', 'conversation-1', bookId],
+    ['delete', 'conversation-2', bookId]
+  ]);
+});
+
+test('AI conversation management keeps the sheet open and offers retry after list or mutation failures', async () => {
+  const { window, api } = await createReaderDom();
+  const bookId = '4'.repeat(64);
+  let listAttempts = 0;
+  window.browserHost = {
+    aiStatus: async () => ({ configured: true, model: 'test-model' }),
+    getAiConversations: async () => {
+      listAttempts += 1;
+      if (listAttempts === 2) throw new Error('列表读取失败');
+      return {
+        activeConversationId: 'conversation-1',
+        conversations: [{ id: 'conversation-1', title: '当前会话', messageCount: 2, updatedAt: '2026-09-21T00:00:01.000Z' }]
+      };
+    },
+    getAiConversation: async () => ({ id: 'conversation-1', messages: [] }),
+    deleteAiConversation: async () => { throw new Error('删除失败'); },
+    clearAiConversation: async () => { throw new Error('清空失败'); }
+  };
+  api.state.contentType = 'epub';
+  api.state.currentBookId = bookId;
+  api.aiApi.setupAiPanel();
+  await api.aiApi.openAiModal(null, window.document.body);
+  window.document.getElementById('btnAiConversations').click();
+  await waitFor(() => window.document.getElementById('aiConversationsView')?.hidden === false, 'conversation sheet did not open');
+  window.document.getElementById('btnRefreshAiConversations').click();
+  await waitFor(() => window.document.getElementById('aiConversationStatus')?.textContent.includes('列表读取失败'), 'list failure was not shown');
+  assert.equal(window.document.getElementById('aiConversationsView').hidden, false);
+  assert.ok(window.document.getElementById('btnRetryAiConversations'));
+
+  window.document.getElementById('btnRetryAiConversations').click();
+  await waitFor(() => (
+    window.document.querySelectorAll('.ai-conversation-row').length === 1
+    && window.document.querySelector('.ai-conversation-clear')?.disabled === false
+  ), 'conversation list retry did not recover');
+  window.document.querySelector('.ai-conversation-clear').click();
+  window.document.getElementById('btnConfirmAiConversationAction').click();
+  await waitFor(() => window.document.getElementById('aiConversationStatus')?.textContent.includes('清空失败'), 'clear failure was not shown');
+  assert.equal(window.document.querySelectorAll('.ai-conversation-row').length, 1);
+
+  window.document.querySelector('.ai-conversation-delete').click();
+  window.document.getElementById('btnConfirmAiConversationAction').click();
+  await waitFor(() => window.document.getElementById('aiConversationStatus')?.textContent.includes('删除失败'), 'delete failure was not shown');
+  assert.equal(window.document.querySelectorAll('.ai-conversation-row').length, 1);
+});
+
+test('AI conversation confirmation submits only one mutation while it is pending', async () => {
+  const { window, api } = await createReaderDom();
+  const bookId = '7'.repeat(64);
+  const calls = [];
+  let resolveClear;
+  window.browserHost = {
+    aiStatus: async () => ({ configured: true, model: 'test-model' }),
+    getAiConversations: async () => ({
+      activeConversationId: 'conversation-1',
+      conversations: [{ id: 'conversation-1', title: '当前会话', messageCount: 2 }]
+    }),
+    getAiConversation: async () => ({ id: 'conversation-1', messages: [] }),
+    clearAiConversation: async (conversationId, requestedBookId) => {
+      calls.push([conversationId, requestedBookId]);
+      await new Promise((resolve) => { resolveClear = resolve; });
+      return { id: conversationId, messages: [] };
+    }
+  };
+  api.state.contentType = 'epub';
+  api.state.currentBookId = bookId;
+  api.aiApi.setupAiPanel();
+  await api.aiApi.openAiModal(null, window.document.body);
+  window.document.getElementById('btnAiConversations').click();
+  await waitFor(() => window.document.querySelector('.ai-conversation-clear'), 'conversation row did not render');
+
+  window.document.querySelector('.ai-conversation-clear').click();
+  const confirm = window.document.getElementById('btnConfirmAiConversationAction');
+  confirm.click();
+  confirm.click();
+  await waitFor(() => calls.length === 1, 'clear mutation did not start exactly once');
+  assert.equal(confirm.disabled, true);
+  assert.equal(window.document.getElementById('btnCancelAiConversationConfirm').disabled, true);
+  resolveClear();
+  await waitFor(() => window.document.querySelector('.ai-conversation-clear').disabled === false, 'conversation controls did not recover');
+  assert.deepEqual(calls, [['conversation-1', bookId]]);
+});
+
+test('AI conversation confirmation becomes inert when its book changes or the AI modal closes', async () => {
+  const { window, api } = await createReaderDom();
+  const bookId = '8'.repeat(64);
+  const calls = [];
+  window.browserHost = {
+    aiStatus: async () => ({ configured: true, model: 'test-model' }),
+    getAiConversations: async () => ({
+      activeConversationId: 'conversation-1',
+      conversations: [{ id: 'conversation-1', title: '当前会话', messageCount: 2 }]
+    }),
+    getAiConversation: async () => ({ id: 'conversation-1', messages: [] }),
+    clearAiConversation: async (...args) => calls.push(args)
+  };
+  api.state.contentType = 'epub';
+  api.state.currentBookId = bookId;
+  api.aiApi.setupAiPanel();
+  await api.aiApi.openAiModal(null, window.document.body);
+  window.document.getElementById('btnAiConversations').click();
+  await waitFor(() => window.document.querySelector('.ai-conversation-clear'), 'conversation row did not render');
+
+  window.document.querySelector('.ai-conversation-clear').click();
+  api.state.currentBookId = '9'.repeat(64);
+  window.document.getElementById('btnConfirmAiConversationAction').click();
+  assert.equal(calls.length, 0);
+
+  api.state.currentBookId = bookId;
+  window.document.querySelector('.ai-conversation-clear').click();
+  api.aiApi.closeAiModal({ restoreFocus: false });
+  assert.equal(window.document.getElementById('aiConversationConfirmView').hidden, true);
+  assert.equal(window.document.getElementById('aiConversationConfirmView').dataset.action, undefined);
+  assert.equal(calls.length, 0);
+});
+
+test('AI conversation confirmation releases management controls after an in-flight book switch', async () => {
+  const { window, api } = await createReaderDom();
+  const bookId = 'a'.repeat(64);
+  let resolveClear;
+  window.browserHost = {
+    aiStatus: async () => ({ configured: true, model: 'test-model' }),
+    getAiConversations: async () => ({
+      activeConversationId: 'conversation-1',
+      conversations: [{ id: 'conversation-1', title: '当前会话', messageCount: 2 }]
+    }),
+    getAiConversation: async () => ({ id: 'conversation-1', messages: [] }),
+    clearAiConversation: async () => new Promise((resolve) => { resolveClear = resolve; })
+  };
+  api.state.contentType = 'epub';
+  api.state.currentBookId = bookId;
+  api.aiApi.setupAiPanel();
+  await api.aiApi.openAiModal(null, window.document.body);
+  window.document.getElementById('btnAiConversations').click();
+  await waitFor(() => window.document.querySelector('.ai-conversation-clear'), 'conversation row did not render');
+
+  window.document.querySelector('.ai-conversation-clear').click();
+  window.document.getElementById('btnConfirmAiConversationAction').click();
+  await waitFor(() => window.document.getElementById('btnRefreshAiConversations').disabled, 'management controls did not lock');
+  api.state.currentBookId = 'b'.repeat(64);
+  resolveClear({ id: 'conversation-1', messages: [] });
+  await waitFor(() => window.document.getElementById('btnRefreshAiConversations').disabled === false, 'management controls stayed locked after book switch');
+});
+
 test('AI browser stream reader dispatches split UTF-8 SSE events', async () => {
   const { window } = await createReaderDom();
   const encoder = new TextEncoder();
@@ -341,6 +1976,26 @@ test('AI browser stream reader dispatches split UTF-8 SSE events', async () => {
   assert.deepEqual(JSON.parse(JSON.stringify(result)), { answer: '第一轮' });
 });
 
+test('PDF AI structure status is accessible, backward-compatible, and separate from EPUB wording', async () => {
+  const { window, api } = await createReaderDom();
+  const status = window.document.getElementById('aiStatus');
+  assert.equal(status.getAttribute('role'), 'status');
+  assert.equal(status.getAttribute('aria-live'), 'polite');
+  assert.equal(api.aiApi.pdfAiStatusFromMeta({ profileStatus: 'ready' }, 4), '正在分析论文结构，仅发送有限页片段…');
+  assert.equal(api.aiApi.pdfAiStatusFromMeta({ profileStatus: 'cached' }, 3), '已使用论文结构，正在检索原文页证据…');
+  assert.equal(api.aiApi.pdfAiStatusFromMeta({ profileStatus: 'fallback' }, 2), '结构分析不可用，已按页检索。');
+  assert.equal(api.aiApi.pdfAiStatusFromMeta({ sources: [] }, 2), '已找到 2 条页证据，正在生成回答…');
+});
+
+test('PDF full-book AI scope does not depend on the local PDF.js page renderer being ready', async () => {
+  const { window, api } = await createReaderDom();
+  api.state.contentType = 'pdf';
+  api.state.currentBookId = 'a'.repeat(64);
+  window.pdfReaderController = { getPageCount: () => 0 };
+
+  assert.deepEqual(JSON.parse(JSON.stringify(api.aiApi.pdfAiScopeInput())), { scope: 'searchable_book' });
+});
+
 test('AI citations render as circled links and only cited sources appear after completion', async () => {
   const { window, api } = await createReaderDom();
   await api.aiApi.openAiForSelection({ text: '引用测试' });
@@ -356,6 +2011,11 @@ test('AI citations render as circled links and only cited sources appear after c
   assert.match(window.document.querySelector('#aiSources')?.textContent || '', /第一章/);
   assert.doesNotMatch(window.document.querySelector('#aiSources')?.textContent || '', /第二章/);
   assert.equal(window.document.querySelector('#aiSources')?.hidden, false);
+
+  api.aiApi.renderAiSources([{ chapterIndex: 0, chapterLabel: '第一章', citationIndexes: [1] }]);
+  api.aiApi.renderAiAnswer('可信【1】与伪造【8】。', null, [{ citationIndex: 1 }]);
+  assert.match(window.document.getElementById('aiAnswer')?.textContent || '', /可信①与伪造。/);
+  assert.equal(window.document.querySelector('#aiAnswer [data-ai-citation="8"]'), null);
 
   api.aiApi.renderAiAnswer('同一章节的第二个片段支持这个结论【3】。');
   api.aiApi.renderAiSources([
@@ -489,6 +2149,51 @@ test('bookmarks capture the current semantic locator and compare stable position
   assert.equal(api.isCurrentBookmark({ locator: { ...locator, pageNumber: 99, scrollTop: 999 } }), false);
 });
 
+test('PDF bookmarks capture, toggle, display, and jump to the exact zero-based page', async () => {
+  const { window, api } = await createReaderDom();
+  const bookId = 'pdf-bookmark-book';
+  const controller = api.pdfApi.pdfReaderController;
+  let pageIndex = 17;
+  const jumps = [];
+  controller.getCurrentBookId = () => bookId;
+  controller.getCurrentPageIndex = () => pageIndex;
+  controller.getPageCount = () => 30;
+  controller.goToPdfPage = (target) => { jumps.push(target); return true; };
+  api.state.contentType = 'pdf';
+  api.state.currentBookId = bookId;
+  api.state.userState.books[bookId] = { bookmarks: [] };
+  api.renderToc();
+
+  const locator = api.getCurrentBookmarkLocator();
+  assert.deepEqual(JSON.parse(JSON.stringify(locator)), { version: 1, type: 'pdf', pageIndex: 17 });
+  assert.equal(api.readerPanels.bookmarks.enabled(), true);
+  assert.equal(api.renderBookmarkButtonState(), false);
+  assert.equal(window.document.getElementById('btnBookmarks').disabled, false);
+  assert.equal(window.document.getElementById('btnMobileBookmarks').disabled, false);
+
+  window.browserHost.createBookmark = async (input) => ({ id: 'pdf-mark-1', ...input });
+  window.browserHost.deleteBookmark = async (id) => ({ deleted: true, id });
+  const bookmark = await api.toggleCurrentBookmark();
+  assert.deepEqual(bookmark.locator, locator);
+  assert.equal(bookmark.label, '第 18 页');
+  assert.equal(api.isCurrentBookmark(), true);
+
+  api.renderBookmarkList();
+  assert.equal(window.document.querySelector('.bookmark-row-title').textContent, '第 18 页');
+  assert.equal(window.document.querySelector('.bookmark-row-meta').textContent, 'PDF · 第 18 页');
+  assert.equal(await api.jumpToBookmark({ locator: { version: 1, type: 'pdf', pageIndex: 30 } }), false);
+  assert.equal(await api.jumpToBookmark(bookmark), true);
+  assert.deepEqual(jumps, [17]);
+
+  pageIndex = 18;
+  assert.equal(api.renderBookmarkButtonState(), false);
+  assert.equal(window.document.getElementById('btnBookmarks').dataset.bookmarkActive, 'false');
+  pageIndex = 17;
+  assert.equal(api.renderBookmarkButtonState(), true);
+  await api.toggleCurrentBookmark();
+  assert.equal(api.state.userState.books[bookId].bookmarks.length, 0);
+});
+
 test('bookmark toggle persists add/remove and mirrors the current book state', async () => {
   const { window, api } = await createReaderDom();
   const chapter = mountDuplicateTextChapter(window);
@@ -594,6 +2299,22 @@ test('EPUB chapter rendering keeps only the latest out-of-order chapter load', a
   const article = window.document.getElementById('article');
   const chapterTwo = deferred();
   const chapterThree = deferred();
+  const leases = [];
+  const released = [];
+  const resourceManager = {
+    createLease() {
+      const lease = { id: `lease-${leases.length + 1}`, paths: new Set(), released: false };
+      leases.push(lease);
+      return lease;
+    },
+    release(lease) {
+      if (!lease || lease.released) return;
+      lease.released = true;
+      released.push(lease.id);
+    },
+    snapshot() { return { cachedBytes: 0, skippedResources: [] }; },
+    destroy() {}
+  };
   const files = {
     'OPS/chapter-2.xhtml': { async: () => chapterTwo.promise },
     'OPS/chapter-3.xhtml': { async: () => chapterThree.promise }
@@ -611,6 +2332,7 @@ test('EPUB chapter rendering keeps only the latest out-of-order chapter load', a
       file: (filePath) => files[filePath] || null
     },
     mediaTypes: {},
+    resourceManager,
     resourceBudget: { totalBytes: 0, skippedResources: [], reserve: () => true },
     diagnostics: { inlinedResourceBytes: 0, skippedResourceCount: 0, skippedResources: [] }
   };
@@ -624,14 +2346,67 @@ test('EPUB chapter rendering keeps only the latest out-of-order chapter load', a
   chapterThree.resolve('<body><p id="third-target">third chapter</p></body>');
   assert.equal(await thirdRequest, true);
   assert.equal(api.state.epubChapterIndex, 2);
+  assert.equal(api.state.epubArchive.activeChapterLease, leases[1]);
   assert.equal(article.querySelectorAll('.epub-chapter').length, 1);
   assert.equal(article.textContent, 'third chapter');
 
   chapterTwo.resolve('<body><p>second chapter</p></body>');
   assert.equal(await secondRequest, false);
   assert.equal(api.state.epubChapterIndex, 2);
+  assert.deepEqual(released, ['lease-1']);
   assert.equal(article.querySelectorAll('.epub-chapter').length, 1);
   assert.equal(article.textContent, 'third chapter');
+});
+
+test('EPUB chapter leases release after DOM replacement and archive destruction', async () => {
+  const { window, api } = await createReaderDom();
+  const article = window.document.getElementById('article');
+  const leases = [];
+  const released = [];
+  let managerDestroyed = false;
+  const resourceManager = {
+    createLease() {
+      const lease = { id: `lease-${leases.length + 1}`, paths: new Set(), released: false };
+      leases.push(lease);
+      return lease;
+    },
+    release(lease) {
+      if (!lease || lease.released) return;
+      if (lease.id === 'lease-1') assert.match(article.textContent, /Chapter two/);
+      lease.released = true;
+      released.push(lease.id);
+    },
+    snapshot() { return { cachedBytes: 0, skippedResources: [] }; },
+    destroy() {
+      assert.deepEqual(released, ['lease-1', 'lease-2']);
+      managerDestroyed = true;
+    }
+  };
+  const entries = {
+    'OPS/one.xhtml': { async: async () => '<body><p>Chapter one</p></body>' },
+    'OPS/two.xhtml': { async: async () => '<body><p>Chapter two</p></body>' }
+  };
+  api.state.contentType = 'epub';
+  api.state.epubChapterCount = 2;
+  api.state.epubArchive = {
+    spine: [
+      { index: 0, fullPath: 'OPS/one.xhtml' },
+      { index: 1, fullPath: 'OPS/two.xhtml' }
+    ],
+    zip: { files: entries, file: (filePath) => entries[filePath] || null },
+    mediaTypes: {},
+    resourceManager,
+    diagnostics: { skippedResources: [], skippedResourceCount: 0, inlinedResourceBytes: 0 }
+  };
+
+  assert.equal(await api.renderEpubChapter(0), true);
+  assert.equal(await api.renderEpubChapter(1), true);
+  assert.deepEqual(released, ['lease-1']);
+  assert.equal(api.state.epubArchive.activeChapterLease, leases[1]);
+
+  api.destroyEpub();
+  assert.deepEqual(released, ['lease-1', 'lease-2']);
+  assert.equal(managerDestroyed, true);
 });
 
 test('scroll EPUB rendering mounts one chapter and loads the next only after navigation', async () => {
@@ -716,6 +2491,84 @@ test('scroll EPUB locators preserve chapter-local and full-book progress', async
   assert.equal(locator.chapterPercentage, 0.5);
   assert.equal(locator.percentage, 0.375);
   assert.equal(locator.href, 'OPS/chapter-2.xhtml');
+});
+
+test('PDF progress writes a bounded page locator and rejects a stale document generation', async () => {
+  const { window, api } = await createReaderDom();
+  const bookId = 'a'.repeat(64);
+  const generation = 12;
+  api.state.currentBookId = bookId;
+  api.state.currentPath = 'library/private.pdf';
+  api.state.contentType = 'pdf';
+  const controller = api.pdfApi.pdfReaderController;
+  controller.getCurrentBookId = () => bookId;
+  controller.getGeneration = () => generation;
+  const requests = [];
+  window.fetch = async (url, options) => {
+    requests.push({ url, options });
+    return { ok: true, json: async () => ({}) };
+  };
+
+  api.savePdfProgress({ bookId, pageIndex: 4, generation });
+  await api.flushPdfProgressSave({ keepalive: true });
+  assert.equal(requests.length, 1);
+  assert.match(requests[0].url, new RegExp(`/books/${bookId}/progress$`));
+  assert.equal(requests[0].options.keepalive, true);
+  assert.deepEqual(JSON.parse(requests[0].options.body), {
+    locator: JSON.stringify({ version: 1, type: 'pdf', pageIndex: 4 }),
+    percentage: null
+  });
+
+  api.savePdfProgress({ bookId, pageIndex: 5, generation });
+  controller.getGeneration = () => generation + 1;
+  await api.flushPdfProgressSave();
+  assert.equal(requests.length, 1, 'a pending write from a replaced PDF document is discarded');
+});
+
+test('generic text progress never overwrites PDF page progress during scroll or pagehide', async () => {
+  const { window, api } = await createReaderDom();
+  const bookId = 'b'.repeat(64);
+  api.state.currentBookId = bookId;
+  api.state.currentPath = 'library/private.pdf';
+  api.state.contentType = 'pdf';
+  api.state.mode = 'read';
+  const requests = [];
+  window.fetch = async (url, options) => {
+    requests.push({ url, options });
+    return { ok: true, json: async () => ({}) };
+  };
+
+  api.saveTextScroll();
+  await api.saveTextScroll.flush();
+
+  assert.deepEqual(requests, []);
+});
+
+test('AI chapter request position follows the visible EPUB anchor without sending page text', async () => {
+  const { window, api } = await createReaderDom();
+  const chapter = mountDuplicateTextChapter(window);
+  chapter.dataset.sourcePath = 'OPS/shared.xhtml';
+  const heading = window.document.createElement('h1');
+  heading.id = 'visible-chapter-two';
+  heading.textContent = '第二章';
+  chapter.appendChild(heading);
+  const reader = window.document.getElementById('reader');
+  reader.getBoundingClientRect = () => ({ top: 0, bottom: 800, left: 0, right: 1200 });
+  heading.getBoundingClientRect = () => ({ top: 20, bottom: 50, left: 20, right: 500 });
+  api.state.contentType = 'epub';
+  api.state.effectiveReadingMode = 'paged';
+  api.state.pageCount = 4;
+  api.state.pageNumber = 2;
+  api.state.epubChapterIndex = 0;
+  api.state.chapterPaths = ['OPS/shared.xhtml'];
+
+  const chapterContext = api.aiApi.currentAiChapter();
+
+  assert.equal(chapterContext.index, 0);
+  assert.equal(chapterContext.href, 'OPS/shared.xhtml');
+  assert.equal(chapterContext.position.href, 'OPS/shared.xhtml');
+  assert.equal(chapterContext.position.anchor, 'visible-chapter-two');
+  assert.equal(Object.hasOwn(chapterContext.position, 'textBefore'), false);
 });
 
 test('legacy EPUB locators restore a valid chapter anchor before whole-book scroll values', async () => {
@@ -920,7 +2773,7 @@ test('an invalid cross-chapter EPUB fragment keeps the current chapter and page 
 
   article.querySelector('a').click();
   await waitFor(
-    () => fileName.textContent === '无法跳转：chapter-2.xhtml#missing（来源：OPS/chapter-1.xhtml）',
+    () => window.document.getElementById('readerFeedback')?.textContent.includes('无法跳转：chapter-2.xhtml#missing（来源：OPS/chapter-1.xhtml）'),
     'invalid EPUB fragment did not show the existing navigation failure'
   );
 
@@ -1070,6 +2923,78 @@ test('selection session opens a bounded six-action menu and rejects outside sele
   api.closeSelectionMenu({ clearSelection: false });
 });
 
+test('PDF selection menu explains why cross-page or oversized selections cannot use selected-text AI', async () => {
+  const { window, api } = await createReaderDom();
+  api.setupSelectionMenu();
+  const base = { format: 'pdf', text: '选中文本', anchor: { left: 160, top: 120, bottom: 140 } };
+  const crossPage = {
+    ...base,
+    targets: [{ pageIndex: 0, quads: [[]] }, { pageIndex: 1, quads: [[]] }]
+  };
+
+  assert.equal(api.openSelectionMenu(crossPage), true);
+  const menu = window.document.getElementById('selectionMenu');
+  const aiAction = menu.querySelector('[data-selection-action="ai"]');
+  const hint = menu.querySelector('.selection-menu-hint');
+  assert.equal(aiAction.hidden, true);
+  assert.equal(hint.hidden, false);
+  assert.match(hint.textContent, /跨页/);
+  assert.match(hint.textContent, /全书提问/);
+
+  api.openSelectionMenu({ ...base, text: '长文本'.repeat(500), targets: [{ pageIndex: 0, quads: [[]] }] });
+  assert.equal(aiAction.hidden, true);
+  assert.match(hint.textContent, /1200 字/);
+
+  api.openSelectionMenu({ ...base, targets: [{ pageIndex: 0, quads: [[]] }] });
+  assert.equal(aiAction.hidden, false);
+  assert.equal(hint.hidden, true);
+  api.openSelectionMenu({ ...base, format: 'epub', targets: [] });
+  assert.equal(aiAction.hidden, false);
+  assert.equal(hint.hidden, true, 'EPUB selection actions keep their existing behavior');
+});
+
+test('Escape from a PDF selection menu restores focus to the PDF reading surface', async () => {
+  const { window, api } = await createReaderDom();
+  const document = window.document;
+  api.setupSelectionMenu();
+  api.state.contentType = 'pdf';
+  document.getElementById('pdfReaderSurface').hidden = false;
+  api.openSelectionMenu({
+    format: 'pdf', text: '依据', targets: [{ pageIndex: 0, quads: [[]] }],
+    anchor: { left: 160, top: 120, bottom: 140 }
+  });
+  document.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+
+  assert.equal(document.getElementById('selectionMenu').hidden, true);
+  assert.equal(document.activeElement, document.getElementById('pdfPages'));
+});
+
+test('oversized PDF text selection explains how to recover instead of silently closing the menu', async () => {
+  const { window, api } = await createReaderDom();
+  const document = window.document;
+  api.state.contentType = 'pdf';
+  api.state.currentBookId = 'a'.repeat(64);
+  const page = document.createElement('div');
+  page.className = 'pdf-page';
+  page.dataset.pageIndex = '0';
+  const textLayer = document.createElement('div');
+  textLayer.className = 'pdf-page-text-layer';
+  const text = document.createTextNode('x'.repeat(4001));
+  textLayer.appendChild(text);
+  page.appendChild(textLayer);
+  document.getElementById('pdfPages').appendChild(page);
+  window.pdfReaderController = { getRenderedPageGeometry: () => null };
+  const range = document.createRange();
+  range.selectNodeContents(text);
+  const selection = window.getSelection();
+  selection.removeAllRanges();
+  selection.addRange(range);
+
+  assert.equal(api.showSelectionMenuForCurrentSelection(), false);
+  assert.match(document.getElementById('readerFeedback').textContent, /超过 4000 字/);
+  assert.match(document.getElementById('readerFeedback').textContent, /缩小选区/);
+});
+
 test('EPUB TOC parsing preserves nested navigation depth for markdown export', async () => {
   const { api } = await createReaderDom();
   const nav = `
@@ -1152,6 +3077,123 @@ test('markdown export groups annotations by chapter depth and quotes only marked
     '',
     ''
   ].join('\n'));
+});
+
+test('PDF export fetches the current book instead of cached notes and downloads one Markdown file', async () => {
+  const { window, api } = await createReaderDom();
+  const bookId = 'a'.repeat(64);
+  api.state.currentBookId = bookId;
+  api.state.currentName = '示例.pdf';
+  api.state.contentType = 'pdf';
+  api.state.userState.books[bookId] = { pdfAnnotations: [{ id: 'stale-cache', text: '缓存旧内容' }] };
+  let requestedUrl = '';
+  window.fetch = async (url) => {
+    requestedUrl = url;
+    return { ok: true, json: async () => ({ annotations: [{
+      type: 'pdf', id: 'fresh', text: '实时笔记', thought: '我的想法',
+      targets: [{ pageIndex: 2, quads: [] }]
+    }] }) };
+  };
+  let blob;
+  let filename;
+  window.URL.createObjectURL = (value) => { blob = value; return 'blob:notes'; };
+  window.URL.revokeObjectURL = () => {};
+  window.HTMLAnchorElement.prototype.click = function click() { filename = this.download; };
+  await api.exportHighlights();
+  assert.equal(requestedUrl, `/app/babyreader-fnos/api/books/${bookId}/pdf-annotations`);
+  assert.equal(filename, '示例.md');
+  const markdown = await blob.text();
+  assert.match(markdown, /第 3 页/);
+  assert.match(markdown, /实时笔记/);
+  assert.doesNotMatch(markdown, /缓存旧内容/);
+});
+
+test('PDF export fails closed when the book changes or its API request fails', async () => {
+  const { window, api } = await createReaderDom();
+  const bookId = 'b'.repeat(64);
+  api.state.currentBookId = bookId;
+  api.state.currentName = '示例.pdf';
+  api.state.contentType = 'pdf';
+  let finishRequest;
+  window.fetch = () => new Promise((resolve) => { finishRequest = resolve; });
+  let downloads = 0;
+  window.HTMLAnchorElement.prototype.click = function click() { downloads += 1; };
+  const pending = api.exportHighlights();
+  api.state.currentBookId = 'c'.repeat(64);
+  finishRequest({ ok: true, json: async () => ({ annotations: [{
+    type: 'pdf', id: 'late', text: '另一书', targets: [{ pageIndex: 0, quads: [] }]
+  }] }) });
+  await pending;
+  assert.equal(downloads, 0);
+  assert.match(window.document.getElementById('readerFeedback').textContent, /已取消上一书的笔记导出/);
+
+  api.state.currentBookId = bookId;
+  api.state.userState.books[bookId] = { pdfAnnotations: [{
+    type: 'pdf', id: 'cached', text: '不允许降级', targets: [{ pageIndex: 0, quads: [] }]
+  }] };
+  window.fetch = async () => ({ ok: false, status: 403, json: async () => ({ error: '无权访问' }) });
+  await api.exportHighlights();
+  assert.equal(downloads, 0);
+});
+
+test('a pending export for the old PDF does not block the new book export or download late data', async () => {
+  const { window, api } = await createReaderDom();
+  const oldBook = '1'.repeat(64);
+  const newBook = '2'.repeat(64);
+  api.state.currentBookId = oldBook;
+  api.state.currentName = '旧书.pdf';
+  api.state.contentType = 'pdf';
+  api.updateTopbarState();
+  let finishOld;
+  window.fetch = async (url) => {
+    if (url.includes(oldBook)) return new Promise((resolve) => { finishOld = resolve; });
+    return { ok: true, json: async () => ({ annotations: [{
+      type: 'pdf', id: 'new', text: '新书内容', targets: [{ pageIndex: 0, quads: [] }]
+    }] }) };
+  };
+  const downloads = [];
+  window.URL.createObjectURL = () => 'blob:test';
+  window.URL.revokeObjectURL = () => {};
+  window.HTMLAnchorElement.prototype.click = function click() { downloads.push(this.download); };
+  const oldExport = api.exportHighlights();
+  api.state.currentBookId = newBook;
+  api.state.currentName = '新书.pdf';
+  api.updateTopbarState();
+  assert.equal(window.document.getElementById('btnExportHighlights').disabled, false);
+  await api.exportHighlights();
+  assert.deepEqual(downloads, ['新书.md']);
+  finishOld({ ok: true, json: async () => ({ annotations: [{
+    type: 'pdf', id: 'old', text: '旧书内容', targets: [{ pageIndex: 0, quads: [] }]
+  }] }) });
+  await oldExport;
+  assert.deepEqual(downloads, ['新书.md']);
+});
+
+test('PDF export button and shortcut are available without changing EPUB shortcut behavior', async () => {
+  const { window, api } = await createReaderDom();
+  api.state.currentBookId = 'd'.repeat(64);
+  api.state.contentType = 'pdf';
+  api.updateTopbarState();
+  assert.equal(window.document.getElementById('btnExportHighlights').hidden, false);
+  const event = { key: 'E', ctrlKey: true, metaKey: true, shiftKey: true, preventDefault() { this.prevented = true; } };
+  assert.equal(api.handleKeyboardShortcut(event), true);
+  assert.equal(event.prevented, true);
+  api.state.contentType = 'epub';
+  api.updateTopbarState();
+  assert.equal(window.document.getElementById('btnExportHighlights').hidden, false);
+});
+
+test('PDF export shortcut does not intercept text fields', async () => {
+  const { window, api } = await createReaderDom();
+  api.state.currentBookId = 'e'.repeat(64);
+  api.state.contentType = 'pdf';
+  const input = window.document.createElement('input');
+  const event = {
+    key: 'e', ctrlKey: true, metaKey: true, shiftKey: true, target: input,
+    preventDefault() { this.prevented = true; }
+  };
+  assert.equal(api.handleKeyboardShortcut(event), false);
+  assert.equal(event.prevented, undefined);
 });
 
 test('deleting one identical-text highlight removes only its stable ID and persists immediately', async () => {
@@ -1352,6 +3394,74 @@ test('page navigation stays within pagination boundaries', async () => {
   assert.equal(api.navigatePageGroup(1), false);
 });
 
+test('repeated pagination control sync does not rewrite stable page buttons', async () => {
+  const { window, api } = await createReaderDom();
+  const previous = window.document.getElementById('btnPreviousPage');
+  const next = window.document.getElementById('btnNextPage');
+  const writes = { previousHidden: 0, previousDisabled: 0, nextHidden: 0, nextDisabled: 0 };
+
+  for (const [button, key] of [[previous, 'previous'], [next, 'next']]) {
+    let hidden = button.hidden;
+    let disabled = button.disabled;
+    Object.defineProperty(button, 'hidden', {
+      configurable: true,
+      get: () => hidden,
+      set: (value) => { writes[`${key}Hidden`] += 1; hidden = Boolean(value); }
+    });
+    Object.defineProperty(button, 'disabled', {
+      configurable: true,
+      get: () => disabled,
+      set: (value) => { writes[`${key}Disabled`] += 1; disabled = Boolean(value); }
+    });
+  }
+
+  api.state.contentType = 'epub';
+  api.state.effectiveReadingMode = 'double';
+  api.state.pageGroup = 1;
+  api.state.pageGroupCount = 3;
+  api.state.pageCount = 6;
+
+  api.updatePaginationControls();
+  const firstSyncWrites = { ...writes };
+  api.updatePaginationControls();
+
+  assert.deepEqual(firstSyncWrites, {
+    previousHidden: 1,
+    previousDisabled: 0,
+    nextHidden: 1,
+    nextDisabled: 0
+  });
+  assert.deepEqual(writes, firstSyncWrites, 'a stable page turn must not rewrite either page button');
+  assert.equal(previous.hidden, false);
+  assert.equal(previous.disabled, false);
+  assert.equal(next.hidden, false);
+  assert.equal(next.disabled, false);
+});
+
+test('pagination snapping skips an already settled page group', async () => {
+  const { window, api } = await createReaderDom();
+  const article = window.document.getElementById('article');
+  let scrollLeft = 800;
+  let scrollWrites = 0;
+  Object.defineProperty(article, 'scrollLeft', {
+    configurable: true,
+    get: () => scrollLeft,
+    set: (value) => { scrollWrites += 1; scrollLeft = value; }
+  });
+
+  api.state.contentType = 'epub';
+  api.state.effectiveReadingMode = 'double';
+  api.state.pageGroup = 1;
+  api.state.pageGroupCount = 3;
+  api.state.pageCount = 6;
+  api.state.pageGroupWidth = 800;
+  api.state.pageOffset = 800;
+
+  assert.equal(api.snapPaginationToNearestGroup({ save: false }), true);
+  assert.equal(scrollWrites, 0, 'settled page groups must not be applied a second time');
+  assert.equal(scrollLeft, 800);
+});
+
 test('page turns keep the existing highlight layer without a full redraw', async () => {
   const { window, api } = await createReaderDom();
   const article = window.document.getElementById('article');
@@ -1428,7 +3538,8 @@ test('Reader Shell retains legacy DOM IDs and exposes one responsive Drawer', as
   assert.ok(bookmarkControl);
   assert.equal(bookmarkControl.disabled, true);
   assert.equal(bookmarkControl.dataset.readerStatus, undefined);
-  assert.match(bookmarkControl.getAttribute('aria-label'), /书签仅支持 EPUB/);
+  assert.doesNotMatch(bookmarkControl.getAttribute('aria-label'), /仅支持 EPUB/);
+  assert.match(bookmarkControl.getAttribute('aria-label'), /书签/);
   assert.equal(bookmarkControl.textContent.trim(), '');
   const aiButton = document.getElementById('btnAi');
   assert.ok(aiButton);
@@ -1597,6 +3708,148 @@ test('search surface keeps the newest query when responses finish out of order',
   assert.doesNotMatch(document.getElementById('readerSearchResults').textContent, /旧结果/);
 });
 
+test('search API adapter forwards a bounded continuation cursor', async () => {
+  const { window } = await createReaderDom();
+  let requestedUrl = '';
+  window.fetch = async (url) => {
+    requestedUrl = String(url);
+    return { ok: true, json: async () => ({ available: true, results: [], hasMore: false, nextCursor: null }) };
+  };
+
+  await window.browserHost.searchBook('search-book', {
+    query: '蛋白质',
+    cursor: 'opaque_cursor-1'
+  });
+
+  const params = new URL(requestedUrl, window.location.origin).searchParams;
+  assert.equal(params.get('cursor'), 'opaque_cursor-1');
+  assert.equal(params.get('limit'), '20');
+});
+
+test('search continuation appends stable unique results and blocks concurrent requests', async () => {
+  const { window, api } = await createReaderDom();
+  const document = window.document;
+  api.state.currentBookId = 'search-book';
+  api.state.currentPath = 'search-book.txt';
+  api.state.contentType = 'text';
+  api.setupReaderActionMapping();
+  api.setupReaderSearch();
+
+  const result = (id) => ({ id, chapterLabel: '当前书本', snippet: `结果 ${id}`, matchText: '内容' });
+  let continuationResolve;
+  let continuationRequests = 0;
+  window.fetch = async (url) => {
+    const cursor = new URL(String(url), window.location.origin).searchParams.get('cursor');
+    if (!cursor) {
+      return { ok: true, json: async () => ({ available: true, results: [result('r1'), result('r2')], hasMore: true, nextCursor: 'cursor-2' }) };
+    }
+    continuationRequests += 1;
+    return new Promise((resolve) => { continuationResolve = resolve; });
+  };
+
+  document.getElementById('readerSearchQuery').value = '内容';
+  document.getElementById('readerSearchForm').dispatchEvent(new window.Event('submit', { bubbles: true, cancelable: true }));
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  const more = document.getElementById('readerSearchMore');
+  assert.equal(more.hidden, false);
+  more.click();
+  more.click();
+  await new Promise((resolve) => setTimeout(resolve, 0));
+
+  assert.equal(continuationRequests, 1);
+  assert.equal(more.disabled, true);
+  assert.match(more.textContent, /加载/);
+  continuationResolve({
+    ok: true,
+    json: async () => ({ available: true, results: [result('r2'), result('r3'), result('r4')], hasMore: false, nextCursor: null })
+  });
+  await new Promise((resolve) => setTimeout(resolve, 0));
+
+  assert.deepEqual([...document.querySelectorAll('#readerSearchResults .reader-search-result')]
+    .map((button) => button.dataset.searchResultId), ['r1', 'r2', 'r3', 'r4']);
+  assert.equal(more.hidden, true);
+});
+
+test('failed search continuation keeps results and retries the same cursor', async () => {
+  const { window, api } = await createReaderDom();
+  const document = window.document;
+  api.state.currentBookId = 'search-book';
+  api.state.currentPath = 'search-book.txt';
+  api.state.contentType = 'text';
+  api.setupReaderActionMapping();
+  api.setupReaderSearch();
+
+  let attempts = 0;
+  window.fetch = async (url) => {
+    const cursor = new URL(String(url), window.location.origin).searchParams.get('cursor');
+    if (!cursor) return {
+      ok: true,
+      json: async () => ({ available: true, results: [{ id: 'kept', snippet: '已有结果', matchText: '已有' }], hasMore: true, nextCursor: 'retry-cursor' })
+    };
+    attempts += 1;
+    if (attempts === 1) return { ok: false, status: 503, json: async () => ({ error: '续取暂时失败' }) };
+    return { ok: true, json: async () => ({ available: true, results: [{ id: 'next', snippet: '后续结果', matchText: '后续' }], hasMore: false, nextCursor: null }) };
+  };
+
+  document.getElementById('readerSearchQuery').value = '内容';
+  document.getElementById('readerSearchForm').dispatchEvent(new window.Event('submit', { bubbles: true, cancelable: true }));
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  document.getElementById('readerSearchMore').click();
+  await new Promise((resolve) => setTimeout(resolve, 0));
+
+  assert.equal(document.querySelectorAll('#readerSearchResults .reader-search-result').length, 1);
+  assert.match(document.getElementById('readerSearchResults').textContent, /已有结果/);
+  assert.equal(document.getElementById('readerSearchError').hidden, false);
+  assert.match(document.getElementById('readerSearchMore').textContent, /重试/);
+
+  document.getElementById('readerSearchMore').click();
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  assert.equal(attempts, 2);
+  assert.deepEqual([...document.querySelectorAll('#readerSearchResults .reader-search-result')]
+    .map((button) => button.dataset.searchResultId), ['kept', 'next']);
+  assert.equal(document.getElementById('readerSearchError').hidden, true);
+});
+
+test('closing search retains same-book responses while switching books invalidates paging state', async () => {
+  const { window, api } = await createReaderDom();
+  const document = window.document;
+  api.state.currentBookId = 'search-book';
+  api.state.currentPath = 'search-book.txt';
+  api.state.contentType = 'text';
+  api.setupReaderActionMapping();
+  api.setupReaderSearch();
+  api.openReaderPanel('search');
+
+  let resolvePending;
+  window.fetch = () => new Promise((resolve) => { resolvePending = resolve; });
+  document.getElementById('readerSearchQuery').value = '内容';
+  document.getElementById('readerSearchForm').dispatchEvent(new window.Event('submit', { bubbles: true, cancelable: true }));
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  api.closeReaderPanel({ restoreFocus: false });
+  resolvePending({
+    ok: true,
+    json: async () => ({ available: true, results: [{ id: 'stale', snippet: '不可显示', matchText: '内容' }], hasMore: true, nextCursor: 'stale-cursor' })
+  });
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  assert.equal(document.getElementById('readerSearchSheet').hidden, true);
+  assert.equal(document.getElementById('readerSearchResults').textContent.includes('不可显示'), true);
+
+  api.openReaderPanel('search');
+  document.getElementById('readerSearchQuery').value = '切书';
+  document.getElementById('readerSearchForm').dispatchEvent(new window.Event('submit', { bubbles: true, cancelable: true }));
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  api.state.currentBookId = 'another-book';
+  window.readerSearchApi.resetReaderSearch();
+  resolvePending({
+    ok: true,
+    json: async () => ({ available: true, results: [{ id: 'old-book', snippet: '旧书结果', matchText: '旧书' }], hasMore: true, nextCursor: 'old-book-cursor' })
+  });
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  assert.equal(document.getElementById('readerSearchMore').hidden, true);
+  assert.equal(document.querySelectorAll('#readerSearchResults > li').length, 0);
+  assert.doesNotMatch(document.getElementById('readerSearchResults').textContent, /旧书结果/);
+});
+
 test('search result navigation locates text in the current document safely', async () => {
   const { window, api } = await createReaderDom();
   const document = window.document;
@@ -1604,6 +3857,7 @@ test('search result navigation locates text in the current document safely', asy
   api.state.currentPath = 'search-book.txt';
   api.state.contentType = 'text';
   document.getElementById('article').innerHTML = '<p>这是可定位的蛋白质内容。</p>';
+  window.Range.prototype.getClientRects = () => [{ left: 24, top: 60, width: 36, height: 18 }];
 
   const navigated = await api.navigateToSearchResult({
     chapterIndex: 0,
@@ -1612,15 +3866,188 @@ test('search result navigation locates text in the current document safely', asy
   });
 
   assert.equal(navigated, true);
-  assert.equal(document.querySelector('.reader-search-target')?.dataset.scrolledIntoView, 'true');
+  assert.equal(document.querySelector('#article p').classList.contains('reader-search-target'), false);
+  assert.equal(document.querySelectorAll('#article .reader-search-hit-rect').length, 1);
+  assert.equal(document.querySelector('#article .reader-search-hit-layer')?.getAttribute('aria-hidden'), 'true');
 });
 
-test('search jump feedback uses a soft highlight instead of a blue outline', async () => {
+test('search navigation uses the locator and local snippet to select a repeated occurrence', async () => {
+  const { window, api } = await createReaderDom();
+  const document = window.document;
+  api.state.currentBookId = 'search-book';
+  api.state.currentPath = 'search-book.txt';
+  api.state.contentType = 'text';
+  document.getElementById('article').innerHTML = '<p>第一次蛋白质</p><p>第二次蛋白质</p>';
+  window.Range.prototype.getClientRects = () => [{ left: 24, top: 60, width: 36, height: 18 }];
+
+  const navigated = await api.navigateToSearchResult({
+    chapterIndex: 0,
+    matchText: '蛋白质',
+    snippet: '…第二次蛋白质…',
+    // Canonical EPUB offsets can drift from DOM offsets around source markup;
+    // the bounded local snippet must win over a coincidental numeric offset.
+    locator: { text: '蛋白质', offset: 3 }
+  });
+
+  const paragraphs = [...document.querySelectorAll('#article p')];
+  assert.equal(navigated, true);
+  assert.equal(paragraphs[0].classList.contains('reader-search-target'), false);
+  assert.equal(paragraphs[1].classList.contains('reader-search-target'), false);
+  assert.equal(document.querySelectorAll('#article .reader-search-hit-rect').length, 1);
+});
+
+test('search locator offset selects a repeated occurrence when it exactly maps to rendered UTF-16 text', async () => {
+  const { window } = await createReaderDom();
+  const article = window.document.getElementById('article');
+  article.innerHTML = '<p>第一次蛋白质</p><p>第二次蛋白质</p>';
+
+  const target = window.readerSearchApi.findSearchTextRange(article, '蛋白质', { offset: 9 });
+
+  assert.ok(target);
+  assert.equal(target.element.textContent, '第二次蛋白质');
+});
+
+test('search locator mapping handles whitespace, inline nodes, supplementary characters, and decoded entities', async () => {
+  const { window, api } = await createReaderDom();
+  const document = window.document;
+  api.state.currentBookId = 'search-book';
+  api.state.currentPath = 'search-book.txt';
+  api.state.contentType = 'text';
+  document.getElementById('article').innerHTML = '<p>😀 前 foo <em>bar</em></p><p>😀 后 foo&nbsp;bar</p>';
+
+  const rangeResult = window.readerSearchApi.findSearchTextRange(
+    document.getElementById('article'),
+    'foo bar',
+    { offset: 13, snippet: '…😀 后 foo bar…' }
+  );
+
+  assert.ok(rangeResult);
+  assert.equal(rangeResult.range.toString(), 'foo bar');
+  assert.equal(rangeResult.element.closest('p')?.textContent, '😀 后 foo bar');
+});
+
+test('PDF-style text-layer spans and line breaks keep repeated search hits on the verified phrase', async () => {
+  const { window } = await createReaderDom();
+  const layer = window.document.createElement('div');
+  layer.className = 'textLayer pdf-page-text-layer';
+  layer.innerHTML = '<span>左栏重复关键词</span><br><span>右栏重复关</span><span>键词，跨行</span><span>命中</span>';
+
+  const repeated = window.readerSearchApi.findSearchTextRange(layer, '重复关键词', {
+    snippet: '…右栏重复关键词，跨行命中…'
+  });
+  const splitAcrossRuns = window.readerSearchApi.findSearchTextRange(layer, '跨行命中', {
+    snippet: '…关键词，跨行命中…'
+  });
+
+  assert.ok(repeated);
+  assert.equal(repeated.range.toString(), '重复关键词');
+  assert.equal(repeated.range.startContainer.parentElement.textContent, '右栏重复关');
+  assert.ok(splitAcrossRuns);
+  assert.equal(splitAcrossRuns.range.toString(), '跨行命中');
+  assert.equal(splitAcrossRuns.range.endContainer.parentElement.textContent, '命中');
+});
+
+test('PDF search hit layers are discarded when their committed page frameId becomes stale', async () => {
+  const { window } = await createReaderDom();
+  const page = window.document.createElement('section');
+  page.className = 'pdf-page';
+  page.dataset.pageIndex = '0';
+  const stale = window.document.createElement('div');
+  stale.className = 'pdf-search-hit-layer';
+  stale.dataset.frameId = 'frame-old';
+  page.append(stale);
+  window.document.getElementById('pdfPages').append(page);
+
+  assert.equal(typeof window.readerSearchApi.onPdfPageFrameCommitted, 'function');
+  window.readerSearchApi.onPdfPageFrameCommitted({ pageIndex: 0, pageElement: page, frameId: 'frame-new' });
+  assert.equal(page.querySelector('.pdf-search-hit-layer'), null);
+
+  const current = window.document.createElement('div');
+  current.className = 'pdf-search-hit-layer';
+  current.dataset.frameId = 'frame-new';
+  page.append(current);
+  window.readerSearchApi.onPdfPageFrameCommitted({ pageIndex: 0, pageElement: page, frameId: 'frame-new' });
+  assert.equal(page.querySelector('.pdf-search-hit-layer'), current);
+});
+
+test('search navigation does not highlight an unverified first occurrence when locator context is absent', async () => {
+  const { window, api } = await createReaderDom();
+  const document = window.document;
+  api.state.currentBookId = 'search-book';
+  api.state.currentPath = 'search-book.txt';
+  api.state.contentType = 'text';
+  document.getElementById('article').innerHTML = '<p>第一次蛋白质</p><p>第二次蛋白质</p>';
+
+  const navigated = await api.navigateToSearchResult({
+    chapterIndex: 0,
+    matchText: '蛋白质',
+    locator: { text: '蛋白质', offset: 500 }
+  });
+
+  assert.equal(navigated, false);
+  assert.equal(document.querySelector('.reader-search-hit-layer'), null);
+});
+
+test('search hit is transient and does not become a saved annotation', async () => {
+  const { window, api } = await createReaderDom();
+  const article = window.document.getElementById('article');
+  api.state.currentBookId = 'search-book';
+  api.state.currentPath = 'search-book.txt';
+  api.state.contentType = 'text';
+  article.innerHTML = '<p>前文蛋白质后文</p>';
+  window.Range.prototype.getClientRects = () => [{ left: 24, top: 60, width: 36, height: 18 }];
+
+  assert.equal(await api.navigateToSearchResult({ matchText: '蛋白质', locator: { text: '蛋白质' } }), true);
+  assert.equal(article.querySelectorAll('.reader-search-hit-rect').length, 1);
+  assert.equal(article.querySelectorAll('.br-highlight-box').length, 0);
+  window.readerSearchApi.resetReaderSearch();
+  assert.equal(article.querySelector('.reader-search-hit-layer'), null);
+  assert.equal(article.querySelector('p')?.textContent, '前文蛋白质后文');
+
+  assert.equal(await api.navigateToSearchResult({ matchText: '蛋白质', locator: { text: '蛋白质' } }), true);
+  assert.equal(article.querySelectorAll('.reader-search-hit-rect').length, 1);
+  api.state.effectiveReadingMode = 'single';
+  assert.equal(api.setPageGroup(0), true);
+  assert.equal(article.querySelector('.reader-search-hit-layer'), null, 'manual pagination clears transient feedback');
+});
+
+test('semantic search ranges navigate by the hit rectangle in paged and continuous layouts', async () => {
+  const { window, api } = await createReaderDom();
+  const document = window.document;
+  const reader = document.getElementById('reader');
+  const article = document.getElementById('article');
+  api.state.pageCount = 12;
+  api.state.pageGroupCount = 6;
+  api.state.pageStepWidth = 100;
+  api.state.pageGroupWidth = 200;
+  api.state.pageOffset = 0;
+  api.state.effectiveReadingMode = 'double';
+
+  const range = {
+    startContainer: document.createTextNode('hit'),
+    getClientRects: () => [{ left: 650, top: 120 }]
+  };
+  assert.equal(api.navigateToSemanticTarget(range), true);
+  assert.equal(api.state.pageGroup, 3, 'right-hand page hit should navigate to its double-page spread');
+
+  api.state.effectiveReadingMode = 'scroll';
+  reader.scrollTop = 0;
+  const scrollRange = {
+    startContainer: document.createTextNode('hit'),
+    getClientRects: () => [{ left: 0, top: 360 }]
+  };
+  assert.equal(api.navigateToSemanticTarget(scrollRange), true);
+  assert.equal(reader.scrollTop, 336, 'continuous mode should align the actual match rather than its paragraph start');
+  assert.ok(article);
+});
+
+test('search jump feedback paints only Range geometry and never a block outline', async () => {
   const css = await fs.readFile(path.resolve(__dirname, '../app/ui/styles.css'), 'utf8');
-  const targetRule = css.match(/\.reader-search-target\s*\{([^}]*)\}/s)?.[1] || '';
-  assert.match(targetRule, /background(?:-color)?:/);
-  assert.match(targetRule, /animation:/);
-  assert.doesNotMatch(targetRule, /outline:/);
+  const layerRule = css.match(/\.article \.reader-search-hit-layer\s*\{([^}]*)\}/s)?.[1] || '';
+  const rectRule = css.match(/\.article \.reader-search-hit-rect\s*\{([^}]*)\}/s)?.[1] || '';
+  assert.match(layerRule, /pointer-events:\s*none/);
+  assert.match(rectRule, /background(?:-color)?:/);
+  assert.doesNotMatch(rectRule, /outline:/);
 });
 
 test('topbar navigation controls use icon-only SVGs without changing actions', async () => {
@@ -1748,6 +4175,67 @@ test('mobile devices default to continuous reading without overwriting the deskt
   desktop.window.document.documentElement.dataset.readerSurface = 'desktop';
   desktop.api.applyUserState({ settings: { readingMode: 'double', continuousScroll: false }, books: {} });
   assert.equal(desktop.api.state.readingMode, 'double');
+});
+
+test('PDF layout preference and shared highlight color keep EPUB controls intact', async () => {
+  const { window, api } = await createReaderDom();
+  const document = window.document;
+  api.applyUserState({ settings: { pdfLayoutMode: 'invalid', readingMode: 'double' }, books: {} });
+  assert.equal(api.state.pdfLayoutMode, 'continuous');
+  assert.equal(api.state.readingMode, 'double');
+  api.applyUserState({ settings: { pdfLayoutMode: 'single', readingMode: 'double' }, books: {} });
+  assert.equal(api.currentUserSettings().pdfLayoutMode, 'single');
+
+  api.state.contentType = 'pdf';
+  api.openReaderPanel('settings', document.getElementById('btnSettings'));
+  assert.equal(document.getElementById('settingPdfLayoutMode').closest('label').hidden, false);
+  assert.equal(document.getElementById('settingReadingMode').closest('label').hidden, true);
+  assert.equal(document.getElementById('settingFontFamily').closest('label').hidden, true);
+  assert.equal(document.querySelector('[data-settings-group="highlight"]').hidden, false);
+  assert.equal(document.querySelector('[data-settings-group="typography"]').hidden, true);
+
+  api.state.contentType = 'epub';
+  api.openReaderPanel('settings', document.getElementById('btnSettings'));
+  assert.equal(document.getElementById('settingPdfLayoutMode').closest('label').hidden, true);
+  assert.equal(document.getElementById('settingReadingMode').closest('label').hidden, false);
+  assert.equal(document.querySelector('[data-settings-group="highlight"]').hidden, false);
+  assert.equal(api.state.readingMode, 'double');
+});
+
+test('PDF toolbar uses the shared reader navigation icons and Apple control tokens', async () => {
+  const { window } = await createReaderDom();
+  const document = window.document;
+  const controls = document.querySelector('.pdf-reader-controls');
+  assert.ok(controls);
+  for (const id of ['pdfPreviousPage', 'pdfNextPage', 'pdfZoomOut', 'pdfZoomIn']) {
+    const button = document.getElementById(id);
+    assert.ok(button?.querySelector('svg'), `${id} should use a vector icon`);
+    assert.equal(button.textContent.trim(), '', `${id} should not rely on a text glyph`);
+  }
+  const css = (await fs.readFile(path.resolve(__dirname, '../app/ui/styles.css'), 'utf8'))
+    .replace(/\r\n/g, '\n');
+  assert.match(css, /\.pdf-reader-controls button\s*\{[^}]*min-width:\s*44px;[^}]*min-height:\s*44px;/s);
+  assert.match(css, /\.pdf-reader-controls button\s*\{[^}]*border-radius:\s*var\(--radius-control\);/s);
+  assert.match(css, /\.pdf-reader-controls button svg\s*\{[^}]*stroke:\s*currentColor;[^}]*stroke-linecap:\s*round;/s);
+  assert.match(css, /\.pdf-reader-controls\s*\{[^}]*background:\s*color-mix\(in srgb, var\(--color-bar\)/s);
+});
+
+test('PDF desktop controls share the fixed reader topbar material while mobile keeps flow layout', async () => {
+  const css = (await fs.readFile(path.resolve(__dirname, '../app/ui/styles.css'), 'utf8'))
+    .replace(/\r\n/g, '\n');
+  assert.match(css, /body\.is-pdf-reader\s+\.pdf-reader-controls\s*\{[^}]*position:\s*fixed;[^}]*top:\s*0;[^}]*z-index:\s*101;/s);
+  assert.match(css, /body\.is-pdf-reader\s+\.pdf-reader-controls\s*\{[^}]*background:\s*transparent;/s);
+  assert.match(css, /body\.is-pdf-reader\s+\.pdf-reader-controls\s+\.pdf-control-group\s*\{[^}]*pointer-events:\s*auto;/s);
+  assert.match(css, /body\.is-pdf-reader\s+\.pdf-reader-controls\[data-pdf-toolbar-mode="compact"\],\s*body\.is-pdf-reader\s+\.pdf-reader-controls\[data-pdf-toolbar-mode="mobile"\]\s*\{[^}]*position:\s*sticky;/s);
+});
+
+test('PDF reading exposes one deliberate position announcement and a keyboard-focusable page viewport', async () => {
+  const html = await fs.readFile(path.resolve(__dirname, '../app/ui/index.html'), 'utf8');
+  assert.match(html, /id="pdfReaderAnnouncement"[^>]*role="status"[^>]*aria-live="polite"/);
+  assert.match(html, /id="pdfPages"[^>]*tabindex="0"/);
+  assert.doesNotMatch(html, /id="pdfZoomValue"[^>]*aria-live=/);
+  const css = await fs.readFile(path.resolve(__dirname, '../app/ui/styles.css'), 'utf8');
+  assert.match(css, /@media \(forced-colors: active\)\s*\{[^]*?\.pdf-search-hit-rect\s*\{[^}]*outline:\s*2px solid Highlight;/);
 });
 
 test('mobile topbar hiding also releases the reader into the topbar area', async () => {
@@ -1912,7 +4400,7 @@ test('Drawer keeps one active panel and restores focus to its original launcher'
   assert.equal(document.activeElement, settingsButton);
 });
 
-test('bookmark toolbar, Drawer list, and mobile entry are enabled only for EPUB', async () => {
+test('bookmark toolbar, Drawer list, and mobile entry are enabled for EPUB and PDF', async () => {
   const { window, api } = await createReaderDom();
   const document = window.document;
   const bookId = 'bookmark-ui-book';
@@ -1952,11 +4440,43 @@ test('bookmark toolbar, Drawer list, and mobile entry are enabled only for EPUB'
   assert.equal(document.getElementById('readerPanelBookmarks').hidden, false);
   assert.equal(document.querySelectorAll('[data-reader-panel-name]:not([hidden])').length, 1);
 
+  api.state.contentType = 'pdf';
+  api.state.currentPath = 'bookmark-ui.pdf';
+  window.pdfReaderController = {
+    getCurrentBookId: () => bookId,
+    getCurrentPageIndex: () => 0,
+    getPageCount: () => 2
+  };
+  api.renderToc();
+  assert.equal(desktopButton.disabled, false);
+  assert.equal(mobileButton.disabled, false);
+  assert.equal(api.readerPanels.bookmarks.enabled(), true);
+
   api.state.contentType = 'text';
   api.renderToc();
   assert.equal(desktopButton.disabled, true);
   assert.equal(mobileButton.disabled, true);
   assert.equal(api.readerPanels.bookmarks.enabled(), false);
+});
+
+test('PDF settings explain fixed-page behavior without exposing EPUB typography controls', async () => {
+  const { window, api } = await createReaderDom();
+  const document = window.document;
+  const hint = document.getElementById('settingsPdfLayoutHint');
+  assert.ok(hint);
+  api.state.contentType = 'pdf';
+  api.typographyApi.syncSettingsPanel();
+  assert.equal(hint.hidden, false);
+  assert.equal(document.querySelector('[data-pdf-inapplicable] #settingReadingMode').closest('[data-pdf-inapplicable]').hidden, true);
+  assert.equal(document.querySelector('[data-pdf-only] #settingPdfLayoutMode').closest('[data-pdf-only]').hidden, false);
+  assert.match(hint.textContent, /固定版面/);
+  assert.match(hint.textContent, /缩放/);
+
+  api.state.contentType = 'epub';
+  api.typographyApi.syncSettingsPanel();
+  assert.equal(hint.hidden, true);
+  assert.equal(document.querySelector('[data-pdf-inapplicable] #settingReadingMode').closest('[data-pdf-inapplicable]').hidden, false);
+  assert.equal(document.querySelector('[data-pdf-only] #settingPdfLayoutMode').closest('[data-pdf-only]').hidden, true);
 });
 
 test('reserved reader actions stay disabled and never issue API requests while AI is EPUB-only', async () => {
@@ -2000,6 +4520,7 @@ test('notes panel is an enabled drawer destination with whole-book filters', asy
   assert.equal(document.getElementById('btnNotes').disabled, false);
   api.state.contentType = 'epub';
   assert.equal(api.readerPanels.notes.enabled(), true);
+  assert.equal(document.querySelector('#notesSort option[value="chapter"]').textContent, '按章节');
   assert.ok(document.getElementById('drawerTabNotes'));
   assert.equal(document.getElementById('readerPanelNotes').hidden, true);
 
@@ -2036,6 +4557,12 @@ test('notes panel is an enabled drawer destination with whole-book filters', asy
   assert.equal(document.getElementById('readerDrawerTitle').textContent, '标记与想法');
   assert.equal(document.querySelectorAll('#notesList [data-annotation-id]').length, 2);
   assert.match(document.getElementById('notesPanelSummary').textContent, /1 条标记 · 1 条想法/);
+  api.state.userState.books['notes-book'].highlights.reverse();
+  api.renderNotesPanel();
+  assert.deepEqual(
+    Array.from(document.querySelectorAll('#notesList [data-annotation-id]'), (item) => item.dataset.annotationId),
+    ['marker-1', 'thought-1']
+  );
 
   document.querySelector('[data-notes-filter="thought"]').click();
   assert.deepEqual(
@@ -2064,6 +4591,244 @@ test('notes panel keeps a row-level error when an annotation locator cannot be r
   assert.equal(await api.navigateToAnnotation('broken-note'), false);
   assert.equal(document.querySelector('.notes-item-error')?.textContent, '原文位置已变化');
   assert.equal(document.querySelector('[data-annotation-id="broken-note"]')?.dataset.notesError, 'true');
+});
+
+test('PDF annotations use the shared notes panel, show page labels, and block stale navigation and edits', async () => {
+  const { window, api } = await createReaderDom();
+  const document = window.document;
+  const bookId = 'c'.repeat(64);
+  api.state.contentType = 'pdf';
+  api.state.currentBookId = bookId;
+  api.state.userState.books[bookId] = {
+    pdfAnnotations: [
+      {
+        version: 1, type: 'pdf', id: 'pdf-fresh', sourceFingerprint: 'a'.repeat(64),
+        kind: 'highlight', style: 'marker', color: 'yellow', text: 'PDF 当前页标记', thought: '',
+        targets: [{ pageIndex: 3, quads: [[0.1, 0.1, 0.3, 0.1, 0.3, 0.12, 0.1, 0.12]] }],
+        createdAt: '2026-09-25T10:00:00.000Z'
+      },
+      {
+        version: 1, type: 'pdf', id: 'pdf-stale', sourceFingerprint: 'b'.repeat(64), sourceStale: true,
+        kind: 'thought', style: 'none', color: 'blue', text: '原文替换前的想法', thought: '仅允许清理',
+        targets: [{ pageIndex: 7, quads: [[0.1, 0.1, 0.3, 0.1, 0.3, 0.12, 0.1, 0.12]] }],
+        createdAt: '2026-09-26T10:00:00.000Z'
+      }
+    ]
+  };
+
+  assert.equal(api.readerPanels.notes.enabled(), true);
+  api.setupNotesPanel();
+  assert.equal(api.renderNotesPanel(), true);
+  assert.equal(document.querySelector('#notesSort option[value="chapter"]').textContent, '按页');
+  assert.match(document.getElementById('notesPanelSummary').textContent, /1 条标记 · 1 条想法/);
+  assert.match(document.querySelector('[data-annotation-id="pdf-fresh"] .notes-item-chapter').textContent, /第 4 页/);
+  const stale = document.querySelector('[data-annotation-id="pdf-stale"]');
+  assert.match(stale.textContent, /原文已变化/);
+  assert.equal(stale.querySelector('[data-notes-action="edit"]'), null);
+  assert.ok(stale.querySelector('[data-notes-action="delete"]'));
+  let navigatedPage = -1;
+  const scrollCalls = [];
+  const pageHost = document.getElementById('pdfPages');
+  Object.defineProperty(pageHost, 'clientHeight', { configurable: true, value: 600 });
+  Object.defineProperty(pageHost, 'clientWidth', { configurable: true, value: 800 });
+  pageHost.getBoundingClientRect = () => ({ left: 100, right: 900, top: 100, bottom: 700, width: 800, height: 600 });
+  pageHost.scrollBy = (options) => scrollCalls.push(options);
+  const pageElement = document.createElement('div');
+  pageElement.className = 'pdf-page';
+  pageElement.getBoundingClientRect = () => ({ left: 100, right: 700, top: 1200, bottom: 2000, width: 600, height: 800 });
+  pageHost.appendChild(pageElement);
+  window.pdfReaderController = {
+    getPageCount: () => 12,
+    getCurrentBookId: () => bookId,
+    getGeneration: () => 3,
+    getRenderedPageGeometry: (pageIndex) => pageIndex === 3 ? {
+      bookId, generation: 3, pageIndex, pageElement, pageView: [0, 0, 1000, 1000],
+      viewport: { convertToViewportPoint: (x, y) => [x, y] }
+    } : null,
+    goToPdfPage: (pageIndex) => { navigatedPage = pageIndex; return true; }
+  };
+  assert.equal(await api.navigateToAnnotation('pdf-fresh'), true);
+  assert.equal(navigatedPage, 3);
+  assert.equal(scrollCalls.length, 1, 'the target quad is moved into the readable viewport');
+  assert.ok(scrollCalls[0].top > 0);
+  assert.ok(pageElement.querySelector('.pdf-note-navigation-highlight'));
+  assert.equal(pageElement.querySelector('.pdf-note-navigation-highlight').style.left, '100px');
+  window.pdfReaderController.getRenderedPageGeometry = () => null;
+  assert.equal(await api.navigateToAnnotation('pdf-fresh'), true, 'page navigation remains available when a current text frame cannot be resolved');
+  assert.match(document.querySelector('[data-annotation-id="pdf-fresh"] .notes-item-error')?.textContent || '', /精确原文位置暂不可用/);
+  assert.equal(scrollCalls.length, 1, 'a missing frame must not reuse old geometry');
+  assert.equal(await api.navigateToAnnotation('pdf-stale'), false);
+
+  document.querySelector('[data-notes-filter="thought"]').click();
+  assert.deepEqual(Array.from(document.querySelectorAll('#notesList [data-annotation-id]'), (item) => item.dataset.annotationId), ['pdf-stale']);
+  document.querySelector('[data-notes-filter="marker"]').click();
+  assert.deepEqual(Array.from(document.querySelectorAll('#notesList [data-annotation-id]'), (item) => item.dataset.annotationId), ['pdf-fresh']);
+  document.querySelector('[data-notes-filter="all"]').click();
+  const sort = document.getElementById('notesSort');
+  sort.value = 'time';
+  sort.dispatchEvent(new window.Event('change', { bubbles: true }));
+  assert.equal(document.querySelector('#notesList [data-annotation-id]')?.dataset.annotationId, 'pdf-stale');
+});
+
+test('PDF note navigation cancels when the reader changes books during page rendering', async () => {
+  const { window, api } = await createReaderDom();
+  const document = window.document;
+  const bookId = 'e'.repeat(64);
+  api.state.contentType = 'pdf';
+  api.state.currentBookId = bookId;
+  api.state.userState.books[bookId] = {
+    pdfAnnotations: [{
+      version: 1, type: 'pdf', id: 'switching-note', sourceFingerprint: 'f'.repeat(64),
+      kind: 'highlight', style: 'marker', color: 'yellow', text: '原书文字', thought: '',
+      targets: [{ pageIndex: 0, quads: [[0.1, 0.1, 0.2, 0.1, 0.2, 0.12, 0.1, 0.12]] }]
+    }]
+  };
+  api.setupNotesPanel();
+  api.renderNotesPanel();
+  window.pdfReaderController = {
+    getPageCount: () => 2,
+    getCurrentBookId: () => bookId,
+    getGeneration: () => 1,
+    getRenderedPageGeometry: () => null,
+    goToPdfPage: () => { api.state.currentBookId = 'f'.repeat(64); return true; }
+  };
+
+  assert.equal(await api.navigateToAnnotation('switching-note'), false);
+  assert.match(document.querySelector('.notes-item-error')?.textContent || '', /已切换/);
+});
+
+test('PDF annotation API methods update the current book cache only after server success', async () => {
+  const { window, api } = await createReaderDom();
+  const bookId = 'd'.repeat(64);
+  api.state.currentBookId = bookId;
+  api.state.contentType = 'pdf';
+  api.state.userState.books[bookId] = { highlights: [{ id: 'epub-keep' }], pdfAnnotations: [] };
+  const requests = [];
+  const saved = {
+    version: 1, type: 'pdf', id: '00000000-0000-4000-8000-000000000001',
+    sourceFingerprint: 'a'.repeat(64), kind: 'highlight', style: 'marker', color: 'yellow',
+    text: '依据', thought: '', targets: [{ pageIndex: 0, quads: [[0.1, 0.1, 0.2, 0.1, 0.2, 0.12, 0.1, 0.12]] }]
+  };
+  window.fetch = async (url, options = {}) => {
+    requests.push({ url, options });
+    return {
+      ok: true,
+      json: async () => options.method === 'POST' ? { annotation: saved } : { annotations: [saved] }
+    };
+  };
+
+  assert.equal(typeof window.browserHost.getPdfAnnotations, 'function');
+  const listed = await window.browserHost.getPdfAnnotations(bookId);
+  assert.deepEqual(Array.from(listed.annotations, (item) => item.id), [saved.id]);
+  const created = await window.browserHost.createPdfAnnotation({ version: 1, type: 'pdf', id: saved.id }, bookId);
+  assert.equal(created.annotation.id, saved.id);
+  assert.equal(requests[0].url, `/app/babyreader-fnos/api/books/${bookId}/pdf-annotations`);
+  assert.equal(requests[1].options.method, 'POST');
+  assert.deepEqual(JSON.parse(JSON.stringify(api.state.userState.books[bookId].highlights)), [{ id: 'epub-keep' }]);
+  assert.deepEqual(Array.from(api.state.userState.books[bookId].pdfAnnotations, (item) => item.id), [saved.id]);
+
+  const cacheBeforeFailure = api.state.userState.books[bookId].pdfAnnotations;
+  window.fetch = async () => ({
+    ok: false,
+    status: 409,
+    json: async () => ({ error: '原文已变化' })
+  });
+  await assert.rejects(
+    window.browserHost.updatePdfAnnotation(saved.id, { color: 'pink' }, bookId),
+    /原文已变化/
+  );
+  assert.equal(api.state.userState.books[bookId].pdfAnnotations, cacheBeforeFailure);
+  await assert.rejects(
+    window.browserHost.deletePdfAnnotation(saved.id, bookId),
+    /原文已变化/
+  );
+  assert.equal(api.state.userState.books[bookId].pdfAnnotations, cacheBeforeFailure);
+});
+
+test('PDF annotations restore a renderer session before the first page frame and reject old generations', async () => {
+  const { window, api } = await createReaderDom();
+  const bookId = 'd'.repeat(64);
+  const record = {
+    id: 'restored', sourceFingerprint: 'a'.repeat(64), sourceStale: false,
+    targets: [{ pageIndex: 0, quads: [[0.1, 0.1, 0.2, 0.1, 0.2, 0.2, 0.1, 0.2]] }]
+  };
+  api.state.currentBookId = bookId;
+  api.state.contentType = 'pdf';
+  let generation = 9;
+  const sessions = [];
+  window.pdfReaderController = {
+    getCurrentBookId: () => bookId,
+    getGeneration: () => generation,
+    getCurrentPageIndex: () => 0,
+    getRenderedPageGeometry: () => null
+  };
+  window.pdfAnnotationRenderer = {
+    setAnnotations: (session) => { sessions.push(session); return true; }
+  };
+
+  assert.equal(window.__babyReaderAnnotationsApi.setPdfAnnotationRendererRecords(bookId, [record]), true);
+  assert.equal(sessions.length, 1);
+  assert.equal(sessions[0].generation, 9);
+  assert.equal(sessions[0].annotations[0].id, 'restored');
+  generation = 10;
+  assert.equal(window.__babyReaderAnnotationsApi.setPdfAnnotationRendererRecords(bookId, [record], 9), false);
+  assert.equal(sessions.length, 1, 'late responses from the previous PDF generation must not install a session');
+});
+
+test('PDF thought and edit dialogs reject a book switch before issuing a write', async () => {
+  const { window, api } = await createReaderDom();
+  const firstBookId = 'e'.repeat(64);
+  const secondBookId = 'f'.repeat(64);
+  const annotation = {
+    id: 'pdf-edit', type: 'pdf', kind: 'highlight', style: 'marker', color: 'yellow',
+    text: '第一页原文', thought: '', targets: [{ pageIndex: 0, quads: [] }]
+  };
+  api.state.currentBookId = firstBookId;
+  api.state.contentType = 'pdf';
+  api.state.userState.books[firstBookId] = { pdfAnnotations: [annotation] };
+  api.state.userState.books[secondBookId] = { highlights: [] };
+  let writes = 0;
+  window.browserHost.createPdfAnnotation = async () => { writes += 1; return { annotation }; };
+  window.browserHost.updatePdfAnnotation = async () => { writes += 1; return { annotation }; };
+
+  assert.equal(api.openThoughtComposer({
+    format: 'pdf', bookId: firstBookId, text: '第一页原文', range: {}, targets: [{ pageIndex: 0, quads: [] }]
+  }), true);
+  window.document.getElementById('highlightEditorThought').value = '切书后不应保存';
+  api.state.currentBookId = secondBookId;
+  api.state.contentType = 'epub';
+  await api.saveActiveHighlightEdits();
+  assert.equal(writes, 0);
+  assert.deepEqual(Array.from(api.state.userState.books[secondBookId].highlights), []);
+  api.closeHighlightEditor({ restoreFocus: false });
+
+  api.state.currentBookId = firstBookId;
+  api.state.contentType = 'pdf';
+  assert.equal(api.openHighlightEditor(annotation.id), true);
+  api.state.currentBookId = secondBookId;
+  await api.saveActiveHighlightEdits();
+  assert.equal(writes, 0);
+});
+
+test('PDF annotation edit failure keeps the editor draft and saved cache intact', async () => {
+  const { window, api } = await createReaderDom();
+  const bookId = 'a'.repeat(64);
+  const saved = {
+    id: 'pdf-edit-failure', type: 'pdf', kind: 'highlight', style: 'marker', color: 'yellow',
+    text: '待修改原文', thought: '', targets: [{ pageIndex: 0, quads: [] }]
+  };
+  api.state.contentType = 'pdf';
+  api.state.currentBookId = bookId;
+  api.state.userState.books[bookId] = { pdfAnnotations: [saved] };
+  window.browserHost.updatePdfAnnotation = async () => { throw new Error('写入失败'); };
+
+  assert.equal(api.openHighlightEditor(saved.id), true);
+  const thought = window.document.getElementById('highlightEditorThought');
+  thought.value = '未保存的草稿';
+  await api.saveActiveHighlightEdits();
+  assert.equal(window.document.getElementById('highlightEditor').hidden, false);
+  assert.equal(thought.value, '未保存的草稿');
+  assert.equal(api.state.userState.books[bookId].pdfAnnotations[0], saved);
 });
 
 test('pagination geometry fixes single mode to one column and double mode to two columns', async () => {
@@ -2319,6 +5084,17 @@ test('paged CSS makes the multicol box itself the scroll container', async () =>
   assert.match(articleRule[1], /overflow-x: hidden/);
   assert.match(articleRule[1], /overflow-y: hidden/);
   assert.doesNotMatch(articleRule[1], /overflow: visible/);
+});
+
+test('page navigation controls use a stable surface during horizontal page turns', async () => {
+  const css = await fs.readFile(path.resolve(__dirname, '../app/ui/styles.css'), 'utf8');
+  const pageNavRule = css.match(
+    /\.reader \.reader-page-nav-btn:not\(\[hidden\]\)\s*\{([^}]*)\}/
+  );
+  assert.ok(pageNavRule, 'missing page navigation control rule');
+  assert.match(pageNavRule[1], /background:\s*var\(--color-bar\)/);
+  assert.doesNotMatch(pageNavRule[1], /backdrop-filter/);
+  assert.doesNotMatch(pageNavRule[1], /-webkit-backdrop-filter/);
 });
 
 test('paged chapter navigation advances exactly one chapter per click', async () => {
@@ -2677,4 +5453,13 @@ test('AI index manager has an admin-only independent surface contract', async ()
   assert.match(manager, /window\.confirm/);
   assert.match(css, /\.ai-index-manager-sheet/);
   assert.match(css, /\.ai-index-manager-backdrop/);
+});
+
+test('PDF render scheduler loads before the PDF reader controller', async () => {
+  const html = await fs.readFile(path.resolve(__dirname, '../app/ui/index.html'), 'utf8');
+  const schedulerIndex = html.indexOf('reader/pdf-render-scheduler.js');
+  const readerIndex = html.indexOf('reader/pdf.js');
+
+  assert.ok(schedulerIndex >= 0, 'PDF render scheduler script must be present');
+  assert.ok(readerIndex > schedulerIndex, 'PDF reader must load after its scheduler');
 });
