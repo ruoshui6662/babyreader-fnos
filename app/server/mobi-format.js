@@ -195,7 +195,13 @@ function parseMobiStructure(bytes, limits = {}) {
   const coverRecord = coverIndex ? record(coverIndex) : null;
   const metadata = buildMetadata(info, kf8Info, kf8Index,
     coverRecord && coverRecord.length <= maxCoverBytes ? Buffer.from(coverRecord) : null);
-  return { ...metadata, recordCount: pdb.count, recordOffsets: pdb.offsets };
+  return {
+    ...metadata,
+    recordCount: pdb.count,
+    recordOffsets: pdb.offsets,
+    firstImageIndex: info.firstImageIndex === NULL_INDEX ? null : info.firstImageIndex,
+    coverRecordIndex: coverIndex
+  };
 }
 
 async function readExactly(handle, position, length) {
@@ -250,5 +256,6 @@ module.exports = {
   DEFAULT_MOBI_LIMITS: DEFAULT_LIMITS,
   MobiFormatError,
   parseMobiStructure,
-  readMobiMetadata
+  readMobiMetadata,
+  sniffImageExtension
 };

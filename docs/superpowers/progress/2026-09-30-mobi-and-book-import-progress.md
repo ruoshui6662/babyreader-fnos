@@ -137,3 +137,57 @@
 - 书库 E2E 12/12；书库组织专项 23/23。
 - 全量 Chromium E2E：131 通过、9 失败、26 跳过；9 项失败与基线名单逐一相同，**无新增失败**。
 
+## Task 2：MOBI→EPUB 转换器
+
+状态：**MOBI6 部分本地完成；KF8/AZW3 部分待真实样本**（2026-09-30）。转换器还没接入任何请求路径，接入在 Task 3 中完成。
+
+### 实现
+
+- **vendor**：`app/server/vendor/lingo-mobi/`，来源为 lingo-reader 0.4.6 的 ESM 构建，已记录上游 SHA-256，另附 MIT `LICENSE` 和 `PATCHES.md`。共打 4 处补丁：导出底层类、修正封面偏移为 0 的判断、改用 latin1 线性转换、`img` 缺少 recindex 时容错。npm 依赖相应改为只保留 `@lingo-reader/shared@0.4.6`（精确版本），移除了 `@lingo-reader/mobi-parser`。
+- **`app/server/epub-writer.js`**：确定性的 EPUB 3 生成器。
+  - 固定 ZIP 时间戳和条目顺序，`mimetype` 放在第一个且不压缩；
+  - 同时生成 nav 和 NCX 两种目录，并支持 cover-image；
+  - **按条目预估压缩比，超过 `ZIP_LIMITS.maxCompressionRatio` 八成的条目改为不压缩存储**。原因是测试发现，重复度高的正文会让派生 EPUB 被项目自己的 ZIP 炸弹检查拒绝，导致书打不开。
+- **`app/server/mobi-convert.js`**：处理 MOBI6，依次完成以下步骤：
+  1. 解压复用 vendor 的 `MobiFile`，其余步骤都在原始字节上进行；
+  2. 按 `<mbp:pagebreak>` 分章；超过 400 KiB 的章节在 h1–h3 处切分，仍然过大的在约 256 KiB 后的第一个 `<p>` 处切分；
+  3. 在 `filepos` 目标处插入 `<a id="fpN">`：落在标签内部的目标退回到标签起点，落在 UTF-8 多字节字符中间的目标退回到首字节；
+  4. 链接改写为 `part-NNNN.xhtml#fpN`；
+  5. 图片按 recindex 映射，并做记录区间和类型校验（EOF、FLIS 等非图片记录一律丢弃），同时检查单张和总量上限；
+  6. 用 sanitize-html 把 HTML 规整为 XHTML：去掉 script、事件属性、`mbp:` 标签和外链，`align` 转为 class；
+  7. 目录优先取 guide 中的 toc，没有时取各章第一个标题，再没有就用"第 N 部分"；
+  8. 最后用 `safeUnzip` 自检产物。
+
+  DRM 和 KF8 在这一步会直接拒绝，错误码为 `DRM_PROTECTED` 或 `UNSUPPORTED_FORMAT`。`MOBI_CONVERTER_VERSION = 1`。
+- **`app/server/mobi-derived.js` 与 `mobi-convert-worker.js`**：
+  - 缓存文件名为 `derived/<bookId>.<指纹16位>.c<版本>.epub`，权限 0600，写入方式是写 `.tmp`、fsync、再 rename；
+  - 每次转换都重新核对源文件指纹，不一致返回 `SOURCE_CHANGED`；
+  - 转换在 worker 中执行：堆 256 MiB，超时 60 s；全局并发 1，同一个文件的并发请求合并为一次转换（single-flight）；
+  - 转换失败会被记住 10 分钟，期间不重复尝试；
+  - `ensure(book, {waitMs})` 在等待时间内没完成就返回 `preparing`，转换在后台继续；
+  - `prune(books)` 清理已消失、已变化或旧版本的产物，并按最近访问时间把缓存总量控制在 2 GiB 以内。
+
+### 章节划分的约束
+
+- 纯 MOBI6 走自研流水线，**KF8（独立的 AZW3 和 MOBI6+KF8 合体文件）一律走 KF8 路径**。一本书走哪条路完全由格式决定，不做回退。原因是 lingo 的 `MobiFile` 遇到合体文件时会自动切换到 KF8 记录，而两条路径的分章结果不同；如果在两条路径之间切换，已有的划线就会失效。
+- `text/part-NNNN.xhtml` 这个命名规则已冻结，由快照测试 `entry names follow the frozen href scheme` 锁住。
+
+### 验证
+
+- 新增测试：`tests/mobi-convert.test.js` 11 项，`tests/mobi-derived.test.js` 9 项（包括 worker 堆内存耗尽时只影响这一次转换）。
+- `npm test`：585 项，576 通过、0 失败、9 跳过；`npm run check` 和 `git diff --check` 通过。
+- 本机端到端转换（默认上限，样本在独立进程中生成）：
+
+  | 正文 | 耗时 | 峰值进程 RSS（基线） |
+  | --- | --- | --- |
+  | 4 MiB | 396 ms | 153 MiB（50） |
+  | 16 MiB | 1,022 ms | 253 MiB（88） |
+  | 30 MiB | 1,922 ms | 317 MiB（120） |
+
+  正文超过 32 MiB 时按设计返回 `TOO_LARGE`。
+
+### 未完成
+
+- [ ] **KF8/AZW3 转换**：接入 vendor 的 `Kf8`（skeleton/fragment 重组），需要真实的 AZW3 样本验证。目前 AZW3 书会以 `UNSUPPORTED_FORMAT` 明确拒绝，不会产生错误的内容。
+- [ ] HUFF/CDIC 压缩：解压代码来自上游，还没有专门的样本覆盖。
+
