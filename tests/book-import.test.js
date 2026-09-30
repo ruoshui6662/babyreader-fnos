@@ -141,3 +141,20 @@ test('disabled formats, concurrency and a missing target are refused cleanly', a
   const nowhere = createBookImporter({ resolveTarget: async () => { throw new Error('EACCES'); } });
   await assert.rejects(run(nowhere, Buffer.from('x'), 'x.txt'), (error) => error.code === 'IMPORT_NO_TARGET' && error.statusCode === 503);
 });
+
+test('dedupe, publish and cataloging run inside the exclusive section; a catalog failure removes the file', async (t) => {
+  const directory = await sandbox(t);
+  const events = [];
+  const instance = importer(directory, {
+    runExclusive: async (fn) => { events.push('lock'); try { return await fn(); } finally { events.push('unlock'); } },
+    findDuplicate: async () => { events.push('dedupe'); return null; },
+    afterPublish: async (result) => { events.push('index'); return { id: 'x', title: result.name }; }
+  });
+  const result = await run(instance, Buffer.from('ok'), 'ok.txt');
+  assert.deepEqual(events, ['lock', 'dedupe', 'index', 'unlock']);
+  assert.deepEqual(result.book, { id: 'x', title: 'ok.txt' });
+
+  const failing = importer(directory, { afterPublish: async () => { throw new Error('index down'); } });
+  await assert.rejects(run(failing, Buffer.from('bad'), 'bad.txt'), (error) => error.code === 'IMPORT_INDEX_FAILED');
+  assert.deepEqual(await listing(directory), ['ok.txt']);
+});

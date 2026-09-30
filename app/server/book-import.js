@@ -150,8 +150,17 @@ async function publishWithoutOverwrite(temporary, directory, name, extension) {
  * @param {() => Promise<string>} deps.resolveTarget absolute, authorized import directory (created if missing)
  * @param {(type: string) => boolean} [deps.isFormatEnabled]
  * @param {(size: number, sha256: string) => Promise<string|null>} [deps.findDuplicate] existing book id
+ * @param {(fn: () => Promise<any>) => Promise<any>} [deps.runExclusive] library lock around dedupe/publish/index
+ * @param {(result: object) => Promise<object>} [deps.afterPublish] indexes the published file; returns the book
  */
-function createBookImporter({ resolveTarget, isFormatEnabled = () => true, findDuplicate = async () => null, limits = {} }) {
+function createBookImporter({
+  resolveTarget,
+  isFormatEnabled = () => true,
+  findDuplicate = async () => null,
+  runExclusive = (fn) => fn(),
+  afterPublish = null,
+  limits = {}
+}) {
   const effective = { ...DEFAULT_LIMITS, ...limits };
   const perUser = new Map();
   let active = 0;
@@ -248,11 +257,24 @@ function createBookImporter({ resolveTarget, isFormatEnabled = () => true, findD
       temporary = path.join(directory, `.babyreader-import-${crypto.randomUUID()}.part`);
       const { size, sha256 } = await receive(stream, temporary, format.maxBytes, declared);
       await validateContent(temporary, format, size);
-      const duplicate = await findDuplicate(size, sha256);
-      if (duplicate) throw importError('IMPORT_DUPLICATE', 409, '书库中已有这本书。', { bookId: duplicate });
-      const published = await publishWithoutOverwrite(temporary, directory, name, extension);
-      temporary = null;
-      return { path: published, name: path.basename(published), size, sha256, type: format.type };
+      // Dedupe, publish and catalog under the library lock so scans and other
+      // imports never interleave with this book's catalog merge.
+      return await runExclusive(async () => {
+        const duplicate = await findDuplicate(size, sha256);
+        if (duplicate) throw importError('IMPORT_DUPLICATE', 409, '书库中已有这本书。', { bookId: duplicate });
+        const published = await publishWithoutOverwrite(temporary, directory, name, extension);
+        temporary = null;
+        const result = { path: published, name: path.basename(published), size, sha256, type: format.type };
+        if (!afterPublish) return result;
+        try {
+          return { ...result, book: await afterPublish(result) };
+        } catch (error) {
+          // A file the catalog cannot hold must not linger in the library.
+          await fs.rm(published, { force: true }).catch(() => {});
+          if (error instanceof ImportError) throw error;
+          throw importError('IMPORT_INDEX_FAILED', 422, '文件已接收，但无法加入书库。');
+        }
+      });
     } finally {
       if (temporary) await fs.rm(temporary, { force: true }).catch(() => {});
       release();

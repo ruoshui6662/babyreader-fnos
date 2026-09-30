@@ -193,9 +193,9 @@
 
 ### Task 4：导入后端（约 2 天）
 
-- [ ] 新建 `app/server/book-import.js`，实现 2.2 中的流式写入、魔数校验、文件名清理、去重、原子重命名、`indexSingleFile`、并发和大小限制。
-- [ ] 路由：`PUT /api/library/imports`。依次校验：管理员身份、开关、同源、自定义头；再加上 `Content-Length` 和格式上限。
-- [ ] 测试（`tests/book-import.test.js`），覆盖以下情况：
+- [x] 新建 `app/server/book-import.js`，实现 2.2 中的流式写入、魔数校验、文件名清理、去重、原子重命名、`indexSingleFile`、并发和大小限制。
+- [x] 路由：`PUT /api/library/imports`。依次校验：管理员身份、开关、同源、自定义头；再加上 `Content-Length` 和格式上限。
+- [x] 测试（`tests/book-import.test.js`），覆盖以下情况：
   - 超限时返回 413 并清理临时文件；
   - 客户端中途断开后临时文件被清理；
   - 伪造扩展名（例如把 exe 改名为 `.epub`）被拒绝；
