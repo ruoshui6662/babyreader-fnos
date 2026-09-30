@@ -143,14 +143,14 @@ npm run build:fpk
 4. 修正生命周期脚本权限。
 5. 调用 `fnpack build --directory`。
 6. 规范化 FPK 归档并生成构件证明。
-7. 将 FPK、`.sha256` 与 `build-provenance.json` 写入 `dist/`。
+7. 将 FPK、`.sha256` 与 `build-provenance.json` 写入 `dist-v<manifest 版本>/`。
 
 预期生成物：
 
 ```text
-dist/*.fpk
-dist/*.fpk.sha256
-dist/build-provenance.json
+dist-v1.2.0/*.fpk
+dist-v1.2.0/*.fpk.sha256
+dist-v1.2.0/build-provenance.json
 ```
 
 `build-provenance.json` 记录 Git commit/ref、manifest 版本、Node/npm/Python、固定 fnpack 信息、FPK 外层 SHA-256，以及服务端入口、锁文件和全部第一方 UI 模块的包内哈希。CI 会校验该记录绑定当前 `GITHUB_SHA`。

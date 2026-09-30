@@ -53,12 +53,12 @@ git status                             # 有没有没提交的工作（正常应
 1. 同时修改 `manifest` 的 `version` 和 `package.json` 的 `version`，两处保持一致。修订号表示修复，次版本号表示功能。**同一个版本号只打包一次**，内容变了就升版本号。
 2. 在 `CHANGELOG_WORK.md` 顶部新增一节，写明版本号、功能要点、验证结果和尚未验收的内容。
 3. 提交：`chore: release vX.Y.Z`。
-4. 在**干净的工作区**里执行 `npm run build:fpk`，产物只输出到 `dist/`。检查 `dist/build-provenance.json`，其中 `git_dirty` 必须是 `false`。
+4. 在**干净的工作区**里执行 `npm run build:fpk`，产物输出到 `dist-v<版本>/`（脚本读取 manifest 版本；目录已存在时拒绝构建）。检查其中的 `build-provenance.json`，`git_dirty` 必须是 `false`。
 5. 打附注 tag：`git tag -a vX.Y.Z -m "BabyReader fnOS vX.Y.Z"`。
 6. 推送：`git push origin main --follow-tags`。FPK 不进 git（已在 `.gitignore` 中）。如果需要长期保存，把它作为附件上传到 GitHub Release。
 7. 真机验收的结果回填到 `docs/FNOS_DEVICE_ACCEPTANCE.md` 和 CHANGELOG。
 
-不要再建 `dist-fpk-<日期>` 这类目录。要找历史版本的包，用 `git checkout vX.Y.Z` 后重新构建即可。
+每个版本只有一个 `dist-v<版本>/` 目录；旧版本目录在新版本验收后可以删除，要找历史版本的包，用 `git checkout vX.Y.Z` 后重新构建即可。
 
 ## 6. 不进 git 的内容
 

@@ -102,14 +102,14 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          test "$(node -p "require('./dist/build-provenance.json').source.git_commit")" = "$GITHUB_SHA"
-          test -n "$(find dist -maxdepth 1 -name '*.fpk' -print -quit)"
-          test -n "$(find dist -maxdepth 1 -name '*.fpk.sha256' -print -quit)"
+          test "$(node -p "require(require('path').resolve(require('fs').readdirSync('.').find((d) => d.startsWith('dist-v')), 'build-provenance.json')).source.git_commit")" = "$GITHUB_SHA"
+          test -n "$(find dist-v* -maxdepth 1 -name '*.fpk' -print -quit)"
+          test -n "$(find dist-v* -maxdepth 1 -name '*.fpk.sha256' -print -quit)"
       - uses: actions/upload-artifact@v4
         with:
           name: babyreader-fnos-${{ github.sha }}
           path: |
-            dist/*.fpk
-            dist/*.fpk.sha256
-            dist/build-provenance.json
+            dist-v*/*.fpk
+            dist-v*/*.fpk.sha256
+            dist-v*/build-provenance.json
           if-no-files-found: error

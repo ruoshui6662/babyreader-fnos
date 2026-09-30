@@ -5,7 +5,10 @@ set -eu
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 BUILD_ID="${BABYREADER_BUILD_ID:-$(date -u +%Y%m%d%H%M%S)}"
 BUILD_ROOT="${BABYREADER_BUILD_ROOT:-$ROOT/.build/fpk-$BUILD_ID}"
-DIST_DIR="${BABYREADER_BUILD_DIST_DIR:-$ROOT/dist-fpk-$BUILD_ID}"
+# One output directory per released version; rebuilding a version is refused
+# below so a version number always identifies exactly one package.
+VERSION="$(sed -n 's/^version=//p' "$ROOT/manifest" | tr -d '\r')"
+DIST_DIR="${BABYREADER_BUILD_DIST_DIR:-$ROOT/dist-v$VERSION}"
 
 if ! command -v fnpack >/dev/null 2>&1; then
   printf '%s\n' '错误：未找到 fnpack。请安装与当前平台匹配的 fnpack 后重试。' >&2

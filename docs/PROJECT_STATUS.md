@@ -78,12 +78,12 @@ npm ci
 npm test                 # node:test，约 540 项（Windows 下约 9 项按平台跳过）
 npm run check            # 结构检查（Windows 自动使用 portable 模式）
 npm run test:e2e         # Playwright Chromium + 书库组织专项
-npm run build:fpk        # 需要 fnpack（本机在 C:/Users/admin/bin/fnpack）和 bash；产物写到 dist/
+npm run build:fpk        # 需要 fnpack（本机在 C:/Users/admin/bin/fnpack）和 bash；产物写到 dist-v<版本>/
 ```
 
 - 本地开发服务：`NODE_ENV=development BABYREADER_DEV_PORT=8099 BABYREADER_DEV_UID=development node app/server/index.js`，访问 `http://127.0.0.1:8099/app/babyreader-fnos/`。
 - E2E 使用 `.runtime/` 下的隔离合成书库，不会碰真实书库。
-- 每次打包都会生成 `dist/build-provenance.json`，记录 commit、dirty 状态和包内文件哈希。**从今以后只保留 `dist/` 一个输出目录**，不要再建 `dist-fpk-*` 这类目录。
+- 每次打包都会生成 `dist-v<版本>/build-provenance.json`，记录 commit、dirty 状态和包内文件哈希。**一个版本号只对应一个输出目录**，重复构建同一版本会被脚本拒绝。
 
 ## 6. 经验与陷阱（从各阶段记录中汇总）
 
