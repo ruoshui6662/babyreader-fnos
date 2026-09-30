@@ -151,24 +151,24 @@
 
 ### Task 1：MOBI 扫描与元数据（约 1.5 天）
 
-- [ ] 新建 `app/server/mobi-format.js`，内容全部是纯函数：
+- [x] 新建 `app/server/mobi-format.js`，内容全部是纯函数：
   - 解析 PDB 头、MOBI 头和 EXTH，只读前 64 KiB 加上 EXTH 中指向的封面记录；
   - 识别 MOBI6 与 KF8（包括混合文件里的 KF8 边界）；
   - 从 MOBI 头的加密类型检测 DRM。
-- [ ] `library.js` 的 `SUPPORTED_EXTENSIONS` 增加 `.mobi`、`.azw`、`.azw3`。扫描时：
+- [x] `library.js` 的 `SUPPORTED_EXTENSIONS` 增加 `.mobi`、`.azw`、`.azw3`。扫描时：
   - 不解压正文，只写入 `type:"mobi"`、`sourceFormat`、标题、作者、语言，并把封面写入 covers；
   - DRM 文件作为错误项记录"受 DRM 保护"，不影响其他书籍。
-- [ ] 开关关闭时，与 PDF 一样隐藏并统计 `hiddenMobiCount`。
-- [ ] 测试：`tests/mobi-format.test.js`，另在 `tests/reader-core.test.js` 中补充"扫描混合格式书库，EPUB/PDF/TXT 条目逐字段不变"。
+- [x] 开关关闭时，与 PDF 一样隐藏并统计 `hiddenMobiCount`。
+- [x] 测试：`tests/mobi-format.test.js`，另在 `tests/reader-core.test.js` 中补充"扫描混合格式书库，EPUB/PDF/TXT 条目逐字段不变"。
 
 ### Task 2：MOBI→EPUB 转换器（约 3 天）
 
-- [ ] 新建 `app/server/mobi-convert.js`，负责按 2.1 的要求把 MOBI 组装成确定性的 EPUB：
+- [x] 新建 `app/server/mobi-convert.js`（MOBI6 与 KF8 均已完成；KF8 已用真实样本验证），负责按 2.1 的要求把 MOBI 组装成确定性的 EPUB：
   - MOBI6：按 `<mbp:pagebreak>` 分章，改写 `filepos`，把 `recindex` 图片替换为包内路径；
   - KF8：用 skeleton 加 fragment 重组章节，保留 CSS，改写 `kindle:embed`/`kindle:pos`；
   - 目录优先取 NCX/INDX 索引；没有目录时按章节生成"第 N 部分"。
-- [ ] 新建 `app/server/mobi-convert-worker.js`：限制资源、超时后终止、single-flight、原子写入、按转换器版本命名缓存文件。
-- [ ] 测试：
+- [x] 新建 `app/server/mobi-convert-worker.js`：限制资源、超时后终止、single-flight、原子写入、按转换器版本命名缓存文件。
+- [x] 测试：
   - 同一输入两次转换产出的字节完全相同；
   - 章节 href 与已发布的命名规则一致（写成快照测试）；
   - 超时和超限时终止 worker，并清理临时文件；
@@ -177,25 +177,25 @@
 
 ### Task 3：接入阅读、搜索与 AI（约 2 天）
 
-- [ ] `index.js`：
+- [x] `index.js`：
   - `findBook` 在源文件授权通过后，通过 `resolveBookContent` 取得派生 EPUB；
   - 转换中的书返回 `409 preparing`；
   - `publicBook` 对外把 MOBI 映射为 `type:"epub"` 加 `format`。
-- [ ] `ai-fts.js`、`ai-book-context.js`、`book-search.js` 改用 `isEpubLike`；解析器版本键包含转换器版本。
-- [ ] 前端：
+- [x] `ai-fts.js`、`ai-book-context.js`、`book-search.js` 改用 `isEpubLike`；解析器版本键包含转换器版本。
+- [x] 前端：
   - `libraryBookFormatLabel` 增加 MOBI/AZW3；
   - 打开时收到 `preparing` 状态，就显示可访问的等待提示，并按退避策略重试；
   - 进度、划线、书签、导出沿用 EPUB 的实现，不做改动。
-- [ ] 测试：
+- [x] 测试：
   - API 层面：MOBI 书的内容接口返回 EPUB，指纹变化后自动重建；
   - E2E（新增 `e2e/mobi-reader.spec.js`）：打开、翻章、划线、刷新后恢复、全文搜索命中后精确跳转；
   - 全量回归：EPUB/PDF 用例全部保持原有结果。
 
 ### Task 4：导入后端（约 2 天）
 
-- [ ] 新建 `app/server/book-import.js`，实现 2.2 中的流式写入、魔数校验、文件名清理、去重、原子重命名、`indexSingleFile`、并发和大小限制。
-- [ ] 路由：`PUT /api/library/imports`。依次校验：管理员身份、开关、同源、自定义头；再加上 `Content-Length` 和格式上限。
-- [ ] 测试（`tests/book-import.test.js`），覆盖以下情况：
+- [x] 新建 `app/server/book-import.js`，实现 2.2 中的流式写入、魔数校验、文件名清理、去重、原子重命名、`indexSingleFile`、并发和大小限制。
+- [x] 路由：`PUT /api/library/imports`。依次校验：管理员身份、开关、同源、自定义头；再加上 `Content-Length` 和格式上限。
+- [x] 测试（`tests/book-import.test.js`），覆盖以下情况：
   - 超限时返回 413 并清理临时文件；
   - 客户端中途断开后临时文件被清理；
   - 伪造扩展名（例如把 exe 改名为 `.epub`）被拒绝；
@@ -210,10 +210,10 @@
 
 ### Task 5：导入前端（约 1.5 天）
 
-- [ ] 书库工具栏加入"导入"按钮（仅管理员且开关开启时出现），用隐藏的 `<input type=file multiple accept=...>` 选择文件，并支持拖拽到书库页面。
-- [ ] 导入队列面板：显示每个文件的进度条和结果；错误文案要可操作，例如"文件受 DRM 保护""超过 64 MB""书库中已有这本书（查看）"；可取消上传。
-- [ ] 在分类详情页导入时，自动放入当前分类。
-- [ ] 同步更新 `docs/library-home-design-contract.md`、DOM 测试和 E2E（`e2e/book-import.spec.js`）。
+- [x] 书库工具栏加入"导入"按钮（仅管理员且开关开启时出现），用隐藏的 `<input type=file multiple accept=...>` 选择文件，并支持拖拽到书库页面。
+- [x] 导入队列面板：显示每个文件的进度条和结果；错误文案要可操作，例如"文件受 DRM 保护""超过 64 MB""书库中已有这本书（查看）"；可取消上传。
+- [x] 在分类详情页导入时，自动放入当前分类。
+- [x] 同步更新 `docs/library-home-design-contract.md`、DOM 测试和 E2E（`e2e/book-import.spec.js`）。
 
 ### Task 6：FPK 审计、NAS 验收与开关决策（约 1.5 天）
 

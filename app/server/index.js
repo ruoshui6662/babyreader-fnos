@@ -6,10 +6,14 @@ const http = require('node:http');
 const path = require('node:path');
 const crypto = require('node:crypto');
 const { UserStorage, readJson } = require('./storage');
-const { fingerprintBook, scanLibrary } = require('./library');
-const { resolveAuthorizedPath } = require('./security');
+const { fingerprintBook, indexBookFile, scanLibrary } = require('./library');
+const { resolveAuthorizedPath, isPathInside } = require('./security');
 const { parseSingleByteRange } = require('./byte-range');
 const { getPdfReaderEnabled } = require('./pdf-feature-config');
+const { getMobiReaderEnabled } = require('./mobi-feature-config');
+const { createMobiDerivedStore } = require('./mobi-derived');
+const { getBookImportEnabled } = require('./import-feature-config');
+const { createBookImporter, hashFile, ImportError, IMPORT_DIRECTORY_NAME } = require('./book-import');
 const { AiConfigStorage, normalizeAiSettings, publicAiConfig } = require('./ai-config');
 const { validateAiBookContext } = require('./ai-book-context');
 const {
@@ -68,11 +72,41 @@ const LIBRARY_ORGANIZATION_ENABLED = ['1', 'true', 'yes', 'on'].includes(
 function pdfReaderEnabled() {
   return getPdfReaderEnabled(CONFIG_ROOT, process.env.BABYREADER_PDF_ENABLED);
 }
+function mobiReaderEnabled() {
+  return getMobiReaderEnabled(CONFIG_ROOT, process.env.BABYREADER_MOBI_ENABLED);
+}
+
+// Format switches hide whole book types from every catalog response.
+function readerFormatSwitches() {
+  return { pdf: pdfReaderEnabled(), mobi: mobiReaderEnabled() };
+}
+
+function isBookVisible(book, switches = readerFormatSwitches()) {
+  if (book?.type === 'pdf') return switches.pdf;
+  if (book?.type === 'mobi') return switches.mobi;
+  return true;
+}
+
+function libraryFeatures(index, switches = readerFormatSwitches(), { canImport = false } = {}) {
+  const books = Array.isArray(index?.books) ? index.books : [];
+  const indexedMobi = books.filter((book) => book.type === 'mobi' && !book.error).length;
+  return {
+    libraryOrganization: LIBRARY_ORGANIZATION_ENABLED,
+    pdfReader: switches.pdf,
+    hiddenPdfCount: switches.pdf ? 0 : books.filter((book) => book.type === 'pdf' && !book.error).length,
+    mobiReader: switches.mobi,
+    // Unparsed Kindle files from a switched-off scan plus any still indexed.
+    hiddenMobiCount: switches.mobi ? 0 : indexedMobi + Number(index?.scan?.hiddenMobiCount || 0),
+    drmProtectedMobiCount: switches.mobi ? Number(index?.scan?.drmProtectedCount || 0) : 0,
+    bookImport: canImport && bookImportEnabled()
+  };
+}
 const CSP = "default-src 'self'; base-uri 'none'; object-src 'none'; frame-ancestors 'self'; form-action 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self'; media-src 'self' blob:; worker-src 'self' blob:";
 
 const storage = new UserStorage(DATA_ROOT);
 const aiConfigStorage = new AiConfigStorage(DATA_ROOT);
 const pdfAiProfileStore = createPdfAiProfileStore({ dataRoot: DATA_ROOT });
+const mobiDerived = createMobiDerivedStore({ dataRoot: DATA_ROOT });
 const aiIndexManager = createAiIndexManager({
   dataRoot: DATA_ROOT,
   schemaVersion: AI_FTS_SCHEMA_VERSION,
@@ -130,6 +164,134 @@ function isHealthyLibraryIndex(index) {
     && (!Array.isArray(index.scan.rootErrors) || index.scan.rootErrors.length === 0);
 }
 
+// ----- Library lock and browser book import (MOBI/import plan Task 4) -----
+
+// Scans and import catalog merges both rewrite library.json; this chain runs
+// them one at a time so neither can overwrite the other's result.
+let libraryLock = Promise.resolve();
+function withLibraryLock(fn) {
+  const run = libraryLock.then(fn, fn);
+  libraryLock = run.catch(() => {});
+  return run;
+}
+
+function bookImportEnabled() {
+  return getBookImportEnabled(CONFIG_ROOT, process.env.BABYREADER_IMPORT_ENABLED);
+}
+
+function authorizedRootFor(realPath) {
+  return authorizedRoots
+    .filter((root) => root === realPath || isPathInside(root, realPath))
+    .sort((left, right) => right.length - left.length)[0] || null;
+}
+
+// Imports go to <babyreader-fnos/library share>/导入, never to a user's own
+// authorized folders. The share is itself an authorized library root.
+async function resolveImportDirectory() {
+  await refreshAuthorizationIfChanged();
+  const shares = [];
+  for (const candidate of rootDiagnostics.sharedRoots || []) {
+    try {
+      shares.push(await fs.realpath(candidate));
+    } catch {
+      // Missing shares are reported by root diagnostics.
+    }
+  }
+  const share = shares.find((root) => /babyreader-fnos[\\/]library$/i.test(root)) || shares[0];
+  if (!share || !authorizedRootFor(share)) {
+    throw Object.assign(new Error('Import share unavailable'), { code: 'IMPORT_NO_TARGET' });
+  }
+  const directory = path.join(share, IMPORT_DIRECTORY_NAME);
+  await fs.mkdir(directory, { recursive: true, mode: 0o750 });
+  const stat = await fs.lstat(directory);
+  const real = await fs.realpath(directory);
+  if (!stat.isDirectory() || stat.isSymbolicLink() || !isPathInside(share, real)) {
+    throw Object.assign(new Error('Import directory is not a plain directory inside the share'), { code: 'IMPORT_NO_TARGET' });
+  }
+  return real;
+}
+
+async function findDuplicateBook(size, sha256) {
+  const index = await storage.getLibraryIndex();
+  for (const book of index.books) {
+    if (book.error || book.size !== size) continue;
+    try {
+      const safePath = await resolveAuthorizedPath(book.path, authorizedRoots);
+      if (await hashFile(safePath) === sha256) return book.id;
+    } catch {
+      // Unreadable candidates cannot be duplicates we could show anyway.
+    }
+  }
+  return null;
+}
+
+async function catalogImportedBook({ path: filePath }) {
+  const realRoot = authorizedRootFor(await fs.realpath(filePath));
+  if (!realRoot) throw new Error('Imported file is outside the authorized roots');
+  const outcome = await indexBookFile({
+    filePath,
+    realRoot,
+    validRoots: authorizedRoots,
+    coverDirectory: path.join(DATA_ROOT, 'covers')
+  });
+  if (outcome.kind !== 'indexed' && outcome.kind !== 'reused') {
+    throw new Error(outcome.book?.error || 'Imported file could not be indexed');
+  }
+  const index = await storage.getLibraryIndex();
+  const books = index.books.filter((book) => book.id !== outcome.book.id);
+  books.push(outcome.book);
+  books.sort((left, right) => String(left.title || left.relativePath).localeCompare(String(right.title || right.relativePath), 'zh-CN'));
+  await storage.saveLibraryIndex({ ...index, books });
+  return outcome.book;
+}
+
+const bookImporter = createBookImporter({
+  resolveTarget: resolveImportDirectory,
+  isFormatEnabled: (type) => (type === 'pdf' ? pdfReaderEnabled() : type === 'mobi' ? mobiReaderEnabled() : true),
+  findDuplicate: findDuplicateBook,
+  runExclusive: withLibraryLock,
+  afterPublish: catalogImportedBook
+});
+
+// Rejections may happen before the body is read; close the connection instead
+// of draining a large upload nobody will use.
+function sendImportError(request, response, error) {
+  const statusCode = error.statusCode || 500;
+  const body = error instanceof ImportError
+    ? { error: error.message, code: error.code, ...error.details }
+    : { error: '导入失败，请稍后重试。', code: 'IMPORT_FAILED' };
+  if (!(error instanceof ImportError)) recordError(error, { operation: 'book-import' });
+  const payload = Buffer.from(JSON.stringify(body));
+  response.writeHead(statusCode, {
+    'Content-Type': 'application/json; charset=utf-8',
+    'Content-Length': payload.length,
+    Connection: 'close'
+  });
+  response.end(payload);
+  if (!request.readableEnded) request.resume();
+}
+
+async function handleBookImport(request, response, user) {
+  if (!bookImportEnabled()) return sendImportError(request, response, new ImportError('IMPORT_DISABLED', 404, '书籍导入未启用。'));
+  if (!user.isAdmin) return sendImportError(request, response, new ImportError('IMPORT_FORBIDDEN', 403, '只有管理员可以导入书籍。'));
+  // A custom header forces a CORS preflight, which this server never grants,
+  // so cross-site pages cannot submit uploads with the user's session.
+  const fetchSite = request.headers['sec-fetch-site'];
+  if (request.headers['x-babyreader-request'] !== 'import' || (fetchSite && !['same-origin', 'none'].includes(fetchSite))) {
+    return sendImportError(request, response, new ImportError('IMPORT_BAD_REQUEST', 403, '导入请求来源无效。'));
+  }
+  try {
+    const result = await bookImporter.importStream(request, {
+      userId: user.uid,
+      encodedName: request.headers['x-babyreader-filename'],
+      contentLength: request.headers['content-length']
+    });
+    return sendJson(response, 201, { book: publicBook(result.book), name: result.name });
+  } catch (error) {
+    return sendImportError(request, response, error);
+  }
+}
+
 async function runLibraryScan() {
   if (activeScan) return activeScan;
 
@@ -142,13 +304,14 @@ async function runLibraryScan() {
     result: null
   };
 
-  activeScan = (async () => {
+  activeScan = withLibraryLock(async () => {
     try {
       await loadConfiguration();
       const previousIndex = await storage.getLibraryIndex();
       const index = await scanLibrary(authorizedRoots, {
         coverDirectory: path.join(DATA_ROOT, 'covers'),
-        previousIndex
+        previousIndex,
+        mobiEnabled: mobiReaderEnabled()
       });
       await storage.saveLibraryIndex(index);
       if (isHealthyLibraryIndex(index) && rootDiagnostics.rejectedRoots.length === 0) {
@@ -173,6 +336,11 @@ async function runLibraryScan() {
         } catch (cleanupError) {
           recordError(cleanupError, { operation: 'ai-index-orphan-cleanup' });
         }
+        try {
+          await mobiDerived.prune(index.books);
+        } catch (pruneError) {
+          recordError(pruneError, { operation: 'mobi-derived-prune' });
+        }
       }
       scanState = {
         status: index.scan?.status || 'completed',
@@ -195,7 +363,7 @@ async function runLibraryScan() {
     } finally {
       activeScan = null;
     }
-  })();
+  });
 
   return activeScan;
 }
@@ -726,6 +894,9 @@ async function readJsonBody(request) {
 function publicBook(book) {
   if (!book || book.error) return book;
   const { path: ignoredPath, root: ignoredRoot, ...safe } = book;
+  // Readers open MOBI/AZW3 through their derived EPUB; the real format is kept
+  // for labels only.
+  if (safe.type === 'mobi') return { ...safe, type: 'epub', format: safe.sourceFormat === 'kf8' ? 'azw3' : 'mobi' };
   return safe;
 }
 
@@ -796,8 +967,8 @@ async function getLibraryOrganizationSnapshot(uid, index = null) {
   const currentIndex = index || await storage.getLibraryIndex();
   const stored = await storage.getLibraryOrganization(uid);
   const resolved = resolveLibraryOrganization(currentIndex.books, stored);
-  const pdfEnabled = pdfReaderEnabled();
-  const visibleBooks = currentIndex.books.filter((book) => !book.error && (pdfEnabled || book.type !== 'pdf'));
+  const switches = readerFormatSwitches();
+  const visibleBooks = currentIndex.books.filter((book) => !book.error && isBookVisible(book, switches));
   const visibleIds = new Set(visibleBooks.map((book) => book.id));
   const visibleOrder = (order) => order.filter((bookId) => visibleIds.has(bookId));
   return {
@@ -814,11 +985,7 @@ async function getLibraryOrganizationSnapshot(uid, index = null) {
       .filter(([bookId]) => visibleIds.has(bookId))),
     orphanedBookIds: resolved.orphanedBookIds,
     books: visibleBooks.map(publicBook),
-    features: {
-      libraryOrganization: LIBRARY_ORGANIZATION_ENABLED,
-      pdfReader: pdfEnabled,
-      hiddenPdfCount: pdfEnabled ? 0 : currentIndex.books.filter((book) => book.type === 'pdf' && !book.error).length
-    }
+    features: libraryFeatures(currentIndex, switches)
   };
 }
 
@@ -827,9 +994,9 @@ async function mutateLibraryOrganization(user, body, mutation) {
   const revision = organizationRevision(payload);
   const index = await storage.getLibraryIndex();
   assertOrganizationCatalogHealthy(index);
-  const pdfEnabled = pdfReaderEnabled();
+  const switches = readerFormatSwitches();
   const activeBookIds = new Set(index.books
-    .filter((book) => !book.error && (pdfEnabled || book.type !== 'pdf'))
+    .filter((book) => !book.error && isBookVisible(book, switches))
     .map((book) => book.id));
   await storage.mutateLibraryOrganization(user.uid, revision, async (draft) => {
     return mutation(draft, activeBookIds);
@@ -903,7 +1070,35 @@ async function findBook(bookId, options = {}) {
   if (options.requirePathIdentity && book.type === 'pdf' && path.resolve(indexedPath) !== path.resolve(book.path)) {
     throw Object.assign(new Error('Book file no longer matches its indexed path'), { statusCode: 404 });
   }
+  if (book.type === 'mobi') {
+    if (!mobiReaderEnabled()) throw Object.assign(new Error('Book not found'), { statusCode: 404 });
+    if (!options.allowMobiMetadata) return mobiEpubView(book);
+  }
   return book;
+}
+
+const MOBI_ERRORS = Object.freeze({
+  DRM_PROTECTED: [415, '这本书受 DRM 保护，无法阅读。'],
+  TOO_LARGE: [413, '这本书过大，暂不支持阅读。'],
+  SOURCE_CHANGED: [409, '文件已变化，请重新扫描书库后再打开。'],
+  TIMEOUT: [503, '准备这本书超时，请稍后重试。']
+});
+
+// Every handler that reads book content (content, search, FTS, AI) receives a
+// MOBI book as an EPUB view of its authorized, converted derivative, so none of
+// them can ever read the raw Kindle bytes. The source was re-authorized above.
+async function mobiEpubView(book) {
+  let derived;
+  try {
+    derived = await mobiDerived.ensure(book);
+  } catch (error) {
+    const [statusCode, message] = MOBI_ERRORS[error?.code] || [422, '无法转换这本书，文件可能已损坏。'];
+    throw Object.assign(new Error(message), { statusCode, publicCode: `MOBI_${error?.code || 'CONVERSION_FAILED'}` });
+  }
+  if (derived.status !== 'ready') {
+    throw Object.assign(new Error('正在准备这本书，请稍候…'), { statusCode: 409, publicCode: 'MOBI_PREPARING' });
+  }
+  return { ...book, type: 'epub', path: derived.path, sourceType: 'mobi', sourcePath: book.path };
 }
 
 async function currentPdfFingerprint(book) {
@@ -1100,38 +1295,33 @@ async function handleApi(request, response, pathname, searchParams = new URLSear
   if (request.method === 'GET' && pathname === `${APP_PREFIX}/api/library/scan/status`) {
     return sendJson(response, 200, currentScanState());
   }
+  if (request.method === 'PUT' && pathname === `${APP_PREFIX}/api/library/imports`) {
+    return handleBookImport(request, response, user);
+  }
   if (request.method === 'GET' && pathname === `${APP_PREFIX}/api/library`) {
     await refreshAuthorizationIfChanged();
     const index = await storage.getLibraryIndex();
-    const pdfEnabled = pdfReaderEnabled();
+    const switches = readerFormatSwitches();
     return sendJson(response, 200, {
       ...index,
-      features: {
-        libraryOrganization: LIBRARY_ORGANIZATION_ENABLED,
-        pdfReader: pdfEnabled,
-        hiddenPdfCount: pdfEnabled ? 0 : index.books.filter((book) => book.type === 'pdf' && !book.error).length
-      },
+      features: libraryFeatures(index, switches, { canImport: user.isAdmin }),
       configured: authorizedRoots.length > 0,
       authorizedRootCount: authorizedRoots.length,
       scanState: currentScanState(),
-      books: index.books.filter((book) => pdfEnabled || book.type !== 'pdf').map(publicBook)
+      books: index.books.filter((book) => isBookVisible(book, switches)).map(publicBook)
     });
   }
   if (request.method === 'POST' && pathname === `${APP_PREFIX}/api/library/scan`) {
     if (!user.isAdmin) return sendError(response, 403, 'Administrator access is required');
     const index = await runLibraryScan();
-    const pdfEnabled = pdfReaderEnabled();
+    const switches = readerFormatSwitches();
     return sendJson(response, 200, {
       ...index,
-      features: {
-        libraryOrganization: LIBRARY_ORGANIZATION_ENABLED,
-        pdfReader: pdfEnabled,
-        hiddenPdfCount: pdfEnabled ? 0 : index.books.filter((book) => book.type === 'pdf' && !book.error).length
-      },
+      features: libraryFeatures(index, switches, { canImport: user.isAdmin }),
       configured: authorizedRoots.length > 0,
       authorizedRootCount: authorizedRoots.length,
       scanState: currentScanState(),
-      books: index.books.filter((book) => pdfEnabled || book.type !== 'pdf').map(publicBook)
+      books: index.books.filter((book) => isBookVisible(book, switches)).map(publicBook)
     });
   }
 
@@ -1907,7 +2097,7 @@ async function handleApi(request, response, pathname, searchParams = new URLSear
 
   const coverMatch = pathname.match(new RegExp(`^${APP_PREFIX}/api/books/([a-f0-9]{64})/cover$`));
   if (request.method === 'GET' && coverMatch) {
-    await findBook(coverMatch[1]);
+    await findBook(coverMatch[1], { allowMobiMetadata: true });
     const entries = await fs.readdir(path.join(DATA_ROOT, 'covers')).catch(() => []);
     const name = entries.find((entry) => entry.startsWith(coverMatch[1]));
     if (!name) return sendError(response, 404, 'Cover not found');
@@ -1940,6 +2130,9 @@ async function handleRequest(request, response) {
     if (error.code === 'ENOENT') return sendError(response, 404, 'Not found');
     recordError(error, { method: request.method, url: request.url });
     console.error(error);
+    if (error.statusCode && error.publicCode) {
+      return sendJson(response, error.statusCode, { error: error.message, code: error.publicCode });
+    }
     return sendError(response, error.statusCode || 500, error.statusCode ? error.message : 'Internal server error');
   }
 }

@@ -149,11 +149,22 @@ function createLibraryRecentCard(books) {
 }
 
 function createLibraryHiddenPdfNotice(library) {
-  const count = library?.features?.hiddenPdfCount;
-  if (library?.features?.pdfReader !== false || !Number.isSafeInteger(count) || count < 1) return null;
+  const features = library?.features || {};
+  const count = (value) => (Number.isSafeInteger(value) && value > 0 ? value : 0);
+  const lines = [];
+  if (features.pdfReader === false && count(features.hiddenPdfCount)) {
+    lines.push(`另有 ${features.hiddenPdfCount} 本 PDF 已扫描；请在 fnOS 的运行设置中启用 PDF 阅读。`);
+  }
+  if (features.mobiReader === false && count(features.hiddenMobiCount)) {
+    lines.push(`另有 ${features.hiddenMobiCount} 本 MOBI/AZW3；请在 fnOS 的运行设置中启用后重新扫描。`);
+  }
+  if (count(features.drmProtectedMobiCount)) {
+    lines.push(`${features.drmProtectedMobiCount} 本 Kindle 书受 DRM 保护，无法阅读。`);
+  }
+  if (!lines.length) return null;
   const notice = document.createElement('p');
   notice.className = 'library-summary';
-  notice.textContent = `另有 ${count} 本 PDF 已扫描；请在 fnOS 的运行设置中启用 PDF 阅读。`;
+  notice.textContent = lines.join(' ');
   return notice;
 }
 
@@ -268,6 +279,9 @@ function renderFlatLibrary(library, { organizationEnabled = false } = {}) {
   const actions = document.createElement('div');
   actions.className = 'library-header-actions';
   actions.dataset.librarySlot = 'header-actions';
+  if (typeof libraryImportAvailable === 'function' && libraryImportAvailable(library)) {
+    actions.appendChild(createLibraryImportButton(library));
+  }
   actions.appendChild(scanButton);
   header.appendChild(actions);
   shell.appendChild(header);
@@ -310,4 +324,5 @@ function renderFlatLibrary(library, { organizationEnabled = false } = {}) {
 
   article.appendChild(shell);
   setupLibraryFilter(shell);
+  if (typeof setupLibraryImportDrop === 'function') setupLibraryImportDrop(shell, library);
 }

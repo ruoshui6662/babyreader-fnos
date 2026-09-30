@@ -12,6 +12,9 @@ const runtimeRoot = path.resolve(process.env.BABYREADER_E2E_RUNTIME_ROOT || path
 const configRoot = path.join(runtimeRoot, 'etc');
 const dataRoot = path.join(runtimeRoot, 'var');
 const libraryRoot = path.join(runtimeRoot, 'library');
+// Empty stand-in for the app's fnOS data share (babyreader-fnos/library); the
+// import spec writes here. It adds no books, so other specs see no change.
+const shareRoot = path.join(runtimeRoot, 'share', 'babyreader-fnos', 'library');
 const sampleEpubPath = process.env.BABYREADER_E2E_SAMPLE_EPUB;
 const samplePdfPath = process.env.BABYREADER_E2E_SAMPLE_PDF;
 
@@ -19,6 +22,7 @@ fs.rmSync(runtimeRoot, { recursive: true, force: true });
 fs.mkdirSync(configRoot, { recursive: true });
 fs.mkdirSync(dataRoot, { recursive: true });
 fs.mkdirSync(libraryRoot, { recursive: true });
+fs.mkdirSync(shareRoot, { recursive: true });
 
 fs.writeFileSync(path.join(libraryRoot, 'e2e-reader.md'), [
   '---',
@@ -249,7 +253,8 @@ Object.assign(process.env, {
   BABYREADER_PDF_ENABLED: '1',
   TRIM_PKGETC: configRoot,
   TRIM_PKGVAR: dataRoot,
-  TRIM_PKGTMP: path.join(runtimeRoot, 'tmp')
+  TRIM_PKGTMP: path.join(runtimeRoot, 'tmp'),
+  TRIM_DATA_SHARE_PATHS: shareRoot
 });
 
 const { start } = require('../app/server/index');

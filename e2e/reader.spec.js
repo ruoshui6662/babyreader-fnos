@@ -487,9 +487,10 @@ test('sepia reader returns to the neutral light library surface', async ({ page 
   expect(readerSurface).toBe('rgb(255, 255, 255)');
 
   await page.locator('#btnBackToLibrary').click();
-  const librarySurface = await page.locator('#article').evaluate((element) => getComputedStyle(element).backgroundColor);
   // The shelf keeps its own neutral palette instead of the reading paper tint.
-  expect(librarySurface).toBe('rgb(251, 251, 253)');
+  // Retrying assertion: the library re-renders asynchronously after the click.
+  await expect(page.locator('.library-view')).toBeVisible();
+  await expect(page.locator('#article')).toHaveCSS('background-color', 'rgb(251, 251, 253)');
 });
 
 test('reader navigation and floating toolbar controls keep 44px icon targets', async ({ page }) => {
