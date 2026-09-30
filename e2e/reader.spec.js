@@ -477,14 +477,20 @@ test('continuous scroll chapter boundary renders dedicated previous and next con
   await expect(page.locator('#article .epub-chapter')).toHaveAttribute('data-source-path', /chapter1\.xhtml/);
 });
 
-test('sepia reader returns to the neutral light library surface', async ({ page }) => {
+test('浅色 is white paper on a neutral stage and 护眼米黄 is warm paper; the shelf stays neutral', async ({ page }) => {
   await openEpubFixture(page);
+  const surfaces = () => page.evaluate(() => ({
+    paper: getComputedStyle(document.getElementById('article')).backgroundColor,
+    stage: getComputedStyle(document.querySelector('.reader')).backgroundColor
+  }));
+  await page.evaluate(() => applyTheme('light', false));
+  // Regression: these two themes used to have their colours swapped.
+  expect(await surfaces()).toEqual({ paper: 'rgb(255, 255, 255)', stage: 'rgb(242, 243, 245)' });
+
   await page.locator('#btnSettings').click();
   await page.locator('#settingTheme').selectOption('sepia');
   await page.locator('#btnCloseSettings').click();
-
-  const readerSurface = await page.locator('#article').evaluate((element) => getComputedStyle(element).backgroundColor);
-  expect(readerSurface).toBe('rgb(255, 255, 255)');
+  expect(await surfaces()).toEqual({ paper: 'rgb(246, 240, 225)', stage: 'rgb(233, 224, 204)' });
 
   await page.locator('#btnBackToLibrary').click();
   // The shelf keeps its own neutral palette instead of the reading paper tint.

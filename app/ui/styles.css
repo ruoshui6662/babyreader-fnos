@@ -181,20 +181,19 @@
   --table-row:   rgba(255,255,255,0.02);
 }
 
-/* Sepia reading mode follows the library's white browsing surface so the app
-   keeps one visual language between choosing a book and reading it. */
+/* 护眼米黄: warm paper on a slightly deeper warm stage. (It used to be white,
+   while 浅色 carried the warm tint, so the two options looked swapped.) */
 body.theme-sepia {
   color-scheme: light;
 
-  /* Library baseline: white stage, quiet gray controls, dark neutral ink. */
-  --color-bg:          #FFFFFF;
-  --color-elevated:    #F7F7F7;
-  --color-bar:         rgba(255,255,255,.92);
-  --color-fill:        rgba(118,118,128,.12);
-  --color-text:        #1F1F1F;
-  --color-text-2:      rgba(60,60,67,.6);
-  --color-text-3:      rgba(60,60,67,.3);
-  --color-separator:   #EDEDED;
+  --color-bg:          #F6F0E1;
+  --color-elevated:    #EFE7D5;
+  --color-bar:         rgba(233,224,204,.88);
+  --color-fill:        rgba(120,96,56,.10);
+  --color-text:        #3A3226;
+  --color-text-2:      rgba(58,50,38,.62);
+  --color-text-3:      rgba(58,50,38,.34);
+  --color-separator:   #E0D5BE;
   --color-accent:      #B4661F;   /* Accent warmer for sepia mode (brand preservation) */
   --color-focus:       #0A74C4;
   --color-destructive: #FF3B30;
@@ -218,7 +217,7 @@ body.theme-sepia {
      leak through on light pages (black cards / black reading stage). */
   --bg:          var(--color-bg);
   --surface:     var(--color-elevated);
-  --surface-alt: #FFFFFF;         /* same paper surface as the library */
+  --surface-alt: #F6F0E1;         /* warm paper */
   --text:        var(--color-text);
   --text-muted:  var(--color-text-2);
   --text-dim:    var(--color-text-3);
@@ -242,15 +241,15 @@ body.theme-sepia {
 body.theme-light {
   color-scheme: light;
 
-  /* Light semantic tokens */
+  /* Light semantic tokens: white paper, neutral gray stage (no warm tint). */
   --color-bg:          #FFFFFF;
-  --color-elevated:    #FCF8F1;
-  --color-bar:         rgba(249,249,246,.72);
+  --color-elevated:    #F7F8FA;
+  --color-bar:         rgba(242,243,245,.86);
   --color-fill:        rgba(118,118,128,.12);
   --color-text:        #1C1C1E;
   --color-text-2:      rgba(60,60,67,.6);
   --color-text-3:      rgba(60,60,67,.3);
-  --color-separator:   rgba(60,60,67,.29);
+  --color-separator:   rgba(60,60,67,.14);
   --color-accent:      #0A84FF;
   --color-focus:       #0A84FF;
   --color-destructive: #FF3B30;
@@ -7111,4 +7110,123 @@ body.is-epub .reader-floating-toolbar {
     border-left: 0;
     border-radius: 20px 20px 0 0;
   }
+}
+
+/* ============================================================
+   Reading surface v2 (2026-09-30) — calmer, WeChat-Reading-like
+   Flat chrome that blends into the stage, paper lifted by a hairline
+   rather than a drop shadow, and a rail of separate round buttons.
+   Kept as one block so the look can be reviewed or reverted together.
+   ============================================================ */
+
+/* Stage (around the paper), paper shadow and rail button fill per theme.
+   Dark is the default theme and carries no body class. */
+body {
+  --reader-stage: #141416;
+  --reader-paper-shadow: 0 0 0 1px rgba(255, 255, 255, .05);
+  --reader-chrome: #26262A;
+  --reader-chrome-shadow: 0 0 0 1px rgba(255, 255, 255, .06);
+}
+body.theme-light {
+  --reader-stage: #F2F3F5;
+  --reader-paper-shadow: 0 1px 2px rgba(15, 23, 42, .04), 0 4px 20px rgba(15, 23, 42, .04);
+  --reader-chrome: #FFFFFF;
+  --reader-chrome-shadow: 0 1px 2px rgba(15, 23, 42, .06), 0 2px 10px rgba(15, 23, 42, .04);
+}
+body.theme-sepia {
+  --reader-stage: #E9E0CC;
+  --reader-paper-shadow: 0 1px 2px rgba(92, 70, 32, .05), 0 4px 20px rgba(92, 70, 32, .05);
+  --reader-chrome: #F8F3E7;
+  --reader-chrome-shadow: 0 1px 2px rgba(92, 70, 32, .08), 0 2px 10px rgba(92, 70, 32, .05);
+}
+
+/* --- Top bars: no drop shadow, no rule; they share the stage colour. --- */
+.reader-shell-nav,
+body.is-epub .reader-shell-nav {
+  border-bottom-color: transparent;
+  box-shadow: none;
+}
+body.is-epub .reader-shell-nav,
+body.is-pdf-reader .reader-shell-nav {
+  background: color-mix(in srgb, var(--reader-stage) 86%, transparent);
+}
+body.is-library .topbar,
+body.is-library.theme-light .topbar,
+body.is-library.theme-sepia .topbar {
+  background: color-mix(in srgb, var(--library-stage, var(--color-bg)) 86%, transparent);
+  border-bottom-color: transparent;
+  box-shadow: none;
+}
+
+/* --- Paper: hairline lift instead of a heavy shadow, softer corners. --- */
+body.is-epub .reader {
+  background: var(--reader-stage);
+}
+body.is-epub .reader .article,
+body.is-epub.continuous-scroll .scroll-chapter-frame {
+  border: 0;
+  border-radius: 12px;
+  box-shadow: var(--reader-paper-shadow);
+}
+body.is-epub.continuous-scroll .scroll-chapter-frame > .article {
+  border-radius: 12px;
+  box-shadow: none;
+}
+body.is-epub.paged-reading .reader .article,
+body.theme-sepia.is-epub.paged-reading .reader .article {
+  border-radius: 12px;
+  box-shadow: var(--reader-paper-shadow);
+}
+.pdf-page {
+  box-shadow: var(--reader-paper-shadow);
+}
+/* PDF pages are white documents: give them the same stage as EPUB paper so
+   they read as sheets instead of dissolving into a white background. */
+.pdf-reader-surface {
+  background: var(--reader-stage);
+}
+.pdf-reader-controls,
+body.is-pdf-reader .pdf-reader-controls[data-pdf-toolbar-mode="compact"],
+body.is-pdf-reader .pdf-reader-controls[data-pdf-toolbar-mode="mobile"] {
+  border-bottom-color: transparent;
+  background: color-mix(in srgb, var(--reader-stage) 86%, transparent);
+}
+
+/* --- Desktop rail: separate round buttons, no shared pill. --- */
+html:not([data-reader-surface="mobile"]) body.is-epub .reader-floating-toolbar,
+html:not([data-reader-surface="mobile"]) .reader-floating-toolbar {
+  gap: 12px;
+  width: auto;
+  padding: 0;
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+html:not([data-reader-surface="mobile"]) .reader-floating-toolbar .reader-toolbar-divider {
+  display: none;
+}
+html:not([data-reader-surface="mobile"]) .reader-floating-toolbar .reader-tool-btn,
+html:not([data-reader-surface="mobile"]) .reader-floating-toolbar .theme-btn,
+html:not([data-reader-surface="mobile"]) .reader-floating-toolbar .toc-toggle {
+  border: 0;
+  border-radius: 50%;
+  color: var(--color-text-2);
+  background: var(--reader-chrome);
+  box-shadow: var(--reader-chrome-shadow);
+}
+html:not([data-reader-surface="mobile"]) .reader-floating-toolbar button:hover,
+html:not([data-reader-surface="mobile"]) .reader-floating-toolbar button:focus-visible {
+  color: var(--color-text);
+  background: color-mix(in srgb, var(--color-text) 6%, var(--reader-chrome));
+}
+html:not([data-reader-surface="mobile"]) .reader-floating-toolbar button[aria-expanded="true"],
+html:not([data-reader-surface="mobile"]) .reader-floating-toolbar #btnBookmarks[data-bookmark-active="true"] {
+  color: var(--color-accent);
+  background: color-mix(in srgb, var(--color-accent) 12%, var(--reader-chrome));
+  box-shadow: var(--reader-chrome-shadow), inset 0 0 0 1.5px color-mix(in srgb, var(--color-accent) 45%, transparent);
+}
+html:not([data-reader-surface="mobile"]) .reader-floating-toolbar button:disabled {
+  opacity: .45;
 }
