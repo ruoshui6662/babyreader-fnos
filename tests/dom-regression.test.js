@@ -741,9 +741,15 @@ test('library organization keeps rescan separate from view switching and collect
 
   create.click();
   assert.equal(
-    window.document.querySelector('.library-collection-form')?.parentElement === window.document.querySelector('.library-books-section'),
+    window.document.querySelector('.library-collection-form')?.parentElement === window.document.querySelector('.library-category-navigation'),
     true
   );
+  // Escape dismisses the inline form and hands focus back to 新建分类.
+  window.document.querySelector('.library-collection-form input').dispatchEvent(
+    new window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true })
+  );
+  assert.equal(window.document.querySelector('.library-collection-form'), null);
+  assert.equal(window.document.activeElement, create);
 
   scan.click();
   await Promise.resolve();
@@ -1042,7 +1048,7 @@ test('UX recent reading uses a prominent cover card and completed scan feedback 
   const card = window.document.querySelector('.library-recent-card');
   assert.equal(window.getComputedStyle(card).display, 'grid');
   assert.equal(window.getComputedStyle(card.querySelector('.library-book-cover')).width, '72px');
-  assert.equal(window.getComputedStyle(card.querySelector('.library-book-cover')).height, '101px');
+  assert.equal(window.getComputedStyle(card.querySelector('.library-book-cover')).height, '104px');
   assert.equal(window.getComputedStyle(window.document.querySelector('.library-scan-status')).display, 'none');
   await window.happyDOM.close();
 });
@@ -1068,15 +1074,14 @@ test('library home exposes stable extension regions without changing its existin
   await window.happyDOM.close();
 });
 
-test('library home styling keeps the cover grid fluid and honors the approved desktop-to-mobile breakpoints', async () => {
+test('library home styling fills rows with WeChat-Reading-sized covers at every breakpoint', async () => {
   const css = await fs.readFile(path.resolve(__dirname, '../app/ui/styles.css'), 'utf8');
   assert.ok(/\.library-view\s*\{[^}]*width:\s*min\(1280px,\s*100%\)/s.test(css), 'library width should match the approved max-width');
-  assert.ok(/^\.library-grid\s*\{[^}]*grid-template-columns:\s*repeat\(6,\s*minmax\(0,\s*1fr\)\)/ms.test(css), 'desktop should use a fluid six-column grid');
-  assert.ok(/aspect-ratio:\s*3\s*\/\s*4\.2/.test(css), 'book covers should use the approved ratio');
-  assert.ok(/@media\s*\(max-width:\s*1099px\)\s*\{\s*\.library-grid\s*\{\s*grid-template-columns:\s*repeat\(5,/.test(css), 'compact desktop should use five columns');
-  assert.ok(/@media\s*\(max-width:\s*919px\)[\s\S]*?\.library-grid\s*\{\s*grid-template-columns:\s*repeat\(4,/.test(css), 'tablet should use four columns');
-  assert.ok(/@media\s*\(max-width:\s*679px\)[\s\S]*?\.library-grid\s*\{\s*grid-template-columns:\s*repeat\(3,/.test(css), 'large phone should use three columns');
-  assert.ok(/@media\s*\(max-width:\s*479px\)\s*\{\s*\.library-grid\s*\{\s*grid-template-columns:\s*repeat\(2,/.test(css), 'phone should use two columns');
+  assert.ok(/^\.library-grid\s*\{[^}]*grid-template-columns:\s*repeat\(auto-fill,\s*minmax\(100px,\s*1fr\)\)/ms.test(css), 'desktop should fill rows with ~100px covers');
+  assert.ok(/^\.library-book-cover\s*\{[^}]*aspect-ratio:\s*1\s*\/\s*1\.45/ms.test(css), 'book covers should use the approved 1:1.45 frame');
+  assert.ok(/@media\s*\(max-width:\s*919px\)[\s\S]*?\.library-grid\s*\{\s*grid-template-columns:\s*repeat\(auto-fill,\s*minmax\(96px,/.test(css), 'tablet covers should stay ~96px');
+  assert.ok(/@media\s*\(max-width:\s*679px\)[\s\S]*?\.library-grid\s*\{\s*grid-template-columns:\s*repeat\(auto-fill,\s*minmax\(88px,/.test(css), 'phones should fit three ~100px covers per row');
+  assert.equal(/repeat\(2,\s*minmax\(0,\s*1fr\)\)/.test(css.match(/@media\s*\(max-width:\s*479px\)[^@]*/)?.[0] || ''), false, 'phones should no longer fall back to two oversized columns');
 });
 
 test('library root actions follow create, rescan, and organize order on one toolbar row', async () => {
@@ -4905,8 +4910,8 @@ test('pagination geometry fixes single mode to one column and double mode to two
     devicePixelRatio: 1
   });
   assert.equal(single.columns, 1);
-  // pageMargin 40 maps onto the measured WeChat inner inset of 70px.
-  assert.equal(single.columnPadding, 70);
+  // pageMargin 40 maps onto a 56px inner inset (tightened from 70px).
+  assert.equal(single.columnPadding, 56);
   // Single-mode uses a minimum gap (≥columnPadding) to prevent the second
   // column from leaking into the paper when column-width is computed. This
   // avoids the right-edge text being clipped by overflow-x:hidden.
@@ -4930,7 +4935,7 @@ test('pagination geometry fixes single mode to one column and double mode to two
   assert.equal(double.columns, 2);
   // Requested gap is honoured only when it is at least the card's inner
   // padding; a smaller gap would let the next spread bleed into this one.
-  assert.equal(double.columnGap, Math.max(70, 36));
+  assert.equal(double.columnGap, Math.max(56, 36));
   assert.equal(double.spreadWidth, double.columnWidth * 2 + double.columnGap);
   // Advancing by the viewport width was the original defect: column k starts
   // at k*(width+gap), so a spread only re-aligns on a (width+gap)*columns grid.
@@ -5010,16 +5015,17 @@ test('pagination geometry uses reader client dimensions at 1200x800 and 800x600'
   });
   assert.equal(desktop.viewportWidth, 1200);
   assert.equal(desktop.viewportHeight, 800);
-  // Expanded reading surface: 800 - 56 (top band) - 40 (bottom breath) = 704 card,
-  // minus 64 / 56 of inner block padding.
-  assert.equal(desktop.bandTop, 56);
-  assert.equal(desktop.bandBottom, 40);
-  assert.equal(desktop.padTop, 64);
-  assert.equal(desktop.padBottom, 56);
-  assert.equal(desktop.pageHeight, 704 - 64 - 56);
+  // Larger reading surface: 800 - 40 (top band) - 24 (bottom breath) = 736 card,
+  // minus 56 / 60 of inner block padding (60 leaves room for the page pills).
+  assert.equal(desktop.bandTop, 40);
+  assert.equal(desktop.bandBottom, 24);
+  assert.equal(desktop.padTop, 56);
+  assert.equal(desktop.padBottom, 60);
+  assert.equal(desktop.pageHeight, 736 - 56 - 60);
   assert.equal(desktop.columns, 2);
   assert.equal(desktop.columnGap, 98);
-  assert.equal(desktop.columnPadding, 96);
+  // pageMargin 56 x 1.4 = 78.4 -> 78px inner inset.
+  assert.equal(desktop.columnPadding, 78);
   // Expanded card: min(0.90 x 1200, 1200 - 128) = 1072.
   assert.equal(desktop.paperWidth, 1072);
   assert.ok(desktop.pageHeight > 500);
@@ -5035,8 +5041,8 @@ test('pagination geometry uses reader client dimensions at 1200x800 and 800x600'
   assert.equal(compact.columns, 1);
   // Mobile mode uses smaller padding; single mode's gap must still cover it.
   assert.ok(compact.columnGap >= compact.columnPadding);
-  // Expanded compact viewport: 600 - 56 (top) - 40 (bottom) = 504 card, pad 64/56 → 384 column.
-  assert.equal(compact.pageHeight, 384);
+  // Compact viewport: 600 - 40 (top) - 24 (bottom) = 536 card, pad 56/60 -> 420 column.
+  assert.equal(compact.pageHeight, 420);
   assert.ok(compact.paperWidth <= 700);
 });
 
@@ -5173,7 +5179,7 @@ test('paged chapter navigation advances exactly one chapter per click', async ()
     readerHeight: 800,
     mode: 'double',
     pageMargin: 40,
-    columnGap: 98,
+    columnGap: 84, // DEFAULT_PAGE_GAP, as measurePagination uses
     devicePixelRatio: 1
   });
   const pitch = geometry.columnWidth + geometry.columnGap;
@@ -5263,7 +5269,7 @@ test('five columns form three double-page groups and never expose a residual col
     readerHeight: 800,
     mode: 'double',
     pageMargin: 40,
-    columnGap: 98,
+    columnGap: 84, // DEFAULT_PAGE_GAP, as measurePagination uses
     devicePixelRatio: 1
   });
   // Five columns: two outer paddings, five column boxes, four inter-column gaps.

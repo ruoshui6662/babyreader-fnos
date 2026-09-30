@@ -282,18 +282,21 @@ test('library organization reorders books through a real desktop mouse drag', as
   }]);
 });
 
-test('mobile library keeps the existing two-column shelf when organization is disabled', async ({ page }) => {
+test('mobile library shows three ~100px covers per row when organization is disabled', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto(APP_PATH);
 
   const columns = await page.locator('.library-grid').evaluate((grid) =>
     getComputedStyle(grid).gridTemplateColumns.trim().split(/\s+/).length
   );
-  expect(columns).toBe(2);
+  expect(columns).toBe(3);
+  const coverWidth = await page.locator('.library-grid .library-book-cover').first().evaluate((element) => element.getBoundingClientRect().width);
+  expect(coverWidth).toBeGreaterThan(92);
+  expect(coverWidth).toBeLessThan(120);
   await expect(page.locator('.library-view')).toHaveAttribute('data-library-mode', 'flat');
 });
 
-test('wide library uses a six-column shelf under a large title', async ({ page }) => {
+test('wide library fills rows with WeChat-Reading-sized covers under a large title', async ({ page }) => {
   await page.setViewportSize({ width: 1600, height: 1000 });
   await page.goto(APP_PATH);
 
@@ -305,7 +308,8 @@ test('wide library uses a six-column shelf under a large title', async ({ page }
   const columns = await page.locator('.library-grid').evaluate((grid) =>
     getComputedStyle(grid).gridTemplateColumns.trim().split(/\s+/).length
   );
-  expect(columns).toBe(6);
+  // 1280px content / (100px covers + 28px gaps) = 10 per row.
+  expect(columns).toBe(10);
 });
 
 test('wide library keeps left-aligned cover slots and typesets covers without artwork', async ({ page }) => {
@@ -315,8 +319,8 @@ test('wide library keeps left-aligned cover slots and typesets covers without ar
   await expect(page.locator('.library-grid')).toHaveCSS('justify-content', 'start');
   await expect(page.locator('.library-book').first()).toHaveCSS('box-shadow', 'none');
   const coverWidth = await page.locator('.library-grid .library-book-cover').first().evaluate((element) => element.getBoundingClientRect().width);
-  expect(coverWidth).toBeGreaterThan(170);
-  expect(coverWidth).toBeLessThan(200);
+  expect(coverWidth).toBeGreaterThanOrEqual(100);
+  expect(coverWidth).toBeLessThan(120);
   const generated = page.locator('.library-book').filter({ hasText: 'E2E Markdown' }).locator('.library-book-cover.is-generated');
   await expect(generated.locator('.library-cover-title')).toHaveText('E2E Markdown');
   await expect(generated.locator('.library-cover-format')).toHaveText('Markdown');
@@ -326,8 +330,9 @@ test('library card metadata stays compact and still opens a selected book', asyn
   await page.setViewportSize({ width: 1600, height: 1000 });
   await page.goto(APP_PATH);
 
-  await expect(page.locator('.library-book strong').first()).toHaveCSS('font-size', '14px');
-  await expect(page.locator('.library-book .library-book-author').first()).toHaveCSS('font-size', '13px');
+  await expect(page.locator('.library-book strong').first()).toHaveCSS('font-size', '13px');
+  await expect(page.locator('.library-book strong').first()).toHaveCSS('-webkit-line-clamp', '2');
+  await expect(page.locator('.library-book .library-book-author').first()).toHaveCSS('font-size', '12px');
 
   await page.locator('.library-book').filter({ hasText: 'E2E Markdown' }).click();
   await expect(page.locator('#fileName')).toHaveText('E2E Markdown');
@@ -574,10 +579,10 @@ test('double-page navigation places previous and next controls at the lower corn
   const next = page.locator('#btnNextPage');
   await expect(previous).toHaveCSS('position', 'absolute');
   await expect(next).toHaveCSS('position', 'absolute');
-  await expect(previous).toHaveCSS('width', '80px');
-  await expect(previous).toHaveCSS('height', '40px');
-  await expect(next).toHaveCSS('width', '80px');
-  await expect(next).toHaveCSS('height', '40px');
+  await expect(previous).toHaveCSS('width', '72px');
+  await expect(previous).toHaveCSS('height', '32px');
+  await expect(next).toHaveCSS('width', '72px');
+  await expect(next).toHaveCSS('height', '32px');
   await expect(previous).not.toHaveCSS('left', 'auto');
   await expect(next).not.toHaveCSS('right', 'auto');
 
@@ -599,7 +604,8 @@ test('double-page navigation places previous and next controls at the lower corn
 });
 
 test('last page group stays aligned when chapter navigation reaches an odd final page', async ({ page }) => {
-  await page.setViewportSize({ width: 1280, height: 800 });
+  // The fixture ends on 7 pages here (6 at 1280x800); 700-760px tall all give 7.
+  await page.setViewportSize({ width: 1280, height: 720 });
   await openEpubFixture(page);
   if (await page.locator('#readerDrawer').isVisible()) {
     await page.locator('#btnCloseSettings').click();
