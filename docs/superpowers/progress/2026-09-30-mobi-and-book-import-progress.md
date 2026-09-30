@@ -188,6 +188,19 @@
 
 ### 未完成
 
-- [ ] **KF8/AZW3 转换**：接入 vendor 的 `Kf8`（skeleton/fragment 重组），需要真实的 AZW3 样本验证。目前 AZW3 书会以 `UNSUPPORTED_FORMAT` 明确拒绝，不会产生错误的内容。
+- [x] **KF8/AZW3 转换**（2026-09-30 完成）。
+  - 样本：Project Gutenberg #11《Alice's Adventures in Wonderland》的 KF8 版本 `pg11-images-kf8.mobi`，255,486 字节，SHA-256 `b3c9067848d28f8c0f36adbb198b306791884319e8b2f8ea7083f844d8876815`，来源 `https://www.gutenberg.org/ebooks/11.kf8.images`。该书为公有领域，经用户同意下载；只放在本机临时目录，**不进仓库**。
+  - 验证方式：`BABYREADER_KF8_SAMPLE=<绝对路径> node --test tests/mobi-convert.test.js`。没有设置这个变量时，该测试自动跳过。
+  - **新发现**：lingo 的 `Kf8.replace` 遇到 `<head>` 里非 Kindle 资源的 `<link>`（例如 `rel="icon"`）时会直接抛异常。这本真实书在第一个带链接的章节就崩溃了。因此 KF8 也只借用上游的底层能力（`loadRaw`、`FDST`、骨架与片段表、`getToc`），其余步骤都由我们自己完成：
+    - 按字节重组章节，并记录每个片段最终落在哪里；
+    - `kindle:pos:fid:off` 按字节偏移精确插入 `<a id="kFID-OFF">` 锚点；
+    - `kindle:embed` 图片按记录区间校验后打包，文件名为 `images/img-<base32 4位>.<扩展名>`；
+    - `kindle:flow` 为 SVG 时，取出里面嵌的那张位图；
+    - 合并 CSS flow，去掉 `@font-face`，并改写其中的 `url(kindle:...)`；
+    - 每个骨架对应一个 part 文件；没有文字也没有图片的章节会被丢掉，指向它的链接改为指向下一个保留的 part；
+    - 保留书籍原有的 class，让 KF8 的 CSS 继续生效。
+  - `Kf8` 只接受 `Uint8Array` 或文件路径，不接受单独的 ArrayBuffer（`MobiFile` 则接受）。
+  - 结果：113 ms，19 个 part，目录正确，书内链接 28 个、死链 0 个，没有残留 `kindle:` 引用，封面为 JPG，两次转换的产物逐字节相同。
+  - 合成的 KF8 样本没有 FDST 和骨架表，现在会按 `CORRUPT` 拒绝，**不会回退到 MOBI6 路径**。
 - [ ] HUFF/CDIC 压缩：解压代码来自上游，还没有专门的样本覆盖。
 

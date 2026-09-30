@@ -136,11 +136,13 @@ test('a book without page breaks is split into bounded parts at headings and par
   assert.equal((combined.match(/没有分页标记的长篇正文。/g) || []).length, 200 * 120, 'no text lost or duplicated');
 });
 
-test('DRM, KF8 (until verified), truncated and oversized sources are rejected with typed codes', async () => {
+test('DRM, structurally empty KF8, truncated and oversized sources are rejected with typed codes', async () => {
   const cases = [
     [createDrmMobiFixture(), 'DRM_PROTECTED'],
-    [createMobiFixture({ kf8: 'standalone' }), 'UNSUPPORTED_FORMAT'],
-    [createMobiFixture({ kf8: 'combo' }), 'UNSUPPORTED_FORMAT'],
+    // Synthetic KF8 headers carry no FDST/skeleton tables: the KF8 path must
+    // refuse them rather than fall back to MOBI6.
+    [createMobiFixture({ kf8: 'standalone' }), 'CORRUPT'],
+    [createMobiFixture({ kf8: 'combo' }), 'CORRUPT'],
     [createTruncatedMobiFixture(), 'TRUNCATED']
   ];
   for (const [bytes, code] of cases) {
@@ -150,4 +152,26 @@ test('DRM, KF8 (until verified), truncated and oversized sources are rejected wi
     convertMobiToEpub(createMobiFixture(), { identifier: 'x', limits: { maxTextBytes: 64 } }),
     (error) => error.code === 'TOO_LARGE'
   );
+});
+
+// Optional real-book check: BABYREADER_KF8_SAMPLE=/abs/path/book.azw3. The
+// sample stays outside the repository (see the MOBI progress ledger).
+const kf8Sample = process.env.BABYREADER_KF8_SAMPLE;
+test('a real KF8/AZW3 sample converts deterministically with intact links and TOC', {
+  skip: kf8Sample ? false : 'set BABYREADER_KF8_SAMPLE to an absolute local AZW3 path'
+}, async () => {
+  const source = require('node:fs').readFileSync(kf8Sample);
+  const first = await convertMobiToEpub(source, { identifier: 'urn:sample' });
+  const second = await convertMobiToEpub(source, { identifier: 'urn:sample' });
+  assert.deepEqual(Buffer.from(first), Buffer.from(second), 'deterministic');
+  const files = safeUnzip(Buffer.from(first));
+  const parts = Object.keys(files).filter((name) => /^OEBPS\/text\/part-\d{4}\.xhtml$/.test(name)).sort();
+  assert.ok(parts.length > 1);
+  parts.forEach((name, index) => assert.equal(name, `OEBPS/text/part-${String(index + 1).padStart(4, '0')}.xhtml`));
+  const all = parts.map((name) => text(files, name)).join('');
+  assert.doesNotMatch(all, /kindle:/);
+  for (const [, part, id] of all.matchAll(/href="(part-\d{4}\.xhtml)#([^"]+)"/g)) {
+    assert.match(text(files, `OEBPS/text/${part}`), new RegExp(`id="${id}"`), `${part}#${id}`);
+  }
+  assert.match(text(files, 'OEBPS/nav.xhtml'), /<a href="text\/part-\d{4}\.xhtml/);
 });

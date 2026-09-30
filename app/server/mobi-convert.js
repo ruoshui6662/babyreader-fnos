@@ -12,6 +12,7 @@
 // chapterHref. Changing section boundaries requires a CONVERTER_VERSION bump
 // together with an annotation migration.
 
+const os = require('node:os');
 const path = require('node:path');
 const { pathToFileURL } = require('node:url');
 const sanitizeHtml = require('sanitize-html');
@@ -142,14 +143,15 @@ function sectionIndexFor(sections, position) {
   return low;
 }
 
-function imageFor(recindex, context) {
+// Packages one PDB record as an image, with record-range, type and size checks.
+// `key` dedupes references; `name` is the frozen file stem inside images/.
+function imageRecord(context, record, key, name) {
   const { structure, bytes, limits, images } = context;
-  if (!Number.isInteger(recindex) || recindex < 1 || structure.firstImageIndex === null) return null;
-  const record = structure.firstImageIndex + recindex - 1;
-  if (record >= structure.recordCount) return null;
-  const href = `images/img-${String(recindex).padStart(4, '0')}`;
-  const existing = images.get(recindex);
+  if (!Number.isInteger(record) || record < 1 || record >= structure.recordCount) return null;
+  const href = `images/${name}`;
+  const existing = images.get(key);
   if (existing !== undefined) return existing;
+  const recindex = key;
   const start = structure.recordOffsets[record];
   const end = record + 1 < structure.recordCount ? structure.recordOffsets[record + 1] : bytes.length;
   const data = bytes.subarray(start, end);
@@ -163,6 +165,12 @@ function imageFor(recindex, context) {
   const image = { href: `${href}${extension}`, bytes: new Uint8Array(data) };
   images.set(recindex, image);
   return image;
+}
+
+// MOBI6: recindex is 1-based from the first image record.
+function imageFor(recindex, context) {
+  if (!Number.isInteger(recindex) || recindex < 1 || context.structure.firstImageIndex === null) return null;
+  return imageRecord(context, context.structure.firstImageIndex + recindex - 1, `m${recindex}`, `img-${String(recindex).padStart(4, '0')}`);
 }
 
 function rewriteSection(raw, section, anchors, context) {
@@ -191,11 +199,16 @@ function rewriteSection(raw, section, anchors, context) {
 
 // ----- XHTML normalization -----
 
+// Keeps the book's own classes (KF8 CSS targets them) and maps the legacy
+// MOBI align attribute to a class, since style attributes are not allowed.
 function alignClass(tagName, attribs) {
   const align = String(attribs.align || '').toLowerCase();
-  const next = { ...(attribs.id ? { id: attribs.id } : {}) };
-  if (['center', 'right', 'left', 'justify'].includes(align)) next.class = `align-${align}`;
-  return { tagName, attribs: next };
+  const classes = String(attribs.class || '').split(/\s+/).filter(Boolean);
+  if (['center', 'right', 'left', 'justify'].includes(align)) classes.push(`align-${align}`);
+  return {
+    tagName,
+    attribs: { ...(attribs.id ? { id: attribs.id } : {}), ...(classes.length ? { class: classes.join(' ') } : {}) }
+  };
 }
 
 const BLOCK_WITH_ALIGN = ['p', 'div', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'blockquote', 'td', 'th'];
@@ -257,20 +270,9 @@ function tocEntriesFrom(raw, section, decode, hrefForTarget) {
   return entries;
 }
 
-/**
- * @param {Uint8Array|Buffer} input MOBI file bytes.
- * @param {{identifier:string, limits?:object}} options
- * @returns {Promise<Uint8Array>} EPUB bytes.
- */
-async function convertMobiToEpub(input, { identifier, limits: overrides = {} } = {}) {
-  if (!identifier) throw new TypeError('identifier is required');
-  const limits = { ...DEFAULT_LIMITS, ...overrides };
-  const bytes = Buffer.isBuffer(input) ? input : Buffer.from(input);
-  const structure = parseMobiStructure(bytes);
-  if (structure.drm) throw conversionError('DRM_PROTECTED', 'The book is DRM protected');
-  if (structure.format !== 'mobi6') throw conversionError('UNSUPPORTED_FORMAT', 'KF8/AZW3 conversion is not enabled yet');
-  if (structure.textLength > limits.maxTextBytes) throw conversionError('TOO_LARGE', 'MOBI text exceeds the conversion limit');
+// ----- MOBI6 -----
 
+async function buildMobi6(bytes, structure, limits, context) {
   const { MobiFile } = await loadParser();
   let raw;
   try {
@@ -308,10 +310,7 @@ async function convertMobiToEpub(input, { identifier, limits: overrides = {} } =
     anchorsBySection[index].push({ point, target });
     targetHref.set(target, `${partHref(index)}#fp${target}`);
   }
-  const context = {
-    structure, bytes, limits, images: new Map(), imageBytes: 0,
-    hrefForTarget: (target) => targetHref.get(target) || null
-  };
+  context.hrefForTarget = (target) => targetHref.get(target) || null;
 
   const tocTarget = guideTocTarget(raw, body);
   const tocSection = tocTarget === null ? null : sections[sectionIndexFor(sections, tocTarget)];
@@ -321,16 +320,250 @@ async function convertMobiToEpub(input, { identifier, limits: overrides = {} } =
     const xhtml = toXhtml(decode(rewriteSection(raw, section, anchorsBySection[index], context)));
     return { href: `text/${partHref(index)}`, title: firstHeading(xhtml) || `第 ${index + 1} 部分`, body: xhtml };
   });
-
-  const images = [...context.images.values()].filter(Boolean);
-  let coverHref = null;
+  let cover = null;
   if (structure.coverRecordIndex !== null && structure.firstImageIndex !== null) {
-    const cover = imageFor(structure.coverRecordIndex - structure.firstImageIndex + 1, context);
-    if (cover) {
-      coverHref = cover.href;
-      if (!images.includes(cover)) images.push(cover);
+    cover = imageFor(structure.coverRecordIndex - structure.firstImageIndex + 1, context);
+  }
+  return { chapters, toc, css: BASE_CSS, cover };
+}
+
+// ----- KF8 (AZW3, and the KF8 half of combined files) -----
+// Every KF8 skeleton becomes exactly one part file; kindle:pos targets become
+// <a id="kFID-OFF"> anchors at their exact byte offset in the assembled text.
+
+const KINDLE_POS = /kindle:pos:fid:([0-9A-Va-v]{4}):off:([0-9A-Va-v]{10})/g;
+const KINDLE_RESOURCE = /kindle:(flow|embed):([0-9A-Za-z]+)(?:\?mime=([\w.+-]+\/[\w.+-]+))?/;
+
+function kf8AnchorId(fid, off) {
+  return `k${fid}-${off}`;
+}
+
+function parseKindlePos(value) {
+  KINDLE_POS.lastIndex = 0;
+  const match = KINDLE_POS.exec(value || '');
+  return match ? { fid: Number.parseInt(match[1], 32), off: Number.parseInt(match[2], 32) } : null;
+}
+
+// Re-assembles a skeleton with its fragments (same algorithm as upstream
+// loadText) but keeps bytes and records where each fragment ended up.
+function assembleKf8Chapter(kf8, chapter) {
+  const { skel, frags, length } = chapter;
+  const raw = Buffer.from(kf8.loadRaw(skel.offset, skel.offset + length));
+  let text = raw.subarray(0, skel.length);
+  const fragmentStarts = new Map();
+  for (const frag of frags) {
+    const insert = frag.insertOffset - skel.offset;
+    const offset = skel.length + frag.offset;
+    const fragment = raw.subarray(offset, offset + frag.length);
+    if (insert < 0 || insert > text.length || offset + frag.length > raw.length) {
+      throw conversionError('CORRUPT', 'KF8 fragment table is inconsistent');
+    }
+    for (const [index, start] of fragmentStarts) if (start >= insert) fragmentStarts.set(index, start + fragment.length);
+    text = Buffer.concat([text.subarray(0, insert), fragment, text.subarray(insert)]);
+    fragmentStarts.set(frag.index, insert);
+  }
+  return { raw: text.toString('latin1'), fragmentStarts };
+}
+
+function kf8ImageName(index) {
+  return `img-${index.toString(32).toUpperCase().padStart(4, '0')}`;
+}
+
+// KF8 resource ids are 1-based base-32 numbers relative to the first resource.
+function kf8ImageFor(id, context) {
+  const index = Number.parseInt(id, 32);
+  if (!Number.isInteger(index) || index < 1) return null;
+  const name = kf8ImageName(index);
+  return imageRecord(context, context.resourceStart + index - 1, `k${name}`, name);
+}
+
+function kf8FlowText(kf8, id, decode) {
+  const index = Number.parseInt(id, 10);
+  if (!Number.isInteger(index) || index < 1 || index >= kf8.fdstTable.length) return '';
+  const flow = kf8.loadFlow(index);
+  return flow ? decode(Buffer.from(flow).toString('latin1')) : '';
+}
+
+function rewriteKf8Chapter(raw, anchors, context) {
+  let text = raw;
+  for (const { point, id } of [...anchors].sort((a, b) => b.point - a.point || (a.id < b.id ? 1 : -1))) {
+    text = `${text.slice(0, point)}<a id="${id}"></a>${text.slice(point)}`;
+  }
+  const open = /<body\b[^>]*>/i.exec(text);
+  const close = text.toLowerCase().lastIndexOf('</body>');
+  let body = open ? text.slice(open.index + open[0].length, close > open.index ? close : text.length) : text;
+  body = body.replace(/<svg\b[\s\S]*?<\/svg>/gi, (svg) => {
+    const embed = /kindle:embed:([0-9A-Za-z]+)/.exec(svg);
+    const image = embed ? kf8ImageFor(embed[1], context) : null;
+    return image ? `<img src="../${image.href}">` : '';
+  });
+  body = body.replace(/<img\b[^>]*>/gi, (tag) => {
+    const source = /\bsrc\s*=\s*["']([^"']*)["']/i.exec(tag);
+    const resource = source ? KINDLE_RESOURCE.exec(source[1]) : null;
+    let image = null;
+    if (resource?.[1] === 'embed') image = kf8ImageFor(resource[2], context);
+    else if (resource?.[1] === 'flow' && /svg/i.test(resource[3] || '')) image = context.kf8FlowImage(resource[2]);
+    if (!image) return '';
+    const alt = /\balt\s*=\s*(["'])(.*?)\1/i.exec(tag);
+    return `<img src="../${image.href}"${alt ? ` alt="${alt[2]}"` : ''}>`;
+  });
+  body = body.replace(/\bhref\s*=\s*(["'])(kindle:pos:[^"']*)\1/gi, (whole, quote, value) => {
+    const position = parseKindlePos(value);
+    const href = position ? context.hrefForPos(position.fid, position.off) : null;
+    return href ? `href="${href}"` : '';
+  });
+  return body;
+}
+
+function kf8Css(kf8, heads, decode, context) {
+  const ids = [];
+  for (const head of heads) {
+    for (const link of head.matchAll(/<link\b[^>]*>/gi)) {
+      const resource = KINDLE_RESOURCE.exec(link[0]);
+      if (resource?.[1] === 'flow' && /css/i.test(resource[3] || '') && !ids.includes(resource[2])) ids.push(resource[2]);
     }
   }
+  const sheets = ids.map((id) => kf8FlowText(kf8, id, decode)
+    .replace(/@font-face\s*\{[^}]*\}/gi, '')
+    .replace(/url\(\s*["']?kindle:embed:([0-9A-Za-z]+)[^)]*\)/gi, (whole, embed) => {
+      const image = kf8ImageFor(embed, context);
+      return image ? `url("../${image.href}")` : 'none';
+    })
+    .replace(/url\(\s*["']?kindle:[^)]*\)/gi, 'none'));
+  return [BASE_CSS, ...sheets].join('\n');
+}
+
+async function buildKf8(bytes, structure, limits, context) {
+  const { Kf8 } = await loadParser();
+  let kf8;
+  try {
+    // The resource directory is only used by upstream helpers we never call.
+    kf8 = new Kf8(new Uint8Array(bytes), os.tmpdir()); // Kf8 loads Uint8Array/paths, not bare ArrayBuffers
+    await kf8.innerLoadFile();
+    await kf8.innerInit();
+  } catch (error) {
+    if (error instanceof MobiFormatError) throw error;
+    throw conversionError('CORRUPT', 'KF8 structure could not be read');
+  }
+  if (kf8.fullRawLength > limits.maxTextBytes) throw conversionError('TOO_LARGE', 'KF8 text exceeds the conversion limit');
+  const spine = kf8.getSpine();
+  if (!spine.length) throw conversionError('CORRUPT', 'KF8 book has no sections');
+  if (spine.length > limits.maxSections) throw conversionError('TOO_LARGE', 'KF8 book has too many sections');
+  context.resourceStart = kf8.mobiFile.resourceStart;
+
+  const decoder = new TextDecoder('utf-8', { fatal: false });
+  const decode = (latin1) => decoder.decode(Buffer.from(latin1, 'latin1'));
+  let assembled;
+  try {
+    assembled = spine.map((chapter) => assembleKf8Chapter(kf8, chapter));
+  } catch (error) {
+    if (error instanceof MobiFormatError) throw error;
+    throw conversionError('CORRUPT', 'KF8 text could not be decompressed');
+  }
+  const chapterOfFragment = new Map();
+  assembled.forEach((chapter, index) => {
+    for (const fragment of chapter.fragmentStarts.keys()) chapterOfFragment.set(fragment, index);
+  });
+
+  // Collect every kindle:pos target (TOC and in-book links) and pin its anchor.
+  const tocRoot = kf8.getToc() || [];
+  const positions = new Map();
+  const remember = (position) => {
+    if (!position) return;
+    const chapter = chapterOfFragment.get(position.fid);
+    if (chapter === undefined) return;
+    const id = kf8AnchorId(position.fid, position.off);
+    if (!positions.has(id)) {
+      positions.set(id, { chapter, target: assembled[chapter].fragmentStarts.get(position.fid) + position.off, id });
+    }
+  };
+  const walk = (items) => items.forEach((item) => { remember(parseKindlePos(item.href)); walk(item.children || []); });
+  walk(tocRoot);
+  for (const { raw } of assembled) {
+    for (const match of raw.matchAll(KINDLE_POS)) remember(parseKindlePos(match[0]));
+  }
+
+  // Chapters without text or images (for example an empty title page) are
+  // dropped; links into them fall through to the next kept part.
+  context.kf8FlowImage = (id) => {
+    const svg = kf8FlowText(kf8, id, decode);
+    const embed = /kindle:embed:([0-9A-Za-z]+)/.exec(svg);
+    return embed ? kf8ImageFor(embed[1], context) : null;
+  };
+  const kept = assembled.map(({ raw }) => {
+    const body = bodyRange(raw);
+    return hasContent(raw, body) || /kindle:(embed|flow):[^"']*svg|<svg\b/i.test(raw.slice(body.start, body.end));
+  });
+  if (!kept.some(Boolean)) throw conversionError('CORRUPT', 'KF8 book has no readable text');
+  const partIndex = [];
+  let nextPart = 0;
+  kept.forEach((keep, index) => { partIndex[index] = keep ? nextPart++ : null; });
+  const partFor = (chapter) => {
+    for (let index = chapter; index < kept.length; index += 1) if (kept[index]) return partIndex[index];
+    return null;
+  };
+  const anchors = assembled.map(() => []);
+  const hrefById = new Map();
+  for (const position of positions.values()) {
+    const part = partFor(position.chapter);
+    if (part === null) continue;
+    if (!kept[position.chapter]) {
+      hrefById.set(position.id, partHref(part));
+      continue;
+    }
+    const { raw } = assembled[position.chapter];
+    const body = bodyRange(raw);
+    const point = safeInsertionPoint(raw, Math.max(position.target, body.start), body, 'utf-8');
+    anchors[position.chapter].push({ point, id: position.id });
+    hrefById.set(position.id, `${partHref(part)}#${position.id}`);
+  }
+  context.hrefForPos = (fid, off) => hrefById.get(kf8AnchorId(fid, off)) || null;
+
+  const chapters = [];
+  assembled.forEach(({ raw }, index) => {
+    if (!kept[index]) return;
+    const xhtml = toXhtml(decode(rewriteKf8Chapter(raw, anchors[index], context)));
+    const part = partIndex[index];
+    chapters.push({ href: `text/${partHref(part)}`, title: firstHeading(xhtml) || `第 ${part + 1} 部分`, body: xhtml });
+  });
+  const mapToc = (items) => items.flatMap((item) => {
+    const position = parseKindlePos(item.href);
+    const href = position ? context.hrefForPos(position.fid, position.off) : null;
+    const children = mapToc(item.children || []);
+    const label = plainText(String(item.label || '')).slice(0, 200);
+    return href && label ? [{ label, href: `text/${href}`, children }] : children;
+  });
+  const css = kf8Css(kf8, assembled.map(({ raw }) => raw.slice(0, bodyRange(raw).start)), decode, context);
+  let cover = null;
+  if (structure.coverRecordIndex !== null && structure.coverRecordIndex >= context.resourceStart) {
+    const index = structure.coverRecordIndex - context.resourceStart + 1;
+    cover = imageRecord(context, structure.coverRecordIndex, `k${kf8ImageName(index)}`, kf8ImageName(index));
+  }
+  return { chapters, toc: mapToc(tocRoot), css, cover };
+}
+
+/**
+ * @param {Uint8Array|Buffer} input MOBI/AZW3 file bytes.
+ * @param {{identifier:string, limits?:object}} options
+ * @returns {Promise<Uint8Array>} EPUB bytes.
+ */
+async function convertMobiToEpub(input, { identifier, limits: overrides = {} } = {}) {
+  if (!identifier) throw new TypeError('identifier is required');
+  const limits = { ...DEFAULT_LIMITS, ...overrides };
+  const bytes = Buffer.isBuffer(input) ? input : Buffer.from(input);
+  const structure = parseMobiStructure(bytes);
+  if (structure.drm) throw conversionError('DRM_PROTECTED', 'The book is DRM protected');
+  if (structure.textLength > limits.maxTextBytes) throw conversionError('TOO_LARGE', 'MOBI text exceeds the conversion limit');
+
+  const context = { structure, bytes, limits, images: new Map(), imageBytes: 0 };
+  // The path is fixed by format and never falls back: MOBI6 and KF8 split a
+  // book differently, and switching would orphan existing highlights.
+  const book = structure.format === 'kf8'
+    ? await buildKf8(bytes, structure, limits, context)
+    : await buildMobi6(bytes, structure, limits, context);
+
+  const images = [...context.images.values()].filter(Boolean);
+  if (book.cover && !images.includes(book.cover)) images.push(book.cover);
   images.sort((left, right) => left.href.localeCompare(right.href));
 
   const epub = buildEpub({
@@ -339,11 +572,11 @@ async function convertMobiToEpub(input, { identifier, limits: overrides = {} } =
     authors: structure.author ? structure.author.split('、') : [],
     language: structure.language,
     publisher: structure.publisher,
-    chapters,
+    chapters: book.chapters,
     images,
-    toc,
-    css: BASE_CSS,
-    coverHref
+    toc: book.toc,
+    css: book.css,
+    coverHref: book.cover ? book.cover.href : null
   });
   // Never hand out an artifact the reader would refuse to open.
   try {

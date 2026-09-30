@@ -163,7 +163,7 @@
 
 ### Task 2：MOBI→EPUB 转换器（约 3 天）
 
-- [ ] 新建 `app/server/mobi-convert.js`（MOBI6 已完成；KF8 待真实样本），负责按 2.1 的要求把 MOBI 组装成确定性的 EPUB：
+- [x] 新建 `app/server/mobi-convert.js`（MOBI6 与 KF8 均已完成；KF8 已用真实样本验证），负责按 2.1 的要求把 MOBI 组装成确定性的 EPUB：
   - MOBI6：按 `<mbp:pagebreak>` 分章，改写 `filepos`，把 `recindex` 图片替换为包内路径；
   - KF8：用 skeleton 加 fragment 重组章节，保留 CSS，改写 `kindle:embed`/`kindle:pos`；
   - 目录优先取 NCX/INDX 索引；没有目录时按章节生成"第 N 部分"。
