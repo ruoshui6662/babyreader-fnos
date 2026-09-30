@@ -2043,10 +2043,8 @@ body.is-library.theme-sepia {
   --library-accent: #007aff;
   --library-on-accent: #ffffff;
   --library-card-shadow: 0 1px 2px rgba(0, 0, 0, .04), 0 8px 28px rgba(0, 0, 0, .07);
-  --library-cover-shadow: 0 1px 2px rgba(0, 0, 0, .08), 0 6px 16px rgba(0, 0, 0, .1);
-  --library-cover-shadow-hover: 0 2px 4px rgba(0, 0, 0, .08), 0 14px 30px rgba(0, 0, 0, .16);
-  --library-cover-drop: drop-shadow(0 1px 1px rgba(0, 0, 0, .1)) drop-shadow(0 6px 8px rgba(0, 0, 0, .1));
-  --library-cover-drop-hover: drop-shadow(0 2px 2px rgba(0, 0, 0, .1)) drop-shadow(0 12px 14px rgba(0, 0, 0, .16));
+  --library-cover-shadow: 0 0 0 .5px rgba(0, 0, 0, .06), 0 2px 4px rgba(0, 0, 0, .06), 0 6px 14px rgba(0, 0, 0, .08);
+  --library-cover-shadow-hover: 0 0 0 .5px rgba(0, 0, 0, .06), 0 4px 8px rgba(0, 0, 0, .08), 0 12px 26px rgba(0, 0, 0, .14);
   --library-search-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2386868b' stroke-width='2.2' stroke-linecap='round'%3E%3Ccircle cx='10.5' cy='10.5' r='6.5'/%3E%3Cpath d='m15.5 15.5 5 5'/%3E%3C/svg%3E");
   background: var(--library-stage);
 }
@@ -2065,8 +2063,6 @@ body.is-library:not(.theme-light):not(.theme-sepia) {
   --library-card-shadow: 0 1px 0 rgba(255, 255, 255, .04) inset, 0 10px 30px rgba(0, 0, 0, .28);
   --library-cover-shadow: 0 1px 2px rgba(0, 0, 0, .35), 0 8px 20px rgba(0, 0, 0, .38);
   --library-cover-shadow-hover: 0 2px 4px rgba(0, 0, 0, .4), 0 16px 34px rgba(0, 0, 0, .5);
-  --library-cover-drop: drop-shadow(0 1px 1px rgba(0, 0, 0, .4)) drop-shadow(0 8px 10px rgba(0, 0, 0, .38));
-  --library-cover-drop-hover: drop-shadow(0 2px 2px rgba(0, 0, 0, .4)) drop-shadow(0 14px 16px rgba(0, 0, 0, .5));
   --library-search-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2398989f' stroke-width='2.2' stroke-linecap='round'%3E%3Ccircle cx='10.5' cy='10.5' r='6.5'/%3E%3Cpath d='m15.5 15.5 5 5'/%3E%3C/svg%3E");
 }
 
@@ -2199,8 +2195,8 @@ body.is-library .library-theme-toggle { display: inline-flex; }
   width: 72px;
   height: 101px;
   aspect-ratio: auto;
-  object-fit: contain;
-  border-radius: 5px;
+  object-fit: cover;
+  border-radius: 4px;
 }
 .library-recent-details { display: grid; min-width: 0; gap: 4px; }
 .library-recent-details strong {
@@ -2863,6 +2859,46 @@ body.is-library .library-theme-toggle { display: inline-flex; }
   box-shadow: inset 0 0 0 2px var(--library-accent, var(--color-accent));
 }
 
+/* New-category form: inline at the end of the chip row, shaped like a chip,
+   so the new name is typed where the new chip will appear. */
+.library-category-navigation .library-collection-create-form {
+  flex: 0 0 auto;
+  flex-wrap: nowrap;
+  gap: 6px;
+  margin: 0;
+}
+.library-category-navigation .library-collection-create-form input {
+  width: 148px;
+  min-height: 36px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--library-fill, var(--color-fill));
+  box-shadow: inset 0 0 0 1.5px var(--library-accent, var(--color-accent));
+  font: 500 14px/1.3 var(--font-ui);
+  outline: none;
+}
+.library-category-navigation .library-collection-create-form .mode-btn {
+  min-height: 36px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: 999px;
+  color: var(--library-text-muted, var(--color-text-2));
+  background: transparent;
+  font: 500 14px/1 var(--font-ui);
+}
+.library-category-navigation .library-collection-create-form .mode-btn[type="submit"] {
+  color: var(--library-on-accent, #fff);
+  background: var(--library-accent, var(--color-accent));
+}
+.library-category-navigation .library-collection-create-form .mode-btn:disabled { opacity: .5; }
+.library-category-navigation .library-collection-create-form .mode-btn:focus-visible {
+  box-shadow: inset 0 0 0 2px var(--library-accent, var(--color-accent));
+}
+.library-category-navigation .library-collection-create-form .mode-btn[type="submit"]:focus-visible {
+  box-shadow: inset 0 0 0 2px var(--library-on-accent, #fff);
+}
+
 .library-category-navigation .library-reorder-handle {
   position: static;
   flex: 0 0 28px;
@@ -3007,8 +3043,9 @@ body.is-library .library-theme-toggle { display: inline-flex; }
   width: 100%;
   margin: 0;
   aspect-ratio: 3 / 4.2;
-  object-fit: contain;
-  border-radius: 6px;
+  object-fit: cover;
+  object-position: 50% 50%;
+  border-radius: 4px;
   background: var(--library-fill, var(--color-fill));
   box-shadow: var(--library-cover-shadow, 0 4px 12px rgba(0, 0, 0, .12));
   transition: transform 220ms var(--ease-out), box-shadow 220ms var(--ease-out);
@@ -3024,20 +3061,16 @@ body.is-library .library-theme-toggle { display: inline-flex; }
   transition-duration: 90ms;
 }
 
-/* Artwork covers keep their own proportions (never cropped): they sit on the
-   shelf baseline and the shadow follows the painted image, not the box. */
+/* Every cover fills the same 3:4.2 frame (WeChat Reading style): artwork of
+   any proportion is centre-cropped to it, so the shelf reads as one even row
+   of same-sized books. A few percent of an unusual cover's edge is lost. */
 .article .library-view img.library-book-cover {
   margin: 0;
-  object-position: 50% 100%;
-  border-radius: 0;
-  background: transparent;
-  box-shadow: none;
-  filter: var(--library-cover-drop, drop-shadow(0 6px 10px rgba(0, 0, 0, .2)));
-  transition: transform 220ms var(--ease-out), filter 220ms var(--ease-out);
-}
-.library-book:hover img.library-book-cover {
-  box-shadow: none;
-  filter: var(--library-cover-drop-hover, drop-shadow(0 12px 16px rgba(0, 0, 0, .26)));
+  object-fit: cover;
+  object-position: 50% 50%;
+  border-radius: 4px;
+  background: var(--library-fill, var(--color-fill));
+  filter: none;
 }
 
 /* Generated cover for books without artwork: tinted cloth, spine highlight,

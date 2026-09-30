@@ -1159,9 +1159,10 @@ function makeLibraryOrganizationEmpty(message, guidance = '') {
 }
 
 function showLibraryCollectionForm(shell, library) {
-  if (shell.querySelector('.library-collection-form')) return;
+  const existing = shell.querySelector('.library-collection-form:not(.library-collection-rename-form)');
+  if (existing) { existing.querySelector('input')?.focus(); return; }
   const form = document.createElement('form');
-  form.className = 'library-collection-form';
+  form.className = 'library-collection-form library-collection-create-form';
   const input = document.createElement('input');
   input.type = 'text';
   input.maxLength = 80;
@@ -1175,10 +1176,22 @@ function showLibraryCollectionForm(shell, library) {
   cancel.type = 'button';
   cancel.className = 'mode-btn';
   cancel.textContent = '取消';
-  cancel.addEventListener('click', () => form.remove());
+  const close = () => {
+    form.remove();
+    shell.querySelector('.library-create-button')?.focus({ preventScroll: true });
+  };
+  cancel.addEventListener('click', close);
+  form.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape') { event.preventDefault(); close(); }
+  });
   form.append(input, save, cancel);
   form.addEventListener('submit', async (event) => {
     event.preventDefault();
+    if (!input.value.trim()) {
+      input.setCustomValidity('请输入分类名称');
+      input.reportValidity();
+      return;
+    }
     save.disabled = true;
     try {
       const next = await window.browserHost.createLibraryCollection(input.value, library.organization.revision);
@@ -1191,11 +1204,13 @@ function showLibraryCollectionForm(shell, library) {
       save.disabled = false;
     }
   });
-  const section = shell.querySelector('.library-books-section');
-  const anchor = section?.querySelector('.library-grid, .library-empty');
-  if (section) section.insertBefore(form, anchor || null);
+  input.addEventListener('input', () => input.setCustomValidity(''));
+  // Inline after the last category chip, where the new chip will appear.
+  const navigation = shell.querySelector('.library-category-navigation');
+  if (navigation) navigation.appendChild(form);
   else shell.insertBefore(form, shell.firstChild || null);
-  input.focus();
+  input.focus({ preventScroll: true });
+  form.scrollIntoView?.({ block: 'nearest', inline: 'nearest' });
 }
 
 function showLibraryCollectionRenameForm(shell, library, collection, trigger) {

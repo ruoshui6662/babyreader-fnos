@@ -741,9 +741,15 @@ test('library organization keeps rescan separate from view switching and collect
 
   create.click();
   assert.equal(
-    window.document.querySelector('.library-collection-form')?.parentElement === window.document.querySelector('.library-books-section'),
+    window.document.querySelector('.library-collection-form')?.parentElement === window.document.querySelector('.library-category-navigation'),
     true
   );
+  // Escape dismisses the inline form and hands focus back to 新建分类.
+  window.document.querySelector('.library-collection-form input').dispatchEvent(
+    new window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true })
+  );
+  assert.equal(window.document.querySelector('.library-collection-form'), null);
+  assert.equal(window.document.activeElement, create);
 
   scan.click();
   await Promise.resolve();
