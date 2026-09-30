@@ -1,5 +1,11 @@
 # Working Change Log
 
+## 当前功能最完整参考包 2026-09-23
+
+- 以 `dist-task8-final-20260923/babyreader-fnos.fpk`（manifest 1.1.7）作为目前已生成候选包中功能最完整的参考基线，包含书库分类/拖拽管理、AI 章节检索与会话持久化，以及 fnOS 授权目录环境变量处理。
+- 包大小：5,498,228 bytes；SHA-256：`6fd90d075c5b6b562b73214710aec7e2b099ac33d683ce8992bde2fefd676f52`。
+- 溯源：`dist-task8-final-20260923/build-provenance.json`；来源提交 `c5cdbe72879b0e81b82378be005eb01f47831c30`，构建时工作区为 dirty。此包是功能参考基线，不等同于当前干净 main 合并提交的重打包，也不代表 fnOS 真机验收已完成。
+
 ## fnOS 授权自定义书库目录 2026-09-22
 
 - 读取 fnOS 注入的 TRIM_DATA_ACCESSIBLE_PATHS 与 TRIM_DATA_SHARE_PATHS，经过 realpath、目录类型、可读性、去重和父子目录裁剪后参与书库扫描；不引入 root 权限、全 NAS 扫描或文件监听。
@@ -7,6 +13,82 @@
 - 验证：npm test 180 pass、4 Windows 条件 skip；Chromium E2E 80 pass、2 可选真实 EPUB skip；npm run check、npm run check:portable、git diff --check 通过。
 - 候选 FPK：dist/babyreader-fnos.fpk；最终大小、SHA-256、源提交和 git_dirty 状态以同目录 build-provenance.json 为准。
 - 真实 fnOS 安装、访问权限添加/撤销、Gateway、ACL、x86_64/ARM64 和升级验收仍待设备侧执行；本地构建不宣称真机通过。
+
+## 分类拖拽与删除入口修复 2026-09-22
+
+- 根因是排序只监听分类手柄，直接拖分类名称不会触发；桌面现在可从分类标签主体拖动，删除按钮被排除在拖动命中区之外，移动端仍用长按手柄。
+- 分类横向导航增加左右边缘自动滚动；删除改为紧凑 SVG 图标按钮，并保留可访问名称及足够触控尺寸。
+- 真实 API/browser 回归验证分类重排与刷新持久化、边缘滚动、删除控件布局、移动端长按：8 项通过；常规 E2E 86 通过、10 项跳过；Node 238 通过、5 项平台条件跳过；结构检查及差异空白检查通过。
+- 已重打 1.1.7 FPK：[dist/babyreader-fnos.fpk](dist/babyreader-fnos.fpk)，5,426,469 bytes，SHA-256 `08419640b100d0c8840b406481a048d7e0d99aca5c095d16d6c887ed24ce5f7f`；包内拖拽修复已与源码比对。fnOS 真机安装验收待执行。
+
+## 书库排序改为拖拽手柄 2026-09-22
+
+- 移除书籍与分类的“上移/下移”按钮，统一使用拖拽手柄调整顺序；鼠标即时拖动，手机沿用长按拖动。
+- 保留键盘可用性：聚焦手柄后可用上/下方向键排序，保存后焦点恢复。
+- 沿用既有 revision-aware 排序 API，不移动书籍文件、不改书籍归属与阅读数据。
+- `npm test`：238 通过、5 个平台条件跳过；书库 Chromium E2E：真实鼠标拖拽及组织 API 2 通过、1 项跳过；结构检查、`git diff --check` 通过。
+- FPK 版本升至 1.1.7；fnOS 真机安装验收待现场执行。
+
+## 书库分类入口与按钮样式再整理 2026-09-22
+
+- 按用户澄清将“我的书籍”与各个自建分类放在同一排顶部导航；点击分类后在导航下方切换书籍，删除底部独立分类卡片区。
+- 分类入口共享一套文字和选中状态样式；“重新扫描 / 新建分类 / 整理”统一为同尺寸中性按钮，减少蓝色主按钮突兀感。
+- 修复分类详情“添加书籍”面板插入位置：书格现在位于分区容器中，面板必须插入书格同级，避免 DOM 层级错误导致点击无反应。
+- FPK 发布版本升至 1.1.6；5,423,569 bytes，SHA-256 `6DE559655D64445F62A76AE568D700E4BFF7048DD7827B08DCA895E3D033195B`。包内已核对版本、顶部分类导航、统一按钮样式及添加书籍面板插入修复；fnOS 真机验收尚未执行。
+
+## 书库“新建分类”标题行对齐修复 2026-09-22
+
+- 将“新建分类”收敛到“我的书籍”标题行的右侧专用操作区，避免按钮在书籍区上方单独漂移或被布局覆盖。
+- 修正第一次调整仍被 `margin-left: auto` 推到整行最右侧的问题；现在按钮紧跟标题右侧，桌面端保持同一行，移动端才按宽度换行。
+- 桌面端保持标题与按钮同一行；移动端按可用宽度自然换行，不改变创建分类行为。
+- DOM 与真实 Chromium 书库拖拽回归通过；为确保 fnOS 覆盖安装，版本升至 1.1.5。FPK SHA-256：`E2A161ECAD508F910F644AAA2A81A0471BC25D8EFAA3E47DCF4F411D4B002670`。
+
+## 书库首页简化与分类入口重排 2026-09-22
+
+- 首页固定为“我的书籍”，将“新建分类”直接放在该标题操作行；书籍网格下方新增独立“分类”内容区。
+- 移除首页“我的分类”和“按目录”切换入口；旧 `viewMode`、source projection、组织 API 与用户分类 JSON 保留，旧 source history 安全回到 root。
+- 全部书籍继续使用 `allBookOrder` 排序，分类卡与未分类卡保留现有详情、添加书籍、整理和删除边界；不移动真实文件、不影响阅读、AI、书签和索引数据。
+- 更新 DOM/E2E 契约，覆盖首页结构、旧 route 回退、桌面鼠标排序、键盘按钮、移动端长按、真实 API 和刷新恢复。
+- 本地验证：`npm test` 238 通过、5 个平台条件跳过；默认 Chromium E2E 86 通过、7 个环境条件跳过；组织专项 5 通过。FPK 与 fnOS 真机验收待完成。
+- FPK 已生成：[dist/babyreader-fnos.fpk](D:\AI编程\reader\babyreader-fnos\dist\babyreader-fnos.fpk)，5,420,987 bytes，SHA-256 `0C51F0E6D5B76982D3E0A5988BF527928C670F070D199DCD21D17ABF261B4932`；构建溯源见 `dist/build-provenance.json`。
+
+## 书库拖拽与分类全链路修复 2026-09-22
+
+- 全部书籍接通整理排序，增加兼容的每用户 allBookOrder；保存时严格验证当前可见书目并保留离线引用，修复首次未分类排序返回 400。
+- 新建分类后直达详情；加入书籍后保留选择器，更新 revision 并阻止并发重复提交；冲突时原位重试。整理书卡可直接选择归属分类。
+- 修复拖拽结束后的焦点、捕获和越界目标状态，源目录隐藏整理操作；加入功能开启环境下的真实 API、鼠标/触摸和刷新恢复回归，接入常规 E2E。
+- 实施记录：`docs/superpowers/plans/2026-09-22-library-organization-interaction-repair.md`。本轮版本号未变，现场安装验收待执行。
+
+## 1.1.4 书库组织可用性修复 2026-09-22
+
+- 修复组织书架接管后“重新扫描”入口丢失的问题；扫描后继续恢复组织视图，而非退回旧书架。
+- 分类详情增加“添加书籍”选择器，可将未分类或其他分类的书籍移入当前分类；复用 revision-aware placement API，绝不移动真实文件。
+- 书库操作重新分层：展示方式仅保留“全部书籍 / 我的分类 / 按目录”，“新建分类”成为独立主操作，表单位于 header 下方而非切换区内。
+- 新增 DOM 回归覆盖扫描入口、独立表单位置与书籍加入分类；验证：`npm test` 231 通过、5 个平台条件跳过，Chromium 85 通过、2 个可选真实样本跳过，结构校验和 FPK 内容核验通过。
+
+## 1.1.3 书库组织功能发布开关 2026-09-22
+
+- FPK 启动脚本默认注入 `BABYREADER_ENABLE_LIBRARY_ORGANIZATION=1`，使已完成的分类、按目录和整理/拖拽功能在正式包中可见。
+- 保留运维覆盖能力：显式设置 `BABYREADER_ENABLE_LIBRARY_ORGANIZATION=0` 时继续使用原有平铺书库。
+- 未改变授权目录来源、书籍扫描边界、真实文件位置和阅读数据；版本同步更新为 1.1.3。
+- 增加生命周期发布契约测试，防止后续 FPK 再次出现功能代码已打包但运行时开关关闭的问题。
+
+## 书库个性化 Task 6 本地交付 2026-09-22
+
+- 增加受控 `POST /api/library/organization/reconcile`：默认 dry-run，只有当前 revision + `confirm: true` 才清除孤儿 bookId 引用；扫描不健康时 fail closed。
+- 清理边界仅限每用户虚拟分类引用，不删除分类、原始书籍、AI 索引、书签、标注、阅读进度或 AI 会话。
+- fnOS 验收脚本增加认证后的只读书库组织契约检查，不执行写操作、不接收或输出 API Key。
+- 本地验证：`npm test` 228 pass / 5 platform-condition skip；Chromium E2E 重跑后 85 pass / 2 optional real-sample skip；`npm run check`、`npm run check:portable`、Git Bash shell syntax 和 `git diff --check` 通过。
+- FPK：[dist/babyreader-fnos.fpk](D:\AI编程\reader\babyreader-fnos\dist\babyreader-fnos.fpk)，5,406,512 bytes，SHA-256 `952BDCE6432CB19E3DED75436F2CCDCD125A73BD1C07C362C5041C0F750227FD`；构建溯源见 `dist/build-provenance.json`。
+- 尚未宣称 fnOS 真机、Gateway、双架构、升级和真实拖拽验收通过；组织 feature flag 继续默认关闭。
+
+## AI 会话持久化 Task 5/6 2026-09-21
+
+- 增加 AI 会话列表独立 surface：列表仅显示标题、消息数和更新时间，切换时按需读取完整消息。
+- 增加服务端成功后才更新本地状态的清空/删除操作；失败时保留面板、原列表和重试入口。
+- 复用现有 AI secondary sheet、主题变量、焦点恢复和移动端安全区，不改变既有问答、流式输出、来源章节和书籍隔离接口。
+- 本地验证：`npm test` 200 pass / 5 platform-condition skip；Chromium E2E 82 pass / 2 optional real-sample skip；`npm run check`、语法检查和 `git diff --check` 通过。
+- FPK：`dist/babyreader-fnos.fpk`，5,346,065 bytes，SHA-256 `A13F09D7D37DBD9AE929CDCDB8AC3CC905A8F137645B5076060C262612F06E91`；构建溯源见 `dist/build-provenance.json`。fnOS 安装、Gateway、双用户和升级验收仍需真实设备证据，未提前宣称通过。
 
 ## 主线合并书签与 AI 阅读能力 2026-09-21
 

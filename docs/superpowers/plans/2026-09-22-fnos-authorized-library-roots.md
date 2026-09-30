@@ -10,6 +10,12 @@
 
 **Spec:** `docs/superpowers/specs/2026-09-22-fnos-authorized-library-roots-design.md`
 
+## 当前进度（2026-09-22）
+
+- Task 0–5 的代码、测试、验收脚本和 FPK 本地发布准备已完成。
+- fnOS 真机反馈：自定义目录扫描正常；删除流程正常。该结果已作为真机回归证据记录，不改变既有书籍、用户数据和 AI 索引安全边界。
+- 仍待补齐的不是本次功能阻塞项：x86_64/ARM64 双架构完整矩阵、Gateway 多用户、升级持久化和撤销权限后的完整报告，需要继续在对应设备上留存验收日志。
+
 ## Global Constraints
 
 - 保持 `manifest` 中 `disable_authorization_path=false`，让 fnOS 提供授权目录设置。
@@ -31,7 +37,7 @@
 
 ---
 
-### Task 0: fnOS 权限注入与生命周期基线
+### Task 0: fnOS 权限注入与生命周期基线 ✅ 已完成
 
 **Files:**
 - Modify: `docs/FNOS_DEVICE_ACCEPTANCE.md`
@@ -69,7 +75,7 @@ git add docs/FNOS_DEVICE_ACCEPTANCE.md scripts/fnos-device-acceptance.sh tests/d
 git commit -m "test: define fnOS custom library authorization baseline"
 ```
 
-### Task 1: 建立授权书库根目录解析模块
+### Task 1: 建立授权书库根目录解析模块 ✅ 已完成
 
 **Files:**
 - Create: `app/server/library-roots.js`
@@ -149,7 +155,7 @@ git add app/server/library-roots.js tests/library-roots.test.js tests/reader-cor
 git commit -m "feat: resolve fnOS authorized library roots"
 ```
 
-### Task 2: 接入服务配置、扫描和诊断
+### Task 2: 接入服务配置、扫描和诊断 ✅ 已完成
 
 **Files:**
 - Modify: `app/server/index.js:291-334`
@@ -225,7 +231,7 @@ git add app/server/index.js app/server/library.js tests/reader-core.test.js test
 git commit -m "feat: scan fnOS authorized library roots"
 ```
 
-### Task 3: 完善书库刷新反馈
+### Task 3: 完善书库刷新反馈 ✅ 已完成
 
 **Files:**
 - Modify: `app/ui/library/view.js:56-70`
@@ -271,7 +277,7 @@ git add app/ui/library/view.js app/ui/core/api.js app/ui/styles.css tests/dom-re
 git commit -m "feat: explain authorized library refresh state"
 ```
 
-### Task 4: 生命周期与权限变更验收
+### Task 4: 生命周期与权限变更验收 ✅ 已完成
 
 **Files:**
 - Modify: `cmd/main`
@@ -322,7 +328,7 @@ git add cmd/main tests/fnos-lifecycle.test.js docs/FNOS_DEVICE_ACCEPTANCE.md scr
 git commit -m "test: verify fnOS authorization refresh lifecycle"
 ```
 
-### Task 5: 全量安全回归与 FPK 发布验收
+### Task 5: 全量安全回归与 FPK 发布验收 ✅ 本地完成，真机部分持续回填
 
 **Files:**
 - Modify: `docs/FNOS_DEVICE_ACCEPTANCE.md`
@@ -392,4 +398,4 @@ git commit -m "test: complete fnOS authorized library release verification"
 - 计划没有引入应用内路径选择器、root 权限、文件监听器或数据库变更。
 - 所有跨任务接口均在 Task 1 中定义，并在后续任务中复用 `RootDiagnostics` 和 `authorizedRoots`。
 - 五类高风险输入均有明确测试归属：环境变量生命周期、特殊路径、重叠根目录、权限撤销/符号链接和既有用户数据回归。
-- 当前没有执行代码修改；执行前仍需先完成 Task 0 的 fnOS 真机权限注入确认。
+- 当前结论：自定义目录扫描与删除已通过用户实机验证；下一次真机回归重点是撤销授权后重启、重新扫描不得读取，以及确认全文搜索、AI 问答、书签、标注和阅读进度不受影响。
