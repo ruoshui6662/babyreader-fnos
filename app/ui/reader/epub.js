@@ -763,10 +763,10 @@ function applyTheme(theme, persist = true) {
   document.body.classList.toggle('theme-light', state.theme === 'light');
   document.body.classList.toggle('theme-sepia', state.theme === 'sepia');
 
-  const btnTheme = document.getElementById('btnTheme');
-  if (btnTheme) {
-    // The toggle button only flips dark <-> light; sepia is picked from the
-    // background dropdown in the settings drawer.
+  // The toggle buttons only flip dark <-> light; sepia is picked from the
+  // background dropdown in the settings drawer.
+  for (const btnTheme of [document.getElementById('btnTheme'), document.getElementById('btnLibraryTheme')]) {
+    if (!btnTheme) continue;
     const isLightOrSepia = state.theme === 'light' || state.theme === 'sepia';
     btnTheme.innerHTML = themeIconSvg(isLightOrSepia ? 'dark' : 'light');
     btnTheme.setAttribute('aria-label', isLightOrSepia ? '切换深色模式' : '切换浅色模式');

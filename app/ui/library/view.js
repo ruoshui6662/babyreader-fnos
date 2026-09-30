@@ -96,16 +96,11 @@ function createLibraryRecentCard(books) {
   button.dataset.bookId = recent.book.id;
   const coverFrame = document.createElement('span');
   coverFrame.className = 'library-recent-cover';
-  const cover = document.createElement(recent.book.coverUrl ? 'img' : 'span');
-  cover.className = 'library-book-cover';
+  const cover = typeof createLibraryCover === 'function'
+    ? createLibraryCover(recent.book)
+    : document.createElement('span');
+  cover.classList.add('library-book-cover');
   cover.draggable = false;
-  if (recent.book.coverUrl) {
-    cover.src = recent.book.coverUrl;
-    cover.alt = '';
-    cover.loading = 'lazy';
-  } else {
-    cover.setAttribute('aria-hidden', 'true');
-  }
   coverFrame.appendChild(cover);
   button.appendChild(coverFrame);
   if (recent.book.type === 'pdf' && !recent.book.coverUrl && typeof window.requestPdfLibraryCover === 'function') {
@@ -116,14 +111,35 @@ function createLibraryRecentCard(books) {
   const title = document.createElement('strong');
   title.textContent = recent.book.title || recent.book.relativePath || '未命名书籍';
   details.appendChild(title);
-  const percent = Number.isFinite(recent.progress.percentage)
-    ? `${Math.round(Math.max(0, Math.min(1, recent.progress.percentage)) * 100)}%` : '';
-  if (recent.book.author || percent) {
+  const ratio = Number.isFinite(recent.progress.percentage)
+    ? Math.max(0, Math.min(1, recent.progress.percentage)) : null;
+  const percent = ratio === null ? '' : `${Math.round(ratio * 100)}%`;
+  if (recent.book.author) {
     const meta = document.createElement('small');
-    meta.textContent = [recent.book.author, percent].filter(Boolean).join(' · ');
+    meta.textContent = recent.book.author;
     details.appendChild(meta);
   }
+  if (percent) {
+    const progress = document.createElement('span');
+    progress.className = 'library-recent-progress';
+    const track = document.createElement('span');
+    track.className = 'library-recent-progress-track';
+    track.setAttribute('aria-hidden', 'true');
+    const fill = document.createElement('span');
+    fill.className = 'library-recent-progress-fill';
+    fill.style.width = `${Math.max(2, ratio * 100)}%`;
+    track.appendChild(fill);
+    const label = document.createElement('small');
+    label.textContent = `已读 ${percent}`;
+    progress.append(track, label);
+    details.appendChild(progress);
+  }
   button.appendChild(details);
+  const action = document.createElement('span');
+  action.className = 'library-recent-action';
+  action.setAttribute('aria-hidden', 'true');
+  action.textContent = '继续';
+  button.appendChild(action);
   button.setAttribute('aria-label', `继续阅读 ${title.textContent}${percent ? `，已读 ${percent}` : ''}`);
   button.addEventListener('click', () => {
     window.browserHost.openBook(recent.book).catch((error) => showHighlightHint(error.message));

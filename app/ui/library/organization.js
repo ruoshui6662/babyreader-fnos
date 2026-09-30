@@ -21,12 +21,39 @@ function normalizeLibrarySourceSegments(value) {
     .slice(0, 64);
 }
 
-function createLibraryBookCard(book, { open = true } = {}) {
-  const button = document.createElement('button');
-  button.type = 'button';
-  button.className = 'library-book';
-  button.dataset.bookId = book.id;
+const LIBRARY_COVER_TONES = 8;
+const LIBRARY_FORMAT_LABELS = { epub: 'EPUB', pdf: 'PDF', txt: 'TXT', md: 'Markdown', markdown: 'Markdown' };
 
+function libraryBookTitle(book) {
+  return book?.title || book?.relativePath || '未命名书籍';
+}
+
+function libraryBookFormatLabel(book) {
+  const type = String(book?.type || '').toLowerCase();
+  return LIBRARY_FORMAT_LABELS[type] || type.toUpperCase();
+}
+
+// Stable per-book tone so a generated cover never changes between renders.
+function libraryCoverTone(book) {
+  // FNV-1a keeps neighbouring ids (same prefix, sequential names) apart.
+  const seed = String(book?.id || libraryBookTitle(book));
+  let hash = 0x811c9dc5;
+  for (let index = 0; index < seed.length; index++) {
+    hash ^= seed.charCodeAt(index);
+    hash = Math.imul(hash, 0x01000193) >>> 0;
+  }
+  return hash % LIBRARY_COVER_TONES;
+}
+
+function libraryBookProgressPercent(book) {
+  const value = state.userState?.books?.[book?.id]?.progress?.percentage;
+  if (!Number.isFinite(value) || value <= 0) return null;
+  return Math.round(Math.min(1, value) * 100);
+}
+
+// Books without embedded artwork get a typeset cover (title, author, format)
+// instead of an anonymous grey block. PDF covers still replace it once rendered.
+function createLibraryCover(book) {
   const cover = document.createElement(book.coverUrl ? 'img' : 'span');
   cover.className = 'library-book-cover';
   cover.draggable = false;
@@ -34,9 +61,38 @@ function createLibraryBookCard(book, { open = true } = {}) {
     cover.src = book.coverUrl;
     cover.alt = '';
     cover.loading = 'lazy';
-  } else {
-    cover.setAttribute('aria-hidden', 'true');
+    return cover;
   }
+  cover.setAttribute('aria-hidden', 'true');
+  cover.classList.add('is-generated');
+  cover.dataset.coverTone = String(libraryCoverTone(book));
+  const title = document.createElement('span');
+  title.className = 'library-cover-title';
+  title.textContent = libraryBookTitle(book);
+  cover.appendChild(title);
+  if (book.author) {
+    const author = document.createElement('span');
+    author.className = 'library-cover-author';
+    author.textContent = book.author;
+    cover.appendChild(author);
+  }
+  const format = libraryBookFormatLabel(book);
+  if (format) {
+    const badge = document.createElement('span');
+    badge.className = 'library-cover-format';
+    badge.textContent = format;
+    cover.appendChild(badge);
+  }
+  return cover;
+}
+
+function createLibraryBookCard(book, { open = true } = {}) {
+  const button = document.createElement('button');
+  button.type = 'button';
+  button.className = 'library-book';
+  button.dataset.bookId = book.id;
+
+  const cover = createLibraryCover(book);
   button.appendChild(cover);
   if (book.type === 'pdf' && !book.coverUrl && typeof window.requestPdfLibraryCover === 'function') {
     window.requestPdfLibraryCover(book, cover);
@@ -45,14 +101,29 @@ function createLibraryBookCard(book, { open = true } = {}) {
   const metadata = document.createElement('div');
   metadata.className = 'library-book-metadata';
   const name = document.createElement('strong');
-  name.textContent = book.title || book.relativePath || '未命名书籍';
+  name.textContent = libraryBookTitle(book);
   metadata.appendChild(name);
-  if (book.author) {
-    const author = document.createElement('span');
-    author.textContent = book.author;
-    metadata.appendChild(author);
+  const detail = book.author || libraryBookFormatLabel(book);
+  const percent = libraryBookProgressPercent(book);
+  if (detail || percent !== null) {
+    const line = document.createElement('span');
+    line.className = 'library-book-detail';
+    const text = document.createElement('span');
+    text.className = 'library-book-author';
+    text.textContent = detail;
+    line.appendChild(text);
+    if (percent !== null) {
+      const progress = document.createElement('span');
+      progress.className = 'library-book-progress';
+      progress.textContent = percent >= 100 ? '已读完' : `${percent}%`;
+      line.appendChild(progress);
+    }
+    metadata.appendChild(line);
   }
   button.appendChild(metadata);
+  if (percent !== null) {
+    button.setAttribute('aria-label', `${libraryBookTitle(book)}${book.author ? `，${book.author}` : ''}，已读 ${percent}%`);
+  }
   if (open) {
     button.addEventListener('click', () => {
       window.browserHost.openBook(book).catch((error) => showHighlightHint(error.message));
@@ -676,7 +747,9 @@ function makeLibraryOrganizationCard({ id = null, title, count, onOpen, onDelete
   const heading = document.createElement('strong');
   heading.textContent = title;
   const summary = document.createElement('span');
-  summary.textContent = `${count} 本`;
+  summary.className = 'library-organization-card-count';
+  summary.setAttribute('aria-hidden', 'true');
+  summary.textContent = String(count);
   open.append(heading, summary);
   open.addEventListener('click', onOpen);
   card.appendChild(open);
@@ -977,7 +1050,7 @@ function renderLibraryOrganization(library) {
 
   if (manage) {
     const hint = document.createElement('p');
-    hint.className = 'library-summary';
+    hint.className = 'library-summary library-manage-hint';
     hint.textContent = '拖动书籍封面调整顺序；手机长按书卡后拖动。分类也可使用 ⋮⋮ 手柄。';
     shell.appendChild(hint);
   }
@@ -1037,24 +1110,39 @@ function renderLibraryOrganization(library) {
     : organization.allBookOrder || organization.books.map((book) => book.id);
   const books = order.map((id) => byId.get(id)).filter(Boolean);
   const scope = collection ? collection.id : route.mode === 'unassigned' ? 'unassigned' : 'all';
+  // Category chips scope everything below them, including Continue Reading.
   const recentCard = createLibraryRecentCard(books);
   if (recentCard) booksSection.appendChild(recentCard);
   booksSection.appendChild(books.length
     ? libraryOrganizationBookGrid(books, { library, scope, order })
-    : makeLibraryOrganizationEmpty(isDetail ? '这个分类还没有书' : '书库还是空的'));
+    : collection
+      ? makeLibraryOrganizationEmpty('这个分类还没有书', '点击上方的“添加书籍”，把书放进这个分类。')
+      : route.mode === 'unassigned'
+        ? makeLibraryOrganizationEmpty('所有书都已归类', '新扫描到的书会先出现在这里。')
+        : makeLibraryOrganizationEmpty('书库还是空的', '在 fnOS 中授权书库目录后，EPUB、Markdown、TXT 和已启用的 PDF 会出现在这里。'));
   shell.appendChild(booksSection);
   article.appendChild(shell);
   setupLibraryFilter(shell);
   return true;
 }
 
-function makeLibraryOrganizationEmpty(message) {
+function makeLibraryOrganizationEmpty(message, guidance = '') {
   const empty = document.createElement('section');
   empty.className = 'library-empty';
+  const icon = document.createElement('span');
+  icon.className = 'library-empty-icon';
+  icon.setAttribute('aria-hidden', 'true');
+  empty.appendChild(icon);
   const title = document.createElement('h2');
   title.className = 'library-empty-title';
   title.textContent = message;
   empty.appendChild(title);
+  if (guidance) {
+    const copy = document.createElement('p');
+    copy.className = 'library-empty-copy';
+    copy.textContent = guidance;
+    empty.appendChild(copy);
+  }
   return empty;
 }
 

@@ -971,7 +971,7 @@ test('UX shelf search hides an unrelated recent book without changing its saved 
   await window.happyDOM.close();
 });
 
-test('UX recent reading uses a compact cover card and completed scan feedback takes no layout space', async () => {
+test('UX recent reading uses a prominent cover card and completed scan feedback takes no layout space', async () => {
   const { window, api } = await createReaderDom();
   const style = window.document.createElement('style');
   style.textContent = await fs.readFile(path.resolve(__dirname, '../app/ui/styles.css'), 'utf8');
@@ -982,9 +982,9 @@ test('UX recent reading uses a compact cover card and completed scan feedback ta
   };
   api.renderLibrary({ books: [book], scan: { status: 'completed', discoveredCount: 1, reusedCount: 1 } });
   const card = window.document.querySelector('.library-recent-card');
-  assert.equal(window.getComputedStyle(card).display, 'flex');
-  assert.equal(window.getComputedStyle(card.querySelector('.library-book-cover')).width, '60px');
-  assert.equal(window.getComputedStyle(card.querySelector('.library-book-cover')).height, '84px');
+  assert.equal(window.getComputedStyle(card).display, 'grid');
+  assert.equal(window.getComputedStyle(card.querySelector('.library-book-cover')).width, '72px');
+  assert.equal(window.getComputedStyle(card.querySelector('.library-book-cover')).height, '101px');
   assert.equal(window.getComputedStyle(window.document.querySelector('.library-scan-status')).display, 'none');
   await window.happyDOM.close();
 });
@@ -1013,11 +1013,12 @@ test('library home exposes stable extension regions without changing its existin
 test('library home styling keeps the cover grid fluid and honors the approved desktop-to-mobile breakpoints', async () => {
   const css = await fs.readFile(path.resolve(__dirname, '../app/ui/styles.css'), 'utf8');
   assert.ok(/\.library-view\s*\{[^}]*width:\s*min\(1280px,\s*100%\)/s.test(css), 'library width should match the approved max-width');
-  assert.ok(/\.library-grid\s*\{[^}]*grid-template-columns:\s*repeat\(5,\s*minmax\(0,\s*1fr\)\)/s.test(css), 'desktop should use a fluid five-column grid');
+  assert.ok(/^\.library-grid\s*\{[^}]*grid-template-columns:\s*repeat\(6,\s*minmax\(0,\s*1fr\)\)/ms.test(css), 'desktop should use a fluid six-column grid');
   assert.ok(/aspect-ratio:\s*3\s*\/\s*4\.2/.test(css), 'book covers should use the approved ratio');
-  assert.ok(/@media\s*\(max-width:\s*1099px\)[\s\S]*?grid-template-columns:\s*repeat\(4,/.test(css), 'medium desktop should use four columns');
-  assert.ok(/@media\s*\(max-width:\s*919px\)[\s\S]*?grid-template-columns:\s*repeat\(3,/.test(css), 'tablet should use three columns');
-  assert.ok(/@media\s*\(max-width:\s*679px\)[\s\S]*?grid-template-columns:\s*repeat\(2,/.test(css), 'phone should use two columns');
+  assert.ok(/@media\s*\(max-width:\s*1099px\)\s*\{\s*\.library-grid\s*\{\s*grid-template-columns:\s*repeat\(5,/.test(css), 'compact desktop should use five columns');
+  assert.ok(/@media\s*\(max-width:\s*919px\)[\s\S]*?\.library-grid\s*\{\s*grid-template-columns:\s*repeat\(4,/.test(css), 'tablet should use four columns');
+  assert.ok(/@media\s*\(max-width:\s*679px\)[\s\S]*?\.library-grid\s*\{\s*grid-template-columns:\s*repeat\(3,/.test(css), 'large phone should use three columns');
+  assert.ok(/@media\s*\(max-width:\s*479px\)\s*\{\s*\.library-grid\s*\{\s*grid-template-columns:\s*repeat\(2,/.test(css), 'phone should use two columns');
 });
 
 test('library root actions follow create, rescan, and organize order on one toolbar row', async () => {
@@ -1034,11 +1035,12 @@ test('library root actions follow create, rescan, and organize order on one tool
   await window.happyDOM.close();
 });
 
-test('library recent-reading heading opts out of the article accent underline and separates search from its actions', async () => {
+test('library headings opt out of the article accent underline and search shares the toolbar row', async () => {
   const css = await fs.readFile(path.resolve(__dirname, '../app/ui/styles.css'), 'utf8');
   assert.ok(/\.article\.is-library\s+\.library-recent-reading\s+h2\s*\{[^}]*border-bottom:\s*0/s.test(css), 'library recent-reading heading should not inherit the article underline');
-  assert.ok(/\.library-organization-view\[data-library-mode="flat"\]\s+\.library-header-actions\s*\{[^}]*display:\s*grid[^}]*grid-template-columns:\s*repeat\(3,\s*max-content\)/s.test(css), 'root actions should keep the three actions on one row');
-  assert.ok(/\.library-organization-view\[data-library-mode="flat"\]\s+\.library-filter\s*\{[^}]*grid-column:\s*1\s*\/\s*-1/s.test(css), 'search should occupy its own row above the actions');
+  assert.ok(/\.article \.library-view \.library-empty-title\s*\{[^}]*border-bottom:\s*0/s.test(css), 'empty-state heading should not inherit the article underline');
+  assert.ok(/^\.library-header-actions\s*\{[^}]*display:\s*flex[^}]*flex-wrap:\s*nowrap/ms.test(css), 'desktop search and actions should share one toolbar row');
+  assert.ok(/@media\s*\(max-width:\s*679px\)[\s\S]*?\.library-filter\s*\{\s*flex-basis:\s*100%/.test(css), 'phones should give search its own full-width row');
 });
 
 test('UX reorder handles stay available without dominating the resting shelf', async () => {
@@ -1058,9 +1060,11 @@ test('UX reorder handles stay available without dominating the resting shelf', a
   const categoryHandle = window.document.querySelector('.library-category-navigation .library-reorder-handle');
   assert.equal(bookHandle.tabIndex, 0);
   assert.equal(window.getComputedStyle(bookHandle).opacity, '0');
-  assert.equal(window.getComputedStyle(categoryHandle).width, '28px');
+  assert.equal(categoryHandle.tabIndex, 0, 'collapsed category handles remain keyboard reachable');
+  assert.equal(window.getComputedStyle(categoryHandle).width, '0px');
   window.document.querySelector('.library-mode-button').click();
   assert.equal(window.getComputedStyle(window.document.querySelector('.library-grid .library-reorder-handle')).opacity, '1');
+  assert.equal(window.getComputedStyle(window.document.querySelector('.library-category-navigation .library-reorder-handle')).width, '28px');
   await window.happyDOM.close();
 });
 

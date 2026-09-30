@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>BabyReader</title>
-  <link rel="stylesheet" href="styles.css?v=55">
+  <link rel="stylesheet" href="styles.css?v=63">
 </head>
 <body class="is-welcome">
   <!-- Reader Shell: low-distraction navigation with stable legacy IDs -->
@@ -27,6 +27,7 @@
       <button class="reader-nav-button chapter-nav-btn" id="btnNextChapter" type="button" hidden data-reader-action="nextChapter" aria-label="下一章" title="下一章">
         <svg viewBox="0 0 24 24" data-icon="chapter-next" aria-hidden="true" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M18 5v14"></path><path d="m7 7 5 5-5 5"></path></svg>
       </button>
+      <button class="reader-nav-button library-theme-toggle" id="btnLibraryTheme" type="button" data-reader-action="toggleTheme" aria-label="切换浅色模式" title="切换浅色模式"></button>
     </div>
   </header>
 
@@ -521,7 +522,7 @@
   <script src="core/user-state.js?v=35"></script>
   <script src="reader/annotations.js?v=2"></script>
   <script src="reader/device-profile.js?v=31"></script>
-  <script src="reader/epub.js?v=28"></script>
+  <script src="reader/epub.js?v=29"></script>
   <script src="reader/document.js?v=28"></script>
   <script src="reader/editor.js?v=28"></script>
   <script src="reader/highlights.js?v=36"></script>
@@ -545,8 +546,8 @@
   <script src="shell/drawer.js?v=32"></script>
   <script src="library/reorder.js?v=1"></script>
   <script src="library/pdf-covers.js?v=1"></script>
-  <script src="library/organization.js?v=5"></script>
-  <script src="library/view.js?v=31"></script>
+  <script src="library/organization.js?v=9"></script>
+  <script src="library/view.js?v=32"></script>
   <script src="app.js?v=34"></script>
 </body>
 </html>

@@ -148,7 +148,7 @@ test('library and welcome states expose the dense library structure', async ({ p
   await page.goto(APP_PATH);
 
   await expect(page.locator('.library-heading h1')).toHaveText('书库');
-  await expect(page.locator('.library-summary')).toContainText('本可阅读内容');
+  await expect(page.locator('.library-heading .library-summary')).toContainText('本可阅读内容');
   await expect(page.locator('.library-scan-button')).toHaveText('重新扫描');
   await expect(page.locator('.library-book').first()).toHaveCSS('border-radius', '0px');
   await expect(page.locator('.library-book').first()).toHaveCSS('box-shadow', 'none');
@@ -263,14 +263,15 @@ test('library organization reorders books through a real desktop mouse drag', as
   const source = await page.locator('.library-grid .library-reorder-handle').first().boundingBox();
   const target = await page.locator('.library-reorder-item').nth(1).boundingBox();
   const sourceItem = page.locator('.library-reorder-item').first();
-  const targetItem = page.locator('.library-reorder-item').nth(1);
   expect(source).toBeTruthy();
   expect(target).toBeTruthy();
   await page.mouse.move(source.x + source.width / 2, source.y + source.height / 2);
   await page.mouse.down();
+  // Dragging activates only after deliberate movement (6px threshold).
+  await page.mouse.move(source.x + source.width / 2 + 12, source.y + source.height / 2, { steps: 3 });
   await expect(sourceItem).toHaveClass(/is-library-dragging/);
+  // Book drags preview the new order live instead of marking a drop target.
   await page.mouse.move(target.x + target.width / 2, target.y + target.height / 2, { steps: 6 });
-  await expect(targetItem).toHaveClass(/is-library-drop-target/);
   await page.mouse.up();
 
   await expect(page.locator('.library-book strong').first()).toHaveText('第二本');
@@ -292,12 +293,13 @@ test('mobile library keeps the existing two-column shelf when organization is di
   await expect(page.locator('.library-view')).toHaveAttribute('data-library-mode', 'flat');
 });
 
-test('wide library uses a six-column compact shelf with small summary text', async ({ page }) => {
+test('wide library uses a six-column shelf under a large title', async ({ page }) => {
   await page.setViewportSize({ width: 1600, height: 1000 });
   await page.goto(APP_PATH);
 
   await expect(page.locator('body')).toHaveClass(/is-library/);
-  await expect(page.locator('.library-summary')).toHaveCSS('font-size', '12px');
+  await expect(page.locator('.library-heading h1')).toHaveCSS('font-size', '34px');
+  await expect(page.locator('.library-heading .library-summary')).toHaveCSS('font-size', '14px');
   await expect(page.locator('#article')).toHaveCSS('max-width', 'none');
 
   const columns = await page.locator('.library-grid').evaluate((grid) =>
@@ -306,21 +308,26 @@ test('wide library uses a six-column compact shelf with small summary text', asy
   expect(columns).toBe(6);
 });
 
-test('wide library keeps compact left-aligned WeChat-style cover slots', async ({ page }) => {
+test('wide library keeps left-aligned cover slots and typesets covers without artwork', async ({ page }) => {
   await page.setViewportSize({ width: 1600, height: 1000 });
   await page.goto(APP_PATH);
 
   await expect(page.locator('.library-grid')).toHaveCSS('justify-content', 'start');
   await expect(page.locator('.library-book').first()).toHaveCSS('box-shadow', 'none');
-  await expect(page.locator('.library-book-cover').first()).toHaveCSS('width', '152px');
+  const coverWidth = await page.locator('.library-grid .library-book-cover').first().evaluate((element) => element.getBoundingClientRect().width);
+  expect(coverWidth).toBeGreaterThan(170);
+  expect(coverWidth).toBeLessThan(200);
+  const generated = page.locator('.library-book').filter({ hasText: 'E2E Markdown' }).locator('.library-book-cover.is-generated');
+  await expect(generated.locator('.library-cover-title')).toHaveText('E2E Markdown');
+  await expect(generated.locator('.library-cover-format')).toHaveText('Markdown');
 });
 
-test('WeChat-style library uses small metadata and still opens a selected book', async ({ page }) => {
+test('library card metadata stays compact and still opens a selected book', async ({ page }) => {
   await page.setViewportSize({ width: 1600, height: 1000 });
   await page.goto(APP_PATH);
 
-  await expect(page.locator('.library-book strong').first()).toHaveCSS('font-size', '13px');
-  await expect(page.locator('.library-book span').first()).toHaveCSS('font-size', '12px');
+  await expect(page.locator('.library-book strong').first()).toHaveCSS('font-size', '14px');
+  await expect(page.locator('.library-book .library-book-author').first()).toHaveCSS('font-size', '13px');
 
   await page.locator('.library-book').filter({ hasText: 'E2E Markdown' }).click();
   await expect(page.locator('#fileName')).toHaveText('E2E Markdown');
@@ -470,7 +477,7 @@ test('continuous scroll chapter boundary renders dedicated previous and next con
   await expect(page.locator('#article .epub-chapter')).toHaveAttribute('data-source-path', /chapter1\.xhtml/);
 });
 
-test('sepia reader uses the same white surface as the library', async ({ page }) => {
+test('sepia reader returns to the neutral light library surface', async ({ page }) => {
   await openEpubFixture(page);
   await page.locator('#btnSettings').click();
   await page.locator('#settingTheme').selectOption('sepia');
@@ -481,7 +488,8 @@ test('sepia reader uses the same white surface as the library', async ({ page })
 
   await page.locator('#btnBackToLibrary').click();
   const librarySurface = await page.locator('#article').evaluate((element) => getComputedStyle(element).backgroundColor);
-  expect(librarySurface).toBe(readerSurface);
+  // The shelf keeps its own neutral palette instead of the reading paper tint.
+  expect(librarySurface).toBe('rgb(251, 251, 253)');
 });
 
 test('reader navigation and floating toolbar controls keep 44px icon targets', async ({ page }) => {
