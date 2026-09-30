@@ -2,6 +2,8 @@
 
 BabyReader 的飞牛 fnOS FPK 改造工程。保留原项目的 Web 阅读界面，使用 Node.js 后端和 fnOS 统一网关提供书库扫描、内容读取、阅读进度及划线持久化能力。
 
+> 项目全貌、进度与待办见 [docs/PROJECT_STATUS.md](docs/PROJECT_STATUS.md)。
+
 ## 上游基线
 
 固定版本记录在 `UPSTREAM_BASELINES`：
