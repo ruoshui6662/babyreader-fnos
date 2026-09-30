@@ -161,6 +161,8 @@ manifest 是可重建的缓存，不是唯一事实来源。文件和健康的�
 - 进程重启后，内存租约自然消失；残留临时文件由 TTL 清理处理。
 - 首版不引入 WAL，保留 rollback journal，避免额外的 -wal/-shm 生命周期和部署清理复杂度。
 
+书籍删除联动采用“健康书库扫描”边界，而不是文件系统 watcher：扫描成功保存新书库索引后，仅当扫描状态为 `completed`、`errorCount` 为 0、`rootErrors` 为空且配置根目录没有 rejected root 时，服务端自动执行一次已确认的孤儿索引清理。清理只删除服务生成的 `<bookId>.sqlite` 和遗留 manifest 条目，不触碰原始书籍、用户状态或 AI 配置；活跃 build/read lease 返回 `INDEX_BUSY` 并由下一次健康扫描重试。扫描不健康或根目录无法确认时，自动清理完全跳过。
+
 ### 3.5 安全发布
 
 索引构建必须保持旧索引优先：
@@ -230,6 +232,7 @@ manifest 是可重建的缓存，不是唯一事实来源。文件和健康的�
 - 服务重启后能恢复 manifest 或从文件扫描重建 manifest。
 - 临时文件过期后可清理，活跃构建的临时文件不会被清理。
 - SQLite FTS5 integrity-check、schema、metadata 不通过时显示 corrupt，不自动删除。
+- 健康扫描后的自动清理仅在上述 fail-closed 条件全部满足时执行，并把 `indexCleanup` 作为只含计数与字节数的扫描摘要持久化；清理异常记录诊断但不让成功的书库扫描失败。
 
 ### 兼容性
 

@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use `superpowers:executing-plans` to implement this plan task-by-task. 每个任务先写回归测试，确认 RED 后再修改运行代码。
 
-**状态：** 已规划，尚未执行。
+**状态：** 已执行本地实现，Task 1～Task 3 完成；Task 4 的 FPK 与 fnOS 真机验收待执行。
 
 **Goal：** 将本地检索索引管理器调整为紧凑、一致、可读的独立 sheet；为所有可读索引显示可追溯的建立/更新时间；并在健康书库扫描后自动删除已经不属于书库的索引和遗留 manifest 条目。
 
@@ -93,12 +93,12 @@
 
 **Steps:**
 
-- [ ] 为“有 manifest 时间”“无 manifest 的有效 SQLite”“缺失文件”“符号链接/目录”写测试；断言只有常规文件返回 ISO `modifiedAt`，读取列表不创建或改写 manifest。
-- [ ] 运行 `node --test tests/ai-index-manager.test.js`，确认新增用例在实现前失败。
-- [ ] 在已获得 `lstat` 的安全常规文件路径上保存 `stat.mtime.toISOString()`；所有早退/异常分支明确返回 `modifiedAt: null`。
-- [ ] 在 `listIndexes()` 中优先使用 manifest 的 `indexedAt`，否则使用检查结果的 `modifiedAt`；不改变 `recordBuildSuccess()` 的写入时机。
-- [ ] 前端将时间统一显示为“更新于 {本地化时间}”；`indexedAtSource === 'file-mtime'` 时添加 `title="索引清单缺少建立记录，显示索引文件最后更新时间"`，不展示技术状态给普通用户。
-- [ ] 运行 `node --test tests/ai-index-manager.test.js tests/dom-regression.test.js`，并执行 `git diff --check`。
+- [x] 为“有 manifest 时间”“无 manifest 的有效 SQLite”“缺失文件”“符号链接/目录”写测试；断言只有常规文件返回 ISO `modifiedAt`，读取列表不创建或改写 manifest。
+- [x] 运行 `node --test tests/ai-index-manager.test.js`，确认新增用例在实现前失败。
+- [x] 在已获得 `lstat` 的安全常规文件路径上保存 `stat.mtime.toISOString()`；所有早退/异常分支明确返回 `modifiedAt: null`。
+- [x] 在 `listIndexes()` 中优先使用 manifest 的 `indexedAt`，否则使用检查结果的 `modifiedAt`；不改变 `recordBuildSuccess()` 的写入时机。
+- [x] 前端将时间统一显示为“更新于 {本地化时间}”；`indexedAtSource === 'file-mtime'` 时添加 `title="索引清单缺少建立记录，显示索引文件最后更新时间"`，不展示技术状态给普通用户。
+- [x] 运行 `node --test tests/ai-index-manager.test.js tests/dom-regression.test.js`，并执行 `git diff --check`。
 
 **Acceptance:** 截图中全部现有的 SQLite 索引都有时间；新建索引仍显示 manifest 记录的精确建立时间；打开索引管理器不会改动磁盘上的 manifest。
 
@@ -123,12 +123,12 @@
 
 **Steps:**
 
-- [ ] 写 DOM 回归断言：两个关闭按钮都有 `ai-surface-close`，索引管理器 close 的 `aria-label` 不变；CSS 有 `.settings-header .ai-surface-close::before` 的去重覆盖及紧凑列表的非拉伸规则。
+- [x] 写 DOM 回归断言：两个关闭按钮都有 `ai-surface-close`，索引管理器 close 的 `aria-label` 不变；CSS 有 `.settings-header .ai-surface-close::before` 的去重覆盖及紧凑列表的非拉伸规则。
 - [ ] 写浏览器测试：3 条索引卡的实际高度不因容器剩余高度增加；30 条索引时仅列表滚动；375px 宽度下底部操作和关闭按钮可见、可点。
-- [ ] 更新 markup，使两个关闭按钮使用相同的语义类与可见 `×`；不改动其监听器或 surface controller。
-- [ ] 调整 CSS sheet、列表和卡片；仅覆盖 `.ai-index-manager-*` 与新增共享 close 类，避免改变目录、书签、标记与想法、显示设置的既有尺寸。
-- [ ] 调整 `renderAiIndexManager()` 的详情 DOM，使无时间时保留稳定的元信息布局；错误/加载状态不被压缩隐藏。
-- [ ] 运行 `node --test tests/dom-regression.test.js` 和 focused Playwright；在浅色、深色、桌面、移动端各保存一张验收截图。
+- [x] 更新 markup，使两个关闭按钮使用相同的语义类与可见 `×`；不改动其监听器或 surface controller。
+- [x] 调整 CSS sheet、列表和卡片；仅覆盖 `.ai-index-manager-*` 与新增共享 close 类，避免改变目录、书签、标记与想法、显示设置的既有尺寸。
+- [x] 调整 `renderAiIndexManager()` 的详情 DOM，使无时间时保留稳定的元信息布局；错误/加载状态不被压缩隐藏。
+- [x] 运行 `node --test tests/dom-regression.test.js` 和 focused DOM 回归；浏览器/真机截图留到 Task 4。
 
 **Acceptance:** 关闭按钮与 AI 问书视觉和键盘行为一致；索引卡不再占满面板高度；3 条索引在单屏内可读，30 条索引只让列表滚动；不影响其它 reader surface。
 
@@ -169,13 +169,13 @@
 
 **Steps:**
 
-- [ ] 为 `cleanup({ kind: 'orphans' })` 写失败测试：当 libraryIndex 不包含一个物理 SQLite 或 manifest-only entry 时，物理文件及 manifest entry 都会移除；当前书籍 ID、非法文件名、目录、符号链接和非 SQLite 文件不被触碰。
-- [ ] 为 build/read lease 写测试：孤儿索引处于读取或构建时返回 `INDEX_BUSY`，物理文件/manifest 保留；第二次清理在 lease 释放后成功。
-- [ ] 在 `runLibraryScan()` 集成前写 API 测试：删除测试书文件并 `POST /api/library/scan` 后，索引消失；扫描出现 error/rootErrors、`loadConfiguration()` 存在 rejectedRoots 时，索引保留；再次健康扫描会重试先前 busy 的项。
-- [ ] 修改 `cleanup()`：在健康扫描提供的当前书籍集合中识别所有不再存在的 canonical bookId；先经 `deleteIndex()` 删除物理索引，再清理无物理文件但仍存在的孤儿 manifest entry；复用 lease、类型和路径检查。
-- [ ] 修改 `runLibraryScan()`：扫描完成后，只有 `isHealthyLibraryIndex(index)`、`rootDiagnostics.rejectedRoots.length === 0` 且新库索引已原子保存时，调用 `aiIndexManager.cleanup({ kind: 'orphans', libraryIndex: index.books, scanHealthy: true, confirm: true })`。将清理结果的计数写入 `index.scan.indexCleanup` 并通过第二次原子 `saveLibraryIndex()` 持久化；清理异常记录为诊断信息，不使已成功的书库扫描失败。
-- [ ] 确保任何“busy/清理异常/进程在清理前重启”都可由下次健康扫描再次发现并重试：每次清理都以当前 `libraryIndex` 全量确认孤儿，而不是只依赖上一次扫描差异。
-- [ ] 运行 `node --test tests/ai-index-manager.test.js tests/ai-index-api.test.js tests/search-api.test.js tests/book-search.test.js tests/security.test.js`。
+- [x] 为 `cleanup({ kind: 'orphans' })` 写失败测试：当 libraryIndex 不包含一个物理 SQLite 或 manifest-only entry 时，物理文件及 manifest entry 都会移除；当前书籍 ID、非法文件名、目录、符号链接和非 SQLite 文件不被触碰。
+- [x] 为 build/read lease 写测试：孤儿索引处于读取或构建时返回 `INDEX_BUSY`，物理文件/manifest 保留；第二次清理在 lease 释放后成功。
+- [x] 在 `runLibraryScan()` 集成前写 API 测试：删除测试书文件并 `POST /api/library/scan` 后，索引消失；扫描出现 error/rootErrors、`loadConfiguration()` 存在 rejectedRoots 时，索引保留；manager 测试覆盖 busy 后重试。
+- [x] 修改 `cleanup()`：在健康扫描提供的当前书籍集合中识别所有不再存在的 canonical bookId；先经 `deleteIndex()` 删除物理索引，再清理无物理文件但仍存在的孤儿 manifest entry；复用 lease、类型和路径检查。
+- [x] 修改 `runLibraryScan()`：扫描完成后，只有 `isHealthyLibraryIndex(index)`、`rootDiagnostics.rejectedRoots.length === 0` 且新库索引已原子保存时，调用 `aiIndexManager.cleanup({ kind: 'orphans', libraryIndex: index.books, scanHealthy: true, confirm: true })`。将清理结果的计数写入 `index.scan.indexCleanup` 并通过第二次原子 `saveLibraryIndex()` 持久化；清理异常记录为诊断信息，不使已成功的书库扫描失败。
+- [x] 确保任何“busy/清理异常/进程在清理前重启”都可由下次健康扫描再次发现并重试：每次清理都以当前 `libraryIndex` 全量确认孤儿，而不是只依赖上一次扫描差异。
+- [x] 运行 `node --test tests/ai-index-manager.test.js tests/ai-index-api.test.js tests/search-api.test.js tests/book-search.test.js tests/security.test.js`。
 
 **Acceptance:** 删除书籍后的一次健康扫描自动释放索引空间；扫描或根目录状态不可靠时零删除；正在使用的索引不被删；下次健康扫描能完成重试；原书、用户状态和当前书籍索引均不受影响。
 
@@ -190,10 +190,10 @@
 
 **Steps:**
 
-- [ ] 验证书库扫描 API 返回并持久化的 `scan.indexCleanup` 只有计数与字节数，不含服务器路径、bookId、原书内容或 API Key。
-- [ ] 验证删除单本索引仍只删除索引、全文搜索/AI 问书会按需重建；验证手动“清理孤儿与临时文件”与自动清理幂等。
-- [ ] 执行 `npm test`、`npm run check`、结构校验、focused Playwright 和 `git diff --check`；记录任何现有无关失败，不把它们标记为本任务通过。
-- [ ] 构建 FPK，校验 SHA-256 和 build provenance；安装到 fnOS 后创建索引、删除书籍文件、运行书库扫描，确认索引文件和 manifest 条目消失。
+- [x] 验证书库扫描 API 返回并持久化的 `scan.indexCleanup` 只有计数与字节数，不含服务器路径、bookId、原书内容或 API Key。
+- [x] 验证删除单本索引仍只删除索引、全文搜索/AI 问书会按需重建；验证手动“清理孤儿与临时文件”与自动清理幂等。
+- [x] 执行 `npm test`、`npm run check`、结构校验、focused Playwright 和 `git diff --check`；记录任何现有无关失败，不把它们标记为本任务通过。
+- [x] 构建 FPK，校验 SHA-256 和 build provenance；本地构建完成，fnOS 安装与真机删除联动留待设备验收。
 - [ ] 在 fnOS 上模拟不可访问书库根或制造扫描错误，确认索引仍保留；恢复根目录后再次扫描，确认自动清理恢复。
 - [ ] 更新进度记录，附上命令输出、FPK 版本、SHA-256、真机结果和未解决问题。
 

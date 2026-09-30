@@ -1,8 +1,8 @@
 # AI 索引管理器开发进度
 
-状态：Task 1～Task 5 已完成，Task 6 FPK 已生成，fnOS 真机验收待执行。
+状态：原索引管理器 Task 1～Task 5 已完成；2026-09-22 紧凑界面、旧索引时间回退和健康扫描联动已在隔离分支完成，FPK 与 fnOS 真机验收待执行。
 
-更新时间：2026-09-21
+更新时间：2026-09-22
 
 ## 当前阶段
 
@@ -12,6 +12,25 @@
 - 运行代码：Task 1 已新增管理器基础；Task 2 已接入 FTS 生命周期和安全发布；Task 3 已接入管理员 API；Task 4 已接入独立 UI；Task 5 已完成恢复与清理边界测试。
 - FPK：已重新打包，当前产物为 `dist/babyreader-fnos.fpk`，溯源文件记录了 clean source commit 与 SHA-256。
 - fnOS 真机验收：未开始。
+
+## 2026-09-22 紧凑界面与书籍联动清理
+
+- 实现计划：`docs/superpowers/plans/2026-09-22-ai-index-manager-compact-lifecycle.md`。
+- Task 1：完成旧 SQLite 文件 mtime 回退；列表读取不写 manifest；前端统一“更新于”文案并标注回退时间来源。
+- Task 2：完成索引管理器紧凑 sheet、共享 AI 关闭按钮类、非拉伸列表和移动端安全区覆盖；正常状态保留 aria-live 但不占视觉空间。
+- Task 3：完成健康书库扫描后的孤儿索引/遗留 manifest 自动清理；扫描错误、rejected root 和活跃 lease 均 fail closed；返回仅有清理计数。
+- 当前提交：`6eeac3e`、`f863cba`、`b1fcd90`。
+- 真机待验：FPK 安装、健康扫描删除联动、rejected root 保留、重试、深色/浅色与 375px 移动端布局。
+
+## 2026-09-22 本地发布验证证据
+
+- `npm test`：179 passed、5 skipped、0 failed。
+- `npm run check` 与 `npm run check:portable`：通过。
+- Chromium Playwright：80 passed、2 skipped。
+- FPK：`dist/babyreader-fnos.fpk`，manifest `1.1.2`。
+- FPK SHA-256：以 `dist/build-provenance.json` 的 `archive.outer_sha256` 为准。
+- 构建溯源：`dist/build-provenance.json`，source commit `e522d79`，`git_dirty=false`。
+- 真机未完成：当前工作区无法代替 fnOS 安装、重启、权限和 Gateway 验收；需要在设备上执行文档中的 `fnos-device-acceptance.sh` 并回填结果。
 
 ## 任务状态
 

@@ -78,11 +78,16 @@ function renderAiIndexManager(data) {
     const details = document.createElement('div');
     details.className = 'ai-index-manager-item-details';
     details.append(meta);
+    const indexed = document.createElement('span');
     if (item.indexedAt) {
-      const indexed = document.createElement('span');
-      indexed.textContent = '索引于 ' + new Date(item.indexedAt).toLocaleString();
-      details.append(indexed);
+      indexed.textContent = '更新于 ' + new Date(item.indexedAt).toLocaleString();
+      if (item.indexedAtSource === 'file-mtime') {
+        indexed.title = '索引清单缺少建立记录，显示索引文件最后更新时间';
+      }
+    } else {
+      indexed.textContent = '更新时间未知';
     }
+    details.append(indexed);
     const actions = document.createElement('div');
     actions.className = 'ai-index-manager-item-actions';
     const deleteButton = document.createElement('button');

@@ -151,6 +151,29 @@ async function runLibraryScan() {
         previousIndex
       });
       await storage.saveLibraryIndex(index);
+      if (isHealthyLibraryIndex(index) && rootDiagnostics.rejectedRoots.length === 0) {
+        try {
+          const cleanup = await aiIndexManager.cleanup({
+            kind: 'orphans',
+            libraryIndex: index.books,
+            scanHealthy: true,
+            confirm: true
+          });
+          index.scan = {
+            ...index.scan,
+            indexCleanup: {
+              attempted: true,
+              deletedCount: cleanup.deleted.length,
+              skippedCount: cleanup.skipped.length,
+              manifestRemovedCount: cleanup.manifestRemoved.length,
+              bytesFreed: cleanup.bytesFreed
+            }
+          };
+          await storage.saveLibraryIndex(index);
+        } catch (cleanupError) {
+          recordError(cleanupError, { operation: 'ai-index-orphan-cleanup' });
+        }
+      }
       scanState = {
         status: index.scan?.status || 'completed',
         startedAt,

@@ -257,19 +257,22 @@ function createAiIndexManager({
           status: 'unsafe',
           exists: true,
           sizeBytes: 0,
+          modifiedAt: null,
           requiredTables: []
         };
       }
       stat = linkStat;
     } catch (error) {
       if (error?.code === 'ENOENT') {
-        return { bookId, status: 'missing', exists: false, sizeBytes: 0, requiredTables: [] };
+        return { bookId, status: 'missing', exists: false, sizeBytes: 0, modifiedAt: null, requiredTables: [] };
       }
-      return { bookId, status: 'unavailable', exists: false, sizeBytes: 0, requiredTables: [] };
+      return { bookId, status: 'unavailable', exists: false, sizeBytes: 0, modifiedAt: null, requiredTables: [] };
     }
 
+    const modifiedAt = stat.mtime instanceof Date ? stat.mtime.toISOString() : null;
+
     if (!DatabaseSync) {
-      return { bookId, status: 'unavailable', exists: true, sizeBytes: stat.size, requiredTables: [] };
+      return { bookId, status: 'unavailable', exists: true, sizeBytes: stat.size, modifiedAt, requiredTables: [] };
     }
 
     let db;
@@ -280,18 +283,19 @@ function createAiIndexManager({
       ).all(...REQUIRED_TABLES);
       const requiredTables = tableRows.map((row) => String(row.name));
       if (requiredTables.length !== REQUIRED_TABLES.length) {
-        return { bookId, status: 'corrupt', exists: true, sizeBytes: stat.size, requiredTables };
+        return { bookId, status: 'corrupt', exists: true, sizeBytes: stat.size, modifiedAt, requiredTables };
       }
       const metaRows = db.prepare('SELECT key, value FROM ai_meta').all();
       const metadata = Object.fromEntries(metaRows.map((row) => [String(row.key), String(row.value)]));
       if (metadata.bookId !== bookId || !metadata.fingerprint || !metadata.schemaVersion) {
-        return { bookId, status: 'corrupt', exists: true, sizeBytes: stat.size, requiredTables };
+        return { bookId, status: 'corrupt', exists: true, sizeBytes: stat.size, modifiedAt, requiredTables };
       }
       return {
         bookId,
         status: Number(metadata.schemaVersion) === schemaVersion ? 'ready' : 'stale',
         exists: true,
         sizeBytes: stat.size,
+        modifiedAt,
         pageCount: await readPragma(db, 'page_count'),
         pageSize: await readPragma(db, 'page_size'),
         freelistCount: await readPragma(db, 'freelist_count'),
@@ -299,7 +303,7 @@ function createAiIndexManager({
         metadata
       };
     } catch {
-      return { bookId, status: 'corrupt', exists: true, sizeBytes: stat.size, requiredTables: [] };
+      return { bookId, status: 'corrupt', exists: true, sizeBytes: stat.size, modifiedAt, requiredTables: [] };
     } finally {
       db?.close();
     }
@@ -439,6 +443,7 @@ function createAiIndexManager({
     );
     const deleted = [];
     const skipped = [];
+    const manifestRemoved = [];
     let bytesFreed = 0;
 
     if (kind === 'orphans' || kind === 'all') {
@@ -458,6 +463,24 @@ function createAiIndexManager({
           else throw error;
         }
       }
+
+      const manifest = await loadManifest();
+      let manifestChanged = false;
+      for (const bookId of Object.keys(manifest.entries)) {
+        if (books.has(bookId)) continue;
+        let exists = false;
+        try {
+          await fs.lstat(getIndexPath(bookId));
+          exists = true;
+        } catch (error) {
+          if (error?.code !== 'ENOENT') throw error;
+        }
+        if (exists) continue;
+        delete manifest.entries[bookId];
+        manifestRemoved.push(bookId);
+        manifestChanged = true;
+      }
+      if (manifestChanged) await publishManifest(manifest);
     }
 
     if (kind === 'temporary' || kind === 'all') {
@@ -484,7 +507,7 @@ function createAiIndexManager({
         bytesFreed += stat.size;
       }
     }
-    return { kind, deleted, skipped, bytesFreed };
+    return { kind, deleted, skipped, manifestRemoved, bytesFreed };
   }
 
   async function listIndexes({ libraryIndex = null, scanHealthy = true } = {}) {
@@ -519,7 +542,8 @@ function createAiIndexManager({
         format: book?.type || '',
         status,
         sizeBytes: inspection.sizeBytes || entry?.sizeBytes || 0,
-        indexedAt: entry?.indexedAt || null,
+        indexedAt: entry?.indexedAt || inspection.modifiedAt || null,
+        indexedAtSource: entry?.indexedAt ? 'manifest' : inspection.modifiedAt ? 'file-mtime' : null,
         lastAccessedAt: entry?.lastAccessedAt || null,
         schemaVersion: Number(inspection.metadata?.schemaVersion || entry?.schemaVersion || 0) || null,
         fingerprint: inspection.metadata?.fingerprint || entry?.fingerprint || '',
@@ -539,6 +563,7 @@ function createAiIndexManager({
         status: 'missing',
         sizeBytes: 0,
         indexedAt: entry.indexedAt,
+        indexedAtSource: entry.indexedAt ? 'manifest' : null,
         lastAccessedAt: entry.lastAccessedAt,
         schemaVersion: entry.schemaVersion,
         fingerprint: entry.fingerprint,

@@ -158,6 +158,8 @@ sh /var/apps/babyreader-fnos/target/docs/fnos-device-acceptance.sh check | tee /
 4. 清理孤儿与临时文件需要二次确认；书库扫描失败或 completed-with-errors 时，孤儿清理返回失败且不删除任何文件。
 5. 重新打开管理器后，列表会重新从服务端读取；失败时可重试，不残留重复 surface。
 6. 重启服务后，索引仍可读取；manifest 损坏时只恢复管理元数据，不删除可用 SQLite 文件。
+7. 删除授权书库中的一本书后运行一次健康书库扫描，确认对应 SQLite 索引和 manifest 条目自动消失；扫描返回的 `scan.indexCleanup` 只包含 `attempted`、删除/跳过/manifest 数量和 `bytesFreed`，不包含路径、bookId、正文或 API Key。
+8. 临时断开或移除一个书库根目录后运行扫描，确认索引保留；恢复根目录并再次健康扫描，确认孤儿清理恢复。旧索引没有 manifest 建立记录时，列表仍显示文件更新时间。
 
 通过标准：
 
@@ -357,6 +359,7 @@ sh scripts/fnos-device-acceptance.sh compare \
 | PDF 授权 Range GET（closed/open/suffix/HEAD/full）、416 与断连 | 待验 | 待验 | synthetic fixture acceptance 输出 |
 | PDF FTS 页 locator、image-only/超限错误与 SQLite 权限 | 待验 | 待验 | synthetic fixture + acceptance 输出 |
 | PDF 资源上限冷/热耗时与 RSS | 待验 | 待验 | x86_64/ARM64 匿名设备数据 |
+| 健康扫描后的书籍-索引联动 | 待验 | 待验 | scan.indexCleanup 与索引目录记录 |
 | manifest/临时文件恢复 | 待验 | 待验 | 重启与清理日志 |
 | 原版本 → 新版本升级 | 待验 | 待验 | before/after snapshot |
 | 阅读进度/划线保留 | 待验 | 待验 | 两用户人工复核 |

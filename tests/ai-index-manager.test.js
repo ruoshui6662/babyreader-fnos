@@ -84,6 +84,36 @@ test('read-only inspection returns required schema and SQLite size statistics', 
   assert.ok(Number.isInteger(result.freelistCount));
 });
 
+test('read-only inspection exposes the regular file mtime without creating a manifest', {
+  skip: !DatabaseSync
+}, async (t) => {
+  const dataRoot = await temporaryDirectory(t);
+  const filePath = await createValidIndex(dataRoot, BOOK_ID);
+  const expectedTime = new Date('2026-09-22T00:52:04.000Z');
+  await fs.utimes(filePath, expectedTime, expectedTime);
+  const manager = createAiIndexManager({ dataRoot });
+
+  const result = await manager.inspectIndexFile(filePath);
+
+  assert.equal(result.modifiedAt, expectedTime.toISOString());
+  assert.equal(await fs.stat(manager.getManifestPath()).then(() => true).catch(() => false), false);
+});
+
+test('unsafe and missing index inspections never report a modification time', async (t) => {
+  const dataRoot = await temporaryDirectory(t);
+  const manager = createAiIndexManager({ dataRoot });
+  const directoryPath = manager.getIndexPath(BOOK_ID);
+  await fs.mkdir(directoryPath, { recursive: true });
+
+  const unsafe = await manager.inspectIndexFile(directoryPath);
+  const missing = await manager.inspectIndexFile(manager.getIndexPath(ORPHAN_ID));
+
+  assert.equal(unsafe.status, 'unsafe');
+  assert.equal(unsafe.modifiedAt, null);
+  assert.equal(missing.status, 'missing');
+  assert.equal(missing.modifiedAt, null);
+});
+
 test('recordBuildSuccess writes only non-sensitive manifest metadata atomically', async (t) => {
   const dataRoot = await temporaryDirectory(t);
   const manager = createAiIndexManager({ dataRoot, now: () => new Date('2026-09-21T05:11:32.835Z') });
@@ -166,6 +196,26 @@ test('listIndexes distinguishes ready, orphan, and manifest-only missing indexes
   assert.equal(result.summary.missing, 1);
 });
 
+test('listIndexes falls back to file mtime for legacy indexes and does not write a manifest', {
+  skip: !DatabaseSync
+}, async (t) => {
+  const dataRoot = await temporaryDirectory(t);
+  const filePath = await createValidIndex(dataRoot, BOOK_ID);
+  const expectedTime = new Date('2026-09-22T00:52:04.000Z');
+  await fs.utimes(filePath, expectedTime, expectedTime);
+  const manager = createAiIndexManager({ dataRoot });
+
+  const result = await manager.listIndexes({
+    libraryIndex: [{ id: BOOK_ID, title: '旧索引书', type: 'epub' }],
+    scanHealthy: true
+  });
+  const item = result.items.find((entry) => entry.bookId === BOOK_ID);
+
+  assert.equal(item.indexedAt, expectedTime.toISOString());
+  assert.equal(item.indexedAtSource, 'file-mtime');
+  await assert.rejects(() => fs.access(manager.getManifestPath()), { code: 'ENOENT' });
+});
+
 test('malformed manifest is recoverable without deleting a valid index', {
   skip: !DatabaseSync
 }, async (t) => {
@@ -197,6 +247,82 @@ test('unhealthy library scan refuses to infer orphan indexes', {
   assert.equal(result.scanHealthy, false);
   assert.equal(result.summary.orphan, 0);
   assert.equal(result.items.find((item) => item.bookId === ORPHAN_ID).status, 'unknown');
+});
+
+test('orphan cleanup removes manifest-only entries and keeps active indexes for retry', async (t) => {
+  const dataRoot = await temporaryDirectory(t);
+  const manager = createAiIndexManager({ dataRoot });
+  const orphanPath = await createValidIndex(dataRoot, ORPHAN_ID);
+  await manager.recordBuildSuccess(
+    { id: ORPHAN_ID },
+    { filePath: orphanPath, fingerprint: 'fingerprint-1', schemaVersion: 2 }
+  );
+  await fs.rm(orphanPath);
+
+  let release;
+  const gate = new Promise((resolve) => {
+    release = resolve;
+  });
+  const build = manager.withBuildLease(BOOK_ID, () => gate);
+  const activePath = await createValidIndex(dataRoot, BOOK_ID);
+
+  const first = await manager.cleanup({
+    kind: 'orphans',
+    libraryIndex: [],
+    scanHealthy: true,
+    confirm: true
+  });
+
+  assert.deepEqual(first.manifestRemoved, [ORPHAN_ID]);
+  assert.equal(first.skipped.length, 1);
+  assert.equal(first.skipped[0].reason, 'INDEX_BUSY');
+  await fs.access(activePath);
+  release();
+  await build;
+
+  const second = await manager.cleanup({
+    kind: 'orphans',
+    libraryIndex: [],
+    scanHealthy: true,
+    confirm: true
+  });
+  assert.equal(second.deleted.length, 1);
+  await assert.rejects(() => fs.access(activePath), { code: 'ENOENT' });
+  const manifest = JSON.parse(await fs.readFile(manager.getManifestPath(), 'utf8'));
+  assert.equal(manifest.entries[ORPHAN_ID], undefined);
+});
+
+test('orphan cleanup leaves current, invalid, non-SQLite, directory, and link targets untouched', {
+  skip: process.platform === 'win32'
+}, async (t) => {
+  const dataRoot = await temporaryDirectory(t);
+  const manager = createAiIndexManager({ dataRoot });
+  const currentPath = await createValidIndex(dataRoot, BOOK_ID);
+  const directory = path.dirname(currentPath);
+  const invalidPath = path.join(directory, 'not-a-book.sqlite');
+  const directoryPath = path.join(directory, MISSING_ID + '.sqlite');
+  const nonSqlitePath = path.join(directory, ORPHAN_ID + '.txt');
+  const linkPath = path.join(directory, ORPHAN_ID + '.sqlite');
+  const outsidePath = path.join(dataRoot, 'outside.sqlite');
+  await fs.writeFile(invalidPath, 'invalid-name');
+  await fs.mkdir(directoryPath);
+  await fs.writeFile(nonSqlitePath, 'not-an-index');
+  await fs.writeFile(outsidePath, 'outside');
+  await fs.symlink(outsidePath, linkPath);
+
+  await manager.cleanup({
+    kind: 'orphans',
+    libraryIndex: [{ id: BOOK_ID }],
+    scanHealthy: true,
+    confirm: true
+  });
+
+  await fs.access(currentPath);
+  await fs.access(invalidPath);
+  await fs.access(directoryPath);
+  await fs.access(nonSqlitePath);
+  await fs.access(linkPath);
+  await fs.access(outsidePath);
 });
 
 test('build leases serialize the same book and release after failures', async (t) => {

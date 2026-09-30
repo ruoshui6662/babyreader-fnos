@@ -161,3 +161,49 @@ test('cleanup fails closed when the library scan is not healthy', async () => {
   assert.equal(response.status, 503);
   await fs.access(orphanPath);
 });
+
+test('healthy library scan removes indexes for deleted books and exposes only cleanup counts', async () => {
+  const manager = createAiIndexManager({ dataRoot: DATA_ROOT });
+  const indexPath = manager.getIndexPath(BOOK_ID);
+  const orphanPath = manager.getIndexPath(ORPHAN_ID);
+  await fs.mkdir(path.dirname(indexPath), { recursive: true });
+  await fs.writeFile(indexPath, 'book-index');
+  await fs.writeFile(orphanPath, 'orphan-index');
+
+  await fs.rm(BOOK_PATH);
+  const response = await request('/app/babyreader-fnos/api/library/scan', {
+    method: 'POST'
+  });
+
+  assert.equal(response.status, 200);
+  assert.deepEqual(response.body.scan.indexCleanup, {
+    attempted: true,
+    deletedCount: 2,
+    skippedCount: 0,
+    manifestRemovedCount: 0,
+    bytesFreed: Buffer.byteLength('book-index') + Buffer.byteLength('orphan-index')
+  });
+  assert.equal(JSON.stringify(response.body.scan.indexCleanup).includes(DATA_ROOT), false);
+  assert.equal(JSON.stringify(response.body.scan.indexCleanup).includes(BOOK_ID), false);
+  await assert.rejects(() => fs.access(indexPath), { code: 'ENOENT' });
+  await assert.rejects(() => fs.access(orphanPath), { code: 'ENOENT' });
+});
+
+test('rejected library roots preserve indexes during automatic cleanup', async () => {
+  const orphanId = 'f'.repeat(64);
+  const manager = createAiIndexManager({ dataRoot: DATA_ROOT });
+  const orphanPath = manager.getIndexPath(orphanId);
+  await fs.mkdir(path.dirname(orphanPath), { recursive: true });
+  await fs.writeFile(orphanPath, 'keep-index');
+  await fs.writeFile(path.join(CONFIG_ROOT, 'settings.json'), JSON.stringify({
+    libraryRoots: [path.join(SANDBOX, 'missing-library-root')]
+  }));
+
+  const response = await request('/app/babyreader-fnos/api/library/scan', {
+    method: 'POST'
+  });
+
+  assert.equal(response.status, 200);
+  assert.equal(response.body.scan.indexCleanup, undefined);
+  await fs.access(orphanPath);
+});
