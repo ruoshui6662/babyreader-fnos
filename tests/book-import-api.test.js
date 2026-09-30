@@ -35,6 +35,10 @@ const ADMIN = { 'x-trim-userid': 'admin', 'x-trim-isadmin': 'true' };
 const READER = { 'x-trim-userid': 'reader', 'x-trim-isadmin': 'false' };
 let server;
 let baseUrl;
+// Built once: ZIP entries record the build time (2 s resolution), so rebuilding
+// "the same" book can yield different bytes and must not be relied on as a
+// duplicate.
+let firstBookBytes;
 
 function epubBytes(title) {
   return Buffer.from(zipSync({
@@ -104,7 +108,8 @@ test('only administrators, from this origin and with the import header, may uplo
 });
 
 test('an EPUB import lands in the share, joins the catalog at once and is readable', async () => {
-  const bytes = epubBytes('导入的书');
+  firstBookBytes = epubBytes('导入的书');
+  const bytes = firstBookBytes;
   const result = await upload(bytes, '我的书.epub');
   assert.equal(result.status, 201);
   assert.equal(result.body.name, '我的书.epub');
@@ -127,7 +132,7 @@ test('an EPUB import lands in the share, joins the catalog at once and is readab
 
 test('the same content is refused as a duplicate; a new book with the same name is renamed', async () => {
   const first = (await library()).books.find((item) => item.title === '导入的书');
-  const duplicate = await upload(epubBytes('导入的书'), '另一个名字.epub');
+  const duplicate = await upload(firstBookBytes, '另一个名字.epub');
   assert.equal(duplicate.status, 409);
   assert.equal(duplicate.body.code, 'IMPORT_DUPLICATE');
   assert.equal(duplicate.body.bookId, first.id);

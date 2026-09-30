@@ -5,7 +5,7 @@
 const DOUBLE_PAGE_MIN_WIDTH = 900;
 // Centre seam. WeChat Reading web measures 98px between the two text columns
 // at 1440x900 (column 457px, card padding 70px each side).
-const DEFAULT_PAGE_GAP = 98;
+const DEFAULT_PAGE_GAP = 84;
 const MIN_PAGE_WIDTH = 240;
 // Body text must stop short of the floating toolbar. Folded into the right
 // inset so the multicol track never runs underneath it.
@@ -25,10 +25,13 @@ const MIN_OUTER_MARGIN = 40;
 const TOOLBAR_BAND = 40;
 // Larger effective reading area: reduce the outer bands and internal vertical
 // padding while keeping enough breathing room around chapter headings.
-const READER_TOP_BAND = 56;
-const READER_BOTTOM_BREATH = 40;
-const PAPER_PAD_TOP = 64;
-const PAPER_PAD_BOTTOM = 56;
+// 2026-09-30: tightened towards WeChat Reading's web spread (user feedback:
+// the double page read slightly small). The bottom inset keeps room for the
+// 32px page-turn pills so they never overlap the last line.
+const READER_TOP_BAND = 40;
+const READER_BOTTOM_BREATH = 24;
+const PAPER_PAD_TOP = 56;
+const PAPER_PAD_BOTTOM = 60;
 // Hard floor so a short window still shows a usable column.
 const MIN_VERTICAL_PADDING = 40;
 
@@ -63,11 +66,11 @@ function createPaginationGeometry({
   const requestedMargin = Math.max(0, Number(pageMargin) || 0);
   const mobile = viewportWidth <= 800;
   // Inner text inset of the card. The user's margin slider (8..96, default 40)
-  // maps onto the measured WeChat inset of 70px, so the default setting lands
+  // maps onto a 56px inset (tightened from the earlier 70px), so the default setting lands
   // on the baseline look and the slider still moves both ways.
   const columnPadding = mobile
     ? Math.max(16, Math.min(32, Math.round(requestedMargin * 0.8)))
-    : Math.max(24, Math.min(96, Math.round(requestedMargin * 1.75)));
+    : Math.max(24, Math.min(84, Math.round(requestedMargin * 1.4)));
   // The gap between consecutive columns doubles as the paper's trailing inset:
   // column k+1 starts at padding + columns*(cw+gap). It must clear the paper's
   // right edge (2*padding + columns*cw + (columns-1)*gap), i.e. gap >= padding.

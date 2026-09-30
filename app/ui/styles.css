@@ -7230,3 +7230,31 @@ html:not([data-reader-surface="mobile"]) .reader-floating-toolbar #btnBookmarks[
 html:not([data-reader-surface="mobile"]) .reader-floating-toolbar button:disabled {
   opacity: .45;
 }
+
+/* Double-page page-turn pills: small and quiet, inside the paper's bottom
+   inset (60px) so they never cover the last line of text. */
+@media (min-width: 801px) {
+  .reader .reader-page-nav-btn:not([hidden]) {
+    bottom: calc(var(--reader-band-bottom, 24px) + env(safe-area-inset-bottom, 0px) + 16px) !important;
+    width: 72px;
+    min-width: 72px;
+    height: 32px;
+    min-height: 32px;
+    padding: 0 10px;
+    color: var(--color-text-3);
+    background: color-mix(in srgb, var(--color-text) 5%, transparent);
+    border: 0;
+    box-shadow: none;
+  }
+  .reader #btnPreviousPage:not([hidden]) {
+    left: calc(var(--reader-inset-left, 0px) + 16px);
+  }
+  .reader #btnNextPage:not([hidden]) {
+    right: calc(var(--reader-inset-right, 0px) + 16px);
+  }
+  .reader .reader-page-nav-btn:not([hidden]):hover,
+  .reader .reader-page-nav-btn:not([hidden]):focus-visible {
+    color: var(--color-text);
+    background: color-mix(in srgb, var(--color-text) 9%, transparent);
+  }
+}

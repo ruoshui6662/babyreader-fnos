@@ -574,10 +574,10 @@ test('double-page navigation places previous and next controls at the lower corn
   const next = page.locator('#btnNextPage');
   await expect(previous).toHaveCSS('position', 'absolute');
   await expect(next).toHaveCSS('position', 'absolute');
-  await expect(previous).toHaveCSS('width', '80px');
-  await expect(previous).toHaveCSS('height', '40px');
-  await expect(next).toHaveCSS('width', '80px');
-  await expect(next).toHaveCSS('height', '40px');
+  await expect(previous).toHaveCSS('width', '72px');
+  await expect(previous).toHaveCSS('height', '32px');
+  await expect(next).toHaveCSS('width', '72px');
+  await expect(next).toHaveCSS('height', '32px');
   await expect(previous).not.toHaveCSS('left', 'auto');
   await expect(next).not.toHaveCSS('right', 'auto');
 
@@ -599,7 +599,8 @@ test('double-page navigation places previous and next controls at the lower corn
 });
 
 test('last page group stays aligned when chapter navigation reaches an odd final page', async ({ page }) => {
-  await page.setViewportSize({ width: 1280, height: 800 });
+  // The fixture ends on 7 pages here (6 at 1280x800); 700-760px tall all give 7.
+  await page.setViewportSize({ width: 1280, height: 720 });
   await openEpubFixture(page);
   if (await page.locator('#readerDrawer').isVisible()) {
     await page.locator('#btnCloseSettings').click();
