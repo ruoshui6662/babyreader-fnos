@@ -177,16 +177,16 @@
 
 ### Task 3：接入阅读、搜索与 AI（约 2 天）
 
-- [ ] `index.js`：
+- [x] `index.js`：
   - `findBook` 在源文件授权通过后，通过 `resolveBookContent` 取得派生 EPUB；
   - 转换中的书返回 `409 preparing`；
   - `publicBook` 对外把 MOBI 映射为 `type:"epub"` 加 `format`。
-- [ ] `ai-fts.js`、`ai-book-context.js`、`book-search.js` 改用 `isEpubLike`；解析器版本键包含转换器版本。
-- [ ] 前端：
+- [x] `ai-fts.js`、`ai-book-context.js`、`book-search.js` 改用 `isEpubLike`；解析器版本键包含转换器版本。
+- [x] 前端：
   - `libraryBookFormatLabel` 增加 MOBI/AZW3；
   - 打开时收到 `preparing` 状态，就显示可访问的等待提示，并按退避策略重试；
   - 进度、划线、书签、导出沿用 EPUB 的实现，不做改动。
-- [ ] 测试：
+- [x] 测试：
   - API 层面：MOBI 书的内容接口返回 EPUB，指纹变化后自动重建；
   - E2E（新增 `e2e/mobi-reader.spec.js`）：打开、翻章、划线、刷新后恢复、全文搜索命中后精确跳转；
   - 全量回归：EPUB/PDF 用例全部保持原有结果。

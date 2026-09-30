@@ -204,3 +204,54 @@
   - 合成的 KF8 样本没有 FDST 和骨架表，现在会按 `CORRUPT` 拒绝，**不会回退到 MOBI6 路径**。
 - [ ] HUFF/CDIC 压缩：解压代码来自上游，还没有专门的样本覆盖。
 
+## Task 3：接入阅读、搜索与 AI
+
+状态：**本地完成**（2026-09-30），开关仍然默认关闭。
+
+### 实现
+
+- **`findBook` 返回 EPUB 视图**：对于 MOBI 书，先对源文件做授权校验，再调用 `mobiDerived.ensure()`，然后返回 `{...book, type:'epub', path:<派生文件>, sourceType:'mobi'}`。
+  - 读取内容的接口（内容、搜索、FTS、AI 上下文）因此**完全不用改**，而且不可能读到 Kindle 原始字节：默认就是这条"内容安全"的路径，只有封面接口通过 `allowMobiMetadata` 拿到原始的书籍记录。
+  - FTS 的缓存键由派生文件的路径、大小和修改时间组成，路径里又带着转换器版本号，所以转换器升级后索引会自动重建。
+- **错误映射**：错误响应会带上可供程序判断的 `code` 字段。
+
+  | 情况 | 状态码 | code |
+  | --- | --- | --- |
+  | 转换中 | 409 | `MOBI_PREPARING` |
+  | DRM | 415 | `MOBI_DRM_PROTECTED` |
+  | 过大 | 413 | `MOBI_TOO_LARGE` |
+  | 源文件已变化 | 409 | `MOBI_SOURCE_CHANGED`（需重新扫描） |
+  | 超时 | 503 | `MOBI_TIMEOUT` |
+  | 损坏或无法转换 | 422 | `MOBI_CORRUPT` 等 |
+
+  全局错误处理在 `error.publicCode` 存在时，会把它作为 `code` 一并输出。
+- **`publicBook`**：对外把 `type:'mobi'` 映射成 `type:'epub'`，并加上 `format:'mobi'|'azw3'`。前端阅读器因此零改动，书卡标签按 `format` 显示。
+- **缓存清理**：扫描健康时（条件与 AI 孤儿索引清理相同）调用 `mobiDerived.prune(index.books)`；扫描不健康时不删任何派生文件。
+- **前端**：`apiRequest` 的错误对象会带上服务端返回的 `code`。`openBook` 遇到 `MOBI_PREPARING` 时，先提示"正在准备这本书，请稍候…"，再按 1.5、3、5、8、12、20 秒的间隔依次重试；其他错误不重试。
+
+### 与计划的差异
+
+- 计划原本打算在 `ai-fts.js`、`ai-book-context.js`、`book-search.js` 中改用 `isEpubLike(book)` 判断。实际改为在 `findBook` 层返回 EPUB 视图，这三个模块**零改动**，改动面更小，也不存在漏改的风险。
+
+### 验证
+
+- `tests/mobi-library.test.js` 的 API 测试已按 Task 3 契约重写，覆盖：
+  - 对外类型为 epub 并带有真实格式；
+  - 内容接口返回有效的 EPUB，派生文件唯一；
+  - 全文搜索命中 MOBI 正文，`chapterHref` 符合 `part-NNNN` 命名规则；
+  - 阅读进度能保存；
+  - 合成的 AZW3 返回 422 `MOBI_CORRUPT`；
+  - 开关关闭后，内容和封面都返回 404。
+- DOM 测试：客户端遇到"转换中"会重试两次后成功；遇到损坏的书不重试。
+- **新增 `e2e/mobi-reader.spec.js`（4/4）**：在真实 Chromium 中完成打开、目录跳转、全文搜索跳转到命中位置、返回书库后从"继续阅读"恢复进度。该用例会自己放入样本、打开开关、重新扫描，结束后全部还原，不影响其他 spec。
+- **全量回归**（按顺序逐项串行执行）：
+  - `npm test`：587 项，577 通过、0 失败、10 跳过（新增的 1 项跳过是未设置 `BABYREADER_KF8_SAMPLE` 的真实样本测试）；
+  - `npm run check`、`git diff --check` 通过；
+  - 书库组织专项 23/23；
+  - Chromium E2E：134 通过、10 失败、26 跳过。其中 9 项与基线名单逐一相同；第 10 项 `sepia reader returns to the neutral light library surface` 是**测试本身的时序问题**：点击"返回书库"后立刻单次读取背景色，全量运行负载高时读到的还是切换前的阅读页背景。依据：单独运行 3/3 通过；紧接 MOBI spec 之后按原顺序运行 2/2 通过。这条断言是首页改版时写的，已改为会自动重试的 `toHaveCSS` 断言，改后通过。
+- **回归过程中的问题**：`tests/pdf-ai-profile.test.js` 第一次运行时卡死超过 17 分钟。它及其被测代码与 `main` 完全一致，不涉及 MOBI；单独运行 11 次，失败 1 次、卡死 0 次，属于既有的间歇性问题（9/28 的记录中已出现过）。之后因为操作失误，两轮回归同时运行，争抢 CPU 和 8099 端口，第二轮也卡住了；两轮都已停止并清理，然后重新串行执行。目前 `npm test` 已加上 `--test-timeout=180000` 作为防护。建议另开任务专门排查这个测试。
+- **真实书目视检**（Project Gutenberg 的 AZW3 样本，预览环境打开 MOBI 开关）：
+  - 书架显示书中自带的真实封面，标签为 AZW3；
+  - 打开后封面页正确显示原本嵌在 SVG 流中的插图；
+  - 目录完整；
+  - 跳转到 "CHAPTER I. Down the Rabbit-Hole" 后，正文排版正常，原书的斜体保留，进度显示为 21% · 5/19。

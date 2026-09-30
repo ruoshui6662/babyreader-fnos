@@ -545,6 +545,38 @@ test('library rescan shows safe progress and outcome feedback', async () => {
   assert.doesNotMatch(article.textContent, /permission denied|\/var\/|root|path/i);
 });
 
+test('opening a MOBI book waits through server-side preparation and then receives the derived EPUB', async () => {
+  const { window } = await createReaderDom();
+  const calls = [];
+  const replies = [
+    { ok: false, status: 409, body: { error: '正在准备这本书，请稍候…', code: 'MOBI_PREPARING' } },
+    { ok: false, status: 409, body: { error: '正在准备这本书，请稍候…', code: 'MOBI_PREPARING' } },
+    { ok: true, status: 200, body: null }
+  ];
+  window.fetch = async (url) => {
+    calls.push(String(url));
+    const reply = replies.shift();
+    return { ok: reply.ok, status: reply.status, json: async () => reply.body, arrayBuffer: async () => new ArrayBuffer(4) };
+  };
+  const realTimeout = window.setTimeout;
+  window.setTimeout = (callback) => { callback(); return 0; };
+  const received = [];
+  window.appHost.receiveDocument = async (document) => received.push(document);
+  await window.browserHost.openBook({ id: 'a'.repeat(64), type: 'epub', format: 'mobi', title: 'MOBI 书', relativePath: 'a.mobi' });
+  window.setTimeout = realTimeout;
+  assert.equal(calls.length, 3);
+  assert.equal(received.length, 1);
+  assert.equal(received[0].type, 'epub');
+
+  // Other errors are not retried.
+  window.fetch = async () => ({ ok: false, status: 422, json: async () => ({ error: '无法转换这本书，文件可能已损坏。', code: 'MOBI_CORRUPT' }) });
+  await assert.rejects(
+    window.browserHost.openBook({ id: 'b'.repeat(64), type: 'epub', format: 'mobi', title: '坏书', relativePath: 'b.mobi' }),
+    /无法转换这本书/
+  );
+  await window.happyDOM.close();
+});
+
 test('library explains hidden and DRM-protected Kindle books and labels MOBI/AZW3 covers', async () => {
   const { window, api } = await createReaderDom();
   const text = { id: 'a'.repeat(64), title: '已收录文本', type: 'txt' };

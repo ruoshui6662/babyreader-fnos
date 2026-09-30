@@ -11,6 +11,7 @@ const { resolveAuthorizedPath } = require('./security');
 const { parseSingleByteRange } = require('./byte-range');
 const { getPdfReaderEnabled } = require('./pdf-feature-config');
 const { getMobiReaderEnabled } = require('./mobi-feature-config');
+const { createMobiDerivedStore } = require('./mobi-derived');
 const { AiConfigStorage, normalizeAiSettings, publicAiConfig } = require('./ai-config');
 const { validateAiBookContext } = require('./ai-book-context');
 const {
@@ -102,6 +103,7 @@ const CSP = "default-src 'self'; base-uri 'none'; object-src 'none'; frame-ances
 const storage = new UserStorage(DATA_ROOT);
 const aiConfigStorage = new AiConfigStorage(DATA_ROOT);
 const pdfAiProfileStore = createPdfAiProfileStore({ dataRoot: DATA_ROOT });
+const mobiDerived = createMobiDerivedStore({ dataRoot: DATA_ROOT });
 const aiIndexManager = createAiIndexManager({
   dataRoot: DATA_ROOT,
   schemaVersion: AI_FTS_SCHEMA_VERSION,
@@ -202,6 +204,11 @@ async function runLibraryScan() {
           await storage.saveLibraryIndex(index);
         } catch (cleanupError) {
           recordError(cleanupError, { operation: 'ai-index-orphan-cleanup' });
+        }
+        try {
+          await mobiDerived.prune(index.books);
+        } catch (pruneError) {
+          recordError(pruneError, { operation: 'mobi-derived-prune' });
         }
       }
       scanState = {
@@ -756,6 +763,9 @@ async function readJsonBody(request) {
 function publicBook(book) {
   if (!book || book.error) return book;
   const { path: ignoredPath, root: ignoredRoot, ...safe } = book;
+  // Readers open MOBI/AZW3 through their derived EPUB; the real format is kept
+  // for labels only.
+  if (safe.type === 'mobi') return { ...safe, type: 'epub', format: safe.sourceFormat === 'kf8' ? 'azw3' : 'mobi' };
   return safe;
 }
 
@@ -931,13 +941,33 @@ async function findBook(bookId, options = {}) {
   }
   if (book.type === 'mobi') {
     if (!mobiReaderEnabled()) throw Object.assign(new Error('Book not found'), { statusCode: 404 });
-    // Until the MOBI→EPUB converter is wired, raw Kindle bytes must never reach
-    // content, search or AI handlers (they would be read as plain text).
-    if (!options.allowMobiMetadata) {
-      throw Object.assign(new Error('MOBI 阅读尚未就绪'), { statusCode: 409 });
-    }
+    if (!options.allowMobiMetadata) return mobiEpubView(book);
   }
   return book;
+}
+
+const MOBI_ERRORS = Object.freeze({
+  DRM_PROTECTED: [415, '这本书受 DRM 保护，无法阅读。'],
+  TOO_LARGE: [413, '这本书过大，暂不支持阅读。'],
+  SOURCE_CHANGED: [409, '文件已变化，请重新扫描书库后再打开。'],
+  TIMEOUT: [503, '准备这本书超时，请稍后重试。']
+});
+
+// Every handler that reads book content (content, search, FTS, AI) receives a
+// MOBI book as an EPUB view of its authorized, converted derivative, so none of
+// them can ever read the raw Kindle bytes. The source was re-authorized above.
+async function mobiEpubView(book) {
+  let derived;
+  try {
+    derived = await mobiDerived.ensure(book);
+  } catch (error) {
+    const [statusCode, message] = MOBI_ERRORS[error?.code] || [422, '无法转换这本书，文件可能已损坏。'];
+    throw Object.assign(new Error(message), { statusCode, publicCode: `MOBI_${error?.code || 'CONVERSION_FAILED'}` });
+  }
+  if (derived.status !== 'ready') {
+    throw Object.assign(new Error('正在准备这本书，请稍候…'), { statusCode: 409, publicCode: 'MOBI_PREPARING' });
+  }
+  return { ...book, type: 'epub', path: derived.path, sourceType: 'mobi', sourcePath: book.path };
 }
 
 async function currentPdfFingerprint(book) {
@@ -1966,6 +1996,9 @@ async function handleRequest(request, response) {
     if (error.code === 'ENOENT') return sendError(response, 404, 'Not found');
     recordError(error, { method: request.method, url: request.url });
     console.error(error);
+    if (error.statusCode && error.publicCode) {
+      return sendJson(response, error.statusCode, { error: error.message, code: error.publicCode });
+    }
     return sendError(response, error.statusCode || 500, error.statusCode ? error.message : 'Internal server error');
   }
 }

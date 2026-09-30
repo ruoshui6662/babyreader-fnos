@@ -14,9 +14,30 @@ async function apiRequest(path, options = {}) {
   });
   if (!response.ok) {
     const detail = await response.json().catch(() => ({}));
-    throw Object.assign(new Error(detail.error || `请求失败：${response.status}`), { status: response.status });
+    throw Object.assign(new Error(detail.error || `请求失败：${response.status}`), {
+      status: response.status,
+      ...(typeof detail.code === 'string' ? { code: detail.code } : {})
+    });
   }
   return response;
+}
+
+const MOBI_PREPARE_RETRY_MS = [1500, 3000, 5000, 8000, 12000, 20000];
+
+// MOBI/AZW3 books are converted on first open; the server answers
+// MOBI_PREPARING while that runs, so keep the user informed and retry.
+async function requestBookContent(book) {
+  for (let attempt = 0; ; attempt += 1) {
+    try {
+      return await apiRequest(`/books/${encodeURIComponent(book.id)}/content`, {
+        headers: { Accept: book.type === 'epub' ? 'application/epub+zip' : 'text/plain' }
+      });
+    } catch (error) {
+      if (error.code !== 'MOBI_PREPARING' || attempt >= MOBI_PREPARE_RETRY_MS.length) throw error;
+      if (attempt === 0 && typeof showHighlightHint === 'function') showHighlightHint('正在准备这本书，请稍候…');
+      await new Promise((resolve) => setTimeout(resolve, MOBI_PREPARE_RETRY_MS[attempt]));
+    }
+  }
 }
 
 async function readAiEventStream(response, handlers = {}) {
@@ -173,9 +194,7 @@ window.browserHost = {
         bookId: book.id
       });
     }
-    const response = await apiRequest(`/books/${encodeURIComponent(book.id)}/content`, {
-      headers: { Accept: book.type === 'epub' ? 'application/epub+zip' : 'text/plain' }
-    });
+    const response = await requestBookContent(book);
     if (book.type === 'epub') {
       return window.appHost.receiveDocument({
         path: book.relativePath,

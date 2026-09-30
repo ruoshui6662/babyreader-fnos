@@ -153,27 +153,51 @@ test.describe('library API', () => {
     assert.equal(organization.books.length, 2);
   });
 
-  test('MOBI enabled after a rescan: listed with metadata and cover, but content stays closed', async () => {
+  test('MOBI enabled after a rescan: listed as EPUB with its format, read and searched through the derived EPUB', async () => {
     setMobiReaderEnabled(CONFIG_ROOT, 'true');
     const library = await scan();
     assert.equal(library.features.mobiReader, true);
     assert.equal(library.features.hiddenMobiCount, 0);
     assert.equal(library.features.drmProtectedMobiCount, 1);
     const novel = library.books.find((book) => book.title === '小说');
-    assert.equal(novel.type, 'mobi');
+    assert.equal(novel.type, 'epub', 'readers open MOBI through the derived EPUB');
+    assert.equal(novel.format, 'mobi');
     assert.equal(novel.path, undefined, 'paths stay redacted');
+    assert.equal(library.books.find((book) => book.title === '新格式').format, 'azw3');
 
     const cover = await fetch(`${baseUrl}/api/books/${novel.id}/cover`, { headers: READER });
     assert.equal(cover.status, 200);
     assert.equal(cover.headers.get('content-type'), 'image/png');
 
-    for (const suffix of ['content', 'search?q=%E7%AB%A0']) {
-      const response = await fetch(`${baseUrl}/api/books/${novel.id}/${suffix}`, { headers: READER });
-      assert.equal(response.status, 409, suffix);
-      assert.match((await response.json()).error, /MOBI/);
-    }
+    const content = await fetch(`${baseUrl}/api/books/${novel.id}/content`, { headers: READER });
+    assert.equal(content.status, 200);
+    assert.equal(content.headers.get('content-type'), 'application/epub+zip');
+    const epub = Buffer.from(await content.arrayBuffer());
+    assert.equal(epub.toString('latin1', 30, 38), 'mimetype');
+    assert.equal(require('../app/server/library').extractEpubMetadata(epub).title, '小说');
+    const derived = await fs.readdir(path.join(DATA_ROOT, 'derived'));
+    assert.equal(derived.filter((name) => name.startsWith(novel.id)).length, 1);
+
+    const search = await fetch(`${baseUrl}/api/books/${novel.id}/search?q=${encodeURIComponent('重复检索词')}&scope=book&limit=20`, { headers: READER });
+    assert.equal(search.status, 200);
+    const results = await search.json();
+    assert.ok(results.results.length >= 2, 'full-text search reads the derived EPUB');
+    assert.ok(results.results.every((result) => /(^|\/)text\/part-\d{4}\.xhtml$/.test(result.chapterHref)), JSON.stringify(results.results[0]?.chapterHref));
+
+    const progress = await fetch(`${baseUrl}/api/books/${novel.id}/progress`, {
+      method: 'PUT', headers: { ...READER, 'content-type': 'application/json' },
+      body: JSON.stringify({ locator: 'text/part-0002.xhtml', percentage: 0.4 })
+    });
+    assert.equal(progress.status, 200);
+
+    // The synthetic AZW3 has no KF8 tables: a clear, typed refusal, not raw bytes.
+    const modern = library.books.find((book) => book.title === '新格式');
+    const refused = await fetch(`${baseUrl}/api/books/${modern.id}/content`, { headers: READER });
+    assert.equal(refused.status, 422);
+    assert.equal((await refused.json()).code, 'MOBI_CORRUPT');
+
     const organization = await (await fetch(`${baseUrl}/api/library/organization`, { headers: READER })).json();
-    assert.ok(organization.books.some((book) => book.id === novel.id));
+    assert.equal(organization.books.find((book) => book.id === novel.id).type, 'epub');
   });
 
   test('switching MOBI off again hides indexed Kindle books and closes their endpoints', async () => {
