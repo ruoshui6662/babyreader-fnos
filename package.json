@@ -1,6 +1,6 @@
 {
   "name": "babyreader-fnos",
-  "version": "1.1.2",
+  "version": "1.1.7",
   "description": "BabyReader EPUB, Markdown and TXT reader for fnOS",
   "main": "app/server/index.js",
   "directories": {
@@ -15,7 +15,8 @@
     "check": "node scripts/validate-structure.js",
     "check:portable": "node scripts/validate-structure.js --portable",
     "check:posix": "node scripts/validate-structure.js --posix",
-    "test:e2e": "playwright test --project=chromium",
+    "test:e2e": "playwright test --project=chromium && npm run test:e2e:organization",
+    "test:e2e:organization": "node scripts/test-library-organization-e2e.js",
     "build:fpk": "bash scripts/build-fpk.sh"
   },
   "keywords": [],
@@ -24,6 +25,7 @@
   "type": "commonjs",
   "dependencies": {
     "fflate": "^0.8.3",
+    "pdfjs-dist": "6.3.289",
     "sanitize-html": "^2.17.7"
   },
   "devDependencies": {

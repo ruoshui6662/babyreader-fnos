@@ -189,6 +189,7 @@ function invalidateEpubChapterRender() {
 }
 
 async function renderEpubChapter(index, options = {}) {
+  if (typeof clearSearchHit === 'function') clearSearchHit();
   const archive = state.epubArchive;
   const article = document.getElementById('article');
   const reader = document.getElementById('reader');
@@ -204,9 +205,12 @@ async function renderEpubChapter(index, options = {}) {
   updateEpubChapterStatus(index);
   updatePaginationControls();
   updateReadingProgress({ chapterIndexHint: state.epubChapterIndex });
+  let chapterResourceLease = null;
+  let chapterLeaseCommitted = false;
 
   try {
     const chapter = await loadEpubChapter(archive, index);
+    chapterResourceLease = chapter.resourceLease || null;
     if (!isCurrent()) return false;
 
     // Validate against the same loaded result that will be mounted. A broken
@@ -219,7 +223,13 @@ async function renderEpubChapter(index, options = {}) {
       }
     }
 
+    const previousLease = archive.activeChapterLease || null;
     article.innerHTML = chapter.html;
+    archive.activeChapterLease = chapterResourceLease;
+    chapterLeaseCommitted = true;
+    if (previousLease && previousLease !== chapterResourceLease) {
+      archive.resourceManager?.release(previousLease);
+    }
     // Replacing the mounted chapter starts a new scroll surface. Locator
     // restoration, when requested, runs after pagination has settled.
     const resetScroll = options.resetScroll !== false;
@@ -266,6 +276,9 @@ async function renderEpubChapter(index, options = {}) {
     showHighlightHint(error?.message || `无法打开第 ${index + 1} 章`);
     return false;
   } finally {
+    if (!chapterLeaseCommitted && chapterResourceLease) {
+      archive.resourceManager?.release(chapterResourceLease);
+    }
     if (generation === _epubChapterRenderGeneration) {
       state.epubChapterLoading = false;
       state.epubRenderPending = false;
@@ -292,6 +305,7 @@ function navigateToEpubChapter(index, options = {}) {
 }
 
 function renderArticle() {
+  if (typeof clearSearchHit === 'function') clearSearchHit();
   const article = document.getElementById('article');
   const reader = document.getElementById('reader');
   const welcome = document.getElementById('welcome');

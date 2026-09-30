@@ -16,7 +16,7 @@ function renderPreview() {
    ============================================================ */
 function setMode(mode) {
   // EPUB files are read-only — never enter edit mode
-  if (mode === 'edit' && state.contentType === 'epub') return;
+  if (mode === 'edit' && (state.contentType === 'epub' || state.contentType === 'pdf')) return;
 
   const prevMode = state.mode;
   state.mode = mode;

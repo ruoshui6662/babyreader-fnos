@@ -22,11 +22,12 @@ const state = {
   tocOpen: true,
   epubBook: null,
   epubRendition: null,
-  contentType: 'text', // 'text' | 'epub'
+  contentType: 'text', // 'text' | 'epub' | 'pdf'
   dirty: false,
   session: null,
   userState: { version: 2, books: {}, settings: {} },
   readingMode: 'scroll',       // user preference: 'scroll' | 'double' ('single' is only the narrow-window fallback)
+  pdfLayoutMode: 'continuous', // independent PDF preference: continuous | single | double
   readingModeAutoApplied: false, // mobile default is temporary until the user chooses a mode
   effectiveReadingMode: 'scroll', // responsive mode after width-based fallback
   continuousScroll: true,     // legacy mirror retained for settings migration

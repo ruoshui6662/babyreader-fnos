@@ -198,7 +198,69 @@ async function flushPendingHighlightSaves() {
   }
 }
 
+let pdfNotesExportPending = null;
+
+async function exportPdfNotes() {
+  const bookId = state.currentBookId;
+  const bookName = state.currentName;
+  const generation = window.pdfReaderController?.getGeneration?.();
+  if (pdfNotesExportPending?.bookId === bookId && pdfNotesExportPending.generation === generation) return;
+  if (!bookId || !bookName || typeof window.browserHost?.getPdfAnnotations !== 'function') {
+    showHighlightHint('请先打开 PDF');
+    return;
+  }
+  const session = { bookId, generation };
+  const button = document.getElementById('btnExportHighlights');
+  pdfNotesExportPending = session;
+  if (button) {
+    button.disabled = true;
+    button.dataset.exportBookId = bookId;
+    button.dataset.exportGeneration = String(generation ?? '');
+  }
+  try {
+    const result = await window.browserHost.getPdfAnnotations(bookId);
+    if (state.contentType !== 'pdf' || state.currentBookId !== bookId || state.currentName !== bookName
+      || (generation != null && window.pdfReaderController?.getGeneration?.() !== generation)) {
+      if (state.contentType === 'pdf' && pdfNotesExportPending === session) {
+        showHighlightHint('已取消上一书的笔记导出');
+      }
+      return;
+    }
+    if (!Array.isArray(result?.annotations)) throw new Error('PDF 笔记响应无效');
+    const markdown = formatPdfNotesMarkdown({ title: bookName, annotations: result.annotations });
+    const safeName = bookName.replace(/\.pdf$/i, '').replace(/[<>:"/\\|?*\x00-\x1f]/g, '_').trim() || 'PDF 笔记';
+    const blob = new Blob([markdown], { type: 'text/markdown;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    try {
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `${safeName}.md`;
+      link.click();
+    } finally {
+      URL.revokeObjectURL(url);
+    }
+    showHighlightHint(`已导出 ${result.annotations.length} 条 PDF 笔记`);
+  } catch (error) {
+    if (pdfNotesExportPending === session) {
+      showHighlightHint(error?.code === 'PDF_EXPORT_EMPTY' ? '还没有 PDF 标记与想法'
+        : error?.code === 'PDF_EXPORT_LIMIT' ? error.message
+          : error?.code === 'PDF_EXPORT_INVALID' ? 'PDF 笔记数据无效，未导出'
+            : 'PDF 笔记获取失败，未导出');
+    }
+  } finally {
+    if (pdfNotesExportPending === session) {
+      pdfNotesExportPending = null;
+      if (button) {
+        button.disabled = false;
+        delete button.dataset.exportBookId;
+        delete button.dataset.exportGeneration;
+      }
+    }
+  }
+}
+
 function exportHighlights() {
+  if (state.contentType === 'pdf') return exportPdfNotes();
   if (state.contentType !== 'epub') return;
   const highlights = loadHighlights();
   if (!highlights.length) {
@@ -208,10 +270,6 @@ function exportHighlights() {
 
   const md = formatHighlightsMd(highlights);
 
-  const showCopied = () => {
-    flashFileName(`已导出 ${highlights.length} 条划线`, 2600);
-  };
-
   const blob = new Blob([md], { type: 'text/markdown;charset=utf-8' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
@@ -219,8 +277,7 @@ function exportHighlights() {
   a.download = highlightFileName();
   a.click();
   URL.revokeObjectURL(url);
-  navigator.clipboard?.writeText?.(md).catch(() => {});
-  showCopied();
+  showHighlightHint(`已导出 ${highlights.length} 条 EPUB 笔记`);
 }
 
 function flashFileName(message, duration = 1600) {
@@ -243,6 +300,26 @@ function flashFileName(message, duration = 1600) {
   }, duration);
 }
 
-function showHighlightHint(message) {
-  flashFileName(message, 1600);
+let readerFeedbackTimer = null;
+
+function showHighlightHint(message, { persistent = /失败|错误|无法|超时|重试/.test(String(message)) } = {}) {
+  let feedback = document.getElementById('readerFeedback');
+  if (!feedback) {
+    feedback = document.createElement('div');
+    feedback.id = 'readerFeedback';
+    feedback.className = 'reader-feedback';
+    const text = document.createElement('span');
+    text.setAttribute('role', 'status');
+    text.setAttribute('aria-live', 'polite');
+    const close = document.createElement('button');
+    close.type = 'button';
+    close.textContent = '关闭';
+    close.addEventListener('click', () => { feedback.hidden = true; });
+    feedback.append(text, close);
+    document.body.appendChild(feedback);
+  }
+  clearTimeout(readerFeedbackTimer);
+  feedback.querySelector('span').textContent = String(message || '');
+  feedback.hidden = false;
+  if (!persistent) readerFeedbackTimer = setTimeout(() => { feedback.hidden = true; }, 5000);
 }

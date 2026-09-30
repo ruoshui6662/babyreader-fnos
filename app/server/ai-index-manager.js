@@ -116,6 +116,7 @@ function summaryFor(items) {
 function createAiIndexManager({
   dataRoot,
   getLibraryIndex = null,
+  onIndexDeleted = null,
   now = () => new Date(),
   schemaVersion = DEFAULT_SCHEMA_VERSION
 } = {}) {
@@ -362,6 +363,9 @@ function createAiIndexManager({
     if (manifest.entries[validBookId]) {
       delete manifest.entries[validBookId];
       await publishManifest(manifest);
+    }
+    if (deleted && typeof onIndexDeleted === 'function') {
+      try { await onIndexDeleted(validBookId); } catch { /* Cache cleanup must not undo index deletion. */ }
     }
     return { bookId: validBookId, deleted };
   }

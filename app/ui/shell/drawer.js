@@ -61,13 +61,14 @@ const readerPanels = Object.freeze({
     id: 'readerPanelBookmarks',
     title: '书签',
     surface: 'content',
-    enabled: () => state.contentType === 'epub' && Boolean(state.currentBookId)
+    enabled: () => ['epub', 'pdf'].includes(state.contentType) && Boolean(state.currentBookId)
   },
   notes: {
     id: 'readerPanelNotes',
     title: '标记与想法',
     surface: 'content',
     enabled: () => state.contentType === 'epub'
+      || (state.contentType === 'pdf' && Boolean(state.currentBookId))
   },
 });
 
@@ -120,7 +121,7 @@ function setSurfaceVisibility(surface, visible) {
   if (root) {
     root.hidden = !visible;
     root.setAttribute('aria-hidden', visible ? 'false' : 'true');
-    root.setAttribute('aria-modal', 'true');
+    root.setAttribute('aria-modal', surface === 'search' ? 'false' : 'true');
   }
   if (backdrop) {
     backdrop.hidden = !visible;
@@ -148,6 +149,11 @@ function setReaderTriggerState() {
     }
     if (button.hasAttribute('aria-expanded')) {
       button.setAttribute('aria-expanded', expanded ? 'true' : 'false');
+    }
+    if (action === 'openToc') {
+      const label = expanded ? '隐藏目录' : '显示目录';
+      button.setAttribute('aria-label', label);
+      button.title = label;
     }
   });
 }
@@ -205,6 +211,10 @@ const readerSurfaceController = Object.freeze({
 
   focusInitial(surface, panelName = null) {
     requestAnimationFrame(() => {
+      if (surface === 'search') {
+        surfaceElement(surface)?.querySelector('input')?.focus();
+        return;
+      }
       if (surface === 'content' && panelName) {
         document.querySelector(`#readerDrawer [data-reader-panel-target="${panelName}"]`)?.focus?.();
         return;
@@ -331,13 +341,27 @@ function setupReaderActionMapping() {
   });
 
   document.addEventListener('keydown', (event) => {
+    if (event.defaultPrevented) return;
+    if (document.getElementById('highlightEditor')?.hidden === false || document.querySelector('.custom-select-menu:not([hidden])')) return;
+    const tab = event.target.closest?.('[data-reader-panel-target], [data-notes-filter]');
+    if (tab && ['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) {
+      const selector = tab.hasAttribute('data-notes-filter') ? '[data-notes-filter]' : '[data-reader-panel-target]';
+      const tabs = [...tab.parentElement.querySelectorAll(selector)].filter((item) => !item.disabled && !item.hidden);
+      const index = tabs.indexOf(tab);
+      const next = event.key === 'Home' ? 0 : event.key === 'End' ? tabs.length - 1
+        : (index + (event.key === 'ArrowRight' ? 1 : -1) + tabs.length) % tabs.length;
+      event.preventDefault();
+      tabs[next]?.click();
+      tabs[next]?.focus();
+      return;
+    }
     if (event.key === 'Escape' && activeReaderSurface) {
       event.preventDefault();
       closeReaderPanel();
       return;
     }
 
-    if (event.key !== 'Tab' || !activeReaderSurface) return;
+    if (event.key !== 'Tab' || !activeReaderSurface || activeReaderSurface === 'search') return;
     const focusable = focusableElements(activeReaderSurface);
     if (!focusable.length) return;
     const first = focusable[0];

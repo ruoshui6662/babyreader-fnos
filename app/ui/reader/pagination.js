@@ -230,6 +230,7 @@ function setPageGroup(group, {
   const reader = document.getElementById('reader');
   const article = document.getElementById('article');
   if (!reader || !article || state.effectiveReadingMode === 'scroll' || isEpubChapterLoading()) return false;
+  if (typeof clearSearchHit === 'function') clearSearchHit();
 
   const nextGroup = clampPageGroup(group);
   const left = pageLeftForGroup(nextGroup);
@@ -252,7 +253,13 @@ function snapPaginationToNearestGroup({ save = true } = {}) {
   const article = document.getElementById('article');
   if (!reader || !article || state.effectiveReadingMode === 'scroll') return false;
   const step = Math.max(1, state.pageGroupWidth || reader.clientWidth || 1);
-  return setPageGroup(Math.round(state.pageOffset / step), { behavior: 'auto', save });
+  const nextGroup = clampPageGroup(Math.round(state.pageOffset / step));
+  const settledLeft = pageLeftForGroup(nextGroup, step);
+  if (nextGroup === state.pageGroup && Math.abs(state.pageOffset - settledLeft) < 0.5) {
+    if (save) saveTextScroll();
+    return true;
+  }
+  return setPageGroup(nextGroup, { behavior: 'auto', save });
 }
 
 function pageNumberForElement(target) {
@@ -267,17 +274,58 @@ function pageNumberForElement(target) {
   return Math.max(1, Math.min(state.pageCount, Math.floor((logicalLeft + 0.01) / step) + 1));
 }
 
+function semanticRangeRects(range) {
+  if (!range || !range.startContainer || typeof range.getClientRects !== 'function') return [];
+  const rects = Array.from(range.getClientRects()).filter((rect) => rect && Number.isFinite(rect.left) && Number.isFinite(rect.top));
+  if (rects.length) return rects;
+  if (typeof range.getBoundingClientRect === 'function') {
+    const rect = range.getBoundingClientRect();
+    if (rect && Number.isFinite(rect.left) && Number.isFinite(rect.top)) return [rect];
+  }
+  return [];
+}
+
+function semanticTargetElement(target) {
+  const start = target?.startContainer;
+  if (!start) return target;
+  return start.nodeType === 1 ? start : start.parentElement || target;
+}
+
 function navigateToSemanticTarget(target, { behavior = 'auto' } = {}) {
   if (!target) return false;
+  const rangeRects = semanticRangeRects(target);
+  const fallbackTarget = semanticTargetElement(target);
   if (state.effectiveReadingMode === 'scroll') {
-    target.scrollIntoView({ block: 'start', behavior });
+    const reader = document.getElementById('reader');
+    if (rangeRects.length && reader) {
+      const readerRect = reader.getBoundingClientRect();
+      const top = rangeRects[0].top - readerRect.top - 24;
+      reader.scrollTop = Math.max(0, reader.scrollTop + top);
+    } else {
+      fallbackTarget.scrollIntoView({ block: 'start', behavior });
+    }
     return true;
   }
-  return setPageGroup(pageGroupForPage(pageNumberForElement(target)), {
+  if (rangeRects.length) {
+    const article = document.getElementById('article');
+    if (!article) return false;
+    const step = Math.max(1, state.pageStepWidth || state.columnWidth + state.columnGap || 1);
+    const articleRect = article.getBoundingClientRect();
+    const logicalLeft = state.pageOffset + rangeRects[0].left - articleRect.left;
+    const pageNumber = Math.max(1, Math.min(state.pageCount, Math.floor((logicalLeft + 0.01) / step) + 1));
+    return setPageGroup(pageGroupForPage(pageNumber), { behavior, save: true, redrawHighlights: true });
+  }
+  return setPageGroup(pageGroupForPage(pageNumberForElement(fallbackTarget)), {
     behavior,
     save: true,
     redrawHighlights: true
   });
+}
+
+function syncPaginationButton(button, { hidden, disabled }) {
+  if (!button) return;
+  if (button.hidden !== hidden) button.hidden = hidden;
+  if (button.disabled !== disabled) button.disabled = disabled;
 }
 
 function updatePaginationControls() {
@@ -297,14 +345,14 @@ function updatePaginationControls() {
   const atStart = state.pageGroup <= 0 && !canPreviousChapter;
   const atEnd = state.pageGroup >= Math.max(0, state.pageGroupCount - 1) && !canNextChapter;
 
-  if (previous) {
-    previous.hidden = !paged || state.contentType !== 'epub';
-    previous.disabled = rendering || atStart;
-  }
-  if (next) {
-    next.hidden = !paged || state.contentType !== 'epub';
-    next.disabled = rendering || atEnd;
-  }
+  syncPaginationButton(previous, {
+    hidden: !paged || state.contentType !== 'epub',
+    disabled: rendering || atStart
+  });
+  syncPaginationButton(next, {
+    hidden: !paged || state.contentType !== 'epub',
+    disabled: rendering || atEnd
+  });
   if (mobilePrevious) mobilePrevious.disabled = rendering || !paged || atStart;
   if (mobileNext) mobileNext.disabled = rendering || !paged || atEnd;
   if (status) {

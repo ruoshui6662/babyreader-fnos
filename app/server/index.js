@@ -1,21 +1,53 @@
 'use strict';
 
 const fs = require('node:fs/promises');
+const nodeFs = require('node:fs');
 const http = require('node:http');
 const path = require('node:path');
+const crypto = require('node:crypto');
 const { UserStorage, readJson } = require('./storage');
-const { scanLibrary } = require('./library');
+const { fingerprintBook, scanLibrary } = require('./library');
 const { resolveAuthorizedPath } = require('./security');
+const { parseSingleByteRange } = require('./byte-range');
+const { getPdfReaderEnabled } = require('./pdf-feature-config');
 const { AiConfigStorage, normalizeAiSettings, publicAiConfig } = require('./ai-config');
 const { validateAiBookContext } = require('./ai-book-context');
-const { searchBook: searchAiBook } = require('./ai-fts');
+const {
+  AI_FTS_SCHEMA_VERSION,
+  resolveBookPosition,
+  readChapterEvidence,
+  readBookNavigation,
+  listCachedChapterSummaries,
+  getOrCreateChapterSummary,
+  getOrCreateChapterSummarySegment,
+  searchBook: searchAiBook,
+  searchPdfEvidenceRows,
+  searchPdfEvidenceRowsByRanges
+} = require('./ai-fts');
+const { validatePdfAiRequest, buildPdfAiContext, pdfAiSources, pdfAiStructuredRetrievalEnabled } = require('./pdf-ai-context');
+const { PDF_AI_STRUCTURE_VERSION, buildPdfStructure } = require('./pdf-ai-structure');
+const { PDF_AI_PROFILE_PROMPT_VERSION, planPdfProfile } = require('./pdf-ai-profile');
+const { PDF_TEXT_PARSER_VERSION, extractPdfText, extractPdfStructureSignals } = require('./pdf-text');
+const { classifyPdfQuestion, planPdfRetrieval, composePdfEvidence } = require('./pdf-ai-retrieval');
+const { assessSummaryConfidence, classifyAiIntent, planChapterSummary, selectBookSummaryCandidates } = require('./ai-chapter-retrieval');
 const { createAiIndexManager } = require('./ai-index-manager');
+const { createAiConversationStorage } = require('./ai-conversation-storage');
+const { createPdfAiProfileStore } = require('./pdf-ai-profile-store');
 const { parseBookSearchParams, searchBookText } = require('./book-search');
 const { parsePathList, resolveLibraryRoots } = require('./library-roots');
+const { readFnOSAuthorizedRoots, fnOSAuthorizationRevision } = require('./fnos-roots-config');
+const {
+  BOOK_ID_PATTERN,
+  COLLECTION_ID_PATTERN,
+  reconcileLibraryOrganization,
+  resolveLibraryOrganization
+} = require('./library-organization');
 const {
   normalizeAiConfig,
   validateAiRequest,
   requestOpenAiAnswer,
+  requestOpenAiChapterSummary,
+  requestOpenAiPdfProfile,
   requestOpenAiStream,
   testOpenAiConnection
 } = require('./ai-service');
@@ -27,16 +59,34 @@ const DATA_ROOT = path.resolve(process.env.TRIM_PKGVAR || path.join(APP_ROOT, '.
 const CONFIG_ROOT = path.resolve(process.env.TRIM_PKGETC || path.join(APP_ROOT, '..', '.runtime', 'etc'));
 const SOCKET_PATH = process.env.BABYREADER_SOCKET || path.resolve(process.env.TRIM_APPDEST || path.join(APP_ROOT, '..'), 'app.sock');
 const MAX_JSON_BYTES = 2 * 1024 * 1024;
+// Provisional per-response ceiling; Task 0 device benchmarks may lower it.
+const MAX_PDF_RANGE_BYTES = 8 * 1024 * 1024;
+const PDF_AI_UNVERIFIED_ANSWER = '依据不足：回答未能提供可验证的 PDF 页引用，请缩小页码范围或换一种问法重试。';
+const LIBRARY_ORGANIZATION_ENABLED = ['1', 'true', 'yes', 'on'].includes(
+  String(process.env.BABYREADER_ENABLE_LIBRARY_ORGANIZATION || '').trim().toLowerCase()
+);
+function pdfReaderEnabled() {
+  return getPdfReaderEnabled(CONFIG_ROOT, process.env.BABYREADER_PDF_ENABLED);
+}
 const CSP = "default-src 'self'; base-uri 'none'; object-src 'none'; frame-ancestors 'self'; form-action 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self'; media-src 'self' blob:; worker-src 'self' blob:";
 
 const storage = new UserStorage(DATA_ROOT);
 const aiConfigStorage = new AiConfigStorage(DATA_ROOT);
+const pdfAiProfileStore = createPdfAiProfileStore({ dataRoot: DATA_ROOT });
 const aiIndexManager = createAiIndexManager({
   dataRoot: DATA_ROOT,
-  getLibraryIndex: () => storage.getLibraryIndex()
+  schemaVersion: AI_FTS_SCHEMA_VERSION,
+  getLibraryIndex: () => storage.getLibraryIndex(),
+  onIndexDeleted: async (bookId) => {
+    try { await pdfAiProfileStore.deleteBook(bookId); } catch (error) {
+      recordError(error, { operation: 'pdf-ai-cache-delete', bookId });
+    }
+  }
 });
+const aiConversationStorage = createAiConversationStorage({ dataRoot: DATA_ROOT });
 const STARTED_AT = new Date().toISOString();
 let authorizedRoots = [];
+let authorizationRevision = null;
 let rootDiagnostics = {
   configuredRoots: [],
   accessibleRoots: [],
@@ -145,15 +195,75 @@ function sendError(response, status, message) {
 function aiUserError(error) {
   const messages = {
     AI_NOT_CONFIGURED: 'AI 服务尚未配置 API Key',
-    AI_TIMEOUT: 'AI 连接超时，请检查服务地址后重试',
+    AI_TIMEOUT: 'AI 请求超时，请稍后重试',
     AI_UPSTREAM_RESPONSE_TOO_LARGE: 'AI 服务返回内容过大，请稍后重试',
-    AI_UPSTREAM_FAILED: 'AI 服务拒绝了请求，请检查模型名和 API Key',
+    AI_UPSTREAM_FAILED: 'AI 服务未能完成回答，请检查配置或稍后重试',
+    AI_INCOMPLETE_RESPONSE: 'AI 回答传输中断，请重试',
     AI_FETCH_UNAVAILABLE: '当前运行环境不支持 AI 请求',
     AI_EMPTY_RESPONSE: 'AI 服务未返回可读内容'
   };
   if (error?.code === 'AI_BOOK_CONTEXT_INVALID') return error.message;
   if (messages[error?.code]) return messages[error.code];
   return error?.statusCode === 400 ? String(error.message || 'AI 请求参数无效') : 'AI 服务暂时不可用，请稍后重试';
+}
+
+function aiConversationError(response, error) {
+  const statusByCode = {
+    INVALID_BOOK_ID: 400,
+    INVALID_CONVERSATION_ID: 400,
+    INVALID_CONVERSATION_TITLE: 400,
+    INVALID_CONVERSATION_SOURCE: 400,
+    INVALID_CONVERSATION_MESSAGE: 400,
+    CONVERSATION_NOT_FOUND: 404,
+    CONVERSATION_LIMIT: 409,
+    CONVERSATION_MESSAGE_LIMIT: 409,
+    CONVERSATION_SIZE_LIMIT: 413,
+    CONVERSATION_STORE_CORRUPT: 503,
+    CONVERSATION_STORE_UNAVAILABLE: 503,
+    CONVERSATION_UNSAFE_TARGET: 503
+  };
+  const messageByCode = {
+    INVALID_BOOK_ID: '请求参数无效',
+    INVALID_CONVERSATION_ID: '请求参数无效',
+    INVALID_CONVERSATION_TITLE: '会话标题无效',
+    INVALID_CONVERSATION_SOURCE: '会话来源无效',
+    INVALID_CONVERSATION_MESSAGE: '会话消息无效',
+    CONVERSATION_NOT_FOUND: '会话不存在',
+    CONVERSATION_LIMIT: '会话数量已达到上限',
+    CONVERSATION_MESSAGE_LIMIT: '会话消息数量已达到上限',
+    CONVERSATION_SIZE_LIMIT: '会话数据已达到大小上限',
+    CONVERSATION_STORE_CORRUPT: '会话暂时无法读取',
+    CONVERSATION_STORE_UNAVAILABLE: '会话暂时无法读取',
+    CONVERSATION_UNSAFE_TARGET: '会话暂时无法读取'
+  };
+  const status = statusByCode[error?.code] || error?.statusCode || 500;
+  const message = messageByCode[error?.code] || (status >= 500 ? '会话服务暂时不可用' : '请求无效');
+  return sendError(response, status, message);
+}
+
+function aiConversationPersistenceErrorCode(error) {
+  const allowed = new Set([
+    'INVALID_CONVERSATION_ID',
+    'INVALID_CONVERSATION_MESSAGE',
+    'INVALID_CONVERSATION_SOURCE',
+    'CONVERSATION_NOT_FOUND',
+    'CONVERSATION_MESSAGE_LIMIT',
+    'CONVERSATION_SIZE_LIMIT',
+    'CONVERSATION_STORE_CORRUPT',
+    'CONVERSATION_STORE_UNAVAILABLE',
+    'CONVERSATION_UNSAFE_TARGET'
+  ]);
+  return allowed.has(error?.code) ? error.code : 'CONVERSATION_PERSIST_FAILED';
+}
+
+function aiPersistenceSources(context) {
+  return aiSourcesFromContext(context).map((source) => ({
+    citationIndex: source.citationIndex,
+    chapterIndex: source.chapterIndex,
+    chapterHref: source.chapterHref || '',
+    chapterLabel: source.chapterLabel || '',
+    ...(Number.isSafeInteger(source.startOffset) && source.startOffset >= 0 ? { startOffset: source.startOffset } : {})
+  }));
 }
 
 function sendSseHeaders(response) {
@@ -187,10 +297,377 @@ function aiSourcesFromContext(context) {
       citationIndexes: [index + 1],
       chapterIndex: item.chapterIndex,
       chapterHref: item.chapterHref,
-      chapterLabel: item.chapterLabel
+      chapterLabel: item.chapterLabel,
+      ...(Number.isSafeInteger(item.startOffset) && item.startOffset >= 0 ? { startOffset: item.startOffset } : {})
     });
   }
   return sources.map(({ key, ...source }) => source);
+}
+
+function pdfConversationWithSourceValidity(conversation, fingerprint) {
+  return {
+    ...conversation,
+    messages: conversation.messages.map((message) => message.role !== 'assistant' ? message : ({
+      ...message,
+      sources: (message.sources || []).map(({ sourceFingerprint, ...source }) => ({
+        ...source,
+        stale: !fingerprint || !sourceFingerprint || sourceFingerprint !== fingerprint
+      }))
+    }))
+  };
+}
+
+async function preparePdfAiEvidence(bookId, body, { signal } = {}) {
+  const input = validatePdfAiRequest(body);
+  if (!pdfReaderEnabled()) return { error: { status: 404, message: 'PDF 阅读尚未启用' } };
+  const book = await findBook(bookId, { requirePathIdentity: true });
+  const fingerprint = await currentPdfFingerprint(book);
+  if (!fingerprint || fingerprint !== book.fingerprint) {
+    return { error: { status: 409, message: 'PDF 文件已变化，请重新扫描书库后再提问。' } };
+  }
+  const scoped = input.scope !== 'searchable_book';
+  const result = await searchPdfEvidenceRows(book, DATA_ROOT, {
+    query: input.question,
+    selectedText: input.selectedText,
+    pageStart: scoped ? input.pageIndex : null,
+    pageEnd: scoped ? input.pageEndIndex : null,
+    signal
+  });
+  // Extraction/index creation can take seconds. Refuse the evidence if the
+  // source changed while that work was in flight; never send stale page text.
+  if (await currentPdfFingerprint(book) !== book.fingerprint) {
+    return { error: { status: 409, message: 'PDF 文件已变化，请重新扫描书库后再提问。' } };
+  }
+  const unavailable = {
+    'no-text': [409, '这份 PDF 没有可提取文本，暂不能用于 AI 问书。'],
+    'password-protected': [409, '加密 PDF 暂不能用于 AI 问书。'],
+    'extraction-limit': [413, 'PDF 超出安全文本提取上限，请缩小文件或使用其他书籍。'],
+    'selection-not-found': [409, '选中文本未能在当前页索引中核验，请重新选择后提问。'],
+    unavailable: [409, 'PDF 文本索引暂不可用，请刷新书库后重试。']
+  };
+  if (result.status !== 'ready') {
+    const [status, message] = unavailable[result.status] || unavailable.unavailable;
+    return { error: { status, message } };
+  }
+  const context = buildPdfAiContext(result.rows, { query: input.selectedText || input.question });
+  if (!context.length) return { error: { status: 409, message: '当前范围没有足够的可检索原文依据，请换一种问法或页码范围。' } };
+  return { input, context, sources: pdfAiSources(context), book };
+}
+
+async function prepareStructuredPdfAiEvidence(user, bookId, body, { signal } = {}) {
+  if (!pdfAiStructuredRetrievalEnabled(process.env)) return preparePdfAiEvidence(bookId, body, { signal });
+  const input = validatePdfAiRequest(body);
+  const intent = classifyPdfQuestion(input.question, { hasSelection: Boolean(input.selectedText) });
+  if (input.scope !== 'searchable_book' || !['paper_overview', 'method', 'findings', 'limitations', 'comparison'].includes(intent)) {
+    return preparePdfAiEvidence(bookId, body, { signal });
+  }
+  const fallback = async () => {
+    const prepared = await preparePdfAiEvidence(bookId, body, { signal });
+    return { ...prepared, profileStatus: 'fallback', retrievalMode: 'fts_fallback', structureCoverage: null };
+  };
+  try {
+    if (signal?.aborted) return { error: { status: 499, message: 'PDF 问答已取消' } };
+    if (!pdfReaderEnabled()) return { error: { status: 404, message: 'PDF 阅读尚未启用' } };
+    const book = await findBook(bookId, { requirePathIdentity: true });
+    const fingerprint = await currentPdfFingerprint(book);
+    if (!fingerprint || fingerprint !== book.fingerprint) return fallback();
+
+    let structure = await pdfAiProfileStore.getStructure({ bookId, sourceFingerprint: fingerprint,
+      parserVersion: PDF_TEXT_PARSER_VERSION, structureVersion: PDF_AI_STRUCTURE_VERSION });
+    if (!structure) {
+      const signals = await extractPdfStructureSignals(book, { signal });
+      if (await currentPdfFingerprint(book) !== fingerprint) return fallback();
+      structure = buildPdfStructure(signals);
+      await pdfAiProfileStore.putStructure({ bookId, sourceFingerprint: fingerprint,
+        parserVersion: PDF_TEXT_PARSER_VERSION, structureVersion: PDF_AI_STRUCTURE_VERSION, structure });
+    }
+    if (structure.mode === 'unavailable' || structure.mode === 'page_windows') return fallback();
+
+    const savedConfig = await aiConfigStorage.get(user.uid);
+    const config = publicAiConfig(savedConfig, process.env);
+    if (!config.configured) return fallback();
+    const profileInput = {
+      uid: user.uid,
+      bookId,
+      sourceFingerprint: fingerprint,
+      provider: config.provider,
+      baseUrl: config.baseUrl,
+      model: config.model,
+      parserVersion: PDF_TEXT_PARSER_VERSION,
+      structureVersion: PDF_AI_STRUCTURE_VERSION,
+      strategyVersion: 'pdf-profile-map-reduce-v1',
+      promptVersion: PDF_AI_PROFILE_PROMPT_VERSION
+    };
+    const cachedProfile = await pdfAiProfileStore.getProfile(profileInput);
+    let profile = cachedProfile;
+    if (!profile) {
+      const extracted = await extractPdfText(book, { signal });
+      if (extracted.status !== 'ready' || await currentPdfFingerprint(book) !== fingerprint) return fallback();
+      const pages = extracted.pages.map((page) => {
+        const section = structure.sections.find((item) => page.pageIndex >= item.pageStart && page.pageIndex <= item.pageEnd);
+        return { ...page, sectionTitle: section?.title || '' };
+      });
+      const plan = planPdfProfile({ structure, pages });
+      if (!plan.mapTasks.length || plan.totalSourceChars > 24000) return fallback();
+      const evidence = plan.mapTasks.flatMap((task) => task.pageIndexes.map((pageIndex) => {
+        const page = pages.find((item) => item.pageIndex === pageIndex);
+        return page ? { evidenceId: `page-${pageIndex + 1}`, pageIndex, text: page.text } : null;
+      })).filter(Boolean);
+      profile = await pdfAiProfileStore.getOrCreateProfile({
+        ...profileInput,
+        signal,
+        validateBeforeWrite: async (sharedSignal) => !sharedSignal?.aborted
+          && await currentPdfFingerprint(book) === fingerprint
+          && Boolean(await findBook(bookId, { requirePathIdentity: true }).catch(() => null)),
+        build: (sharedSignal) => requestOpenAiPdfProfile({ plan, evidence, env: process.env, savedConfig, signal: sharedSignal })
+      });
+    }
+    if (signal?.aborted || await currentPdfFingerprint(book) !== fingerprint) return fallback();
+    const plan = planPdfRetrieval({ intent, structure });
+    const result = await searchPdfEvidenceRowsByRanges(book, DATA_ROOT, {
+      query: input.question,
+      ranges: plan.ranges,
+      limit: 6,
+      signal
+    });
+    if (result.status !== 'ready') return fallback();
+    if (await currentPdfFingerprint(book) !== fingerprint) return fallback();
+    const composed = composePdfEvidence({ rows: result.rows, structure, intent, question: input.question, profile });
+    if (!composed.context.length) return fallback();
+    return {
+      input, context: composed.context, sources: composed.sources, book, profile,
+      profileStatus: cachedProfile ? 'cached' : 'ready',
+      retrievalMode: composed.retrievalMode,
+      structureCoverage: composed.coverage
+    };
+  } catch (error) {
+    if (signal?.aborted) return { error: { status: 499, message: 'PDF 问答已取消' } };
+    recordError(error, { operation: 'pdf-ai-structured-retrieval', bookId, code: error.code || null });
+    return fallback();
+  }
+}
+
+async function handlePdfAiSearch(request, response, bookId, body) {
+  const abortController = new AbortController();
+  const onAbort = () => abortController.abort();
+  const onClose = () => { if (!response.writableEnded) onAbort(); };
+  request.once('aborted', onAbort);
+  response.once('close', onClose);
+  try {
+    const prepared = await preparePdfAiEvidence(bookId, body, { signal: abortController.signal });
+    if (abortController.signal.aborted || response.destroyed) return;
+    if (prepared.error) return sendError(response, prepared.error.status, prepared.error.message);
+    return sendJson(response, 200, {
+      available: true, retrievalStatus: 'ok', scope: prepared.input.scope,
+      sources: prepared.sources,
+      matches: prepared.context.map((item, index) => ({
+        evidenceId: index + 1, pageIndex: item.chapterIndex,
+        text: item.text, chapterIndex: item.chapterIndex, chapterLabel: item.chapterLabel
+      }))
+    });
+  } finally {
+    request.removeListener('aborted', onAbort);
+    response.removeListener('close', onClose);
+  }
+}
+
+async function handlePdfAiAnswer(request, response, user, bookId, body) {
+  const abortController = new AbortController();
+  const onAbort = () => abortController.abort();
+  const onClose = () => { if (!response.writableEnded) onAbort(); };
+  request.once('aborted', onAbort);
+  response.once('close', onClose);
+  try {
+    const prepared = await prepareStructuredPdfAiEvidence(user, bookId, body, { signal: abortController.signal });
+    if (abortController.signal.aborted || response.destroyed) return;
+    if (prepared.error) return sendError(response, prepared.error.status, prepared.error.message);
+    const savedConfig = await aiConfigStorage.get(user.uid);
+    if (!publicAiConfig(savedConfig, process.env).configured) return sendError(response, 503, 'AI 服务尚未配置');
+    if (abortController.signal.aborted || response.destroyed) return;
+    const result = await requestOpenAiAnswer({
+      request: { pdfEvidence: true, question: prepared.input.question,
+        history: prepared.input.history, context: prepared.context,
+        ...(prepared.profile ? { paperContext: prepared.profile, answerProtocol: 'paper-profile' } : {}) },
+      env: process.env, savedConfig, signal: abortController.signal
+    });
+    if (abortController.signal.aborted || response.destroyed) return;
+    return sendJson(response, 200, {
+      answer: result.citationIntegrity ? result.answer : PDF_AI_UNVERIFIED_ANSWER,
+      sources: result.citationIntegrity ? prepared.sources : [],
+      citationIntegrity: result.citationIntegrity === true,
+      scope: prepared.input.scope
+    });
+  } catch (error) {
+    if (!abortController.signal.aborted && !response.destroyed) {
+      recordError(error, { operation: 'pdf-ai-answer', bookId, code: error.code || null });
+      return sendError(response, error.statusCode || 502, aiUserError(error));
+    }
+  } finally {
+    request.removeListener('aborted', onAbort);
+    response.removeListener('close', onClose);
+  }
+}
+
+async function handlePdfAiStream(request, response, user, bookId, body) {
+  const abortController = new AbortController();
+  const onAbort = () => abortController.abort();
+  const onClose = () => { if (!response.writableEnded) onAbort(); };
+  request.once('aborted', onAbort);
+  response.once('close', onClose);
+  try {
+    const prepared = await prepareStructuredPdfAiEvidence(user, bookId, body, { signal: abortController.signal });
+    if (abortController.signal.aborted || response.destroyed) return;
+    if (prepared.error) return sendError(response, prepared.error.status, prepared.error.message);
+    const savedConfig = await aiConfigStorage.get(user.uid);
+    const config = publicAiConfig(savedConfig, process.env);
+    if (!config.configured) return sendError(response, 503, 'AI 服务尚未配置');
+    if (prepared.input.conversationId) {
+      try {
+        await aiConversationStorage.getConversation(user.uid, bookId, prepared.input.conversationId);
+      } catch (error) {
+        return aiConversationError(response, error);
+      }
+    }
+    if (abortController.signal.aborted || response.destroyed) return;
+    sendSseHeaders(response);
+    sendSseEvent(response, 'meta', { scope: prepared.input.scope, sources: prepared.sources, model: config.model,
+      evidenceChars: prepared.context.reduce((sum, item) => sum + item.text.length, 0),
+      ...(prepared.retrievalMode ? { retrievalMode: prepared.retrievalMode } : {}),
+      ...(prepared.profileStatus ? { profileStatus: prepared.profileStatus } : {}),
+      ...(prepared.structureCoverage ? { structureCoverage: prepared.structureCoverage } : {}) });
+    try {
+      const result = await requestOpenAiStream({
+        request: { pdfEvidence: true, question: prepared.input.question,
+          context: prepared.context, history: prepared.input.history,
+          ...(prepared.profile ? { paperContext: prepared.profile, answerProtocol: 'paper-profile' } : {}) },
+        env: process.env, savedConfig, signal: abortController.signal,
+        onEvent: async (event) => {
+          if (event?.type === 'response.output_text.delta' && typeof event.delta === 'string') {
+            sendSseEvent(response, 'delta', { delta: event.delta });
+          }
+        }
+      });
+      const verified = result.citationIntegrity === true;
+      const answer = verified ? result.answer : PDF_AI_UNVERIFIED_ANSWER;
+      const done = { answer, responseId: result.responseId, streamed: result.streamed,
+        citationIntegrity: verified, scope: prepared.input.scope,
+        sources: verified ? prepared.sources : [] };
+      if (verified && prepared.input.conversationId && !abortController.signal.aborted && !request.aborted) {
+        try {
+          await aiConversationStorage.appendCompletedTurn(user.uid, bookId, prepared.input.conversationId, {
+            question: prepared.input.question, answer,
+            sources: prepared.context.map((item, index) => ({
+              citationIndex: index + 1, chapterIndex: item.chapterIndex,
+              chapterHref: '', chapterLabel: item.chapterLabel, startOffset: item.startOffset,
+              sourceFingerprint: prepared.book.fingerprint
+            }))
+          });
+          done.persisted = true;
+        } catch (error) {
+          done.persisted = false;
+          done.persistenceErrorCode = aiConversationPersistenceErrorCode(error);
+          recordError(error, { operation: 'pdf-ai-conversation-persist', bookId, code: done.persistenceErrorCode });
+        }
+      }
+      sendSseEvent(response, 'done', done);
+    } catch (error) {
+      if (error.code !== 'AI_ABORTED' && !response.destroyed) {
+        recordError(error, { operation: 'pdf-ai-stream', bookId, code: error.code || null });
+        sendSseEvent(response, 'error', { code: error.code || 'AI_STREAM_FAILED', message: aiUserError(error) });
+      }
+    }
+  } catch (error) {
+    if (!abortController.signal.aborted) throw error;
+  } finally {
+    request.removeListener('aborted', onAbort);
+    response.removeListener('close', onClose);
+    if (response.headersSent && !response.writableEnded) response.end();
+  }
+}
+
+async function resolveAiInputChapter(book, input) {
+  if (book?.type !== 'epub' || !input?.chapter) return { status: 'unresolved', reason: 'position_unavailable' };
+  const resolution = await resolveBookPosition(book, DATA_ROOT, input.chapter);
+  input.chapterResolution = resolution;
+  if (resolution.status === 'resolved') {
+    input.chapter = {
+      index: resolution.spineIndex,
+      href: resolution.href,
+      label: resolution.chapterLabel
+    };
+  } else {
+    // Never forward a client-authored chapter label as a verified location.
+    input.chapter = { index: null, href: '', label: '当前阅读位置未能可靠确认' };
+  }
+  return resolution;
+}
+
+function isAiChapterUnderstandingEnabled() {
+  return process.env.BABYREADER_ENABLE_AI_CHAPTER_UNDERSTANDING === '1';
+}
+
+function effectiveAiIntent(question, selectedText = '') {
+  const intent = classifyAiIntent({ question, selectedText });
+  if (!isAiChapterUnderstandingEnabled() && ['chapter_summary', 'book_summary'].includes(intent.intent)) {
+    return { ...intent, intent: 'lookup', scope: 'book', scopeConfidence: 'default' };
+  }
+  return intent;
+}
+
+async function prepareBookSummary(book, userId, question, config) {
+  const navigation = await readBookNavigation(book, DATA_ROOT);
+  if (!navigation.available || !navigation.chapters.length) {
+    return { error: Object.assign(new Error('无法读取本书目录，暂时不能安全生成全书概述。'), { statusCode: 409 }) };
+  }
+  const [retrieval, cachedSummaries] = await Promise.all([
+    searchAiBook(book, DATA_ROOT, { query: question, intent: 'lookup', limit: 12 }),
+    listCachedChapterSummaries({
+      book, dataRoot: DATA_ROOT, userId, baseUrl: config.baseUrl, model: config.model
+    })
+  ]);
+  const selection = selectBookSummaryCandidates({
+    chapters: navigation.chapters,
+    query: question,
+    matches: retrieval.matches,
+    cachedSummaries
+  });
+  if (selection.status !== 'selected' || !selection.candidates.length) {
+    return { error: Object.assign(new Error('未能从本书目录确定可用章节。'), { statusCode: 409 }) };
+  }
+  const evidenceResults = await Promise.all(selection.candidates.map(async (chapter) => ({
+    chapter,
+    evidence: await readChapterEvidence(book, DATA_ROOT, chapter.id)
+  })));
+  const failed = evidenceResults.find(({ evidence }) => !evidence.available || evidence.truncated || !evidence.chunks.length);
+  if (failed) {
+    return { error: Object.assign(new Error(failed.evidence.truncated
+      ? '代表性章节超出单次安全读取上限，请改为逐章提问。'
+      : '部分目录章节缺少可用原文，请重建本地索引后重试。'), { statusCode: failed.evidence.truncated ? 413 : 409 }) };
+  }
+  const chunks = evidenceResults.flatMap(({ chapter, evidence }) => evidence.chunks.map((chunk) => ({
+    ...chunk,
+    logicalChapterId: chapter.id,
+    chapterLabel: chapter.label || chunk.chapterLabel
+  })));
+  let plan;
+  try {
+    plan = planChapterSummary(chunks);
+  } catch (error) {
+    return { error };
+  }
+  plan.coverage = selection.coverage;
+  plan.mode = 'book-map-reduce';
+  const fingerprint = evidenceResults[0].evidence.bookFingerprint;
+  const parserVersion = evidenceResults[0].evidence.parserVersion;
+  if (evidenceResults.some(({ evidence }) => evidence.bookFingerprint !== fingerprint || evidence.parserVersion !== parserVersion)) {
+    return { error: Object.assign(new Error('书籍索引在处理中发生变化，请重试。'), { statusCode: 409 }) };
+  }
+  const bookSummaryFingerprint = crypto.createHash('sha256').update(JSON.stringify({
+    fingerprint,
+    chapters: selection.candidates.map((chapter) => chapter.id),
+    question: String(question || '').trim().toLocaleLowerCase()
+  }), 'utf8').digest('hex');
+  return { plan, evidence: { bookFingerprint: bookSummaryFingerprint, parserVersion }, coverage: selection.coverage };
 }
 
 function gatewayUser(request) {
@@ -241,10 +718,131 @@ function currentRootCounts() {
   };
 }
 
+function organizationApiError(response, error) {
+  const statusByCode = {
+    INVALID_ORGANIZATION: 400,
+    INVALID_ORGANIZATION_REVISION: 400,
+    INVALID_ORGANIZATION_MUTATION: 400,
+    COLLECTION_NOT_FOUND: 404,
+    BOOK_NOT_FOUND: 404,
+    ORGANIZATION_CONFLICT: 409,
+    LIBRARY_INDEX_UNHEALTHY: 503,
+    ORGANIZATION_STORE_CORRUPT: 503,
+    ORGANIZATION_STORE_TOO_LARGE: 503,
+    ORGANIZATION_UNSAFE_TARGET: 503
+  };
+  const messageByCode = {
+    INVALID_ORGANIZATION: '组织参数无效',
+    INVALID_ORGANIZATION_REVISION: '组织版本无效',
+    INVALID_ORGANIZATION_MUTATION: '组织操作无效',
+    COLLECTION_NOT_FOUND: '分类不存在',
+    BOOK_NOT_FOUND: '书籍不存在',
+    ORGANIZATION_CONFLICT: '书库已在其他页面更新，请重新加载',
+    LIBRARY_INDEX_UNHEALTHY: '当前书库扫描未完成，暂不能修改分类',
+    ORGANIZATION_STORE_CORRUPT: '书库分类数据暂时无法读取',
+    ORGANIZATION_STORE_TOO_LARGE: '书库分类数据过大',
+    ORGANIZATION_UNSAFE_TARGET: '书库分类数据暂时无法读取'
+  };
+  const status = statusByCode[error?.code] || error?.statusCode || 500;
+  const message = messageByCode[error?.code]
+    || (status === 404 ? '资源不存在' : status >= 500 ? '书库分类服务暂时不可用' : '请求无效');
+  return sendError(response, status, message);
+}
+
+function assertOrganizationBody(body) {
+  if (!body || typeof body !== 'object' || Array.isArray(body)) {
+    throw Object.assign(new Error('Invalid organization body'), { code: 'INVALID_ORGANIZATION' });
+  }
+  return body;
+}
+
+function organizationRevision(body) {
+  if (!Number.isInteger(body.revision) || body.revision < 0) {
+    throw Object.assign(new Error('Invalid organization revision'), { code: 'INVALID_ORGANIZATION_REVISION' });
+  }
+  return body.revision;
+}
+
+function assertOrganizationCatalogHealthy(index) {
+  if (index?.scan && !isHealthyLibraryIndex(index)) {
+    throw Object.assign(new Error('Library index is not healthy'), { code: 'LIBRARY_INDEX_UNHEALTHY' });
+  }
+}
+
+async function getLibraryOrganizationSnapshot(uid, index = null) {
+  const currentIndex = index || await storage.getLibraryIndex();
+  const stored = await storage.getLibraryOrganization(uid);
+  const resolved = resolveLibraryOrganization(currentIndex.books, stored);
+  const pdfEnabled = pdfReaderEnabled();
+  const visibleBooks = currentIndex.books.filter((book) => !book.error && (pdfEnabled || book.type !== 'pdf'));
+  const visibleIds = new Set(visibleBooks.map((book) => book.id));
+  const visibleOrder = (order) => order.filter((bookId) => visibleIds.has(bookId));
+  return {
+    version: resolved.organization.version,
+    revision: resolved.organization.revision,
+    updatedAt: resolved.organization.updatedAt,
+    preferences: resolved.organization.preferences,
+    collections: resolved.collections,
+    allBookOrder: visibleOrder(resolved.allBookOrder),
+    collectionOrders: Object.fromEntries(Object.entries(resolved.collectionOrders)
+      .map(([collectionId, order]) => [collectionId, visibleOrder(order)])),
+    unassignedOrder: visibleOrder(resolved.unassignedOrder),
+    bookAssignments: Object.fromEntries(Object.entries(resolved.bookAssignments)
+      .filter(([bookId]) => visibleIds.has(bookId))),
+    orphanedBookIds: resolved.orphanedBookIds,
+    books: visibleBooks.map(publicBook),
+    features: {
+      libraryOrganization: LIBRARY_ORGANIZATION_ENABLED,
+      pdfReader: pdfEnabled,
+      hiddenPdfCount: pdfEnabled ? 0 : currentIndex.books.filter((book) => book.type === 'pdf' && !book.error).length
+    }
+  };
+}
+
+async function mutateLibraryOrganization(user, body, mutation) {
+  const payload = assertOrganizationBody(body);
+  const revision = organizationRevision(payload);
+  const index = await storage.getLibraryIndex();
+  assertOrganizationCatalogHealthy(index);
+  const pdfEnabled = pdfReaderEnabled();
+  const activeBookIds = new Set(index.books
+    .filter((book) => !book.error && (pdfEnabled || book.type !== 'pdf'))
+    .map((book) => book.id));
+  await storage.mutateLibraryOrganization(user.uid, revision, async (draft) => {
+    return mutation(draft, activeBookIds);
+  });
+  return getLibraryOrganizationSnapshot(user.uid, index);
+}
+
+function organizationCollection(draft, collectionId) {
+  return draft.collections.find((collection) => collection.id === collectionId) || null;
+}
+
+function ensureOrganizationCollection(draft, collectionId) {
+  if (!COLLECTION_ID_PATTERN.test(String(collectionId || '')) || !organizationCollection(draft, collectionId)) {
+    throw Object.assign(new Error('Collection not found'), { code: 'COLLECTION_NOT_FOUND' });
+  }
+}
+
+function ensureExactOrder(order, expected, message = 'Invalid organization order') {
+  if (!Array.isArray(order) || order.length !== expected.length) {
+    throw Object.assign(new Error(message), { code: 'INVALID_ORGANIZATION' });
+  }
+  const expectedSet = new Set(expected);
+  const seen = new Set();
+  for (const item of order) {
+    if (typeof item !== 'string' || !expectedSet.has(item) || seen.has(item)) {
+      throw Object.assign(new Error(message), { code: 'INVALID_ORGANIZATION' });
+    }
+    seen.add(item);
+  }
+}
+
 async function loadConfiguration() {
+  const revision = fnOSAuthorizationRevision(CONFIG_ROOT);
   const config = await readJson(path.join(CONFIG_ROOT, 'settings.json'), { libraryRoots: [] });
   const configured = Array.isArray(config.libraryRoots) ? config.libraryRoots : [];
-  const fnOSAuthorized = parseFnOSPathList(process.env.TRIM_DATA_ACCESSIBLE_PATHS);
+  const fnOSAuthorized = readFnOSAuthorizedRoots(CONFIG_ROOT, process.env.TRIM_DATA_ACCESSIBLE_PATHS);
   const fnOSShared = parseFnOSPathList(process.env.TRIM_DATA_SHARE_PATHS);
   rootDiagnostics = await resolveLibraryRoots({
     configuredRoots: configured,
@@ -252,6 +850,7 @@ async function loadConfiguration() {
     sharedRoots: fnOSShared
   });
   authorizedRoots = rootDiagnostics.authorizedRoots.slice();
+  authorizationRevision = revision;
   for (const rejected of rootDiagnostics.rejectedRoots) {
     recordError(new Error(rejected.error), {
       operation: 'load-library-root',
@@ -262,13 +861,103 @@ async function loadConfiguration() {
   return rootDiagnostics;
 }
 
-async function findBook(bookId) {
+async function refreshAuthorizationIfChanged() {
+  if (authorizationRevision !== fnOSAuthorizationRevision(CONFIG_ROOT)) await loadConfiguration();
+}
+
+async function findBook(bookId, options = {}) {
+  await refreshAuthorizationIfChanged();
   if (!/^[a-f0-9]{64}$/.test(bookId)) throw Object.assign(new Error('Invalid book ID'), { statusCode: 400 });
   const index = await storage.getLibraryIndex();
   const book = index.books.find((item) => item.id === bookId && !item.error);
   if (!book) throw Object.assign(new Error('Book not found'), { statusCode: 404 });
-  book.path = await resolveAuthorizedPath(book.path, authorizedRoots);
+  const indexedPath = book.path;
+  try {
+    book.path = await resolveAuthorizedPath(indexedPath, authorizedRoots);
+  } catch {
+    throw Object.assign(new Error('Book not found'), { statusCode: 404 });
+  }
+  if (options.requirePathIdentity && book.type === 'pdf' && path.resolve(indexedPath) !== path.resolve(book.path)) {
+    throw Object.assign(new Error('Book file no longer matches its indexed path'), { statusCode: 404 });
+  }
   return book;
+}
+
+async function currentPdfFingerprint(book) {
+  const flags = nodeFs.constants.O_RDONLY | (nodeFs.constants.O_NOFOLLOW || 0);
+  const handle = await fs.open(book.path, flags);
+  try {
+    const stat = await handle.stat();
+    if (!stat.isFile()) return null;
+    const header = Buffer.alloc(1024);
+    const { bytesRead } = await handle.read(header, 0, header.length, 0);
+    if (!/%PDF-[0-9]\.[0-9]/.test(header.subarray(0, bytesRead).toString('latin1'))) return null;
+    return fingerprintBook(book.path, stat);
+  } finally {
+    await handle.close();
+  }
+}
+
+async function servePdfContent(request, response, book) {
+  const flags = nodeFs.constants.O_RDONLY | (nodeFs.constants.O_NOFOLLOW || 0);
+  const handle = await fs.open(book.path, flags);
+  let streamOwnsHandle = false;
+  try {
+    const stat = await handle.stat();
+    if (!stat.isFile()) throw Object.assign(new Error('Book is not a regular file'), { statusCode: 404 });
+    const header = Buffer.alloc(1024);
+    const { bytesRead } = await handle.read(header, 0, header.length, 0);
+    if (!/%PDF-[0-9]\.[0-9]/.test(header.subarray(0, bytesRead).toString('latin1'))) {
+      throw Object.assign(new Error('PDF file changed or is no longer valid'), { statusCode: 409 });
+    }
+
+    const commonHeaders = {
+      'Content-Type': 'application/pdf',
+      'Content-Disposition': 'inline',
+      'Accept-Ranges': 'bytes',
+      'Cache-Control': 'private, no-store',
+      'X-Content-Type-Options': 'nosniff'
+    };
+    const rangeHeader = request.headers.range;
+    const range = rangeHeader ? parseSingleByteRange(rangeHeader, stat.size) : null;
+    if (range && (range.kind || range.start === undefined
+      || range.end - range.start + 1 > MAX_PDF_RANGE_BYTES)) {
+      await handle.close();
+      const headers = { ...commonHeaders, 'Content-Range': `bytes */${stat.size}`, 'Content-Length': '0' };
+      response.writeHead(416, headers);
+      return response.end();
+    }
+
+    const start = range ? range.start : 0;
+    const end = range ? range.end : Math.max(0, stat.size - 1);
+    const length = range ? end - start + 1 : stat.size;
+    const status = range ? 206 : 200;
+    const headers = {
+      ...commonHeaders,
+      'Content-Length': String(length),
+      ...(range ? { 'Content-Range': `bytes ${start}-${end}/${stat.size}` } : {})
+    };
+    if (request.method === 'HEAD') {
+      await handle.close();
+      response.writeHead(status, headers);
+      return response.end();
+    }
+
+    response.writeHead(status, headers);
+    const stream = handle.createReadStream({ start, end, autoClose: true });
+    streamOwnsHandle = true;
+    response.on('close', () => {
+      if (!response.writableEnded) stream.destroy();
+    });
+    stream.on('error', (error) => {
+      if (!response.headersSent) return sendError(response, 500, 'Unable to read PDF');
+      response.destroy(error);
+    });
+    stream.pipe(response);
+  } catch (error) {
+    if (!streamOwnsHandle) await handle.close().catch(() => {});
+    throw error;
+  }
 }
 
 async function serveStatic(request, response, pathname) {
@@ -289,6 +978,7 @@ async function serveStatic(request, response, pathname) {
   const contentTypes = {
     '.html': 'text/html; charset=utf-8',
     '.js': 'text/javascript; charset=utf-8',
+    '.mjs': 'text/javascript; charset=utf-8',
     '.css': 'text/css; charset=utf-8',
     '.png': 'image/png',
     '.svg': 'image/svg+xml',
@@ -301,7 +991,7 @@ async function serveStatic(request, response, pathname) {
   // would silently keep the old behaviour. Vendor libs never change in place
   // and keep a long immutable cache.
   const etag = `"${stat.size.toString(16)}-${Math.floor(stat.mtimeMs).toString(16)}"`;
-  const isImmutable = relative.startsWith('lib/') || /\.(png|svg|woff2)$/i.test(relative);
+  const isImmutable = relative.startsWith('lib/') || relative.startsWith('vendor/pdfjs/') || /\.(png|svg|woff2)$/i.test(relative);
   if (request.headers['if-none-match'] === etag) {
     response.writeHead(304, { ETag: etag, 'Cache-Control': isImmutable ? 'public, max-age=31536000, immutable' : 'no-cache' });
     response.end();
@@ -360,6 +1050,7 @@ async function handleApi(request, response, pathname, searchParams = new URLSear
   }
   if (request.method === 'GET' && pathname === `${APP_PREFIX}/api/diagnostics`) {
     if (!user.isAdmin) return sendError(response, 403, 'Administrator access is required');
+    await refreshAuthorizationIfChanged();
     const index = await storage.getLibraryIndex();
     return sendJson(response, 200, {
       status: 'ok',
@@ -387,26 +1078,225 @@ async function handleApi(request, response, pathname, searchParams = new URLSear
     return sendJson(response, 200, currentScanState());
   }
   if (request.method === 'GET' && pathname === `${APP_PREFIX}/api/library`) {
+    await refreshAuthorizationIfChanged();
     const index = await storage.getLibraryIndex();
+    const pdfEnabled = pdfReaderEnabled();
     return sendJson(response, 200, {
       ...index,
+      features: {
+        libraryOrganization: LIBRARY_ORGANIZATION_ENABLED,
+        pdfReader: pdfEnabled,
+        hiddenPdfCount: pdfEnabled ? 0 : index.books.filter((book) => book.type === 'pdf' && !book.error).length
+      },
       configured: authorizedRoots.length > 0,
       authorizedRootCount: authorizedRoots.length,
       scanState: currentScanState(),
-      books: index.books.map(publicBook)
+      books: index.books.filter((book) => pdfEnabled || book.type !== 'pdf').map(publicBook)
     });
   }
   if (request.method === 'POST' && pathname === `${APP_PREFIX}/api/library/scan`) {
     if (!user.isAdmin) return sendError(response, 403, 'Administrator access is required');
     const index = await runLibraryScan();
+    const pdfEnabled = pdfReaderEnabled();
     return sendJson(response, 200, {
       ...index,
+      features: {
+        libraryOrganization: LIBRARY_ORGANIZATION_ENABLED,
+        pdfReader: pdfEnabled,
+        hiddenPdfCount: pdfEnabled ? 0 : index.books.filter((book) => book.type === 'pdf' && !book.error).length
+      },
       configured: authorizedRoots.length > 0,
       authorizedRootCount: authorizedRoots.length,
       scanState: currentScanState(),
-      books: index.books.map(publicBook)
+      books: index.books.filter((book) => pdfEnabled || book.type !== 'pdf').map(publicBook)
     });
   }
+
+  const organizationCollectionMatch = pathname.match(new RegExp(`^${APP_PREFIX}/api/library/collections/([^/]+)$`));
+  const organizationPlacementMatch = pathname.match(new RegExp(`^${APP_PREFIX}/api/library/books/([^/]+)/placement$`));
+  try {
+    if (request.method === 'GET' && pathname === `${APP_PREFIX}/api/library/organization`) {
+      return sendJson(response, 200, await getLibraryOrganizationSnapshot(user.uid));
+    }
+
+    if (request.method === 'POST' && pathname === `${APP_PREFIX}/api/library/organization/reconcile`) {
+      const body = await readJsonBody(request);
+      const revision = organizationRevision(body);
+      if (body.confirm !== undefined && typeof body.confirm !== 'boolean') {
+        throw Object.assign(new Error('Invalid organization confirmation'), { code: 'INVALID_ORGANIZATION_MUTATION' });
+      }
+      const index = await storage.getLibraryIndex();
+      assertOrganizationCatalogHealthy(index);
+      const stored = await storage.getLibraryOrganization(user.uid);
+      if (stored.revision !== revision) {
+        throw Object.assign(new Error('Organization revision conflict'), { code: 'ORGANIZATION_CONFLICT' });
+      }
+      const activeBookIds = new Set(index.books.filter((book) => !book.error).map((book) => book.id));
+      const preview = reconcileLibraryOrganization(stored, activeBookIds);
+      if (body.confirm !== true || preview.orphanedBookIds.length === 0) {
+        return sendJson(response, 200, {
+          dryRun: body.confirm !== true,
+          confirmed: body.confirm === true,
+          removedCount: 0,
+          orphanCount: preview.orphanedBookIds.length,
+          orphanedBookIds: preview.orphanedBookIds,
+          revision: stored.revision
+        });
+      }
+
+      await storage.mutateLibraryOrganization(user.uid, revision, (current) => {
+        return reconcileLibraryOrganization(current, activeBookIds).organization;
+      });
+      return sendJson(response, 200, {
+        ...(await getLibraryOrganizationSnapshot(user.uid, index)),
+        dryRun: false,
+        confirmed: true,
+        removedCount: preview.orphanedBookIds.length
+      });
+    }
+
+    if (request.method === 'POST' && pathname === `${APP_PREFIX}/api/library/collections`) {
+      const body = await readJsonBody(request);
+      const result = await mutateLibraryOrganization(user, body, (draft) => {
+        const name = body.name;
+        const now = new Date().toISOString();
+        const id = crypto.randomUUID();
+        draft.collections.push({ id, name, createdAt: now, updatedAt: now });
+        draft.collectionOrders[id] = [];
+        return draft;
+      });
+      return sendJson(response, 201, result);
+    }
+
+    if (organizationCollectionMatch && ['PATCH', 'DELETE'].includes(request.method)) {
+      const collectionId = decodeURIComponent(organizationCollectionMatch[1]);
+      if (!COLLECTION_ID_PATTERN.test(collectionId)) {
+        throw Object.assign(new Error('Invalid collection ID'), { code: 'INVALID_ORGANIZATION' });
+      }
+      const body = await readJsonBody(request);
+      if (request.method === 'PATCH') {
+        const result = await mutateLibraryOrganization(user, body, (draft) => {
+          const collection = organizationCollection(draft, collectionId);
+          if (!collection) throw Object.assign(new Error('Collection not found'), { code: 'COLLECTION_NOT_FOUND' });
+          collection.name = body.name;
+          collection.updatedAt = new Date().toISOString();
+          return draft;
+        });
+        return sendJson(response, 200, result);
+      }
+
+      const result = await mutateLibraryOrganization(user, body, (draft) => {
+        ensureOrganizationCollection(draft, collectionId);
+        const removedOrder = Array.isArray(draft.collectionOrders[collectionId])
+          ? draft.collectionOrders[collectionId]
+          : [];
+        draft.collections = draft.collections.filter((collection) => collection.id !== collectionId);
+        delete draft.collectionOrders[collectionId];
+        for (const [bookId, assignedCollectionId] of Object.entries(draft.bookAssignments)) {
+          if (assignedCollectionId === collectionId) delete draft.bookAssignments[bookId];
+        }
+        const nextUnassigned = [...draft.unassignedOrder];
+        for (const bookId of removedOrder) {
+          if (!nextUnassigned.includes(bookId)) nextUnassigned.push(bookId);
+        }
+        draft.unassignedOrder = nextUnassigned;
+        return draft;
+      });
+      return sendJson(response, 200, result);
+    }
+
+    if (organizationPlacementMatch && request.method === 'PUT') {
+      const bookId = decodeURIComponent(organizationPlacementMatch[1]);
+      if (!BOOK_ID_PATTERN.test(bookId)) {
+        throw Object.assign(new Error('Invalid book ID'), { code: 'INVALID_ORGANIZATION' });
+      }
+      await findBook(bookId);
+      const body = await readJsonBody(request);
+      const result = await mutateLibraryOrganization(user, body, (draft, activeBookIds) => {
+        if (!activeBookIds.has(bookId)) {
+          throw Object.assign(new Error('Book not found'), { code: 'BOOK_NOT_FOUND' });
+        }
+        const collectionId = body.collectionId === null || body.collectionId === undefined
+          ? null
+          : String(body.collectionId);
+        if (collectionId !== null) ensureOrganizationCollection(draft, collectionId);
+        const beforeBookId = body.beforeBookId === null || body.beforeBookId === undefined
+          ? null
+          : String(body.beforeBookId);
+        if (beforeBookId !== null && !activeBookIds.has(beforeBookId)) {
+          throw Object.assign(new Error('Invalid placement target'), { code: 'INVALID_ORGANIZATION' });
+        }
+
+        for (const order of Object.values(draft.collectionOrders)) {
+          const index = order.indexOf(bookId);
+          if (index >= 0) order.splice(index, 1);
+        }
+        draft.unassignedOrder = draft.unassignedOrder.filter((id) => id !== bookId);
+        if (collectionId === null) {
+          delete draft.bookAssignments[bookId];
+          const index = beforeBookId === null ? -1 : draft.unassignedOrder.indexOf(beforeBookId);
+          if (index < 0) draft.unassignedOrder.push(bookId);
+          else draft.unassignedOrder.splice(index, 0, bookId);
+          return draft;
+        }
+
+        draft.bookAssignments[bookId] = collectionId;
+        const targetOrder = draft.collectionOrders[collectionId] || (draft.collectionOrders[collectionId] = []);
+        const index = beforeBookId === null ? -1 : targetOrder.indexOf(beforeBookId);
+        if (beforeBookId !== null && index < 0) {
+          throw Object.assign(new Error('Invalid placement target'), { code: 'INVALID_ORGANIZATION' });
+        }
+        if (index < 0) targetOrder.push(bookId);
+        else targetOrder.splice(index, 0, bookId);
+        return draft;
+      });
+      return sendJson(response, 200, result);
+    }
+
+    if (request.method === 'PUT' && pathname === `${APP_PREFIX}/api/library/organization/order`) {
+      const body = await readJsonBody(request);
+      const result = await mutateLibraryOrganization(user, body, (draft, activeBookIds) => {
+        const scope = String(body.scope || '');
+        const visible = resolveLibraryOrganization([...activeBookIds].map((id) => ({ id })), draft);
+        const preserveMissing = (previous) => previous.filter((id) => !activeBookIds.has(id));
+        if (scope === 'all') {
+          ensureExactOrder(body.order, visible.allBookOrder, 'Invalid all-book order');
+          draft.allBookOrder = [...body.order, ...preserveMissing(draft.allBookOrder || [])];
+          return draft;
+        }
+        if (scope === 'collections') {
+          const current = draft.collections.map((collection) => collection.id);
+          ensureExactOrder(body.order, current, 'Invalid collection order');
+          const byId = new Map(draft.collections.map((collection) => [collection.id, collection]));
+          draft.collections = body.order.map((id) => byId.get(id));
+          return draft;
+        }
+        if (scope === 'unassigned') {
+          ensureExactOrder(body.order, visible.unassignedOrder, 'Invalid unassigned order');
+          draft.unassignedOrder = [...body.order, ...preserveMissing(draft.unassignedOrder)];
+          return draft;
+        }
+        ensureOrganizationCollection(draft, scope);
+        const current = draft.collectionOrders[scope] || [];
+        ensureExactOrder(body.order, visible.collectionOrders[scope], 'Invalid collection book order');
+        draft.collectionOrders[scope] = [...body.order, ...preserveMissing(current)];
+        return draft;
+      });
+      return sendJson(response, 200, result);
+    }
+
+    if (request.method === 'PUT' && pathname === `${APP_PREFIX}/api/library/organization/preferences`) {
+      const body = await readJsonBody(request);
+      const result = await mutateLibraryOrganization(user, body, (draft) => {
+        draft.preferences = { viewMode: body.viewMode };
+        return draft;
+      });
+      return sendJson(response, 200, result);
+    }
+  } catch (error) {
+    return organizationApiError(response, error);
+  }
+
   if (request.method === 'GET' && pathname === `${APP_PREFIX}/api/state`) {
     return sendJson(response, 200, await storage.getState(user.uid));
   }
@@ -446,7 +1336,35 @@ async function handleApi(request, response, pathname, searchParams = new URLSear
   if (request.method === 'GET' && searchMatch) {
     const book = await findBook(searchMatch[1]);
     const options = parseBookSearchParams(searchParams);
-    return sendJson(response, 200, await searchBookText(book, DATA_ROOT, options));
+    if (book.type === 'pdf') {
+      if (!pdfReaderEnabled()) {
+        return sendJson(response, 200, {
+          available: false,
+          query: options.query,
+          scope: options.scope,
+          results: [],
+          hasMore: false,
+          nextCursor: null,
+          truncated: false,
+          unavailableReason: 'pdf_search_disabled'
+        });
+      }
+    }
+    const abortController = new AbortController();
+    const abortSearch = () => abortController.abort();
+    const abortOnResponseClose = () => {
+      if (!response.writableEnded) abortSearch();
+    };
+    request.once('aborted', abortSearch);
+    response.once('close', abortOnResponseClose);
+    try {
+      const payload = await searchBookText(book, DATA_ROOT, { ...options, signal: abortController.signal });
+      if (request.aborted || response.destroyed) return;
+      return sendJson(response, 200, payload);
+    } finally {
+      request.off('aborted', abortSearch);
+      response.off('close', abortOnResponseClose);
+    }
   }
 
   const progressMatch = pathname.match(new RegExp(`^${APP_PREFIX}/api/books/([a-f0-9]{64})/progress$`));
@@ -480,38 +1398,171 @@ async function handleApi(request, response, pathname, searchParams = new URLSear
     }
   }
 
+  const aiConversationCollectionMatch = pathname.match(new RegExp(`^${APP_PREFIX}/api/books/([^/]+)/ai/conversations$`));
+  const aiConversationItemMatch = pathname.match(new RegExp(`^${APP_PREFIX}/api/books/([^/]+)/ai/conversations/([^/]+)$`));
+  const aiConversationMessagesMatch = pathname.match(new RegExp(`^${APP_PREFIX}/api/books/([^/]+)/ai/conversations/([^/]+)/messages$`));
+  if (aiConversationCollectionMatch || aiConversationItemMatch || aiConversationMessagesMatch) {
+    try {
+      const match = aiConversationCollectionMatch || aiConversationItemMatch || aiConversationMessagesMatch;
+      const bookId = match[1];
+      const conversationBook = await findBook(bookId, { requirePathIdentity: true });
+      if (aiConversationCollectionMatch) {
+        if (request.method === 'GET') {
+          return sendJson(response, 200, await aiConversationStorage.getConversationState(user.uid, bookId));
+        }
+        if (request.method === 'POST') {
+          const body = await readJsonBody(request);
+          if (!body || typeof body !== 'object' || Array.isArray(body)) {
+            throw Object.assign(new Error('Invalid conversation title'), { code: 'INVALID_CONVERSATION_TITLE' });
+          }
+          return sendJson(response, 201, await aiConversationStorage.createConversation(user.uid, bookId, {
+            title: body.title
+          }));
+        }
+      } else if (aiConversationMessagesMatch) {
+        if (request.method === 'DELETE') {
+          return sendJson(response, 200, await aiConversationStorage.clearConversation(
+            user.uid,
+            bookId,
+            aiConversationMessagesMatch[2]
+          ));
+        }
+      } else {
+        if (request.method === 'GET') {
+          const conversation = await aiConversationStorage.getConversation(
+            user.uid,
+            bookId,
+            aiConversationItemMatch[2]
+          );
+          if (conversationBook.type !== 'pdf') return sendJson(response, 200, conversation);
+          const currentFingerprint = await currentPdfFingerprint(conversationBook).catch(() => null);
+          return sendJson(response, 200, pdfConversationWithSourceValidity(
+            conversation, currentFingerprint === conversationBook.fingerprint ? currentFingerprint : null
+          ));
+        }
+        if (request.method === 'DELETE') {
+          return sendJson(response, 200, await aiConversationStorage.deleteConversation(
+            user.uid,
+            bookId,
+            aiConversationItemMatch[2]
+          ));
+        }
+      }
+      return sendError(response, 405, 'Method not allowed');
+    } catch (error) {
+      return aiConversationError(response, error);
+    }
+  }
+
   const aiSearchMatch = pathname.match(new RegExp(`^${APP_PREFIX}/api/books/([a-f0-9]{64})/ai/search$`));
   if (request.method === 'POST' && aiSearchMatch) {
     const book = await findBook(aiSearchMatch[1]);
+    if (book.type === 'pdf') return handlePdfAiSearch(request, response, aiSearchMatch[1], await readJsonBody(request));
     const body = await readJsonBody(request);
     const question = String(body.question || '').trim();
     const selectedText = String(body.selectedText || '').trim();
     if (!question || question.length > 4000) return sendError(response, 400, '检索问题无效');
     if (selectedText.length > 12000) return sendError(response, 400, '选中文本过长');
+    const intent = effectiveAiIntent(question, selectedText);
     const chapterIndex = Number.isInteger(body.chapter?.index) ? body.chapter.index : null;
+    let chapterResolution = null;
+    let logicalChapterId = null;
+    let logicalSectionId = null;
+    if (intent.scope === 'chapter' || intent.scope === 'section') {
+      chapterResolution = await resolveBookPosition(book, DATA_ROOT, body.chapter || null);
+      logicalChapterId = chapterResolution.status === 'resolved' ? chapterResolution.chapterId : null;
+      logicalSectionId = intent.scope === 'section' && chapterResolution.status === 'resolved'
+        ? chapterResolution.sectionId
+        : null;
+      if (!logicalChapterId || (intent.scope === 'section' && !logicalSectionId)) {
+        return sendJson(response, 200, {
+          available: true,
+          matches: [],
+          confidence: { level: 'none', guarded: true, reason: 'insufficient-scope', message: '无法确认当前章节范围。' },
+          intent: intent.intent,
+          scope: intent.scope,
+          scopeConfidence: 'unresolved',
+          coverage: { mode: 'unavailable', totalChunks: 0, selectedChunks: 0, coveredRegions: [], ratio: 0 },
+          retrievalStatus: 'insufficient_scope',
+          chapterResolution
+        });
+      }
+    }
     const result = await searchAiBook(book, DATA_ROOT, {
       query: question,
       selectedText,
       currentChapterIndex: chapterIndex,
+      logicalChapterId,
+      logicalSectionId,
+      intent: intent.intent,
       limit: 6
     });
-    return sendJson(response, 200, result);
+    return sendJson(response, 200, {
+      ...result,
+      intent: intent.intent,
+      scope: intent.scope,
+      scopeConfidence: chapterResolution?.mappingQuality || intent.scopeConfidence,
+      chapterResolution
+    });
   }
 
   const aiStreamMatch = pathname.match(new RegExp(`^${APP_PREFIX}/api/books/([a-f0-9]{64})/ai/ask/stream$`));
   if (request.method === 'POST' && aiStreamMatch) {
     const book = await findBook(aiStreamMatch[1]);
+    if (book.type === 'pdf') return handlePdfAiStream(request, response, user, aiStreamMatch[1], await readJsonBody(request));
     const body = await readJsonBody(request);
+    const conversationId = body?.conversationId ? String(body.conversationId) : '';
     let input;
     try {
-      input = validateAiRequest(body);
+      input = validateAiRequest(body, {
+        allowEmptyContext: isAiChapterUnderstandingEnabled()
+          && classifyAiIntent({ question: body?.question, selectedText: body?.selectedText }).intent === 'book_summary'
+      });
     } catch (error) {
       throw Object.assign(error, { statusCode: 400 });
     }
     await validateAiBookContext(book, input);
+    const chapterResolution = await resolveAiInputChapter(book, input);
     const savedConfig = await aiConfigStorage.get(user.uid);
     const config = publicAiConfig(savedConfig, process.env);
     if (!config.configured) return sendError(response, 503, 'AI 服务尚未配置');
+
+    const requestIntent = effectiveAiIntent(input.question, input.selectedText);
+    let chapterSummaryPlan = null;
+    let chapterSummaryEvidence = null;
+    let bookSummaryEvidence = null;
+    if (requestIntent.intent === 'chapter_summary') {
+      if (chapterResolution.status !== 'resolved' || !chapterResolution.chapterId) {
+        return sendError(response, 409, '无法确认当前章节范围，请跳转到明确的章节标题后重试。');
+      }
+      chapterSummaryEvidence = await readChapterEvidence(book, DATA_ROOT, chapterResolution.chapterId);
+      if (!chapterSummaryEvidence.available || chapterSummaryEvidence.truncated || !chapterSummaryEvidence.chunks.length) {
+        return sendError(response, chapterSummaryEvidence.truncated ? 413 : 409, chapterSummaryEvidence.truncated
+          ? '本章内容超出安全读取上限，请缩小范围后重试。'
+          : '当前章节没有可用的原文证据。');
+      }
+      try {
+        chapterSummaryPlan = planChapterSummary(chapterSummaryEvidence.chunks);
+      } catch (error) {
+        return sendError(response, error.statusCode || 413, error.message || '本章超出 AI 概述预算，请缩小范围后重试。');
+      }
+      input.context = chapterSummaryPlan.mapTasks.map((task) => ({
+        text: task.text,
+        chapterIndex: task.chapterIndex,
+        chapterHref: task.chapterHref,
+        chapterLabel: task.chapterLabel,
+        startOffset: task.start
+      }));
+    } else if (requestIntent.intent === 'book_summary') {
+      bookSummaryEvidence = await prepareBookSummary(book, user.uid, input.question, config);
+      if (bookSummaryEvidence.error) return sendError(response, bookSummaryEvidence.error.statusCode || 413, bookSummaryEvidence.error.message);
+      chapterSummaryPlan = bookSummaryEvidence.plan;
+      input.scope = 'book';
+      input.context = chapterSummaryPlan.mapTasks.map((task) => ({
+        text: task.text, chapterIndex: task.chapterIndex, chapterHref: task.chapterHref,
+        chapterLabel: task.chapterLabel, startOffset: task.start
+      }));
+    }
 
     const abortController = new AbortController();
     const abortOnClientClose = () => abortController.abort();
@@ -521,26 +1572,99 @@ async function handleApi(request, response, pathname, searchParams = new URLSear
     });
 
     sendSseHeaders(response);
-    sendSseEvent(response, 'meta', { sources: aiSourcesFromContext(input.context), model: config.model });
+    sendSseEvent(response, 'meta', {
+      sources: aiSourcesFromContext(input.context),
+      model: config.model,
+      chapterResolution,
+      ...(chapterSummaryPlan ? {
+        summaryMode: chapterSummaryPlan.mode,
+        scope: bookSummaryEvidence ? 'book' : 'chapter',
+        coverage: chapterSummaryPlan.coverage,
+        estimatedSourceChars: chapterSummaryPlan.totalSourceChars,
+        estimatedInputTokens: chapterSummaryPlan.estimatedInputTokens
+      } : {})
+    });
     try {
-      const result = await requestOpenAiStream({
-        request: input,
-        env: process.env,
-        savedConfig,
-        signal: abortController.signal,
-        onEvent: async (event) => {
-          const delta = event?.type === 'response.output_text.delta' && typeof event.delta === 'string'
-            ? event.delta
-            : '';
-          if (delta) sendSseEvent(response, 'delta', { delta });
-        }
-      });
-      sendSseEvent(response, 'done', {
+      const result = chapterSummaryPlan
+        ? await getOrCreateChapterSummary({
+          book,
+          dataRoot: DATA_ROOT,
+          userId: user.uid,
+          logicalChapterId: bookSummaryEvidence ? '__book_summary__' : chapterResolution.chapterId,
+          bookFingerprint: (bookSummaryEvidence || chapterSummaryEvidence).bookFingerprint,
+          parserVersion: (bookSummaryEvidence || chapterSummaryEvidence).parserVersion,
+          baseUrl: config.baseUrl,
+          model: config.model,
+          cachePurpose: bookSummaryEvidence ? 'book-summary' : 'chapter-summary',
+          build: () => requestOpenAiChapterSummary({
+            request: { ...input, scope: bookSummaryEvidence ? 'book' : 'chapter' },
+            plan: chapterSummaryPlan,
+            env: process.env,
+            savedConfig,
+            signal: abortController.signal,
+            mapTaskCache: (task, build) => getOrCreateChapterSummarySegment({
+              book,
+              dataRoot: DATA_ROOT,
+              userId: user.uid,
+              logicalChapterId: task.logicalChapterId || chapterResolution.chapterId,
+              parserVersion: (bookSummaryEvidence || chapterSummaryEvidence).parserVersion,
+              baseUrl: config.baseUrl,
+              model: config.model,
+              task,
+              build
+            })
+          })
+        })
+        : await requestOpenAiStream({
+          request: input,
+          env: process.env,
+          savedConfig,
+          signal: abortController.signal,
+          onEvent: async (event) => {
+            const delta = event?.type === 'response.output_text.delta' && typeof event.delta === 'string'
+              ? event.delta
+              : '';
+            if (delta) sendSseEvent(response, 'delta', { delta });
+          }
+        });
+      if (chapterSummaryPlan && result.answer) sendSseEvent(response, 'delta', { delta: result.answer });
+      const done = {
         answer: result.answer,
         responseId: result.responseId,
-        streamed: result.streamed,
+        streamed: result.streamed ?? false,
         sources: aiSourcesFromContext(input.context)
-      });
+      };
+      if (chapterSummaryPlan) {
+        done.summaryCacheHit = result.cacheHit;
+        done.summaryMode = chapterSummaryPlan.mode;
+        done.coverage = chapterSummaryPlan.coverage;
+        done.scope = bookSummaryEvidence ? 'book' : 'chapter';
+        done.summaryConfidence = assessSummaryConfidence({
+          mappingQuality: bookSummaryEvidence ? chapterSummaryPlan.coverage.mappingQuality : chapterResolution.mappingQuality,
+          coverage: chapterSummaryPlan.coverage,
+          sourceIntegrity: true,
+          citationIntegrity: result.citationIntegrity === true
+        });
+      }
+      if (conversationId && !abortController.signal.aborted && !request.aborted) {
+        try {
+          await aiConversationStorage.appendCompletedTurn(user.uid, aiStreamMatch[1], conversationId, {
+            question: input.question,
+            answer: result.answer,
+            sources: aiPersistenceSources(input.context)
+          });
+          done.persisted = true;
+        } catch (error) {
+          done.persisted = false;
+          done.persistenceErrorCode = aiConversationPersistenceErrorCode(error);
+          recordError(error, {
+            operation: 'ai-conversation-persist',
+            bookId: aiStreamMatch[1],
+            code: done.persistenceErrorCode
+          });
+        }
+      }
+      sendSseEvent(response, 'done', done);
     } catch (error) {
       if (error.code !== 'AI_ABORTED' && !response.destroyed) {
         recordError(error, { operation: 'ai-stream', bookId: aiStreamMatch[1], code: error.code || null });
@@ -559,22 +1683,116 @@ async function handleApi(request, response, pathname, searchParams = new URLSear
   const aiMatch = pathname.match(new RegExp(`^${APP_PREFIX}/api/books/([a-f0-9]{64})/ai/ask$`));
   if (request.method === 'POST' && aiMatch) {
     const book = await findBook(aiMatch[1]);
+    if (book.type === 'pdf') return handlePdfAiAnswer(request, response, user, aiMatch[1], await readJsonBody(request));
     const body = await readJsonBody(request);
     let input;
     try {
-      input = validateAiRequest(body);
+      input = validateAiRequest(body, {
+        allowEmptyContext: isAiChapterUnderstandingEnabled()
+          && classifyAiIntent({ question: body?.question, selectedText: body?.selectedText }).intent === 'book_summary'
+      });
     } catch (error) {
       throw Object.assign(error, { statusCode: 400 });
     }
     await validateAiBookContext(book, input);
+    const chapterResolution = await resolveAiInputChapter(book, input);
     const savedConfig = await aiConfigStorage.get(user.uid);
     const config = publicAiConfig(savedConfig, process.env);
     if (!config.configured) return sendError(response, 503, 'AI 服务尚未配置');
 
+    const requestIntent = effectiveAiIntent(input.question, input.selectedText);
+    let chapterSummaryPlan = null;
+    let chapterSummaryEvidence = null;
+    let bookSummaryEvidence = null;
+    if (requestIntent.intent === 'chapter_summary') {
+      if (chapterResolution.status !== 'resolved' || !chapterResolution.chapterId) {
+        return sendError(response, 409, '无法确认当前章节范围，请跳转到明确的章节标题后重试。');
+      }
+      chapterSummaryEvidence = await readChapterEvidence(book, DATA_ROOT, chapterResolution.chapterId);
+      if (!chapterSummaryEvidence.available || chapterSummaryEvidence.truncated || !chapterSummaryEvidence.chunks.length) {
+        return sendError(response, chapterSummaryEvidence.truncated ? 413 : 409, chapterSummaryEvidence.truncated
+          ? '本章内容超出安全读取上限，请缩小范围后重试。'
+          : '当前章节没有可用的原文证据。');
+      }
+      try {
+        chapterSummaryPlan = planChapterSummary(chapterSummaryEvidence.chunks);
+      } catch (error) {
+        return sendError(response, error.statusCode || 413, error.message || '本章超出 AI 概述预算，请缩小范围后重试。');
+      }
+      input.context = chapterSummaryPlan.mapTasks.map((task) => ({
+        text: task.text,
+        chapterIndex: task.chapterIndex,
+        chapterHref: task.chapterHref,
+        chapterLabel: task.chapterLabel,
+        startOffset: task.start
+      }));
+    } else if (requestIntent.intent === 'book_summary') {
+      bookSummaryEvidence = await prepareBookSummary(book, user.uid, input.question, config);
+      if (bookSummaryEvidence.error) return sendError(response, bookSummaryEvidence.error.statusCode || 413, bookSummaryEvidence.error.message);
+      chapterSummaryPlan = bookSummaryEvidence.plan;
+      input.scope = 'book';
+      input.context = chapterSummaryPlan.mapTasks.map((task) => ({
+        text: task.text,
+        chapterIndex: task.chapterIndex,
+        chapterHref: task.chapterHref,
+        chapterLabel: task.chapterLabel,
+        startOffset: task.start
+      }));
+    }
+
     try {
-      const answer = await requestOpenAiAnswer({ request: input, env: process.env, savedConfig });
+      const summaryResult = chapterSummaryPlan
+        ? await getOrCreateChapterSummary({
+          book,
+          dataRoot: DATA_ROOT,
+          userId: user.uid,
+          logicalChapterId: bookSummaryEvidence ? '__book_summary__' : chapterResolution.chapterId,
+          bookFingerprint: (bookSummaryEvidence || chapterSummaryEvidence).bookFingerprint,
+          parserVersion: (bookSummaryEvidence || chapterSummaryEvidence).parserVersion,
+          baseUrl: config.baseUrl,
+          model: config.model,
+          cachePurpose: bookSummaryEvidence ? 'book-summary' : 'chapter-summary',
+          build: () => requestOpenAiChapterSummary({
+            request: { ...input, scope: bookSummaryEvidence ? 'book' : 'chapter' },
+            plan: chapterSummaryPlan,
+            env: process.env,
+            savedConfig,
+            mapTaskCache: (task, build) => getOrCreateChapterSummarySegment({
+              book,
+              dataRoot: DATA_ROOT,
+              userId: user.uid,
+              logicalChapterId: task.logicalChapterId || chapterResolution.chapterId,
+              parserVersion: (bookSummaryEvidence || chapterSummaryEvidence).parserVersion,
+              baseUrl: config.baseUrl,
+              model: config.model,
+              task,
+              build
+            })
+          })
+        })
+        : null;
+      const answer = summaryResult?.answer
+        || await requestOpenAiAnswer({ request: input, env: process.env, savedConfig });
       const sources = aiSourcesFromContext(input.context);
-      return sendJson(response, 200, { answer, sources });
+      return sendJson(response, 200, {
+        answer,
+        sources,
+        chapterResolution,
+        ...(chapterSummaryPlan ? {
+          summaryMode: chapterSummaryPlan.mode,
+          scope: bookSummaryEvidence ? 'book' : 'chapter',
+          coverage: chapterSummaryPlan.coverage,
+          estimatedSourceChars: chapterSummaryPlan.totalSourceChars,
+          estimatedInputTokens: chapterSummaryPlan.estimatedInputTokens,
+          summaryCacheHit: summaryResult.cacheHit,
+          summaryConfidence: assessSummaryConfidence({
+            mappingQuality: bookSummaryEvidence ? chapterSummaryPlan.coverage.mappingQuality : chapterResolution.mappingQuality,
+            coverage: chapterSummaryPlan.coverage,
+            sourceIntegrity: true,
+            citationIntegrity: summaryResult.citationIntegrity === true
+          })
+        } : {})
+      });
     } catch (error) {
       recordError(error, { operation: 'ai-answer', bookId: aiMatch[1], code: error.code || null });
       return sendError(response, error.statusCode || 502, aiUserError(error));
@@ -582,8 +1800,76 @@ async function handleApi(request, response, pathname, searchParams = new URLSear
   }
 
   const contentMatch = pathname.match(new RegExp(`^${APP_PREFIX}/api/books/([a-f0-9]{64})/content$`));
-  if (request.method === 'GET' && contentMatch) {
-    const book = await findBook(contentMatch[1]);
+
+  const pdfAnnotationCollectionMatch = pathname.match(new RegExp(`^${APP_PREFIX}/api/books/([a-f0-9]{64})/pdf-annotations$`));
+  const pdfAnnotationItemMatch = pathname.match(new RegExp(`^${APP_PREFIX}/api/books/([a-f0-9]{64})/pdf-annotations/([0-9a-f-]{36})$`));
+  if (pdfAnnotationCollectionMatch || pdfAnnotationItemMatch) {
+    const match = pdfAnnotationCollectionMatch || pdfAnnotationItemMatch;
+    const bookId = match[1];
+    const annotationId = pdfAnnotationItemMatch?.[2] || '';
+    const isCollection = Boolean(pdfAnnotationCollectionMatch);
+    if ((isCollection && !['GET', 'POST'].includes(request.method))
+      || (!isCollection && !['PATCH', 'DELETE'].includes(request.method))) {
+      return sendError(response, 405, 'Method not allowed');
+    }
+
+    try {
+      const book = await findBook(bookId, { requirePathIdentity: true });
+      if (book.type !== 'pdf') return sendError(response, 415, 'PDF annotations require a PDF book');
+      if (!pdfReaderEnabled()) return sendError(response, 404, 'PDF reading is disabled');
+
+      if (request.method === 'DELETE') {
+        const result = await storage.deletePdfAnnotation(user.uid, bookId, annotationId);
+        return sendJson(response, 200, result);
+      }
+
+      const currentFingerprint = await currentPdfFingerprint(book);
+      const sourceMatchesIndex = Boolean(currentFingerprint
+        && /^[a-f0-9]{64}$/.test(String(book.fingerprint || ''))
+        && currentFingerprint === book.fingerprint);
+
+      if (request.method === 'GET') {
+        const annotations = await storage.listPdfAnnotations(user.uid, bookId);
+        return sendJson(response, 200, {
+          annotations: annotations.map((annotation) => ({
+            ...annotation,
+            sourceStale: !sourceMatchesIndex || annotation.sourceFingerprint !== book.fingerprint
+          }))
+        });
+      }
+
+      if (!sourceMatchesIndex) {
+        return sendError(response, 409, 'PDF source changed; rescan the library before creating or editing annotations');
+      }
+
+      if (request.method === 'POST') {
+        const body = await readJsonBody(request);
+        const annotation = await storage.createPdfAnnotation(user.uid, bookId, body, book.fingerprint);
+        return sendJson(response, 200, { annotation });
+      }
+
+      const saved = (await storage.listPdfAnnotations(user.uid, bookId)).find((item) => item.id === annotationId);
+      if (!saved) return sendError(response, 404, 'PDF annotation not found');
+      if (saved.sourceFingerprint !== book.fingerprint) {
+        return sendError(response, 409, 'PDF source changed; stale annotations cannot be edited');
+      }
+      const body = await readJsonBody(request);
+      const annotation = await storage.updatePdfAnnotation(user.uid, bookId, annotationId, body);
+      return sendJson(response, 200, { annotation });
+    } catch (error) {
+      if (error.statusCode) return sendError(response, error.statusCode, error.message);
+      if (error.code === 'ELOOP') return sendError(response, 409, 'PDF source is no longer a regular authorized file');
+      throw error;
+    }
+  }
+
+  if (['GET', 'HEAD'].includes(request.method) && contentMatch) {
+    const book = await findBook(contentMatch[1], { requirePathIdentity: true });
+    if (book.type === 'pdf') {
+      if (!pdfReaderEnabled()) return sendError(response, 404, 'PDF reading is disabled');
+      return servePdfContent(request, response, book);
+    }
+    if (request.method === 'HEAD') return sendError(response, 405, 'Method not allowed');
     const data = await fs.readFile(book.path);
     const type = book.type === 'epub' ? 'application/epub+zip' : 'text/plain; charset=utf-8';
     response.writeHead(200, {
@@ -627,6 +1913,7 @@ async function handleRequest(request, response) {
     if (request.method !== 'GET' && request.method !== 'HEAD') return sendError(response, 405, 'Method not allowed');
     return await serveStatic(request, response, url.pathname);
   } catch (error) {
+    if (response.destroyed || response.writableEnded) return;
     if (error.code === 'ENOENT') return sendError(response, 404, 'Not found');
     recordError(error, { method: request.method, url: request.url });
     console.error(error);

@@ -3,12 +3,25 @@
 const fs = require('node:fs/promises');
 const path = require('node:path');
 const crypto = require('node:crypto');
+const {
+  MAX_ORGANIZATION_BYTES,
+  createEmptyLibraryOrganization,
+  normalizeLibraryOrganization
+} = require('./library-organization');
+const {
+  MAX_PDF_ANNOTATIONS_PER_BOOK,
+  normalizePdfAnnotationCreate,
+  normalizePdfAnnotationEdit,
+  assertPdfAnnotationCollection,
+  annotationPayload
+} = require('./pdf-annotation-contract');
 
 const MAX_BOOKMARKS_PER_BOOK = 200;
 const MAX_BOOKMARK_LABEL_LENGTH = 120;
 const MAX_BOOKMARK_LOCATOR_TEXT_LENGTH = 240;
 const MAX_BOOKMARK_LOCATOR_HREF_LENGTH = 2048;
 const MAX_BOOKMARK_LOCATOR_ANCHOR_LENGTH = 512;
+const MAX_BOOKMARK_PDF_PAGE_COUNT = 10000;
 
 function normalizeUserId(value) {
   const uid = String(value || '').trim();
@@ -62,6 +75,15 @@ function normalizeBookmarkLocator(value) {
 
   const version = Number(value.version);
   const type = String(value.type || '');
+  if (version === 1 && type === 'pdf') {
+    if (!Number.isInteger(value.pageIndex)
+      || value.pageIndex < 0
+      || value.pageIndex >= MAX_BOOKMARK_PDF_PAGE_COUNT) {
+      throw new Error('Invalid bookmark locator');
+    }
+    return { version: 1, type: 'pdf', pageIndex: value.pageIndex };
+  }
+
   const readingScope = String(value.readingScope || '');
   const href = String(value.href || '').replace(/\\/g, '/');
   if (version !== 2 || type !== 'semantic-position' || !['page', 'chapter'].includes(readingScope)) {
@@ -111,6 +133,7 @@ function normalizeBookmarkLocator(value) {
 
 function bookmarkLocatorKey(locator) {
   const normalized = normalizeBookmarkLocator(locator);
+  if (normalized.type === 'pdf') return JSON.stringify(normalized);
   return JSON.stringify({
     version: normalized.version,
     type: normalized.type,
@@ -153,6 +176,7 @@ class UserStorage {
     }
     this.dataRoot = path.resolve(dataRoot);
     this.userMutationQueues = new Map();
+    this.libraryOrganizationMutationQueues = new Map();
   }
 
   userDirectory(uid) {
@@ -217,6 +241,7 @@ class UserStorage {
       // 'single' is no longer a user-selectable mode: legacy values migrate to
       // 'double'. It survives only as the client's narrow-window fallback.
       const allowedReadingModes = new Set(['scroll', 'double']);
+      const allowedPdfLayoutModes = new Set(['continuous', 'single', 'double']);
       const normalizeMode = (value) => (value === 'single' ? 'double' : value);
       const previousReadingMode = allowedReadingModes.has(state.settings.readingMode)
         ? state.settings.readingMode
@@ -239,6 +264,10 @@ class UserStorage {
           : Number.isFinite(state.settings.pageMargin) ? state.settings.pageMargin : 40,
         readingMode,
         continuousScroll: readingMode === 'scroll',
+        pdfLayoutMode: allowedPdfLayoutModes.has(settings.pdfLayoutMode)
+          ? settings.pdfLayoutMode
+          : allowedPdfLayoutModes.has(state.settings.pdfLayoutMode)
+            ? state.settings.pdfLayoutMode : 'continuous',
         tocOpen: settings.tocOpen !== false,
         highlightColor: allowedHighlightColors.has(settings.highlightColor)
           ? settings.highlightColor
@@ -342,6 +371,99 @@ class UserStorage {
     });
   }
 
+  async listPdfAnnotations(uid, bookId) {
+    if (!/^[a-f0-9]{64}$/.test(String(bookId || ''))) {
+      throw new Error('Invalid book ID');
+    }
+    const state = await this.getState(uid);
+    const saved = state.books[bookId]?.pdfAnnotations;
+    if (saved === undefined) return [];
+    return assertPdfAnnotationCollection(saved);
+  }
+
+  async createPdfAnnotation(uid, bookId, input, sourceFingerprint) {
+    if (!/^[a-f0-9]{64}$/.test(String(bookId || ''))) {
+      throw new Error('Invalid book ID');
+    }
+    const annotation = normalizePdfAnnotationCreate(input, sourceFingerprint);
+    return this.mutateUserState(uid, async (state) => {
+      const previous = state.books[bookId] || {};
+      const existing = previous.pdfAnnotations === undefined
+        ? [] : assertPdfAnnotationCollection(previous.pdfAnnotations);
+      const duplicate = existing.find((item) => item.id === annotation.id);
+      if (duplicate) {
+        if (JSON.stringify(annotationPayload(duplicate)) !== JSON.stringify(annotationPayload(annotation))) {
+          throw Object.assign(new Error('PDF annotation ID already exists with different content'), {
+            code: 'PDF_ANNOTATION_CONFLICT', statusCode: 409
+          });
+        }
+        return duplicate;
+      }
+      if (existing.length >= MAX_PDF_ANNOTATIONS_PER_BOOK) {
+        throw Object.assign(new Error('PDF annotation limit exceeded'), { code: 'PDF_ANNOTATION_LIMIT', statusCode: 413 });
+      }
+
+      const annotations = assertPdfAnnotationCollection([...existing, annotation]);
+      state.books[bookId] = {
+        ...previous,
+        pdfAnnotations: annotations,
+        pdfAnnotationsUpdatedAt: annotation.updatedAt
+      };
+      return annotation;
+    });
+  }
+
+  async updatePdfAnnotation(uid, bookId, annotationId, input) {
+    if (!/^[a-f0-9]{64}$/.test(String(bookId || ''))) {
+      throw new Error('Invalid book ID');
+    }
+    const id = String(annotationId || '');
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(id)) {
+      throw Object.assign(new Error('Invalid PDF annotation ID'), { code: 'INVALID_PDF_ANNOTATION', statusCode: 400 });
+    }
+    const patch = normalizePdfAnnotationEdit(input);
+    return this.mutateUserState(uid, async (state) => {
+      const previous = state.books[bookId] || {};
+      const existing = previous.pdfAnnotations === undefined
+        ? [] : assertPdfAnnotationCollection(previous.pdfAnnotations);
+      const index = existing.findIndex((item) => item.id === id);
+      if (index < 0) throw Object.assign(new Error('PDF annotation not found'), { code: 'PDF_ANNOTATION_NOT_FOUND', statusCode: 404 });
+      const updated = { ...existing[index], ...patch, updatedAt: new Date().toISOString() };
+      const annotations = existing.slice();
+      annotations[index] = updated;
+      const normalized = assertPdfAnnotationCollection(annotations);
+      state.books[bookId] = {
+        ...previous,
+        pdfAnnotations: normalized,
+        pdfAnnotationsUpdatedAt: updated.updatedAt
+      };
+      return normalized[index];
+    });
+  }
+
+  async deletePdfAnnotation(uid, bookId, annotationId) {
+    if (!/^[a-f0-9]{64}$/.test(String(bookId || ''))) {
+      throw new Error('Invalid book ID');
+    }
+    const id = String(annotationId || '');
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(id)) {
+      throw Object.assign(new Error('Invalid PDF annotation ID'), { code: 'INVALID_PDF_ANNOTATION', statusCode: 400 });
+    }
+    return this.mutateUserState(uid, async (state) => {
+      const previous = state.books[bookId] || {};
+      const existing = previous.pdfAnnotations === undefined
+        ? [] : assertPdfAnnotationCollection(previous.pdfAnnotations);
+      const annotations = existing.filter((item) => item.id !== id);
+      if (annotations.length === existing.length) return { deleted: false, id };
+      state.books[bookId] = {
+        ...previous,
+        pdfAnnotations: annotations,
+        pdfAnnotationsUpdatedAt: new Date().toISOString()
+      };
+      return { deleted: true, id };
+    });
+  }
+
   async listBookmarks(uid, bookId) {
     if (!/^[a-f0-9]{64}$/.test(String(bookId || ''))) {
       throw new Error('Invalid book ID');
@@ -412,6 +534,76 @@ class UserStorage {
       };
       return { deleted: true, id };
     });
+  }
+
+  libraryOrganizationPath(uid) {
+    return path.join(this.userDirectory(uid), 'library-organization.json');
+  }
+
+  async getLibraryOrganization(uid) {
+    const normalizedUid = normalizeUserId(uid);
+    const filePath = this.libraryOrganizationPath(normalizedUid);
+    let raw;
+    try {
+      const stat = await fs.lstat(filePath);
+      if (stat.isSymbolicLink() || !stat.isFile()) {
+        throw Object.assign(new Error('Unsafe organization store target'), { code: 'ORGANIZATION_UNSAFE_TARGET' });
+      }
+      if (stat.size > MAX_ORGANIZATION_BYTES) {
+        throw Object.assign(new Error('Organization store is too large'), { code: 'ORGANIZATION_STORE_TOO_LARGE' });
+      }
+      raw = await readJson(filePath, null);
+    } catch (error) {
+      if (error.code === 'ENOENT') return createEmptyLibraryOrganization();
+      if (String(error.code || '').startsWith('ORGANIZATION_')) throw error;
+      throw Object.assign(new Error('Organization store is corrupt'), { code: 'ORGANIZATION_STORE_CORRUPT' });
+    }
+
+    try {
+      return normalizeLibraryOrganization(raw);
+    } catch {
+      throw Object.assign(new Error('Organization store is corrupt'), { code: 'ORGANIZATION_STORE_CORRUPT' });
+    }
+  }
+
+  async mutateLibraryOrganization(uid, expectedRevision, mutation) {
+    const normalizedUid = normalizeUserId(uid);
+    if (!Number.isInteger(expectedRevision) || expectedRevision < 0) {
+      throw Object.assign(new Error('Invalid organization revision'), { code: 'INVALID_ORGANIZATION_REVISION' });
+    }
+    if (typeof mutation !== 'function') {
+      throw Object.assign(new Error('Invalid organization mutation'), { code: 'INVALID_ORGANIZATION_MUTATION' });
+    }
+
+    const previous = this.libraryOrganizationMutationQueues.get(normalizedUid) || Promise.resolve();
+    const operation = previous.catch(() => {}).then(async () => {
+      const current = await this.getLibraryOrganization(normalizedUid);
+      if (current.revision !== expectedRevision) {
+        throw Object.assign(new Error('Organization revision conflict'), { code: 'ORGANIZATION_CONFLICT' });
+      }
+
+      const draft = structuredClone(current);
+      const result = await mutation(draft);
+      const next = normalizeLibraryOrganization(result === undefined ? draft : result);
+      next.revision = current.revision + 1;
+      next.updatedAt = new Date().toISOString();
+      if (Buffer.byteLength(JSON.stringify(next), 'utf8') > MAX_ORGANIZATION_BYTES) {
+        throw Object.assign(new Error('Organization store is too large'), { code: 'ORGANIZATION_STORE_TOO_LARGE' });
+      }
+
+      const userDirectory = this.userDirectory(normalizedUid);
+      await writeJsonAtomic(this.libraryOrganizationPath(normalizedUid), next);
+      await fs.chmod(userDirectory, 0o700);
+      await fs.chmod(this.libraryOrganizationPath(normalizedUid), 0o600);
+      return next;
+    });
+    this.libraryOrganizationMutationQueues.set(normalizedUid, operation);
+    operation.finally(() => {
+      if (this.libraryOrganizationMutationQueues.get(normalizedUid) === operation) {
+        this.libraryOrganizationMutationQueues.delete(normalizedUid);
+      }
+    }).catch(() => {});
+    return operation;
   }
 
   async saveLibraryIndex(index) {

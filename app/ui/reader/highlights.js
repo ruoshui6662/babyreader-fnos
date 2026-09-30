@@ -75,6 +75,8 @@ let _lastLibraryFocusBookId = null;
 let _activeHighlightEditorId = null;
 let _highlightEditorMode = 'edit';
 let _pendingThoughtSession = null;
+let _activeHighlightEditorFormat = 'epub';
+let _activeHighlightEditorBookId = null;
 
 function getHighlightPill() {
   if (!_highlightPill) {
@@ -125,18 +127,20 @@ function runPendingHighlight() {
 
 function updateTopbarState() {
   const isEpub = state.contentType === 'epub';
+  const isPdf = state.contentType === 'pdf';
   const hasToc = state.toc.length > 0;
   const btnToc = document.getElementById('btnToc');
   const btnEdit = document.getElementById('btnEdit');
 
   document.body.classList.toggle('is-epub', isEpub);
+  document.body.classList.toggle('is-pdf-reader', isPdf);
   document.body.classList.toggle('has-toc', hasToc);
   document.body.classList.toggle('toc-open', hasToc && state.tocOpen);
 
   if (btnToc) {
     btnToc.hidden = !hasToc;
     btnToc.innerHTML = `<svg viewBox="0 0 24 24" data-icon="toc" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 6h14"></path><path d="M5 12h10"></path><path d="M5 18h14"></path></svg>`;
-    const tocLabel = state.tocOpen ? '隐藏目录' : '显示目录';
+    const tocLabel = typeof activeReaderPanel !== 'undefined' && activeReaderPanel === 'toc' ? '隐藏目录' : '显示目录';
     btnToc.setAttribute('aria-label', tocLabel);
     btnToc.setAttribute('title', tocLabel);
   }
@@ -149,10 +153,13 @@ function updateTopbarState() {
 
   const btnExport = document.getElementById('btnExportHighlights');
   if (btnExport) {
-    btnExport.hidden = !isEpub;
+    btnExport.hidden = !(isEpub || (isPdf && state.currentBookId));
+    btnExport.disabled = isPdf && btnExport.dataset.exportBookId === state.currentBookId
+      && btnExport.dataset.exportGeneration === String(window.pdfReaderController?.getGeneration?.() ?? '');
     btnExport.innerHTML = exportIconSvg();
-    btnExport.setAttribute('aria-label', isEpub ? '导出标记与想法' : '导出标记与想法仅支持 EPUB');
-    btnExport.setAttribute('title', isEpub ? '导出标记与想法' : '导出标记与想法仅支持 EPUB');
+    const exportLabel = isEpub || isPdf ? '导出标记与想法' : '导出标记与想法仅支持 EPUB 和 PDF';
+    btnExport.setAttribute('aria-label', exportLabel);
+    btnExport.setAttribute('title', exportLabel);
   }
 
   // P0: inject icon-only toolbar buttons
@@ -173,30 +180,32 @@ function updateTopbarState() {
   }
   if (btnBookmarks) {
     btnBookmarks.innerHTML = bookmarkIconSvg();
-    const bookmarkAvailable = isEpub && Boolean(state.currentBookId);
+    const bookmarkAvailable = (isEpub || isPdf) && Boolean(state.currentBookId);
     const bookmarkActive = bookmarkAvailable
       && typeof isCurrentBookmark === 'function'
       && isCurrentBookmark();
     btnBookmarks.disabled = !bookmarkAvailable;
     btnBookmarks.setAttribute('aria-pressed', bookmarkActive ? 'true' : 'false');
     const bookmarkLabel = bookmarkActive ? '取消当前书签' : '添加当前书签';
-    btnBookmarks.setAttribute('aria-label', bookmarkAvailable ? bookmarkLabel : '书签仅支持 EPUB');
-    btnBookmarks.setAttribute('title', bookmarkAvailable ? bookmarkLabel : '书签仅支持 EPUB');
+    btnBookmarks.setAttribute('aria-label', bookmarkAvailable ? bookmarkLabel : '书签仅支持 EPUB 和 PDF');
+    btnBookmarks.setAttribute('title', bookmarkAvailable ? bookmarkLabel : '书签仅支持 EPUB 和 PDF');
     if (typeof renderBookmarkButtonState === 'function') renderBookmarkButtonState();
   }
   if (btnNotes) {
-    btnNotes.hidden = !isEpub;
-    btnNotes.disabled = !isEpub;
+    const notesAvailable = isEpub || isPdf;
+    btnNotes.hidden = !notesAvailable;
+    btnNotes.disabled = !notesAvailable;
     btnNotes.innerHTML = notesIconSvg();
-    btnNotes.setAttribute('aria-label', isEpub ? '打开标记与想法' : '标记与想法仅支持 EPUB');
-    btnNotes.setAttribute('title', isEpub ? '打开标记与想法' : '标记与想法仅支持 EPUB');
+    btnNotes.setAttribute('aria-label', notesAvailable ? '打开标记与想法' : '标记与想法仅支持 EPUB 和 PDF');
+    btnNotes.setAttribute('title', notesAvailable ? '打开标记与想法' : '标记与想法仅支持 EPUB 和 PDF');
   }
   if (btnAi) {
-    btnAi.hidden = !isEpub;
-    btnAi.disabled = !isEpub;
+    const aiAvailable = (isEpub || isPdf) && Boolean(state.currentBookId);
+    btnAi.hidden = !aiAvailable;
+    btnAi.disabled = !aiAvailable;
     btnAi.innerHTML = aiIconSvg();
-    btnAi.setAttribute('aria-label', isEpub ? '打开 AI 阅读助手' : 'AI 阅读助手仅支持 EPUB');
-    btnAi.setAttribute('title', isEpub ? '打开 AI 阅读助手' : 'AI 阅读助手仅支持 EPUB');
+    btnAi.setAttribute('aria-label', aiAvailable ? '打开 AI 阅读助手' : '打开书籍后可用');
+    btnAi.setAttribute('title', aiAvailable ? '打开 AI 阅读助手' : '打开书籍后可用');
   }
   if (btnSettings) btnSettings.innerHTML = settingsIconSvg();
   if (themeBtn) {
@@ -239,9 +248,9 @@ function updateTopbarState() {
     setMobileChromeOpen(isMobileChromeOpen());
   }
   if (mobileBack) mobileBack.disabled = !hasDocument;
-  if (mobileBookmarks) mobileBookmarks.disabled = !(isEpub && Boolean(state.currentBookId));
+  if (mobileBookmarks) mobileBookmarks.disabled = !((isEpub || isPdf) && Boolean(state.currentBookId));
   if (mobileSearch) mobileSearch.disabled = !searchAvailable;
-  if (mobileNotes) mobileNotes.disabled = !isEpub;
+  if (mobileNotes) mobileNotes.disabled = !(isEpub || isPdf);
   if (mobilePrevious) mobilePrevious.disabled = !isEpub || state.currentChapterIndex <= 0;
   if (mobileHighlight) mobileHighlight.disabled = !isEpub;
   if (mobileNext) {
@@ -486,13 +495,27 @@ function rangeFromHighlight(highlight) {
 }
 
 let _highlightEditorReturnFocus = null;
+let _highlightEditorBaseline = '';
+let _highlightEditorSaving = false;
 
-function closeHighlightEditor({ restoreFocus = true } = {}) {
+function highlightEditorSnapshot() {
+  return JSON.stringify(['highlightEditorThought', 'highlightEditorColor', 'highlightEditorStyle']
+    .map((id) => document.getElementById(id)?.value || ''));
+}
+
+function closeHighlightEditor({ restoreFocus = true, force = false } = {}) {
   const editor = document.getElementById('highlightEditor');
+  if (editor && !editor.hidden && !force) {
+    if (_highlightEditorSaving) { showHighlightHint('正在保存，请稍候'); return false; }
+    if (highlightEditorSnapshot() !== _highlightEditorBaseline
+      && !window.confirm('想法或标记有未保存的更改。放弃这些更改？取消可继续编辑。')) return false;
+  }
   if (editor) editor.hidden = true;
   _activeHighlightEditorId = null;
   _highlightEditorMode = 'edit';
   _pendingThoughtSession = null;
+  _activeHighlightEditorFormat = 'epub';
+  _activeHighlightEditorBookId = null;
 
   if (restoreFocus) {
     const target = _highlightEditorReturnFocus;
@@ -505,11 +528,14 @@ function closeHighlightEditor({ restoreFocus = true } = {}) {
       document.getElementById('btnBackToLibrary')?.focus();
     }
   }
+  return true;
 }
 
 function openHighlightEditor(id) {
-  const highlight = loadHighlights().find((item) => item.id === id);
-  if (!highlight) return false;
+  if (!document.getElementById('highlightEditor')?.hidden && !closeHighlightEditor({ restoreFocus: false })) return false;
+  const adapter = currentAnnotationAdapter(state.contentType);
+  const highlight = adapter.list().find((item) => item.id === id);
+  if (!highlight || (state.contentType === 'pdf' && highlight.sourceStale)) return false;
 
   const editor = document.getElementById('highlightEditor');
   const title = document.getElementById('highlightEditorTitle');
@@ -524,6 +550,8 @@ function openHighlightEditor(id) {
   _highlightEditorMode = 'edit';
   _pendingThoughtSession = null;
   _activeHighlightEditorId = id;
+  _activeHighlightEditorFormat = adapter.format;
+  _activeHighlightEditorBookId = state.currentBookId;
   title.textContent = highlight.kind === 'thought' ? '编辑想法' : '编辑批注';
   text.textContent = highlight.text || '';
   color.value = ['yellow', 'green', 'blue', 'pink'].includes(highlight.color)
@@ -535,6 +563,7 @@ function openHighlightEditor(id) {
   if (typeof syncCustomSelectValue === 'function') syncCustomSelectValue(color);
   if (typeof syncCustomSelectValue === 'function') syncCustomSelectValue(style);
   thought.value = String(highlight.thought || highlight.note || '');
+  _highlightEditorBaseline = highlightEditorSnapshot();
   if (deleteButton) deleteButton.hidden = false;
   editor.hidden = false;
   requestAnimationFrame(() => thought.focus());
@@ -542,7 +571,9 @@ function openHighlightEditor(id) {
 }
 
 function openThoughtComposer(session) {
-  if (!session?.locator || !session?.range) return false;
+  if (!document.getElementById('highlightEditor')?.hidden && !closeHighlightEditor({ restoreFocus: false })) return false;
+  const pdfSession = session?.format === 'pdf' && Array.isArray(session.targets);
+  if ((!session?.locator && !pdfSession) || !session?.range) return false;
 
   const editor = document.getElementById('highlightEditor');
   const title = document.getElementById('highlightEditorTitle');
@@ -557,6 +588,8 @@ function openThoughtComposer(session) {
   _highlightEditorMode = 'create-thought';
   _pendingThoughtSession = session;
   _activeHighlightEditorId = null;
+  _activeHighlightEditorFormat = pdfSession ? 'pdf' : 'epub';
+  _activeHighlightEditorBookId = state.currentBookId;
   title.textContent = '写想法';
   text.textContent = session.text || '';
   color.value = state.highlightColor;
@@ -564,6 +597,7 @@ function openThoughtComposer(session) {
   if (typeof syncCustomSelectValue === 'function') syncCustomSelectValue(color);
   if (typeof syncCustomSelectValue === 'function') syncCustomSelectValue(style);
   thought.value = '';
+  _highlightEditorBaseline = highlightEditorSnapshot();
   if (deleteButton) deleteButton.hidden = true;
   editor.hidden = false;
   requestAnimationFrame(() => thought.focus());
@@ -571,6 +605,18 @@ function openThoughtComposer(session) {
 }
 
 async function saveActiveHighlightEdits() {
+  if (_highlightEditorSaving) return;
+  _highlightEditorSaving = true;
+  const saveButton = document.getElementById('btnSaveHighlight');
+  if (saveButton) { saveButton.disabled = true; saveButton.setAttribute('aria-busy', 'true'); }
+  try { await performHighlightEditorSave(); }
+  finally {
+    _highlightEditorSaving = false;
+    if (saveButton) { saveButton.disabled = false; saveButton.removeAttribute('aria-busy'); }
+  }
+}
+
+async function performHighlightEditorSave() {
   const thought = document.getElementById('highlightEditorThought');
   const color = document.getElementById('highlightEditorColor');
   const style = document.getElementById('highlightEditorStyle');
@@ -590,33 +636,56 @@ async function saveActiveHighlightEdits() {
       thought.focus();
       return;
     }
-    const annotation = createAnnotationFromSession(_pendingThoughtSession, {
-      kind: 'thought',
-      style: selectedStyle,
-      color: selectedColor,
-      thought: thoughtText
-    });
-    if (!annotation) {
-      showHighlightHint('想法保存失败，请重新选择文本');
-      thought.focus();
-      return;
-    }
+    const session = _pendingThoughtSession;
+    const format = _activeHighlightEditorFormat;
+    const bookId = _activeHighlightEditorBookId;
     try {
-      // createAnnotationFromSession already queued the first persistence write;
-      // wait for that chain instead of sending the same snapshot twice.
-      await _highlightSaveChain;
+      if (format === 'pdf' && (state.contentType !== 'pdf'
+        || state.currentBookId !== bookId || session?.bookId !== bookId)) {
+        throw new Error('书籍已切换，请重新选择文本');
+      }
+      const annotation = await currentAnnotationAdapter(format).create(session, {
+        kind: 'thought', style: selectedStyle, color: selectedColor, thought: thoughtText
+      });
+      if (!annotation) throw new Error('想法保存失败，请重新选择文本');
+      if (format === 'epub') await _highlightSaveChain;
+      if (_pendingThoughtSession !== session || state.currentBookId !== bookId) return;
       clearReaderSelection();
-      closeHighlightEditor();
-    } catch {
+      closeHighlightEditor({ force: true });
+    } catch (error) {
+      if (_pendingThoughtSession !== session || state.currentBookId !== bookId) return;
+      showHighlightHint(error.message || '想法保存失败，请重试');
       thought.focus();
     }
     return;
   }
 
   if (!_activeHighlightEditorId) return;
+  if (_activeHighlightEditorFormat === 'pdf') {
+    const annotationId = _activeHighlightEditorId;
+    const bookId = _activeHighlightEditorBookId;
+    try {
+      if (state.contentType !== 'pdf' || state.currentBookId !== bookId) {
+        throw new Error('书籍已切换，请重新打开标记');
+      }
+      await window.browserHost.updatePdfAnnotation(annotationId, {
+        color: selectedColor, style: selectedStyle, thought: thoughtText
+      }, bookId);
+      if (state.currentBookId !== bookId || _activeHighlightEditorId !== annotationId) return;
+      setPdfAnnotationRendererRecords(bookId, pdfAnnotationCache(bookId));
+      renderNotesPanel();
+      closeHighlightEditor({ force: true });
+    } catch (error) {
+      if (_activeHighlightEditorId !== annotationId || state.currentBookId !== bookId) return;
+      showHighlightHint(error.message || '标记更新失败，请重试');
+      thought.focus();
+    }
+    return;
+  }
+
   const highlights = loadHighlights();
   const index = highlights.findIndex((item) => item.id === _activeHighlightEditorId);
-  if (index < 0) return closeHighlightEditor();
+  if (index < 0) return closeHighlightEditor({ force: true });
 
   highlights[index] = {
     ...highlights[index],
@@ -631,7 +700,7 @@ async function saveActiveHighlightEdits() {
   redrawDomHighlights();
   try {
     await queueHighlightSave();
-    closeHighlightEditor();
+    closeHighlightEditor({ force: true });
   } catch {
     thought.focus();
   }
@@ -639,6 +708,23 @@ async function saveActiveHighlightEdits() {
 
 async function deleteHighlightById(id) {
   if (!id) return false;
+  if (!window.confirm('删除这条标记及其想法？书籍原文不会改变，此操作无法撤销。')) return false;
+  if (state.contentType === 'pdf') {
+    const bookId = state.currentBookId;
+    try {
+      const result = await window.browserHost.deletePdfAnnotation(id, bookId);
+      if (!result.deleted) return false;
+      if (state.currentBookId === bookId && state.contentType === 'pdf') {
+        setPdfAnnotationRendererRecords(bookId, pdfAnnotationCache(bookId));
+        renderNotesPanel();
+      }
+      return true;
+    } catch (error) {
+      if (state.currentBookId !== bookId) return false;
+      showHighlightHint(error.message || '标记删除失败，请重试');
+      return false;
+    }
+  }
   const remaining = loadHighlights().filter((item) => item.id !== id);
   if (remaining.length === loadHighlights().length) return false;
   saveHighlights(remaining);
@@ -654,8 +740,11 @@ async function deleteHighlightById(id) {
 
 async function deleteActiveHighlight() {
   if (!_activeHighlightEditorId) return false;
-  const deleted = await deleteHighlightById(_activeHighlightEditorId);
-  if (deleted) closeHighlightEditor();
+  const annotationId = _activeHighlightEditorId;
+  const bookId = state.currentBookId;
+  const deleted = await deleteHighlightById(annotationId);
+  if (state.currentBookId !== bookId || _activeHighlightEditorId !== annotationId) return deleted;
+  if (deleted) closeHighlightEditor({ force: true });
   else document.getElementById('btnDeleteHighlight')?.focus();
   return deleted;
 }

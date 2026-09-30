@@ -14,7 +14,7 @@ async function apiRequest(path, options = {}) {
   });
   if (!response.ok) {
     const detail = await response.json().catch(() => ({}));
-    throw new Error(detail.error || `请求失败：${response.status}`);
+    throw Object.assign(new Error(detail.error || `请求失败：${response.status}`), { status: response.status });
   }
   return response;
 }
@@ -30,6 +30,8 @@ async function readAiEventStream(response, handlers = {}) {
   const decoder = new TextDecoder();
   let buffer = '';
   let lastEvent = null;
+  let completed = false;
+  let streamError = null;
   const dispatch = (frame) => {
     const lines = frame.split('\n');
     let eventName = 'message';
@@ -41,6 +43,7 @@ async function readAiEventStream(response, handlers = {}) {
     const data = dataLines.join('\n').trim();
     if (!data) return;
     if (data === '[DONE]') {
+      completed = true;
       lastEvent = { event: 'done', data: {} };
       handlers.onDone?.({});
       return;
@@ -54,8 +57,11 @@ async function readAiEventStream(response, handlers = {}) {
     lastEvent = { event: eventName, data: payload };
     if (eventName === 'meta') handlers.onMeta?.(payload);
     else if (eventName === 'delta') handlers.onDelta?.(payload.delta || '');
-    else if (eventName === 'done') handlers.onDone?.(payload);
-    else if (eventName === 'error') handlers.onError?.(payload);
+    else if (eventName === 'done') { completed = true; handlers.onDone?.(payload); }
+    else if (eventName === 'error') {
+      streamError = new Error(payload?.message || 'AI 回答失败，请重试。');
+      handlers.onError?.(payload);
+    }
   };
 
   const consume = (chunk, flush = false) => {
@@ -75,6 +81,8 @@ async function readAiEventStream(response, handlers = {}) {
   const tail = decoder.decode();
   if (tail) consume(tail);
   if (buffer.trim()) consume('\n\n', true);
+  if (streamError) throw streamError;
+  if (!completed) throw new Error('AI 回答传输中断，请重试。');
   return lastEvent?.data || {};
 }
 
@@ -85,6 +93,55 @@ window.browserHost = {
 
   async getLibrary() {
     return (await apiRequest('/library')).json();
+  },
+
+  async getLibraryOrganization() {
+    return (await apiRequest('/library/organization')).json();
+  },
+
+  async createLibraryCollection(name, revision) {
+    return (await apiRequest('/library/collections', {
+      method: 'POST',
+      body: JSON.stringify({ name, revision })
+    })).json();
+  },
+
+  async renameLibraryCollection(collectionId, name, revision) {
+    if (!collectionId) throw new Error('分类标识无效');
+    return (await apiRequest(`/library/collections/${encodeURIComponent(collectionId)}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ name, revision })
+    })).json();
+  },
+
+  async deleteLibraryCollection(collectionId, revision) {
+    if (!collectionId) throw new Error('分类标识无效');
+    return (await apiRequest(`/library/collections/${encodeURIComponent(collectionId)}`, {
+      method: 'DELETE',
+      body: JSON.stringify({ revision })
+    })).json();
+  },
+
+  async placeLibraryBook(bookId, collectionId, beforeBookId, revision) {
+    if (!bookId) throw new Error('书籍标识无效');
+    return (await apiRequest(`/library/books/${encodeURIComponent(bookId)}/placement`, {
+      method: 'PUT',
+      body: JSON.stringify({ collectionId: collectionId ?? null, beforeBookId: beforeBookId ?? null, revision })
+    })).json();
+  },
+
+  async reorderLibraryOrganization(scope, order, revision) {
+    return (await apiRequest('/library/organization/order', {
+      method: 'PUT',
+      body: JSON.stringify({ scope, order, revision })
+    })).json();
+  },
+
+  async updateLibraryOrganizationPreferences(viewMode, revision) {
+    return (await apiRequest('/library/organization/preferences', {
+      method: 'PUT',
+      body: JSON.stringify({ viewMode, revision })
+    })).json();
   },
 
   async getUserState() {
@@ -107,6 +164,15 @@ window.browserHost = {
   },
 
   async openBook(book) {
+    if (book.type === 'pdf') {
+      return window.appHost.receiveDocument({
+        path: book.relativePath,
+        name: book.title,
+        type: 'pdf',
+        contentUrl: `${API_PREFIX}/books/${encodeURIComponent(book.id)}/content`,
+        bookId: book.id
+      });
+    }
     const response = await apiRequest(`/books/${encodeURIComponent(book.id)}/content`, {
       headers: { Accept: book.type === 'epub' ? 'application/epub+zip' : 'text/plain' }
     });
@@ -148,6 +214,50 @@ window.browserHost = {
     });
   },
 
+  async getPdfAnnotations(bookId = state.currentBookId) {
+    if (!bookId) return { annotations: [] };
+    const result = await (await apiRequest(`/books/${encodeURIComponent(bookId)}/pdf-annotations`)).json();
+    if (typeof savePdfAnnotations === 'function') savePdfAnnotations(bookId, result.annotations || []);
+    return result;
+  },
+
+  async createPdfAnnotation(annotation, bookId = state.currentBookId) {
+    if (!bookId) throw new Error('当前没有打开的 PDF');
+    const result = await (await apiRequest(`/books/${encodeURIComponent(bookId)}/pdf-annotations`, {
+      method: 'POST',
+      body: JSON.stringify(annotation)
+    })).json();
+    if (result.annotation && typeof loadPdfAnnotations === 'function') {
+      const current = loadPdfAnnotations(bookId).filter((item) => item.id !== result.annotation.id);
+      savePdfAnnotations(bookId, [...current, result.annotation]);
+    }
+    return result;
+  },
+
+  async updatePdfAnnotation(annotationId, patch, bookId = state.currentBookId) {
+    if (!bookId || !annotationId) throw new Error('PDF 标记标识无效');
+    const result = await (await apiRequest(`/books/${encodeURIComponent(bookId)}/pdf-annotations/${encodeURIComponent(annotationId)}`, {
+      method: 'PATCH',
+      body: JSON.stringify(patch)
+    })).json();
+    if (result.annotation && typeof loadPdfAnnotations === 'function') {
+      const current = loadPdfAnnotations(bookId).map((item) => item.id === annotationId ? result.annotation : item);
+      savePdfAnnotations(bookId, current);
+    }
+    return result;
+  },
+
+  async deletePdfAnnotation(annotationId, bookId = state.currentBookId) {
+    if (!bookId || !annotationId) return { deleted: false, id: annotationId };
+    const result = await (await apiRequest(`/books/${encodeURIComponent(bookId)}/pdf-annotations/${encodeURIComponent(annotationId)}`, {
+      method: 'DELETE'
+    })).json();
+    if (result.deleted && typeof loadPdfAnnotations === 'function') {
+      savePdfAnnotations(bookId, loadPdfAnnotations(bookId).filter((item) => item.id !== annotationId));
+    }
+    return result;
+  },
+
   async getBookmarks(bookId = state.currentBookId) {
     if (!bookId) return [];
     return (await apiRequest(`/books/${encodeURIComponent(bookId)}/bookmarks`)).json();
@@ -165,6 +275,47 @@ window.browserHost = {
     if (!bookId || !bookmarkId) return { deleted: false, id: bookmarkId };
     return (await apiRequest(
       `/books/${encodeURIComponent(bookId)}/bookmarks/${encodeURIComponent(bookmarkId)}`,
+      { method: 'DELETE' }
+    )).json();
+  },
+
+  async getAiConversations(bookId = state.currentBookId) {
+    if (!bookId) return { activeConversationId: null, conversations: [] };
+    return (await apiRequest(
+      `/books/${encodeURIComponent(bookId)}/ai/conversations`
+    )).json();
+  },
+
+  async getAiConversation(conversationId, bookId = state.currentBookId) {
+    if (!bookId || !conversationId) throw new Error('会话标识无效');
+    return (await apiRequest(
+      `/books/${encodeURIComponent(bookId)}/ai/conversations/${encodeURIComponent(conversationId)}`
+    )).json();
+  },
+
+  async createAiConversation(title = '', bookId = state.currentBookId) {
+    if (!bookId) throw new Error('当前没有打开的书');
+    return (await apiRequest(
+      `/books/${encodeURIComponent(bookId)}/ai/conversations`,
+      {
+        method: 'POST',
+        body: JSON.stringify({ title: String(title || '').trim() })
+      }
+    )).json();
+  },
+
+  async deleteAiConversation(conversationId, bookId = state.currentBookId) {
+    if (!bookId || !conversationId) throw new Error('会话标识无效');
+    return (await apiRequest(
+      `/books/${encodeURIComponent(bookId)}/ai/conversations/${encodeURIComponent(conversationId)}`,
+      { method: 'DELETE' }
+    )).json();
+  },
+
+  async clearAiConversation(conversationId, bookId = state.currentBookId) {
+    if (!bookId || !conversationId) throw new Error('会话标识无效');
+    return (await apiRequest(
+      `/books/${encodeURIComponent(bookId)}/ai/conversations/${encodeURIComponent(conversationId)}/messages`,
       { method: 'DELETE' }
     )).json();
   },
@@ -230,6 +381,7 @@ window.browserHost = {
     scope = 'book',
     chapterIndex = null,
     limit = 20,
+    cursor = null,
     signal
   } = {}) {
     if (!bookId) throw new Error('当前没有打开的书');
@@ -240,6 +392,7 @@ window.browserHost = {
       params.set('chapterIndex', String(chapterIndex));
     }
     params.set('limit', String(Math.max(1, Math.min(50, Math.trunc(Number(limit) || 20)))));
+    if (typeof cursor === 'string' && cursor) params.set('cursor', cursor);
     return (await apiRequest(`/books/${encodeURIComponent(bookId)}/search?${params.toString()}`, {
       signal
     })).json();

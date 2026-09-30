@@ -8,28 +8,9 @@
 // over budget; the asset is simply omitted from the first-pass render.
 const EPUB_RESOURCE_LIMITS = Object.freeze({
   maxInlineResourceBytes: 8 * 1024 * 1024,
-  maxInlineTotalBytes: 48 * 1024 * 1024
+  maxCachedResourceBytes: 48 * 1024 * 1024,
+  maxConcurrentInflations: 2
 });
-
-function createEpubResourceBudget(limits = EPUB_RESOURCE_LIMITS) {
-  return {
-    totalBytes: 0,
-    skippedResources: [],
-    reserve(resourcePath, bytes) {
-      const size = Number(bytes) || 0;
-      if (size > limits.maxInlineResourceBytes || this.totalBytes + size > limits.maxInlineTotalBytes) {
-        this.skippedResources.push({
-          path: resourcePath,
-          bytes: size,
-          reason: size > limits.maxInlineResourceBytes ? 'single-resource-limit' : 'total-resource-limit'
-        });
-        return false;
-      }
-      this.totalBytes += size;
-      return true;
-    }
-  };
-}
 
 function yieldToBrowser() {
   return new Promise((resolve) => {
@@ -187,28 +168,233 @@ function zipEntryUncompressedSize(file) {
   return Number.isFinite(size) && size >= 0 ? size : null;
 }
 
-async function resourceDataUrl(zip, resourcePath, mediaTypes, budget) {
-  const file = getZipFile(zip, resourcePath);
-  if (!file) return null;
-  const declaredSize = zipEntryUncompressedSize(file);
-  if (budget && declaredSize !== null && !budget.reserve(resourcePath, declaredSize)) {
-    console.warn('跳过超出内联预算的 EPUB 资源', resourcePath, declaredSize);
-    return null;
+function createEpubResourceManager(zip, mediaTypes, options = {}, urlApi = URL) {
+  const limits = {
+    maxInlineResourceBytes: Math.max(1, Number(options.maxInlineResourceBytes) || EPUB_RESOURCE_LIMITS.maxInlineResourceBytes),
+    maxCachedResourceBytes: Math.max(1, Number(options.maxCachedResourceBytes) || EPUB_RESOURCE_LIMITS.maxCachedResourceBytes),
+    maxConcurrentInflations: Math.max(1, Math.floor(Number(options.maxConcurrentInflations) || EPUB_RESOURCE_LIMITS.maxConcurrentInflations))
+  };
+  const entries = new Map();
+  const leases = new Set();
+  const skippedResources = [];
+  const inflationWaiters = [];
+  let cachedBytes = 0;
+  let activeInflations = 0;
+  let clock = 0;
+  let destroyed = false;
+
+  function noteSkipped(resourcePath, bytes, reason) {
+    if (skippedResources.length < 20) {
+      skippedResources.push({ path: String(resourcePath || '').slice(0, 240), bytes: Number(bytes) || 0, reason });
+    }
   }
-  const bytes = await file.async('uint8array');
-  if (budget && declaredSize === null && !budget.reserve(resourcePath, bytes.byteLength)) {
-    console.warn('跳过超出内联预算的 EPUB 资源', resourcePath, bytes.byteLength);
-    return null;
+
+  function revokeEntry(entry) {
+    if (entry.url) {
+      try { urlApi.revokeObjectURL(entry.url); } catch {}
+      entry.url = null;
+    }
+    entries.delete(entry.path);
+    cachedBytes = Math.max(0, cachedBytes - entry.reservedBytes);
   }
-  let binary = '';
-  for (let offset = 0; offset < bytes.length; offset += 0x8000) {
-    binary += String.fromCharCode(...bytes.subarray(offset, offset + 0x8000));
+
+  function makeRoom(bytes, protectedEntry = null) {
+    if (bytes > limits.maxCachedResourceBytes) return false;
+    while (cachedBytes + bytes > limits.maxCachedResourceBytes) {
+      let candidate = null;
+      for (const entry of entries.values()) {
+        if (entry === protectedEntry || entry.pending || entry.leases.size) continue;
+        if (!candidate || entry.lastUsed < candidate.lastUsed) candidate = entry;
+      }
+      if (!candidate) return false;
+      revokeEntry(candidate);
+    }
+    return true;
   }
-  const mime = mediaTypes[resourcePath] || mimeFromPath(resourcePath);
-  return `data:${mime};base64,${btoa(binary)}`;
+
+  async function withInflationSlot(operation) {
+    let acquiredFromQueue = false;
+    if (activeInflations >= limits.maxConcurrentInflations) {
+      await new Promise((resolve) => inflationWaiters.push(resolve));
+      acquiredFromQueue = true;
+    }
+    if (!acquiredFromQueue) activeInflations += 1;
+    try {
+      return await operation();
+    } finally {
+      const next = inflationWaiters.shift();
+      if (next) next();
+      else activeInflations = Math.max(0, activeInflations - 1);
+    }
+  }
+
+  function pin(entry, lease) {
+    if (!lease || lease.released || destroyed) return false;
+    if (!lease.paths.has(entry.path)) {
+      lease.paths.add(entry.path);
+      entry.leases.add(lease);
+      leases.add(lease);
+    }
+    entry.lastUsed = ++clock;
+    return true;
+  }
+
+  function unpin(entry, lease) {
+    if (!entry || !lease) return;
+    entry.leases.delete(lease);
+    lease.paths.delete(entry.path);
+    if (!lease.paths.size) leases.delete(lease);
+  }
+
+  async function acquire(resourcePath, lease) {
+    if (destroyed || !lease || lease.released) return null;
+    let normalized;
+    try {
+      normalized = normalizeZipPath(resourcePath);
+    } catch {
+      noteSkipped(resourcePath, 0, 'invalid-resource-path');
+      return null;
+    }
+
+    let entry = entries.get(normalized);
+    if (entry) {
+      if (!pin(entry, lease)) return null;
+      const url = await entry.promise;
+      if (!url || destroyed) {
+        unpin(entry, lease);
+        return null;
+      }
+      return url;
+    }
+
+    const file = getZipFile(zip, normalized);
+    if (!file) {
+      noteSkipped(normalized, 0, 'missing-resource');
+      return null;
+    }
+
+    const declaredSize = zipEntryUncompressedSize(file);
+    if (declaredSize !== null && declaredSize > limits.maxInlineResourceBytes) {
+      noteSkipped(normalized, declaredSize, 'single-resource-limit');
+      return null;
+    }
+    const reservation = declaredSize ?? 0;
+    if (!makeRoom(reservation)) {
+      noteSkipped(normalized, reservation, 'cache-capacity-pinned');
+      return null;
+    }
+
+    entry = {
+      path: normalized,
+      reservedBytes: reservation,
+      pending: true,
+      promise: null,
+      url: null,
+      leases: new Set(),
+      lastUsed: ++clock
+    };
+    cachedBytes += reservation;
+    entries.set(normalized, entry);
+    if (!pin(entry, lease)) {
+      revokeEntry(entry);
+      return null;
+    }
+
+    entry.promise = withInflationSlot(async () => {
+      try {
+        if (destroyed) return null;
+        const bytes = await file.async('uint8array');
+        const actualSize = bytes?.byteLength ?? 0;
+        if (actualSize > limits.maxInlineResourceBytes) {
+          noteSkipped(normalized, actualSize, 'single-resource-limit');
+          revokeEntry(entry);
+          return null;
+        }
+        if (actualSize > entry.reservedBytes) {
+          const extraBytes = actualSize - entry.reservedBytes;
+          if (!makeRoom(extraBytes, entry)) {
+            noteSkipped(normalized, actualSize, 'cache-capacity-pinned');
+            revokeEntry(entry);
+            return null;
+          }
+          entry.reservedBytes += extraBytes;
+          cachedBytes += extraBytes;
+        } else if (actualSize < entry.reservedBytes) {
+          cachedBytes -= entry.reservedBytes - actualSize;
+          entry.reservedBytes = actualSize;
+        }
+        if (destroyed) {
+          revokeEntry(entry);
+          return null;
+        }
+        const mime = mediaTypes?.[normalized] || mimeFromPath(normalized);
+        entry.url = urlApi.createObjectURL(new Blob([bytes], { type: mime }));
+        entry.pending = false;
+        entry.lastUsed = ++clock;
+        return entry.url;
+      } catch (error) {
+        noteSkipped(normalized, entry.reservedBytes, 'resource-read-failed');
+        revokeEntry(entry);
+        return null;
+      } finally {
+        entry.pending = false;
+      }
+    });
+
+    const url = await entry.promise;
+    if (!url || destroyed) {
+      unpin(entry, lease);
+      return null;
+    }
+    return url;
+  }
+
+  function release(lease) {
+    if (!lease || lease.released) return;
+    lease.released = true;
+    for (const resourcePath of lease.paths) {
+      const entry = entries.get(resourcePath);
+      if (entry) entry.leases.delete(lease);
+    }
+    lease.paths.clear();
+    leases.delete(lease);
+  }
+
+  function destroy() {
+    if (destroyed) return;
+    destroyed = true;
+    for (const lease of leases) {
+      lease.released = true;
+      lease.paths.clear();
+    }
+    leases.clear();
+    for (const entry of [...entries.values()]) revokeEntry(entry);
+    skippedResources.length = 0;
+  }
+
+  function snapshot() {
+    return {
+      cachedBytes,
+      resourceCount: entries.size,
+      activeInflations,
+      queuedInflations: inflationWaiters.length,
+      activeLeases: leases.size,
+      skippedResources: skippedResources.map((item) => ({ ...item }))
+    };
+  }
+
+  return {
+    createLease() {
+      return { paths: new Set(), released: false };
+    },
+    acquire,
+    release,
+    destroy,
+    snapshot
+  };
 }
 
-async function inlineCssResources(css, cssPath, zip, mediaTypes, budget) {
+async function inlineCssResources(css, cssPath, resourceManager, lease) {
   const cssDir = getDirPath(cssPath);
   let output = sanitizeCss(css);
   const references = [...output.matchAll(/url\s*\(\s*(["']?)([^"')]+)\1\s*\)/gi)];
@@ -217,17 +403,17 @@ async function inlineCssResources(css, cssPath, zip, mediaTypes, budget) {
     if (!href || /^(?:data:|blob:|https?:|file:|javascript:|#)/i.test(href)) continue;
     try {
       const resourcePath = resolveZipPath(cssDir, href);
-      const dataUrl = await resourceDataUrl(zip, resourcePath, mediaTypes, budget);
-      if (dataUrl) output = output.replace(match[0], `url("${dataUrl}")`);
+      const resourceUrl = await resourceManager.acquire(resourcePath, lease);
+      if (resourceUrl) output = output.replace(match[0], `url("${resourceUrl}")`);
       else output = output.replace(match[0], 'none');
-    } catch (error) {
-      console.warn('EPUB CSS 资源路径无效', cssPath, href, error);
+    } catch {
+      output = output.replace(match[0], 'none');
     }
   }
   return output;
 }
 
-async function inlineResourceRefs(html, chapterPath, zip, mediaTypes, budget) {
+async function inlineResourceRefs(html, chapterPath, zip, resourceManager, lease) {
   const chapterDir = getDirPath(chapterPath);
   let output = html;
 
@@ -247,10 +433,9 @@ async function inlineResourceRefs(html, chapterPath, zip, mediaTypes, budget) {
         output = output.replace(tag, '');
         continue;
       }
-      const css = await inlineCssResources(await cssFile.async('text'), cssPath, zip, mediaTypes, budget);
+      const css = await inlineCssResources(await cssFile.async('text'), cssPath, resourceManager, lease);
       output = output.replace(tag, `<style data-source-path="${escapeHtmlAttribute(cssPath)}">${css}</style>`);
-    } catch (error) {
-      console.warn('EPUB 样式表加载失败', chapterPath, href, error);
+    } catch {
       output = output.replace(tag, '');
     }
   }
@@ -264,13 +449,13 @@ async function inlineResourceRefs(html, chapterPath, zip, mediaTypes, budget) {
       if (!href || /^(?:data:|blob:|https?:|file:|javascript:|#)/i.test(href)) continue;
       try {
         const resourcePath = resolveZipPath(chapterDir, href);
-        const dataUrl = await resourceDataUrl(zip, resourcePath, mediaTypes, budget);
-        if (!dataUrl) continue;
+        const resourceUrl = await resourceManager.acquire(resourcePath, lease);
+        if (!resourceUrl) continue;
         const escapedHref = href.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
         const attrRe = new RegExp(`(${attrName.replace(':', '\\:')}\\s*=\\s*)(["'])${escapedHref}\\2`, 'i');
-        nextTag = nextTag.replace(attrRe, `$1$2${escapeHtmlAttribute(dataUrl)}$2`);
-      } catch (error) {
-        console.warn('EPUB 资源加载失败', chapterPath, href, error);
+        nextTag = nextTag.replace(attrRe, `$1$2${escapeHtmlAttribute(resourceUrl)}$2`);
+      } catch {
+        // Invalid paths are recorded by the resource manager; keep the body readable.
       }
     }
     output = output.replace(tag, nextTag);
@@ -390,7 +575,9 @@ function themeColors() {
       textMuted: '#8B8378',
       textStrong: '#161513',
       accent: '#C8A26C',
-      surface: '#FBF7EF'
+      surface: '#FBF7EF',
+      selectionBg: '#75B7F0',
+      selectionText: '#102B45'
     };
   }
 
@@ -400,7 +587,9 @@ function themeColors() {
     textMuted: '#cdbfb2',
     textStrong: '#f0e8dc',
     accent: '#DA7756',
-    surface: '#232323'
+    surface: '#232323',
+    selectionBg: '#75B7F0',
+    selectionText: '#102B45'
   };
 }
 
@@ -489,8 +678,8 @@ function getEpubThemeCss() {
       color: ${colors.text} !important;
     }
     ::selection {
-      background: ${highlightColor()} !important;
-      color: ${colors.textStrong} !important;
+      background: ${colors.selectionBg} !important;
+      color: ${colors.selectionText} !important;
     }
     .epubjs-hl { fill: ${highlightColor()} !important; fill-opacity: 1 !important; mix-blend-mode: multiply; }
   `;
@@ -601,6 +790,12 @@ function toggleTheme() {
 function destroyEpub() {
   dismissHighlightPill();
   if (typeof invalidateEpubChapterRender === 'function') invalidateEpubChapterRender();
+  const archive = state.epubArchive;
+  if (archive?.resourceManager) {
+    if (archive.activeChapterLease) archive.resourceManager.release(archive.activeChapterLease);
+    archive.activeChapterLease = null;
+    archive.resourceManager.destroy();
+  }
   state.epubArchive = null;
   state.epubChapterIndex = 0;
   state.epubChapterCount = 0;
@@ -712,7 +907,7 @@ async function openEpubArchive(data) {
     });
   }
 
-  const resourceBudget = createEpubResourceBudget();
+  const resourceManager = createEpubResourceManager(zip, mediaTypes);
   const chapterIndexByPath = Object.fromEntries(
     spine.map((chapter) => [normalizeZipPath(chapter.fullPath), chapter.index])
   );
@@ -742,7 +937,7 @@ async function openEpubArchive(data) {
     chapterIndexByPath,
     toc,
     metadata: { title, creator },
-    resourceBudget,
+    resourceManager,
     diagnostics: {
       chapterCount: spine.length,
       inlinedResourceBytes: 0,
@@ -762,29 +957,40 @@ async function loadEpubChapter(archive, index) {
   const file = getZipFile(archive.zip, chapter.fullPath);
   if (!file) throw new Error(`无法打开第 ${index + 1} 章：缺少 ${chapter.fullPath}`);
 
-  await yieldToBrowser();
-  const xhtml = await file.async('text');
-  const bodyMatch = xhtml.match(/<body[^>]*>([\s\S]*?)<\/body>/i);
-  const bodyContent = bodyMatch ? bodyMatch[1] : xhtml;
-  const cleaned = (await inlineResourceRefs(
-    sanitizeEpubHtml(bodyContent),
-    chapter.fullPath,
-    archive.zip,
-    archive.mediaTypes,
-    archive.resourceBudget
-  ))
-    .replace(/\s+xmlns(?::\w+)?="[^"]*"/g, '')
-    .replace(/\s+xml:\w+="[^"]*"/g, '')
-    .replace(/<svg\b/gi, '<svg class="epub-svg"');
+  const resourceManager = archive.resourceManager || (archive.resourceManager = createEpubResourceManager(archive.zip, archive.mediaTypes));
+  const resourceLease = resourceManager.createLease();
+
+  let cleaned;
+  try {
+    await yieldToBrowser();
+    const xhtml = await file.async('text');
+    const bodyMatch = xhtml.match(/<body[^>]*>([\s\S]*?)<\/body>/i);
+    const bodyContent = bodyMatch ? bodyMatch[1] : xhtml;
+    cleaned = (await inlineResourceRefs(
+      sanitizeEpubHtml(bodyContent),
+      chapter.fullPath,
+      archive.zip,
+      resourceManager,
+      resourceLease
+    ))
+      .replace(/\s+xmlns(?::\w+)?="[^"]*"/g, '')
+      .replace(/\s+xml:\w+="[^"]*"/g, '')
+      .replace(/<svg\b/gi, '<svg class="epub-svg"');
+  } catch (error) {
+    resourceManager.release(resourceLease);
+    throw error;
+  }
   await yieldToBrowser();
 
-  archive.diagnostics.inlinedResourceBytes = archive.resourceBudget.totalBytes;
-  archive.diagnostics.skippedResourceCount = archive.resourceBudget.skippedResources.length;
-  archive.diagnostics.skippedResources = archive.resourceBudget.skippedResources.slice(0, 20);
+  const resourceSnapshot = resourceManager.snapshot();
+  archive.diagnostics.inlinedResourceBytes = resourceSnapshot.cachedBytes;
+  archive.diagnostics.skippedResourceCount = resourceSnapshot.skippedResources.length;
+  archive.diagnostics.skippedResources = resourceSnapshot.skippedResources.slice(0, 20);
 
   return {
     index,
     href: chapter.fullPath,
+    resourceLease,
     html: `<section class="epub-chapter" id="br-chapter-${index + 1}" data-source-path="${escapeHtmlAttribute(chapter.fullPath)}">${cleaned}</section>`
   };
 }

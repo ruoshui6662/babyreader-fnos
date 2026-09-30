@@ -20,6 +20,11 @@ function updateCurrentBookBookmarks(bookmarks) {
 
 function stableBookmarkLocator(locator) {
   if (!locator || typeof locator !== 'object' || Array.isArray(locator)) return null;
+  if (Number(locator.version) === 1 && locator.type === 'pdf') {
+    const pageIndex = locator.pageIndex;
+    if (!Number.isInteger(pageIndex) || pageIndex < 0 || pageIndex >= 10000) return null;
+    return { version: 1, type: 'pdf', pageIndex };
+  }
   const href = String(locator.href || '').trim();
   if (!href) return null;
   const anchor = String(locator.anchor || '').trim();
@@ -44,7 +49,17 @@ function bookmarkLocatorKey(locator) {
 }
 
 function getCurrentBookmarkLocator() {
-  if (state.contentType !== 'epub' || !state.currentBookId) return null;
+  if (!state.currentBookId) return null;
+  if (state.contentType === 'pdf') {
+    const controller = window.pdfReaderController;
+    if (!controller || controller.getCurrentBookId() !== state.currentBookId) return null;
+    const pageIndex = controller.getCurrentPageIndex();
+    const pageCount = controller.getPageCount();
+    return Number.isInteger(pageIndex) && pageIndex >= 0 && pageIndex < pageCount
+      ? { version: 1, type: 'pdf', pageIndex }
+      : null;
+  }
+  if (state.contentType !== 'epub') return null;
   const reader = document.getElementById('reader');
   if (!reader || typeof currentReadingLocator !== 'function') return null;
   if (typeof updateReadingProgress === 'function') updateReadingProgress();
@@ -60,6 +75,9 @@ function isCurrentBookmark(locator = getCurrentBookmarkLocator()) {
 }
 
 function bookmarkLabel(locator) {
+  if (locator?.type === 'pdf' && Number.isInteger(locator.pageIndex)) {
+    return `第 ${locator.pageIndex + 1} 页`;
+  }
   const chapter = [...document.querySelectorAll('#article .epub-chapter')]
     .find((candidate) => candidate.dataset.sourcePath === locator?.href);
   const heading = chapter?.querySelector('h1, h2, h3, h4')?.textContent?.replace(/\s+/g, ' ').trim();
@@ -148,7 +166,16 @@ async function toggleCurrentBookmark() {
 
 async function jumpToBookmark(bookmark) {
   const locator = bookmark?.locator || bookmark;
-  if (state.contentType !== 'epub' || !locator) return false;
+  if (!locator) return false;
+  if (state.contentType === 'pdf') {
+    const normalized = stableBookmarkLocator(locator);
+    const controller = window.pdfReaderController;
+    if (!normalized || normalized.type !== 'pdf'
+      || !controller || controller.getCurrentBookId() !== state.currentBookId
+      || normalized.pageIndex >= controller.getPageCount()) return false;
+    return Boolean(controller.goToPdfPage(normalized.pageIndex));
+  }
+  if (state.contentType !== 'epub') return false;
 
   let targetIndex = null;
   if (state.epubArchive && locator.href) {
@@ -171,19 +198,22 @@ async function jumpToBookmark(bookmark) {
 function renderBookmarkButtonState() {
   const button = document.getElementById('btnBookmarks');
   if (!button) return false;
-  const available = state.contentType === 'epub' && Boolean(state.currentBookId);
+  const available = ['epub', 'pdf'].includes(state.contentType) && Boolean(state.currentBookId);
   const active = available && isCurrentBookmark();
   button.disabled = !available;
   button.dataset.bookmarkActive = active ? 'true' : 'false';
   button.setAttribute('aria-pressed', active ? 'true' : 'false');
   const label = active ? '取消当前书签' : '添加当前书签';
-  button.setAttribute('aria-label', available ? label : '书签仅支持 EPUB');
-  button.setAttribute('title', available ? label : '书签仅支持 EPUB');
+  button.setAttribute('aria-label', available ? label : '书签仅支持 EPUB 和 PDF');
+  button.setAttribute('title', available ? label : '书签仅支持 EPUB 和 PDF');
   return active;
 }
 
 function bookmarkMeta(bookmark) {
   const locator = bookmark?.locator || {};
+  if (locator.type === 'pdf' && Number.isInteger(locator.pageIndex)) {
+    return `PDF · 第 ${locator.pageIndex + 1} 页`;
+  }
   if (Number.isFinite(locator.pageNumber)) return `第 ${locator.pageNumber} 页`;
   if (locator.readingScope === 'chapter') return '章节位置';
   return '阅读位置';
@@ -196,7 +226,7 @@ function renderBookmarkList() {
 
   ensureBookmarkPanelStatus();
   list.replaceChildren();
-  const bookmarks = state.contentType === 'epub' ? currentBookBookmarks() : [];
+  const bookmarks = ['epub', 'pdf'].includes(state.contentType) ? currentBookBookmarks() : [];
   if (empty) empty.hidden = bookmarks.length > 0 || ['loading', 'error'].includes(_bookmarkPanelStatus);
 
   bookmarks.forEach((bookmark) => {
@@ -263,7 +293,7 @@ async function deleteBookmarkFromList(bookmarkId) {
 }
 
 function refreshBookmarks() {
-  if (state.contentType !== 'epub' || !state.currentBookId) return Promise.resolve(false);
+  if (!['epub', 'pdf'].includes(state.contentType) || !state.currentBookId) return Promise.resolve(false);
   if (_bookmarkRefreshPromise) return _bookmarkRefreshPromise;
 
   const bookId = state.currentBookId;

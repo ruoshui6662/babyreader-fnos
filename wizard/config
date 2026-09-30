@@ -1,0 +1,17 @@
+[
+  {
+    "stepTitle": "PDF 阅读验收",
+    "items": [
+      {
+        "type": "switch",
+        "field": "wizard_pdf_reader_enabled",
+        "label": "启用 PDF 阅读与全文搜索（验收用）",
+        "initValue": "false"
+      },
+      {
+        "type": "tips",
+        "helpText": "默认关闭。仅在管理员进行 PDF 验收时开启；结束后在此关闭。"
+      }
+    ]
+  }
+]

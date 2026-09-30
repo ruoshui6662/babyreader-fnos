@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>BabyReader</title>
-  <link rel="stylesheet" href="styles.css?v=38">
+  <link rel="stylesheet" href="styles.css?v=55">
 </head>
 <body class="is-welcome">
   <!-- Reader Shell: low-distraction navigation with stable legacy IDs -->
@@ -37,7 +37,7 @@
     <button class="reader-tool-btn" id="btnExportHighlights" type="button" hidden data-reader-action="exportHighlights" aria-label="导出标记与想法" title="导出标记与想法"></button>
     <span class="reader-toolbar-divider" aria-hidden="true"></span>
     <button class="reader-tool-btn" id="btnSearch" type="button" data-reader-action="openSearch" data-reader-panel="search" data-reader-status="reserved" aria-controls="readerSearchSheet" aria-expanded="false" aria-label="搜索，打开书籍后可用" title="搜索，打开书籍后可用" disabled></button>
-    <button class="reader-tool-btn" id="btnBookmarks" type="button" data-reader-action="toggleBookmark" aria-pressed="false" aria-label="书签仅支持 EPUB" title="书签仅支持 EPUB" disabled></button>
+    <button class="reader-tool-btn" id="btnBookmarks" type="button" data-reader-action="toggleBookmark" aria-pressed="false" aria-label="书签，打开书籍后可用" title="书签，打开书籍后可用" disabled></button>
     <button class="reader-tool-btn" id="btnNotes" type="button" data-reader-action="openNotes" data-reader-panel="notes" aria-controls="readerDrawer" aria-expanded="false" aria-label="打开标记与想法" title="打开标记与想法"></button>
     <button class="reader-tool-btn" id="btnAi" type="button" data-reader-action="openAi" data-reader-panel="ai" aria-controls="aiModal" aria-expanded="false" aria-label="打开 AI 阅读助手" title="打开 AI 阅读助手" disabled></button>
     <span class="reader-toolbar-divider" aria-hidden="true"></span>
@@ -77,7 +77,7 @@
               <option value="sepia">护眼米黄</option>
             </select>
           </label>
-          <label class="settings-field">
+          <label class="settings-field" data-pdf-inapplicable>
             <span>正文字体</span>
             <select id="settingFontFamily">
               <option value="sans">系统黑体</option>
@@ -90,13 +90,24 @@
       <section class="settings-group" data-settings-group="reading">
         <h3 class="settings-group-title">阅读</h3>
         <div class="settings-group-card">
-          <label class="settings-field">
+          <label class="settings-field" data-pdf-inapplicable>
             <span>阅读模式</span>
             <select id="settingReadingMode">
               <option value="scroll">连续滚动</option>
               <option value="double">双页分页</option>
             </select>
           </label>
+          <label class="settings-field" data-pdf-only hidden>
+            <span>PDF 阅读模式</span>
+            <select id="settingPdfLayoutMode">
+              <option value="continuous">连续</option>
+              <option value="single">单页</option>
+              <option value="double">双页</option>
+            </select>
+          </label>
+          <p class="settings-field-description" id="settingsPdfLayoutHint" data-pdf-only hidden>
+            PDF 是固定版面；模式切换只调整页面排列，缩放和适宽只改变显示大小，不会重排文字。
+          </p>
           <label class="settings-field settings-checkbox">
             <input id="settingTocOpen" type="checkbox" checked>
             <span>默认展开目录</span>
@@ -117,7 +128,7 @@
           </label>
         </div>
       </section>
-      <section class="settings-group" data-settings-group="typography">
+      <section class="settings-group" data-settings-group="typography" data-pdf-inapplicable>
         <div class="settings-group-heading">
           <h3 class="settings-group-title">排版</h3>
           <button type="button" class="settings-group-reset" id="btnResetTypography">恢复默认</button>
@@ -178,7 +189,10 @@
       <p class="reader-panel-empty bookmark-empty-state" id="bookmarkEmptyState">当前还没有书签。</p>
     </section>
     <section class="reader-panel notes-panel" id="readerPanelNotes" data-reader-panel-name="notes" role="tabpanel" hidden aria-labelledby="drawerTabNotes">
-      <div class="notes-panel-summary" id="notesPanelSummary">0 条标记 · 0 条想法</div>
+      <div class="notes-panel-heading">
+        <div class="notes-panel-summary" id="notesPanelSummary">0 条标记 · 0 条想法</div>
+        <button type="button" class="notes-panel-export" data-reader-action="exportHighlights">导出笔记</button>
+      </div>
       <div class="notes-panel-toolbar">
         <div class="notes-panel-filters" role="tablist" aria-label="标记与想法筛选">
           <button type="button" data-notes-filter="all" role="tab" aria-selected="true" tabindex="0">全部</button>
@@ -223,10 +237,17 @@
           </div>
         </div>
       </form>
-      <div class="reader-search-status" id="readerSearchStatus" role="status" aria-live="polite" hidden></div>
+      <div class="reader-search-summary">
+        <div class="reader-search-status" id="readerSearchStatus" role="status" aria-live="polite" hidden></div>
+        <div class="reader-search-stepper" aria-label="浏览搜索命中">
+          <button id="readerSearchPrevious" type="button" aria-label="上一条命中" disabled>‹</button>
+          <button id="readerSearchNext" type="button" aria-label="下一条命中" disabled>›</button>
+        </div>
+      </div>
       <div class="reader-search-loading" id="readerSearchLoading" role="status" aria-live="polite" hidden>正在搜索…</div>
       <p class="reader-search-empty" id="readerSearchEmpty" hidden>输入关键词后开始搜索。</p>
       <ol class="reader-search-results" id="readerSearchResults" role="list" hidden></ol>
+      <button class="reader-search-more" id="readerSearchMore" type="button" hidden>加载更多</button>
       <div class="reader-search-error" id="readerSearchError" role="alert" hidden>搜索暂时不可用。</div>
     </div>
   </aside>
@@ -256,6 +277,7 @@
         <p>回答仅基于当前书本内容</p>
       </div>
       <div class="ai-modal-actions">
+        <button type="button" class="ai-icon-button ai-conversations-button" id="btnAiConversations" aria-label="会话列表" title="会话列表">会话</button>
         <button type="button" class="ai-icon-button ai-new-conversation" id="btnAiNewConversation" aria-label="新建对话" title="新建对话">新对话</button>
         <button type="button" class="ai-icon-button" id="btnAiSettings" aria-label="AI 设置" title="AI 设置">设置</button>
         <button type="button" class="ai-icon-button" id="btnCloseAiModal" aria-label="关闭 AI 问书" title="关闭">×</button>
@@ -279,19 +301,57 @@
             <button type="button" data-ai-prompt="书中有哪些内容可以支持这段观点？">关键依据</button>
           </div>
         </div>
+        <button class="ai-new-reply" id="aiNewReply" type="button" hidden>查看新回答 ↓</button>
         <div class="ai-composer">
-          <label class="ai-question-field">
-            <span class="ai-question-label">向本书提问</span>
+          <div class="ai-pdf-scope" id="aiPdfScopeRow" hidden>
+            <span class="ai-pdf-privacy" id="aiPdfPrivacy">回答会检索本篇 PDF 的可提取文本，并发送有限片段至已配置的 AI 服务</span>
+          </div>
+          <div class="ai-question-field">
+            <label class="ai-question-label" for="aiQuestion">向本书提问</label>
             <textarea id="aiQuestion" rows="2" maxlength="4000" aria-label="向本书提问" placeholder="提出问题，获取来自书籍的解答…" disabled></textarea>
-          </label>
-          <div class="ai-question-actions">
-            <span class="ai-question-hint">Enter 发送 · Shift + Enter 换行</span>
-            <button class="reader-action-button ai-send-button" type="button" id="btnAiAsk" disabled aria-label="发送问题">
-              <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M12 19V5"></path>
-                <path d="m6 11 6-6 6 6"></path>
-              </svg>
-            </button>
+            <div class="ai-question-actions">
+              <span class="ai-question-hint">Enter 发送 · Shift + Enter 换行</span>
+              <button class="reader-action-button ai-send-button" type="button" id="btnAiAsk" disabled aria-label="发送问题">
+                <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M12 19V5"></path>
+                  <path d="m6 11 6-6 6 6"></path>
+                </svg>
+              </button>
+            </div>
+          </div>
+        </div>
+      </section>
+      <section id="aiConversationsView" class="ai-config-sheet ai-conversations-sheet" data-ai-view="conversations" hidden role="dialog" aria-modal="true" aria-labelledby="aiConversationsTitle">
+        <button type="button" class="ai-config-sheet-backdrop" id="btnCloseAiConversationsBackdrop" aria-label="关闭会话列表"></button>
+        <div class="ai-config-sheet-card">
+          <header class="ai-config-sheet-header">
+            <div class="ai-config-heading">
+              <h3 id="aiConversationsTitle">会话列表</h3>
+              <p>只显示会话摘要，打开后加载完整内容。</p>
+            </div>
+            <div class="ai-conversations-header-actions">
+              <button type="button" class="ai-secondary-button" id="btnRefreshAiConversations">重新加载</button>
+              <button type="button" class="ai-icon-button" id="btnCloseAiConversationsSheet" aria-label="关闭会话列表" title="关闭">×</button>
+            </div>
+          </header>
+          <div class="ai-config-sheet-content ai-conversations-content">
+            <div class="ai-conversation-status" id="aiConversationStatus" role="status" aria-live="polite" hidden></div>
+            <button type="button" class="ai-conversation-retry" id="btnRetryAiConversations" hidden>重试</button>
+            <div class="ai-conversation-list" id="aiConversationList" role="list"></div>
+            <p class="ai-conversation-empty" id="aiConversationEmpty" hidden>还没有保存的会话。</p>
+          </div>
+        </div>
+      </section>
+      <section id="aiConversationConfirmView" class="ai-config-sheet ai-conversation-confirm-sheet" data-ai-view="conversation-confirm" hidden role="alertdialog" aria-modal="true" aria-labelledby="aiConversationConfirmTitle" aria-describedby="aiConversationConfirmDescription">
+        <button type="button" class="ai-config-sheet-backdrop" id="btnCloseAiConversationConfirmBackdrop" aria-label="取消会话操作"></button>
+        <div class="ai-config-sheet-card ai-conversation-confirm-card">
+          <div class="ai-conversation-confirm-content">
+            <h3 id="aiConversationConfirmTitle"></h3>
+            <p id="aiConversationConfirmDescription"></p>
+          </div>
+          <div class="ai-config-actions ai-conversation-confirm-actions">
+            <button type="button" class="ai-secondary-button" id="btnCancelAiConversationConfirm">取消</button>
+            <button type="button" class="reader-action-button ai-conversation-confirm-danger" id="btnConfirmAiConversationAction"></button>
           </div>
         </div>
       </section>
@@ -393,7 +453,7 @@
           <p class="welcome-quote-en">To acquire the habit of reading is to construct for yourself<br>a refuge from almost all the miseries of life.</p>
           <p class="welcome-quote-zh">阅读是一座随身携带的避难所。</p>
           <p class="welcome-guidance">把书放进书库目录，即可从这里开始阅读。</p>
-          <p class="hint">⌘O 打开文件 · 支持 .md .txt .epub · 双击直接阅读</p>
+          <p class="hint">单击书籍开始阅读 · 支持 EPUB、PDF、Markdown 和 TXT · Ctrl/⌘+O 返回书库</p>
           <p class="credit">by <a href="https://x.com/KingJing001" target="_blank">@一龙小包子</a></p>
         </div>
       </div>
@@ -410,6 +470,32 @@
     <button class="reader-nav-button page-nav-btn reader-page-nav-btn" id="btnNextPage" type="button" hidden data-reader-action="nextPage" aria-label="下一页" title="下一页">
       <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"></path></svg>
     </button>
+    <section class="pdf-reader-surface" id="pdfReaderSurface" hidden aria-label="PDF 阅读器">
+      <div class="pdf-reader-controls" role="toolbar" aria-label="PDF 阅读控制">
+        <div class="pdf-control-group" aria-label="翻页">
+          <button type="button" id="pdfPreviousPage" aria-label="上一页" title="上一页">
+            <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"></path></svg>
+          </button>
+          <label class="pdf-page-jump"><span class="visually-hidden">页码</span><input id="pdfPageNumber" type="number" min="1" value="1" inputmode="numeric" aria-label="跳转到页码"><span id="pdfPageCount">/ 0</span></label>
+          <button type="button" id="pdfNextPage" aria-label="下一页" title="下一页">
+            <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"></path></svg>
+          </button>
+        </div>
+        <div class="pdf-control-group" aria-label="缩放">
+          <button type="button" id="pdfZoomOut" aria-label="缩小" title="缩小">
+            <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke-width="1.8" stroke-linecap="round"><path d="M6 12h12"></path></svg>
+          </button>
+          <span id="pdfZoomValue">100%</span>
+          <button type="button" id="pdfZoomIn" aria-label="放大" title="放大">
+            <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke-width="1.8" stroke-linecap="round"><path d="M6 12h12"></path><path d="M12 6v12"></path></svg>
+          </button>
+          <button type="button" id="pdfFitWidth" aria-label="适合宽度" title="适合宽度">适宽</button>
+        </div>
+      </div>
+      <span id="pdfReaderAnnouncement" class="visually-hidden" role="status" aria-live="polite"></span>
+      <div class="pdf-reader-status" id="pdfReaderStatus" role="status" aria-live="polite" hidden></div>
+      <div class="pdf-pages" id="pdfPages" aria-label="PDF 页面" tabindex="0"></div>
+    </section>
     <div class="epub-shell" id="epubShell" style="display:none">
       <div class="epub-viewer" id="epubViewer"></div>
     </div>
@@ -428,30 +514,39 @@
   <script src="lib/jszip.min.js"></script>
   <script src="lib/epub.min.js"></script>
   <script src="lib/marked.min.js"></script>
-  <script src="core/state.js?v=32"></script>
+  <script src="core/state.js?v=33"></script>
   <script src="core/utils.js?v=28"></script>
   <script src="core/api.js?v=28"></script>
   <script src="core/reader-route.js?v=1"></script>
-  <script src="core/user-state.js?v=32"></script>
+  <script src="core/user-state.js?v=35"></script>
+  <script src="reader/annotations.js?v=2"></script>
   <script src="reader/device-profile.js?v=31"></script>
   <script src="reader/epub.js?v=28"></script>
   <script src="reader/document.js?v=28"></script>
   <script src="reader/editor.js?v=28"></script>
-  <script src="reader/highlights.js?v=32"></script>
+  <script src="reader/highlights.js?v=36"></script>
   <script src="reader/ai.js?v=1"></script>
   <script src="reader/ai-index-manager.js?v=1"></script>
-  <script src="reader/selection-menu.js?v=1"></script>
+  <script src="reader/selection-menu.js?v=4"></script>
+  <script src="reader/pdf-notes-export.js?v=1"></script>
   <script src="reader/actions.js?v=28"></script>
-  <script src="reader/notes-panel.js?v=1"></script>
-  <script src="reader/progress.js?v=31"></script>
-  <script src="reader/bookmarks.js?v=1"></script>
+  <script src="reader/notes-panel.js?v=3"></script>
+  <script src="reader/progress.js?v=33"></script>
+  <script src="reader/bookmarks.js?v=2"></script>
   <script src="reader/pagination.js?v=33"></script>
-  <script src="reader/settings.js?v=29"></script>
+  <script src="reader/settings.js?v=30"></script>
   <script src="reader/navigation.js?v=28"></script>
+  <script src="reader/pdf-annotation-geometry.js?v=1"></script>
+  <script src="reader/pdf-annotations.js?v=1"></script>
+  <script src="reader/pdf-render-scheduler.js?v=1"></script>
+  <script src="reader/pdf.js?v=12"></script>
   <script src="reader/lifecycle.js?v=31"></script>
-  <script src="reader/search.js?v=1"></script>
-  <script src="shell/drawer.js?v=31"></script>
-  <script src="library/view.js?v=29"></script>
-  <script src="app.js?v=32"></script>
+  <script src="reader/search.js?v=3"></script>
+  <script src="shell/drawer.js?v=32"></script>
+  <script src="library/reorder.js?v=1"></script>
+  <script src="library/pdf-covers.js?v=1"></script>
+  <script src="library/organization.js?v=5"></script>
+  <script src="library/view.js?v=31"></script>
+  <script src="app.js?v=34"></script>
 </body>
 </html>

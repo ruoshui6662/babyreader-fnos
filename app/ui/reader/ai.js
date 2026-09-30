@@ -6,6 +6,7 @@ const AI_CHUNK_SIZE = 900;
 const AI_CHUNK_OVERLAP = 120;
 const AI_MAX_RESULTS = 6;
 const AI_CONTEXT_CHAR_BUDGET = AI_CHUNK_SIZE * AI_MAX_RESULTS;
+const AI_REMOTE_SEARCH_TIMEOUT_MS = 2500;
 const AI_TITLE_WEIGHT = 4;
 const AI_HEADING_WEIGHT = 3;
 const AI_BODY_WEIGHT = 1;
@@ -31,6 +32,11 @@ const AI_BOOK_PROMPTS = [
   '这本书的核心观点是什么？',
   '作者提出了哪些关键概念？'
 ];
+const AI_PDF_PROMPTS = [
+  '当前页的主要观点是什么？',
+  '请解释当前页出现的关键概念。',
+  '哪些可检索片段支持这个观点？'
+];
 
 let _aiSelection = null;
 let _aiIndex = null;
@@ -42,6 +48,16 @@ let _aiModalReturnFocus = null;
 let _aiConfigReturnFocus = null;
 let _aiClearApiKey = false;
 let _aiConversation = [];
+let _aiConversationId = null;
+let _aiConversationList = [];
+let _aiConversationBookId = null;
+let _aiConversationRestoring = false;
+let _aiConversationRestoreToken = 0;
+let _aiConversationPersistenceAvailable = false;
+let _aiConversationManageBusy = false;
+let _aiConversationManageReturnFocus = null;
+let _aiConversationConfirmation = null;
+let _aiConversationConfirmationPending = false;
 let _aiStreamController = null;
 let _aiActiveAnswerElement = null;
 let _aiActiveSourcesElement = null;
@@ -191,8 +207,26 @@ function aiChapterLabel(index) {
 }
 
 function currentAiChapter() {
-  const index = Number.isInteger(state.epubChapterIndex) ? state.epubChapterIndex : 0;
-  return { index, href: state.chapterPaths?.[index] || '', label: aiChapterLabel(index) };
+  const reader = document.getElementById('reader');
+  const locator = typeof currentReadingLocator === 'function' && reader
+    ? currentReadingLocator(reader)
+    : null;
+  const visibleIndex = locator?.href && Array.isArray(state.chapterPaths)
+    ? state.chapterPaths.indexOf(locator.href)
+    : -1;
+  const index = visibleIndex >= 0
+    ? visibleIndex
+    : Number.isInteger(state.epubChapterIndex) ? state.epubChapterIndex : 0;
+  const href = state.chapterPaths?.[index] || '';
+  return {
+    index,
+    href,
+    label: aiChapterLabel(index),
+    position: {
+      href,
+      anchor: locator?.href === href ? String(locator.anchor || '') : ''
+    }
+  };
 }
 
 function aiElement(id) {
@@ -202,9 +236,20 @@ function aiElement(id) {
 function setAiStatus(message, tone = '') {
   const element = aiElement('aiStatus');
   if (!element) return;
+  if (tone === 'ready' && aiElement('btnAiAsk')?.dataset.configured === 'false') {
+    message = '尚未配置 AI 服务，请先填写 AI 设置。';
+    tone = 'warning';
+  }
   element.textContent = message;
   element.dataset.tone = tone;
   element.hidden = !['busy', 'warning', 'error'].includes(tone);
+}
+
+function pdfAiStatusFromMeta(meta, sourceCount) {
+  if (meta?.profileStatus === 'ready') return '正在分析论文结构，仅发送有限页片段…';
+  if (meta?.profileStatus === 'cached') return '已使用论文结构，正在检索原文页证据…';
+  if (meta?.profileStatus === 'fallback') return '结构分析不可用，已按页检索。';
+  return `已找到 ${sourceCount} 条页证据，正在生成回答…`;
 }
 
 function renderAiSelection() {
@@ -219,7 +264,7 @@ function renderAiPromptSuggestions() {
   const title = document.querySelector('.ai-suggested-title');
   const buttons = [...document.querySelectorAll('[data-ai-prompt]')];
   const hasSelection = Boolean(normalizeAiText(_aiSelection?.text));
-  const prompts = hasSelection ? AI_SELECTION_PROMPTS : AI_BOOK_PROMPTS;
+  const prompts = hasSelection ? AI_SELECTION_PROMPTS : state.contentType === 'pdf' ? AI_PDF_PROMPTS : AI_BOOK_PROMPTS;
   if (title) title.textContent = hasSelection ? '你还可以问' : '常用问题';
   buttons.forEach((button, index) => {
     const prompt = prompts[index];
@@ -279,7 +324,7 @@ function decorateAiCitationHtml(html, scope = '') {
       link.dataset.aiCitation = String(index);
       link.href = `#${aiSourceAnchorId(scope, index)}`;
       link.textContent = circledAiNumber(index);
-      link.setAttribute('aria-label', `跳转到来源章节 ${index}`);
+      link.setAttribute('aria-label', `跳转到来源 ${index}`);
       fragment.appendChild(link);
       cursor = match.index + match[0].length;
     }
@@ -322,30 +367,40 @@ function renderAiSources(sources, target = null, answer = '') {
   if (!citedSources.length) return;
   const title = document.createElement('div');
   title.className = 'ai-sources-title';
-  title.textContent = '来源章节';
+  title.textContent = state.contentType === 'pdf' ? '来源页码' : '来源章节';
   container.appendChild(title);
   for (const source of citedSources) {
     const primaryCitationIndex = source.citedIndexes[0];
-    const rawSourceLabel = normalizeAiText(source.chapterLabel || `第${Number(source.chapterIndex || 0) + 1}章`);
+    const rawSourceLabel = normalizeAiText(source.chapterLabel || (state.contentType === 'pdf'
+      ? `第${Number(source.pageIndex || 0) + 1}页` : `第${Number(source.chapterIndex || 0) + 1}章`));
     const sourceLabel = normalizeAiSourceLabel(rawSourceLabel);
     const link = document.createElement('a');
     link.id = aiSourceAnchorId(scope, primaryCitationIndex);
     link.href = `#${link.id}`;
     link.dataset.aiSourceIndex = String(primaryCitationIndex);
     link.className = 'ai-source';
-    link.setAttribute('aria-label', `来源章节：${rawSourceLabel}`);
-    if (sourceLabel !== rawSourceLabel) link.title = rawSourceLabel;
+    const stalePdfSource = state.contentType === 'pdf' && source.stale === true;
+    link.setAttribute('aria-label', `来源${state.contentType === 'pdf' ? '页码' : '章节'}：${rawSourceLabel}${stalePdfSource ? '，来源已变化' : ''}`);
+    if (stalePdfSource) {
+      link.removeAttribute('href');
+      link.setAttribute('aria-disabled', 'true');
+      link.title = 'PDF 来源已变化，旧页码不可跳转';
+    }
+    if (!stalePdfSource && sourceLabel !== rawSourceLabel) link.title = rawSourceLabel;
     const indexElement = document.createElement('span');
     indexElement.className = 'ai-source-index';
     indexElement.setAttribute('aria-hidden', 'true');
     indexElement.textContent = String(primaryCitationIndex);
     const labelElement = document.createElement('span');
     labelElement.className = 'ai-source-label';
-    labelElement.textContent = sourceLabel;
+    labelElement.textContent = stalePdfSource ? `${sourceLabel} · 来源已变化` : sourceLabel;
     link.append(indexElement, labelElement);
     const navigateSource = (event) => {
       event.preventDefault();
-      if (Number.isInteger(source.chapterIndex) && typeof navigateToEpubChapter === 'function') {
+      if (stalePdfSource) return;
+      if (state.contentType === 'pdf' && Number.isInteger(source.pageIndex ?? source.chapterIndex)) {
+        window.pdfReaderController?.goToPdfPage?.(source.pageIndex ?? source.chapterIndex);
+      } else if (Number.isInteger(source.chapterIndex) && typeof navigateToEpubChapter === 'function') {
         navigateToEpubChapter(source.chapterIndex, { reason: 'ai-source' });
       }
     };
@@ -409,6 +464,20 @@ function prepareAiAssistantMessage() {
   return { answer, sources, card, notice };
 }
 
+function discardFailedAiTurn(userMessage, assistant, questionElement, question) {
+  userMessage?.remove();
+  if (assistant?.card === aiElement('aiInitialAnswerCard')) {
+    assistant.card.hidden = true;
+    if (assistant.answer) { assistant.answer.replaceChildren(); assistant.answer.hidden = true; }
+    assistant.sources?.replaceChildren();
+  } else {
+    assistant?.card?.remove();
+    const initialAnswer = aiElement('aiInitialAnswerCard');
+    if (initialAnswer && !aiElement('aiAnswer')?.textContent?.trim()) initialAnswer.hidden = true;
+  }
+  if (questionElement && !questionElement.value.trim()) questionElement.value = question;
+}
+
 function ensureAiConfidenceNotice(card) {
   if (!card) return null;
   const existing = card.querySelector('.ai-confidence-notice');
@@ -432,8 +501,15 @@ function renderAiConfidenceNotice(confidence, target = null) {
   element.dataset.tone = guarded ? 'warning' : '';
 }
 
-function resetAiConversation() {
+function resetAiConversation({ clearConversationId = false, clearConversationList = false } = {}) {
+  closeAiConversationConfirmation({ restoreFocus: false });
   _aiConversation = [];
+  if (clearConversationId) {
+    _aiConversationId = null;
+    _aiConversationBookId = null;
+    _aiConversationPersistenceAvailable = false;
+  }
+  if (clearConversationList) _aiConversationList = [];
   _aiActiveAnswerElement = null;
   _aiActiveSourcesElement = null;
   const messages = aiElement('aiMessages');
@@ -451,11 +527,474 @@ function resetAiConversation() {
     answer.hidden = true;
   }
   if (sources) sources.replaceChildren();
+  const newReply = aiElement('aiNewReply');
+  if (newReply) newReply.hidden = true;
+}
+
+function getAiConversationState() {
+  return {
+    conversationId: _aiConversationId,
+    conversationList: _aiConversationList.slice(),
+    bookId: _aiConversationBookId,
+    restoring: _aiConversationRestoring,
+    persistenceAvailable: _aiConversationPersistenceAvailable
+  };
+}
+
+function formatAiConversationTime(value) {
+  if (!value) return '';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '';
+  try {
+    return new Intl.DateTimeFormat('zh-CN', {
+      month: 'numeric',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    }).format(date);
+  } catch {
+    return '';
+  }
+}
+
+function normalizeAiConversationSummary(item) {
+  if (!item?.id) return null;
+  const messageCount = Number(item.messageCount);
+  return {
+    id: String(item.id),
+    title: normalizeAiText(item.title) || '未命名会话',
+    messageCount: Number.isFinite(messageCount) && messageCount >= 0 ? messageCount : 0,
+    updatedAt: item.updatedAt || item.createdAt || ''
+  };
+}
+
+function setAiConversationManagementStatus(message, tone = '') {
+  const status = aiElement('aiConversationStatus');
+  if (!status) return;
+  status.textContent = String(message || '');
+  status.dataset.tone = tone;
+  status.hidden = !message;
+  const retry = aiElement('btnRetryAiConversations');
+  if (retry && tone !== 'error') retry.hidden = true;
+}
+
+function setAiConversationManagementBusy(busy) {
+  _aiConversationManageBusy = Boolean(busy);
+  const refresh = aiElement('btnRefreshAiConversations');
+  if (refresh) refresh.disabled = _aiConversationManageBusy;
+  const rows = aiElement('aiConversationList')?.querySelectorAll?.('button') || [];
+  rows.forEach((button) => {
+    button.disabled = _aiConversationManageBusy;
+  });
+  const confirmView = aiElement('aiConversationConfirmView');
+  const confirmBusy = _aiConversationManageBusy || _aiConversationConfirmationPending;
+  if (confirmView) confirmView.classList.toggle('is-pending', confirmBusy);
+  const cancel = aiElement('btnCancelAiConversationConfirm');
+  const confirm = aiElement('btnConfirmAiConversationAction');
+  if (cancel) cancel.disabled = confirmBusy;
+  if (confirm) confirm.disabled = confirmBusy;
+}
+
+function renderAiConversationList() {
+  const list = aiElement('aiConversationList');
+  const empty = aiElement('aiConversationEmpty');
+  if (!list) return;
+  list.replaceChildren();
+  const summaries = _aiConversationList
+    .map(normalizeAiConversationSummary)
+    .filter(Boolean);
+  _aiConversationList = summaries;
+  if (empty) empty.hidden = summaries.length > 0;
+  for (const summary of summaries) {
+    const row = document.createElement('article');
+    row.className = `ai-conversation-row${summary.id === _aiConversationId ? ' is-active' : ''}`;
+    row.dataset.aiConversationId = summary.id;
+    row.setAttribute('role', 'listitem');
+    if (summary.id === _aiConversationId) row.setAttribute('aria-current', 'true');
+
+    const open = document.createElement('button');
+    open.type = 'button';
+    open.className = 'ai-conversation-open';
+    open.setAttribute('aria-label', `打开会话：${summary.title}`);
+    const title = document.createElement('span');
+    title.className = 'ai-conversation-title';
+    title.textContent = summary.title;
+    const meta = document.createElement('span');
+    meta.className = 'ai-conversation-meta';
+    const time = formatAiConversationTime(summary.updatedAt);
+    meta.textContent = `${summary.messageCount} 条消息${time ? ` · ${time}` : ''}`;
+    open.append(title, meta);
+    open.addEventListener('click', () => void selectAiConversation(summary.id));
+
+    const actions = document.createElement('div');
+    actions.className = 'ai-conversation-actions';
+    const clear = document.createElement('button');
+    clear.type = 'button';
+    clear.className = 'ai-conversation-clear';
+    clear.textContent = '清空';
+    clear.addEventListener('click', (event) => {
+      requestAiConversationConfirmation('clear', summary.id, event.currentTarget);
+    });
+    const remove = document.createElement('button');
+    remove.type = 'button';
+    remove.className = 'ai-conversation-delete';
+    remove.textContent = '删除';
+    remove.addEventListener('click', (event) => {
+      requestAiConversationConfirmation('delete', summary.id, event.currentTarget);
+    });
+    actions.append(clear, remove);
+    row.append(open, actions);
+    list.appendChild(row);
+  }
+  setAiConversationManagementBusy(_aiConversationManageBusy);
+}
+
+function closeAiConversationsSheet({ restoreFocus = true } = {}) {
+  closeAiConversationConfirmation({ restoreFocus: false });
+  const sheet = aiElement('aiConversationsView');
+  if (sheet) sheet.hidden = true;
+  if (restoreFocus && _aiConversationManageReturnFocus?.isConnected) _aiConversationManageReturnFocus.focus();
+  _aiConversationManageReturnFocus = null;
+}
+
+async function openAiConversationsSheet(trigger = document.activeElement) {
+  const sheet = aiElement('aiConversationsView');
+  if (!sheet || !state.currentBookId) return false;
+  closeAiConfigSheet({ restoreFocus: false });
+  _aiConversationManageReturnFocus = trigger;
+  sheet.hidden = false;
+  setAiConversationManagementStatus('', 'ready');
+  renderAiConversationList();
+  aiElement('btnCloseAiConversationsSheet')?.focus();
+  return true;
+}
+
+async function refreshAiConversationList() {
+  const bookId = state.currentBookId;
+  if (!bookId || typeof browserHost?.getAiConversations !== 'function') {
+    setAiConversationManagementStatus('当前书籍暂不支持会话列表。', 'error');
+    return false;
+  }
+  const token = ++_aiConversationRestoreToken;
+  setAiConversationManagementBusy(true);
+  setAiConversationManagementStatus('正在加载会话列表…', 'busy');
+  try {
+    const summary = await browserHost.getAiConversations(bookId);
+    if (token !== _aiConversationRestoreToken || state.currentBookId !== bookId) return false;
+    _aiConversationPersistenceAvailable = true;
+    _aiConversationList = Array.isArray(summary?.conversations) ? summary.conversations.slice() : [];
+    if (!_aiConversationId || !_aiConversationList.some((item) => String(item.id) === _aiConversationId)) {
+      _aiConversationId = summary?.activeConversationId || _aiConversationList[0]?.id || null;
+    }
+    _aiConversationBookId = bookId;
+    renderAiConversationList();
+    setAiConversationManagementStatus('', 'ready');
+    return true;
+  } catch (error) {
+    if (token === _aiConversationRestoreToken && state.currentBookId === bookId) {
+      setAiConversationManagementStatus(error.message || '会话列表加载失败，请点击“重试”。', 'error');
+      const retry = aiElement('btnRetryAiConversations');
+      if (retry) retry.hidden = false;
+      renderAiConversationList();
+    }
+    return false;
+  } finally {
+    if (token === _aiConversationRestoreToken) setAiConversationManagementBusy(false);
+  }
+}
+
+async function loadAiConversationDetail(conversationId, { closeOnSuccess = true } = {}) {
+  const bookId = state.currentBookId;
+  if (!bookId || !conversationId || typeof browserHost?.getAiConversation !== 'function') return false;
+  setAiConversationManagementBusy(true);
+  setAiConversationManagementStatus('正在打开会话…', 'busy');
+  try {
+    const conversation = await browserHost.getAiConversation(conversationId, bookId);
+    if (state.currentBookId !== bookId) return false;
+    if (!conversation || String(conversation.id) !== String(conversationId)) throw new Error('会话内容无效');
+    _aiConversationId = String(conversationId);
+    _aiConversationBookId = bookId;
+    renderAiConversation(conversation);
+    renderAiConversationList();
+    setAiConversationManagementStatus('', 'ready');
+    if (closeOnSuccess) closeAiConversationsSheet();
+    return true;
+  } catch (error) {
+    setAiConversationManagementStatus(error.message || '会话打开失败，请重试。', 'error');
+    return false;
+  } finally {
+    setAiConversationManagementBusy(false);
+  }
+}
+
+async function selectAiConversation(conversationId) {
+  if (_aiConversationManageBusy || String(conversationId) === String(_aiConversationId)) {
+    if (String(conversationId) === String(_aiConversationId)) closeAiConversationsSheet();
+    return false;
+  }
+  return loadAiConversationDetail(String(conversationId));
+}
+
+function requestAiConversationConfirmation(action, conversationId, trigger) {
+  if (_aiConversationManageBusy || _aiConversationConfirmationPending || !state.currentBookId) return false;
+  if (action !== 'clear' && action !== 'delete') return false;
+  const summary = normalizeAiConversationSummary(_aiConversationList.find((item) => (
+    String(item?.id) === String(conversationId)
+  )));
+  const view = aiElement('aiConversationConfirmView');
+  const conversations = aiElement('aiConversationsView');
+  if (!summary || !view || !conversations) return false;
+  const isClear = action === 'clear';
+  const title = isClear ? '清空此会话？' : '删除此会话？';
+  const description = isClear
+    ? `将删除“${summary.title}”中的 ${summary.messageCount} 条消息。此操作无法撤销。`
+    : `将删除“${summary.title}”及其中全部消息。此操作无法恢复。`;
+  aiElement('aiConversationConfirmTitle').textContent = title;
+  aiElement('aiConversationConfirmDescription').textContent = description;
+  const confirm = aiElement('btnConfirmAiConversationAction');
+  if (confirm) {
+    confirm.textContent = isClear ? '清空会话' : '删除会话';
+    confirm.dataset.action = action;
+  }
+  _aiConversationConfirmation = {
+    action,
+    conversationId: summary.id,
+    title: summary.title,
+    messageCount: summary.messageCount,
+    bookId: state.currentBookId,
+    trigger
+  };
+  view.dataset.action = action;
+  conversations.setAttribute('aria-hidden', 'true');
+  view.hidden = false;
+  queueMicrotask(() => {
+    if (_aiConversationConfirmation && !view.hidden) aiElement('btnCancelAiConversationConfirm')?.focus();
+  });
+  return true;
+}
+
+function closeAiConversationConfirmation({ restoreFocus = true } = {}) {
+  const confirmation = _aiConversationConfirmation;
+  const view = aiElement('aiConversationConfirmView');
+  if (view) {
+    view.hidden = true;
+    view.classList.remove('is-pending');
+    delete view.dataset.action;
+  }
+  const conversations = aiElement('aiConversationsView');
+  if (conversations) conversations.removeAttribute('aria-hidden');
+  const confirm = aiElement('btnConfirmAiConversationAction');
+  if (confirm) {
+    confirm.disabled = false;
+    delete confirm.dataset.action;
+  }
+  const cancel = aiElement('btnCancelAiConversationConfirm');
+  if (cancel) cancel.disabled = false;
+  _aiConversationConfirmation = null;
+  _aiConversationConfirmationPending = false;
+  if (restoreFocus && confirmation?.trigger?.isConnected) confirmation.trigger.focus();
+}
+
+function trapAiConversationConfirmationFocus(event) {
+  if (event.key !== 'Tab' || _aiConversationConfirmationPending) return;
+  const cancel = aiElement('btnCancelAiConversationConfirm');
+  const confirm = aiElement('btnConfirmAiConversationAction');
+  if (!cancel || !confirm) return;
+  if (event.shiftKey && document.activeElement === cancel) {
+    event.preventDefault();
+    confirm.focus();
+  } else if (!event.shiftKey && document.activeElement === confirm) {
+    event.preventDefault();
+    cancel.focus();
+  }
+}
+
+async function executeAiConversationConfirmation() {
+  const confirmation = _aiConversationConfirmation;
+  if (!confirmation || _aiConversationConfirmationPending || confirmation.bookId !== state.currentBookId) {
+    if (confirmation && confirmation.bookId !== state.currentBookId) closeAiConversationConfirmation({ restoreFocus: false });
+    return false;
+  }
+  _aiConversationConfirmationPending = true;
+  closeAiConversationConfirmation({ restoreFocus: false });
+  try {
+    if (confirmation.action === 'clear') {
+      return await performClearAiConversationItem(confirmation.conversationId, confirmation.bookId);
+    }
+    return await performDeleteAiConversationItem(confirmation.conversationId, confirmation.bookId);
+  } finally {
+    _aiConversationConfirmationPending = false;
+  }
+}
+
+async function performClearAiConversationItem(conversationId, bookId) {
+  if (!bookId || typeof browserHost?.clearAiConversation !== 'function') return false;
+  setAiConversationManagementBusy(true);
+  setAiConversationManagementStatus('正在清空会话…', 'busy');
+  try {
+    await browserHost.clearAiConversation(conversationId, bookId);
+    if (state.currentBookId !== bookId) return false;
+    if (String(conversationId) === String(_aiConversationId)) {
+      resetAiConversation();
+      _aiConversationId = String(conversationId);
+      _aiConversationBookId = bookId;
+    }
+    _aiConversationList = _aiConversationList.map((item) => (
+      String(item.id) === String(conversationId) ? { ...item, messageCount: 0 } : item
+    ));
+    renderAiConversationList();
+    setAiConversationManagementStatus('', 'ready');
+    return true;
+  } catch (error) {
+    if (state.currentBookId === bookId) {
+      setAiConversationManagementStatus(error.message || '清空失败，请重试。', 'error');
+    }
+    return false;
+  } finally {
+    setAiConversationManagementBusy(false);
+  }
+}
+
+async function performDeleteAiConversationItem(conversationId, bookId) {
+  if (!bookId || typeof browserHost?.deleteAiConversation !== 'function') return false;
+  setAiConversationManagementBusy(true);
+  setAiConversationManagementStatus('正在删除会话…', 'busy');
+  try {
+    await browserHost.deleteAiConversation(conversationId, bookId);
+    if (state.currentBookId !== bookId) return false;
+    _aiConversationList = _aiConversationList.filter((item) => String(item.id) !== String(conversationId));
+    if (String(conversationId) === String(_aiConversationId)) {
+      const next = _aiConversationList[0];
+      if (next) {
+        setAiConversationManagementBusy(false);
+        return loadAiConversationDetail(next.id, { closeOnSuccess: false });
+      }
+      resetAiConversation({ clearConversationId: true });
+      _aiConversationPersistenceAvailable = true;
+      _aiConversationBookId = bookId;
+    }
+    renderAiConversationList();
+    setAiConversationManagementStatus('', 'ready');
+    return true;
+  } catch (error) {
+    if (state.currentBookId === bookId) {
+      setAiConversationManagementStatus(error.message || '删除失败，请重试。', 'error');
+    }
+    return false;
+  } finally {
+    setAiConversationManagementBusy(false);
+  }
+}
+
+function setAiConversationRetryVisible(visible) {
+  const status = aiElement('aiStatus');
+  if (!status?.parentElement) return;
+  let button = aiElement('btnAiRetryConversation');
+  if (!button && visible) {
+    button = document.createElement('button');
+    button.type = 'button';
+    button.id = 'btnAiRetryConversation';
+    button.className = 'ai-conversation-retry';
+    button.textContent = '重试';
+    button.addEventListener('click', () => void restoreAiConversation());
+    status.parentElement.appendChild(button);
+  }
+  if (button) button.hidden = !visible;
+}
+
+function renderAiConversation(conversation) {
+  resetAiConversation();
+  for (const message of Array.isArray(conversation?.messages) ? conversation.messages : []) {
+    if (message.role === 'user') {
+      appendAiUserMessage(message.content);
+      _aiConversation.push({ role: 'user', content: message.content });
+      continue;
+    }
+    if (message.role !== 'assistant') continue;
+    const assistant = prepareAiAssistantMessage();
+    renderAiSources(message.sources || [], assistant.sources, message.content);
+    renderAiAnswer(message.content, assistant.answer, message.sources || []);
+    _aiConversation.push({ role: 'assistant', content: message.content });
+  }
+  scrollAiConversationToBottom();
+}
+
+async function restoreAiConversation() {
+  const bookId = state.currentBookId;
+  if (_aiBusy) return false;
+  if (!bookId || typeof browserHost?.getAiConversations !== 'function') {
+    _aiConversationPersistenceAvailable = false;
+    return false;
+  }
+  const token = ++_aiConversationRestoreToken;
+  const requestGeneration = _aiRequestId;
+  _aiConversationRestoring = true;
+  _aiConversationBookId = bookId;
+  setAiConversationRetryVisible(false);
+  setAiStatus('正在恢复 AI 对话…', 'busy');
+  resetAiConversation({ clearConversationId: true, clearConversationList: true });
+  try {
+    const summary = await browserHost.getAiConversations(bookId);
+    if (token !== _aiConversationRestoreToken || state.currentBookId !== bookId || requestGeneration !== _aiRequestId) return false;
+    _aiConversationPersistenceAvailable = true;
+    _aiConversationList = Array.isArray(summary?.conversations) ? summary.conversations.slice() : [];
+    const activeId = summary?.activeConversationId || _aiConversationList[0]?.id || null;
+    _aiConversationId = activeId;
+    renderAiConversationList();
+    if (activeId && typeof browserHost.getAiConversation === 'function') {
+      const conversation = await browserHost.getAiConversation(activeId, bookId);
+      if (token !== _aiConversationRestoreToken || state.currentBookId !== bookId || requestGeneration !== _aiRequestId) return false;
+      if (!conversation || conversation.id !== activeId) throw new Error('会话恢复结果无效');
+      renderAiConversation(conversation);
+    }
+    setAiStatus('', 'ready');
+    return true;
+  } catch (error) {
+    if (token === _aiConversationRestoreToken && state.currentBookId === bookId && requestGeneration === _aiRequestId) {
+      resetAiConversation({ clearConversationId: true, clearConversationList: true });
+      setAiStatus('会话恢复失败，请点击“重试”重新加载。', 'error');
+      setAiConversationRetryVisible(true);
+    }
+    return false;
+  } finally {
+    if (token === _aiConversationRestoreToken) _aiConversationRestoring = false;
+  }
+}
+
+async function ensureAiConversation() {
+  if (_aiConversationId && _aiConversationBookId === state.currentBookId) return _aiConversationId;
+  // Older fixtures/servers may not expose conversation persistence yet. Keep
+  // the legacy ask flow usable instead of adding a failing create request.
+  if (!_aiConversationPersistenceAvailable) return null;
+  if (!state.currentBookId || typeof browserHost?.createAiConversation !== 'function') return null;
+  try {
+    const created = await browserHost.createAiConversation('', state.currentBookId);
+    if (!created?.id) throw new Error('会话创建结果无效');
+    _aiConversationId = created.id;
+    _aiConversationBookId = state.currentBookId;
+    _aiConversationList = [
+      ..._aiConversationList.filter((item) => item.id !== created.id),
+      { id: created.id, title: created.title || '新对话', messageCount: 0 }
+    ];
+    renderAiConversationList();
+    return created.id;
+  } catch {
+    _aiConversationPersistenceAvailable = false;
+    return null;
+  }
 }
 
 function scrollAiConversationToBottom() {
   const scroll = aiElement('aiChatScroll');
   if (scroll) scroll.scrollTop = scroll.scrollHeight;
+  const button = aiElement('aiNewReply');
+  if (button) button.hidden = true;
+}
+
+function aiConversationIsNearBottom() {
+  const scroll = aiElement('aiChatScroll');
+  if (!scroll) return true;
+  return scroll.scrollHeight - scroll.clientHeight - scroll.scrollTop <= 64;
 }
 
 function setAiSendButtonState(busy) {
@@ -538,13 +1077,38 @@ function renderAiMarkdown(markdown, scope = '') {
   return decorateAiCitationHtml(escapeAiHtml(source).replace(/\r?\n/g, '<br>'), scope);
 }
 
-function renderAiAnswer(answer, target = null) {
+function filterAiCitationsForSources(answer, sources = []) {
+  const allowed = new Set((Array.isArray(sources) ? sources : []).flatMap((source, index) => {
+    const indexes = Array.isArray(source?.citationIndexes) && source.citationIndexes.length
+      ? source.citationIndexes
+      : [source?.citationIndex || index + 1];
+    return indexes.map(Number).filter((value) => Number.isInteger(value) && value > 0);
+  }));
+  return String(answer || '').replace(/[【〔](\d+)[】〕]/g, (marker, rawIndex) => (
+    allowed.has(Number(rawIndex)) ? `【${Number(rawIndex)}】` : ''
+  )).replace(/[ \t]{2,}/g, ' ').replace(/\s+([，。；：！？])/g, '$1');
+}
+
+function renderAiAnswer(answer, target = null, sources = null) {
   const element = target || _aiActiveAnswerElement || aiElement('aiAnswer');
   if (!element) return;
-  element.innerHTML = renderAiMarkdown(answer, aiSourceScopeFor(element));
-  element.hidden = !answer;
+  const followAnswer = aiConversationIsNearBottom();
+  const renderedSources = sources === null
+    ? Array.from(_aiActiveSourcesElement?.querySelectorAll?.('[data-ai-source-index]') || [])
+      .map((item) => ({ citationIndex: Number(item.dataset?.aiSourceIndex) }))
+    : sources;
+  const hasSourceContract = sources !== null || renderedSources.length > 0;
+  const safeAnswer = hasSourceContract
+    ? filterAiCitationsForSources(answer, renderedSources)
+    : String(answer || '');
+  element.innerHTML = renderAiMarkdown(safeAnswer, aiSourceScopeFor(element));
+  element.hidden = !safeAnswer;
   bindAiCitationLinks(element);
-  scrollAiConversationToBottom();
+  if (followAnswer) scrollAiConversationToBottom();
+  else {
+    const button = aiElement('aiNewReply');
+    if (button) button.hidden = false;
+  }
 }
 
 function syncReaderLayoutAfterAiToggle() {
@@ -622,16 +1186,47 @@ function assessAiRetrievalConfidence(matches, { query = '', selectedText = '' } 
 async function retrieveAiMatches(question, selectedText, chapter) {
   if (typeof browserHost.searchAiBook === 'function') {
     try {
-      const remote = await browserHost.searchAiBook(state.currentBookId, {
-        question,
-        selectedText,
-        chapter
-      });
+      const remote = await Promise.race([
+        browserHost.searchAiBook(state.currentBookId, {
+          question,
+          selectedText,
+          chapter
+        }),
+        new Promise((_, reject) => window.setTimeout(
+          () => reject(new Error('远程检索超时')),
+          AI_REMOTE_SEARCH_TIMEOUT_MS
+        ))
+      ]);
       const matches = normalizeAiSearchMatches(remote?.matches);
+      if (remote?.scope === 'chapter' || remote?.scope === 'section'
+        || remote?.retrievalStatus === 'insufficient_scope') {
+        return {
+          matches,
+          confidence: remote?.confidence || assessAiRetrievalConfidence(matches, { query: question, selectedText }),
+          chapterResolution: remote?.chapterResolution || null,
+          retrievalStatus: remote?.retrievalStatus || (matches.length ? 'ok' : 'no_matches'),
+          intent: remote?.intent || 'chapter_lookup',
+          scope: remote.scope
+        };
+      }
+      if (remote?.intent === 'book_summary') {
+        return {
+          matches,
+          confidence: remote?.confidence || { level: 'low', message: '将按目录抽取代表性章节原文。' },
+          chapterResolution: null,
+          retrievalStatus: 'ok',
+          intent: 'book_summary',
+          scope: 'book'
+        };
+      }
       if (matches.length) {
         return {
           matches,
-          confidence: remote?.confidence || assessAiRetrievalConfidence(matches, { query: question, selectedText })
+          confidence: remote?.confidence || assessAiRetrievalConfidence(matches, { query: question, selectedText }),
+          chapterResolution: remote?.chapterResolution || null,
+          retrievalStatus: remote?.retrievalStatus || 'ok',
+          intent: remote?.intent || 'lookup',
+          scope: remote?.scope || 'book'
         };
       }
     } catch {
@@ -648,15 +1243,16 @@ async function retrieveAiMatches(question, selectedText, chapter) {
   });
   return {
     matches,
-    confidence: assessAiRetrievalConfidence(matches, { query: question, selectedText })
+    confidence: assessAiRetrievalConfidence(matches, { query: question, selectedText }),
+    chapterResolution: null
   };
 }
 
 async function refreshAiStatus() {
   const question = aiElement('aiQuestion');
   const send = aiElement('btnAiAsk');
-  if (state.contentType !== 'epub') {
-    setAiStatus('AI 阅读助手仅支持 EPUB。');
+  if (state.contentType !== 'epub' && state.contentType !== 'pdf') {
+    setAiStatus('AI 阅读助手仅支持 EPUB 和 PDF。');
     if (send) {
       send.dataset.configured = 'false';
       send.disabled = true;
@@ -676,6 +1272,28 @@ async function refreshAiStatus() {
     if (question) question.disabled = true;
     return false;
   }
+}
+
+function configurePdfAiDisclosure() {
+  const row = aiElement('aiPdfScopeRow');
+  if (!row) return;
+  const isPdf = state.contentType === 'pdf';
+  row.hidden = !isPdf;
+}
+
+function pdfAiScopeInput() {
+  const reader = window.pdfReaderController;
+  const selectedText = normalizeAiText(_aiSelection?.text);
+  if (selectedText) {
+    const pageCount = reader?.getPageCount?.() || 0;
+    if (!pageCount) throw new Error('PDF 尚未准备好，请稍后重试。');
+    const pageIndex = _aiSelection?.targets?.[0]?.pageIndex;
+    if (!Number.isInteger(pageIndex) || _aiSelection?.targets?.length !== 1) {
+      throw new Error('请选择同一页的 PDF 文本后提问。');
+    }
+    return { scope: 'selection', pageIndex, selectedText: selectedText.slice(0, 1200) };
+  }
+  return { scope: 'searchable_book' };
 }
 
 function applyAiStatus(status) {
@@ -730,6 +1348,7 @@ function closeAiConfigSheet({ restoreFocus = true } = {}) {
 async function openAiConfigSheet() {
   const config = aiElement('aiConfigView');
   if (!config) return false;
+  closeAiConversationsSheet({ restoreFocus: false });
   _aiConfigReturnFocus = document.activeElement;
   config.hidden = false;
   await loadAiConfig();
@@ -739,6 +1358,7 @@ async function openAiConfigSheet() {
 
 function showAiView(view) {
   if (view === 'config') return openAiConfigSheet();
+  closeAiConversationsSheet({ restoreFocus: false });
   closeAiConfigSheet({ restoreFocus: false });
   aiElement('aiQuestion')?.focus();
   return true;
@@ -807,7 +1427,7 @@ function stopAiQuestion() {
   return true;
 }
 
-async function askAiQuestion() {
+async function askPdfAiQuestion() {
   if (_aiBusy || !state.currentBookId) return false;
   const questionElement = aiElement('aiQuestion');
   const question = String(questionElement?.value || '').trim();
@@ -816,84 +1436,70 @@ async function askAiQuestion() {
     questionElement?.focus();
     return false;
   }
+  let scopeInput;
+  try { scopeInput = pdfAiScopeInput(); }
+  catch (error) { setAiStatus(error.message, 'warning'); return false; }
   const requestId = ++_aiRequestId;
+  const bookId = state.currentBookId;
   _aiBusy = true;
   setAiSendButtonState(true);
-  if (questionElement) questionElement.disabled = true;
-  if (questionElement) questionElement.value = '';
-  appendAiUserMessage(question);
+  if (questionElement) { questionElement.disabled = true; questionElement.value = ''; }
+  const userMessage = appendAiUserMessage(question);
   const assistant = prepareAiAssistantMessage();
   _aiActiveAnswerElement = assistant.answer;
   _aiActiveSourcesElement = assistant.sources;
-  renderAiConfidenceNotice(null, assistant.notice);
-  renderAiAnswer('');
-  renderAiSources([]);
-  scrollAiConversationToBottom();
-  setAiStatus('正在思考并检索本书内容…', 'busy');
+  setAiStatus('正在检索 PDF 页证据…', 'busy');
   try {
-    const chapter = currentAiChapter();
-    const retrieval = await retrieveAiMatches(question, _aiSelection?.text || '', chapter);
-    const matches = retrieval.matches;
-    renderAiConfidenceNotice(retrieval.confidence, assistant.notice);
-    if (retrieval.confidence?.level === 'low') {
-      setAiStatus(`正在思考并检索本书内容… ${retrieval.confidence.message}`, 'warning');
-    }
-    if (!matches.length) throw new Error('没有检索到足够的书本内容，请换一种问法。');
+    const conversationId = await ensureAiConversation();
+    if (requestId !== _aiRequestId || bookId !== state.currentBookId) return false;
     _aiStreamController = new AbortController();
-    let partialAnswer = '';
-    let streamSources = matches;
+    let answer = '';
+    let sources = [];
     let streamError = null;
-    let answerRenderScheduled = false;
-    const scheduleAnswerRender = () => {
-      if (answerRenderScheduled) return;
-      answerRenderScheduled = true;
-      requestAnimationFrame(() => {
-        answerRenderScheduled = false;
-        if (requestId === _aiRequestId) renderAiAnswer(partialAnswer);
-      });
-    };
-    const result = await browserHost.askAiStream(state.currentBookId, {
-      question,
-      selectedText: _aiSelection?.text || '',
-      chapter,
-      retrievalConfidence: retrieval.confidence?.level || 'none',
-      context: matches.map(({ text, chapterIndex, chapterHref, chapterLabel }) => ({ text, chapterIndex, chapterHref, chapterLabel })),
-      history: _aiConversation.slice(-12)
+    let persistenceWarning = false;
+    let citationWarning = false;
+    const result = await browserHost.askAiStream(bookId, {
+      question, ...scopeInput,
+      history: _aiConversation.slice(-4).map(({ role, content }) => ({ role, content: String(content).slice(0, 500) })),
+      ...(conversationId ? { conversationId } : {})
     }, {
       onMeta: (meta) => {
-        if (requestId !== _aiRequestId) return;
-        streamSources = meta?.sources || matches;
+        if (requestId !== _aiRequestId || bookId !== state.currentBookId) return;
+        sources = Array.isArray(meta?.sources) ? meta.sources : [];
+        setAiStatus(pdfAiStatusFromMeta(meta, sources.length), 'busy');
       },
       onDelta: (delta) => {
-        if (requestId !== _aiRequestId) return;
-        partialAnswer += String(delta || '');
-        scheduleAnswerRender();
-        setAiStatus('正在生成回答…', 'busy');
+        if (requestId !== _aiRequestId || bookId !== state.currentBookId) return;
+        answer += String(delta || '');
+        setAiStatus('正在生成并核验页码引用…', 'busy');
       },
       onDone: (done) => {
-        if (requestId !== _aiRequestId) return;
-        if (done?.answer) {
-          partialAnswer = String(done.answer);
-          renderAiAnswer(partialAnswer);
-        }
-        streamSources = done?.sources || streamSources;
-        renderAiSources(streamSources, null, partialAnswer);
+        if (requestId !== _aiRequestId || bookId !== state.currentBookId) return;
+        if (done?.answer) answer = String(done.answer);
+        sources = Array.isArray(done?.sources) ? done.sources : sources;
+        persistenceWarning = done?.persisted === false;
+        citationWarning = done?.citationIntegrity === false;
+        renderAiSources(sources, null, answer);
+        renderAiAnswer(answer, null, sources);
       },
-      onError: (error) => {
-        streamError = new Error(error?.message || 'AI 回答失败，请稍后重试。');
-      }
+      onError: (error) => { streamError = new Error(error?.message || 'PDF 问书失败'); }
     }, _aiStreamController.signal);
     if (streamError) throw streamError;
-    if (requestId !== _aiRequestId) return false;
-    const answer = result?.answer || partialAnswer;
+    if (requestId !== _aiRequestId || bookId !== state.currentBookId) return false;
+    answer = result?.answer || answer;
     if (!answer) throw new Error('AI 没有返回可读回答。');
-    renderAiAnswer(answer);
-    renderAiSources(result?.sources || streamSources || matches, null, answer);
+    renderAiSources(result?.sources || sources, null, answer);
+    renderAiAnswer(answer, null, result?.sources || sources);
     _aiConversation.push({ role: 'user', content: question }, { role: 'assistant', content: answer });
-    setAiStatus('', 'ready');
+    setAiStatus(citationWarning ? '页码引用未通过核验，本轮未保存。'
+      : persistenceWarning ? '回答已生成，但本轮未保存。' : '',
+    citationWarning || persistenceWarning ? 'warning' : 'ready');
     return true;
   } catch (error) {
-    if (requestId === _aiRequestId) setAiStatus(error.message || 'AI 回答失败，请稍后重试。', 'error');
+    if (requestId === _aiRequestId) {
+      discardFailedAiTurn(userMessage, assistant, questionElement, question);
+      setAiStatus(error.message || 'PDF 问书失败，请稍后重试。', 'error');
+    }
     return false;
   } finally {
     if (requestId === _aiRequestId) {
@@ -907,11 +1513,158 @@ async function askAiQuestion() {
   }
 }
 
-function closeAiModal({ restoreFocus = true } = {}) {
-  if (_aiBusy) stopAiQuestion();
+async function askAiQuestion() {
+  if (state.contentType === 'pdf') return askPdfAiQuestion();
+  if (_aiBusy || !state.currentBookId) return false;
+  const questionElement = aiElement('aiQuestion');
+  const question = String(questionElement?.value || '').trim();
+  if (!question) {
+    setAiStatus('请先输入问题。', 'warning');
+    questionElement?.focus();
+    return false;
+  }
+  const requestId = ++_aiRequestId;
+  _aiBusy = true;
+  setAiSendButtonState(true);
+  if (questionElement) questionElement.disabled = true;
+  if (questionElement) questionElement.value = '';
+  const userMessage = appendAiUserMessage(question);
+  const assistant = prepareAiAssistantMessage();
+  _aiActiveAnswerElement = assistant.answer;
+  _aiActiveSourcesElement = assistant.sources;
+  renderAiConfidenceNotice(null, assistant.notice);
+  renderAiAnswer('');
+  renderAiSources([]);
+  scrollAiConversationToBottom();
+  setAiStatus('正在思考并检索本书内容…', 'busy');
+  try {
+    const chapter = currentAiChapter();
+    const retrieval = await retrieveAiMatches(question, _aiSelection?.text || '', chapter);
+    if (retrieval.retrievalStatus === 'insufficient_scope') {
+      throw new Error('无法准确定位当前章节，请先跳转到明确章节标题后再提问。');
+    }
+    const matches = retrieval.matches;
+    const locationIsUncertain = Boolean(retrieval.chapterResolution)
+      && (retrieval.chapterResolution.status !== 'resolved' || retrieval.chapterResolution.mappingQuality !== 'exact');
+    const confidence = locationIsUncertain
+      ? {
+        ...retrieval.confidence,
+        message: `${retrieval.confidence?.message || ''} 当前阅读位置${retrieval.chapterResolution?.status === 'resolved' ? '仅能推断' : '尚未能可靠映射'}到目录章节；章节范围问答将要求更明确的位置。`.trim()
+      }
+      : retrieval.confidence;
+    renderAiConfidenceNotice(confidence, assistant.notice);
+    if (retrieval.confidence?.level === 'low') {
+      setAiStatus(`正在思考并检索本书内容… ${retrieval.confidence.message}`, 'warning');
+    }
+    const isBookSummary = retrieval.intent === 'book_summary';
+    if (!matches.length && !isBookSummary) throw new Error('没有检索到足够的书本内容，请换一种问法。');
+    const conversationId = await ensureAiConversation();
+    _aiStreamController = new AbortController();
+    let partialAnswer = '';
+    let streamSources = matches;
+    let streamError = null;
+    let persistenceWarning = false;
+    let summaryCacheHit = false;
+    let summaryCoverage = null;
+    let answerRenderScheduled = false;
+    const scheduleAnswerRender = () => {
+      if (answerRenderScheduled) return;
+      answerRenderScheduled = true;
+      requestAnimationFrame(() => {
+        answerRenderScheduled = false;
+        if (requestId === _aiRequestId && _aiBusy) renderAiAnswer(partialAnswer, null, streamSources);
+      });
+    };
+    const result = await browserHost.askAiStream(state.currentBookId, {
+      question,
+      selectedText: _aiSelection?.text || '',
+      chapter,
+      retrievalConfidence: confidence?.level || 'none',
+      context: matches.map(({ text, chapterIndex, chapterHref, chapterLabel }) => ({ text, chapterIndex, chapterHref, chapterLabel })),
+      history: _aiConversation.slice(-12),
+      ...(conversationId ? { conversationId } : {})
+    }, {
+      onMeta: (meta) => {
+        if (requestId !== _aiRequestId) return;
+        streamSources = meta?.sources || matches;
+        if (meta?.scope === 'book' && meta?.coverage) summaryCoverage = meta.coverage;
+        if (Number.isSafeInteger(meta?.estimatedInputTokens) && meta.estimatedInputTokens > 0) {
+          const statusScope = meta?.scope === 'book' ? '代表性章节' : '本章';
+          setAiStatus(`正在整理${statusScope}证据 · 输入约 ${meta.estimatedInputTokens.toLocaleString()} tokens（粗估，实际随模型而异）…`, 'busy');
+        }
+        const serverResolution = meta?.chapterResolution;
+        if (meta?.scope !== 'book' && serverResolution
+          && (serverResolution.status !== 'resolved' || serverResolution.mappingQuality !== 'exact')) {
+          renderAiConfidenceNotice({
+            ...confidence,
+            message: `${confidence?.message || ''} 服务端未能精确确认当前目录章节；请在后续提问中补充章节信息。`.trim()
+          }, assistant.notice);
+        }
+      },
+      onDelta: (delta) => {
+        if (requestId !== _aiRequestId) return;
+        partialAnswer += String(delta || '');
+        scheduleAnswerRender();
+        setAiStatus('正在生成回答…', 'busy');
+      },
+      onDone: (done) => {
+        if (requestId !== _aiRequestId) return;
+        streamSources = done?.sources || streamSources;
+        if (done?.answer) partialAnswer = String(done.answer);
+        renderAiSources(streamSources, null, partialAnswer);
+        renderAiAnswer(partialAnswer, null, streamSources);
+        persistenceWarning = done?.persisted === false;
+        summaryCacheHit = done?.summaryCacheHit === true;
+        if (done?.scope === 'book' && done?.coverage) summaryCoverage = done.coverage;
+        if (done?.summaryConfidence?.level === 'low') {
+          renderAiConfidenceNotice({ level: 'low', message: done.summaryConfidence.message }, assistant.notice);
+        }
+      },
+      onError: (error) => {
+        streamError = new Error(error?.message || 'AI 回答失败，请稍后重试。');
+      }
+    }, _aiStreamController.signal);
+    if (streamError) throw streamError;
+    if (requestId !== _aiRequestId) return false;
+    const answer = result?.answer || partialAnswer;
+    if (!answer) throw new Error('AI 没有返回可读回答。');
+    renderAiAnswer(answer, null, result?.sources || streamSources || matches);
+    renderAiSources(result?.sources || streamSources || matches, null, answer);
+    _aiConversation.push({ role: 'user', content: question }, { role: 'assistant', content: answer });
+    setAiStatus(
+      persistenceWarning
+        ? '回答已生成，但本轮未保存。'
+        : summaryCoverage && summaryCoverage.ratio < 1
+          ? `全书概述抽取 ${summaryCoverage.selectedChapters}/${summaryCoverage.totalChapters} 章，结果为代表性概述。`
+          : summaryCacheHit ? '已复用本地摘要缓存。' : '',
+      persistenceWarning ? 'warning' : 'ready'
+    );
+    return true;
+  } catch (error) {
+    if (requestId === _aiRequestId) {
+      discardFailedAiTurn(userMessage, assistant, questionElement, question);
+      setAiStatus(error.message || 'AI 回答失败，请稍后重试。', 'error');
+    }
+    return false;
+  } finally {
+    if (requestId === _aiRequestId) {
+      _aiBusy = false;
+      _aiStreamController = null;
+      setAiSendButtonState(false);
+      if (questionElement) questionElement.disabled = aiElement('btnAiAsk')?.dataset.configured !== 'true';
+      _aiActiveAnswerElement = null;
+      _aiActiveSourcesElement = null;
+    }
+  }
+}
+
+function closeAiModal({ restoreFocus = true, cancelRequest = false } = {}) {
+  if (_aiBusy && cancelRequest) stopAiQuestion();
+  _aiConversationRestoreToken += 1;
+  closeAiConversationConfirmation({ restoreFocus: false });
+  closeAiConversationsSheet({ restoreFocus: false });
   closeAiConfigSheet({ restoreFocus: false });
-  resetAiConversation();
-  _aiSelection = null;
+  if (!_aiBusy || cancelRequest) _aiSelection = null;
   const modal = aiElement('aiModal');
   const backdrop = aiElement('aiModalBackdrop');
   if (modal) {
@@ -920,6 +1673,7 @@ function closeAiModal({ restoreFocus = true } = {}) {
   }
   if (backdrop) backdrop.hidden = true;
   document.body.classList.remove('ai-modal-open');
+  setAiConversationRetryVisible(false);
   document.getElementById('btnAi')?.setAttribute('aria-expanded', 'false');
   syncReaderLayoutAfterAiToggle();
   if (restoreFocus && _aiModalReturnFocus?.isConnected) _aiModalReturnFocus.focus();
@@ -927,8 +1681,8 @@ function closeAiModal({ restoreFocus = true } = {}) {
 }
 
 async function openAiModal(session = null, trigger = document.activeElement) {
-  if (state.contentType !== 'epub') {
-    showHighlightHint('AI 阅读助手仅支持 EPUB');
+  if (state.contentType !== 'epub' && state.contentType !== 'pdf') {
+    showHighlightHint('AI 阅读助手仅支持 EPUB 和 PDF');
     return false;
   }
   const modal = aiElement('aiModal');
@@ -940,9 +1694,9 @@ async function openAiModal(session = null, trigger = document.activeElement) {
   } else if (typeof closeReaderPanel === 'function') {
     closeReaderPanel({ restoreFocus: false });
   }
-  if (_aiBusy) stopAiQuestion();
-  resetAiConversation();
-  _aiSelection = session || null;
+  const continuing = _aiBusy;
+  if (!continuing) _aiSelection = session || null;
+  configurePdfAiDisclosure();
   renderAiSelection();
   renderAiPromptSuggestions();
   showAiView('chat');
@@ -952,8 +1706,11 @@ async function openAiModal(session = null, trigger = document.activeElement) {
   document.body.classList.add('ai-modal-open');
   document.getElementById('btnAi')?.setAttribute('aria-expanded', 'true');
   syncReaderLayoutAfterAiToggle();
+  if (continuing) return true;
+  const requestGeneration = _aiRequestId;
   await refreshAiStatus();
-  aiElement('aiQuestion')?.focus();
+  if (requestGeneration === _aiRequestId && !modal.hidden) await restoreAiConversation();
+  if (!modal.hidden) aiElement('aiQuestion')?.focus();
   return true;
 }
 
@@ -965,15 +1722,62 @@ async function openAiForSelection(session) {
 function setupAiPanel() {
   if (_aiSetup) return;
   _aiSetup = true;
+  aiElement('aiNewReply')?.addEventListener('click', scrollAiConversationToBottom);
+  aiElement('aiChatScroll')?.addEventListener('scroll', () => {
+    if (aiConversationIsNearBottom()) {
+      const button = aiElement('aiNewReply');
+      if (button) button.hidden = true;
+    }
+  });
   aiElement('btnAiAsk')?.addEventListener('click', () => {
     if (_aiBusy) stopAiQuestion();
     else void askAiQuestion();
   });
-  aiElement('btnAiNewConversation')?.addEventListener('click', () => {
+  aiElement('btnAiConversations')?.addEventListener('click', () => {
+    void openAiConversationsSheet(aiElement('btnAiConversations'));
+  });
+  aiElement('btnRefreshAiConversations')?.addEventListener('click', () => {
+    void refreshAiConversationList();
+  });
+  aiElement('btnRetryAiConversations')?.addEventListener('click', () => {
+    void refreshAiConversationList();
+  });
+  aiElement('btnCloseAiConversationsSheet')?.addEventListener('click', () => closeAiConversationsSheet());
+  aiElement('btnCloseAiConversationsBackdrop')?.addEventListener('click', () => closeAiConversationsSheet());
+  aiElement('btnCloseAiConversationConfirmBackdrop')?.addEventListener('click', () => closeAiConversationConfirmation());
+  aiElement('btnCancelAiConversationConfirm')?.addEventListener('click', () => closeAiConversationConfirmation());
+  aiElement('btnConfirmAiConversationAction')?.addEventListener('click', () => {
+    void executeAiConversationConfirmation();
+  });
+  aiElement('aiConversationConfirmView')?.addEventListener('keydown', trapAiConversationConfirmationFocus);
+  aiElement('btnAiNewConversation')?.addEventListener('click', async () => {
     if (_aiBusy) stopAiQuestion();
-    resetAiConversation();
-    setAiStatus('', 'ready');
-    aiElement('aiQuestion')?.focus();
+    if (!state.currentBookId || typeof browserHost?.createAiConversation !== 'function') {
+      resetAiConversation({ clearConversationId: true, clearConversationList: true });
+      setAiStatus('', 'ready');
+      aiElement('aiQuestion')?.focus();
+      return;
+    }
+    const button = aiElement('btnAiNewConversation');
+    if (button) button.disabled = true;
+    try {
+      const created = await browserHost.createAiConversation('', state.currentBookId);
+      if (!created?.id) throw new Error('新对话创建失败');
+      _aiConversationId = created.id;
+      _aiConversationBookId = state.currentBookId;
+      _aiConversationList = [
+        ..._aiConversationList.filter((item) => item.id !== created.id),
+        { id: created.id, title: created.title || '新对话', messageCount: 0 }
+      ];
+      renderAiConversationList();
+      resetAiConversation();
+      setAiStatus('', 'ready');
+      aiElement('aiQuestion')?.focus();
+    } catch (error) {
+      setAiStatus(error.message || '新对话创建失败，请稍后重试。', 'error');
+    } finally {
+      if (button) button.disabled = false;
+    }
   });
   aiElement('btnCloseAiModal')?.addEventListener('click', () => closeAiModal());
   aiElement('btnAiSettings')?.addEventListener('click', () => showAiView('config'));
@@ -1008,14 +1812,18 @@ function setupAiPanel() {
     void askAiQuestion();
   });
   document.addEventListener('keydown', (event) => {
-    if (event.key !== 'Escape' || aiElement('aiConfigView')?.hidden !== false) return;
+    if (event.defaultPrevented || event.key !== 'Escape' || aiElement('aiModal')?.hidden !== false) return;
     event.preventDefault();
     event.stopPropagation();
-    closeAiConfigSheet();
+    if (aiElement('aiConversationConfirmView')?.hidden === false) closeAiConversationConfirmation();
+    else if (aiElement('aiConversationsView')?.hidden === false) closeAiConversationsSheet();
+    else if (aiElement('aiConfigView')?.hidden === false) closeAiConfigSheet();
+    else closeAiModal();
   });
 }
 
 window.__babyReaderAiApi = {
+  currentAiChapter,
   buildBookSearchIndex,
   chunkChapterText,
   searchBookIndex,
@@ -1027,6 +1835,13 @@ window.__babyReaderAiApi = {
   saveAiSettings,
   testAiConnection,
   assessAiRetrievalConfidence,
+  getAiConversationState,
+  restoreAiConversation,
+  openAiConversationsSheet,
+  closeAiConversationsSheet,
+  refreshAiConversationList,
+  renderAiConversationList,
+  setupAiPanel,
   askAiQuestion,
   stopAiQuestion,
   refreshAiStatus,
@@ -1035,5 +1850,6 @@ window.__babyReaderAiApi = {
   renderAiSources,
   extractAiCitationIndexes,
   renderAiSelection,
-  renderAiPromptSuggestions
+  renderAiPromptSuggestions,
+  pdfAiStatusFromMeta
 };

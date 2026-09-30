@@ -276,9 +276,46 @@ function restoreTextScroll() {
 }
 
 const saveTextScroll = debounce(() => {
-  if (!state.currentPath || state.mode !== 'read') return Promise.resolve();
+  if (!state.currentPath || state.mode !== 'read' || state.contentType === 'pdf') return Promise.resolve();
   const reader = document.getElementById('reader');
   if (!reader) return Promise.resolve();
   updateReadingProgress();
   return savePosition(currentReadingLocator(reader));
 }, 250);
+
+let pendingPdfProgress = null;
+let pdfProgressTimer = null;
+
+function savePdfProgress(change) {
+  if (state.contentType !== 'pdf'
+      || !change
+      || !/^[a-f0-9]{64}$/i.test(String(change.bookId || ''))
+      || !Number.isInteger(change.pageIndex)
+      || !Number.isInteger(change.generation)) return;
+  pendingPdfProgress = {
+    bookId: change.bookId,
+    pageIndex: Math.max(0, change.pageIndex),
+    generation: change.generation
+  };
+  if (pdfProgressTimer) clearTimeout(pdfProgressTimer);
+  pdfProgressTimer = setTimeout(() => {
+    void flushPdfProgressSave().catch((error) => console.error('保存 PDF 阅读进度失败', error));
+  }, 250);
+}
+
+async function flushPdfProgressSave({ keepalive = false } = {}) {
+  if (pdfProgressTimer) clearTimeout(pdfProgressTimer);
+  pdfProgressTimer = null;
+  const pending = pendingPdfProgress;
+  pendingPdfProgress = null;
+  if (!pending
+      || state.contentType !== 'pdf'
+      || state.currentBookId !== pending.bookId
+      || pdfReaderController.getCurrentBookId() !== pending.bookId
+      || pdfReaderController.getGeneration() !== pending.generation) return;
+  return savePosition({ version: 1, type: 'pdf', pageIndex: pending.pageIndex }, { keepalive });
+}
+
+window.addEventListener('pagehide', () => {
+  void flushPdfProgressSave({ keepalive: true }).catch(() => {});
+});

@@ -6,8 +6,21 @@ const path = require('node:path');
 const { resolveAuthorizedPath, isPathInside } = require('./security');
 const { safeUnzip } = require('./zip');
 
-const SUPPORTED_EXTENSIONS = new Set(['.epub', '.md', '.markdown', '.txt']);
+const SUPPORTED_EXTENSIONS = new Set(['.epub', '.md', '.markdown', '.txt', '.pdf']);
 const MAX_TEXT_BYTES = 32 * 1024 * 1024;
+const MAX_PDF_HEADER_BYTES = 1024;
+
+async function validatePdfHeader(filePath) {
+  const handle = await fs.open(filePath, 'r');
+  try {
+    const header = Buffer.alloc(MAX_PDF_HEADER_BYTES);
+    const { bytesRead } = await handle.read(header, 0, header.length, 0);
+    const signature = header.subarray(0, bytesRead).toString('latin1');
+    if (!/%PDF-[0-9]\.[0-9]/.test(signature)) throw new Error('Invalid PDF signature');
+  } finally {
+    await handle.close();
+  }
+}
 
 function decodeXml(value) {
   return String(value || '')
@@ -66,6 +79,18 @@ function fingerprintBook(realPath, stat) {
     .createHash('sha256')
     .update(`${path.resolve(realPath)}\0${stat.size}\0${Math.trunc(stat.mtimeMs)}`)
     .digest('hex');
+}
+
+function sourceRootId(realRoot) {
+  return crypto
+    .createHash('sha256')
+    .update(`babyreader-source-root\0${path.resolve(realRoot)}`)
+    .digest('hex');
+}
+
+function sourcePathSegments(relativePath) {
+  const parts = String(relativePath || '').replace(/\\/g, '/').split('/').filter(Boolean);
+  return parts.slice(0, -1).filter((part) => part !== '.' && part !== '..').slice(0, 64);
 }
 
 function extractTextMetadata(fileName, content) {
@@ -197,6 +222,8 @@ async function scanLibrary(authorizedRoots, options = {}) {
     discoveredCount += discovered.files.length;
     for (const filePath of discovered.files) {
       const relativePath = path.relative(discovered.realRoot, filePath).split(path.sep).join('/');
+      const safeSourceRootId = sourceRootId(discovered.realRoot);
+      const safeSourcePathSegments = sourcePathSegments(relativePath);
       let id = hashBook(filePath);
       try {
         const safePath = await resolveAuthorizedPath(filePath, validRoots);
@@ -212,6 +239,8 @@ async function scanLibrary(authorizedRoots, options = {}) {
             root: discovered.realRoot,
             path: safePath,
             relativePath,
+            sourceRootId: safeSourceRootId,
+            sourcePathSegments: safeSourcePathSegments,
             size: stat.size,
             modifiedAt: stat.mtime.toISOString()
           });
@@ -221,7 +250,12 @@ async function scanLibrary(authorizedRoots, options = {}) {
 
         let metadata;
         let coverUrl = null;
-        if (extension === '.epub') {
+        if (extension === '.pdf') {
+          // PDF discovery is intentionally metadata-only. Do not feed potentially
+          // large binary documents into the generic UTF-8 metadata path.
+          await validatePdfHeader(safePath);
+          metadata = { title: path.basename(safePath, extension), author: '' };
+        } else if (extension === '.epub') {
           const bytes = await fs.readFile(safePath);
           metadata = extractEpubMetadata(bytes);
           if (coverDirectory) {
@@ -244,12 +278,14 @@ async function scanLibrary(authorizedRoots, options = {}) {
         books.push({
           id,
           fingerprint,
-          type: extension === '.epub' ? 'epub' : extension === '.txt' ? 'txt' : 'markdown',
+          type: extension === '.epub' ? 'epub' : extension === '.pdf' ? 'pdf' : extension === '.txt' ? 'txt' : 'markdown',
           title: metadata.title || path.basename(safePath, extension),
           author: metadata.author || '',
           language: metadata.language || '',
           publisher: metadata.publisher || '',
           relativePath,
+          sourceRootId: safeSourceRootId,
+          sourcePathSegments: safeSourcePathSegments,
           root: discovered.realRoot,
           path: safePath,
           size: stat.size,
@@ -258,7 +294,15 @@ async function scanLibrary(authorizedRoots, options = {}) {
         });
         indexedCount += 1;
       } catch (error) {
-        books.push({ id, relativePath, root: discovered.realRoot, path: filePath, error: String(error.message || error) });
+        books.push({
+          id,
+          relativePath,
+          sourceRootId: safeSourceRootId,
+          sourcePathSegments: safeSourcePathSegments,
+          root: discovered.realRoot,
+          path: filePath,
+          error: String(error.message || error)
+        });
       }
     }
   }
@@ -290,8 +334,12 @@ async function scanLibrary(authorizedRoots, options = {}) {
 
 module.exports = {
   MAX_TEXT_BYTES,
+  MAX_PDF_HEADER_BYTES,
   SUPPORTED_EXTENSIONS,
   extractEpubMetadata,
   extractTextMetadata,
+  fingerprintBook,
+  sourcePathSegments,
+  sourceRootId,
   scanLibrary
 };

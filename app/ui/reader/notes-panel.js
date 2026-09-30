@@ -46,8 +46,8 @@ function notesAnnotationStyleLabel(annotation) {
 }
 
 function notesPanelAnnotations() {
-  if (typeof loadHighlights !== 'function') return [];
-  return loadHighlights().filter((annotation) => annotation?.text || notesAnnotationThought(annotation));
+  const adapter = currentAnnotationAdapter(state.contentType);
+  return adapter.list().filter((annotation) => annotation?.text || notesAnnotationThought(annotation));
 }
 
 function notesAnnotationById(annotationId) {
@@ -91,10 +91,8 @@ function setNotesItemError(annotationId, message = '') {
   item.appendChild(error);
 }
 
-async function navigateToAnnotation(annotationId) {
-  const annotation = notesAnnotationById(annotationId);
+async function navigateToEpubAnnotation(annotation) {
   if (!annotation || state.contentType !== 'epub') return false;
-
   setNotesItemError(annotation.id, '');
   if (typeof isEpubChapterLoading === 'function' && isEpubChapterLoading()) {
     setNotesItemError(annotation.id, '阅读器正在切换章节，请稍后重试');
@@ -130,6 +128,141 @@ async function navigateToAnnotation(annotationId) {
   return true;
 }
 
+function nextPdfAnnotationFrame() {
+  return new Promise((resolve) => window.requestAnimationFrame(() => resolve()));
+}
+
+async function waitForPdfAnnotationGeometry(controller, pageIndex, bookId, generation) {
+  // goToPdfPage schedules a render; wait for the current frame instead of
+  // projecting against a canvas/text layer that may still belong to old scale.
+  for (let attempt = 0; attempt < 120; attempt += 1) {
+    await nextPdfAnnotationFrame();
+    if (state.contentType !== 'pdf' || state.currentBookId !== bookId
+        || window.pdfReaderController !== controller
+        || controller.getCurrentBookId?.() !== bookId
+        || controller.getGeneration?.() !== generation) return { stale: true };
+    const geometry = controller.getRenderedPageGeometry?.(pageIndex);
+    if (geometry?.bookId === bookId && geometry.generation === generation
+        && geometry.pageIndex === pageIndex && geometry.pageElement?.isConnected
+        && geometry.viewport && Array.isArray(geometry.pageView)) {
+      return { geometry };
+    }
+  }
+  return null;
+}
+
+function showPdfAnnotationTarget(pageElement, projectedQuads) {
+  pageElement.querySelector('.pdf-note-navigation-overlay')?.remove();
+  const overlay = document.createElement('div');
+  overlay.className = 'pdf-note-navigation-overlay';
+  overlay.setAttribute('aria-hidden', 'true');
+  for (const points of projectedQuads.slice(0, 40)) {
+    const xs = points.map(([x]) => x);
+    const ys = points.map(([, y]) => y);
+    const left = Math.min(...xs);
+    const top = Math.min(...ys);
+    const width = Math.max(...xs) - left;
+    const height = Math.max(...ys) - top;
+    if (!(width > 0) || !(height > 0)) continue;
+    const target = document.createElement('span');
+    target.className = 'pdf-note-navigation-highlight';
+    target.style.left = `${left}px`;
+    target.style.top = `${top}px`;
+    target.style.width = `${width}px`;
+    target.style.height = `${height}px`;
+    overlay.appendChild(target);
+  }
+  if (!overlay.childElementCount) return false;
+  pageElement.appendChild(overlay);
+  window.setTimeout(() => overlay.remove(), 1500);
+  return true;
+}
+
+function scrollPdfAnnotationTarget(host, geometry, projectedQuads) {
+  if (!host || !geometry?.pageElement || !projectedQuads.length) return false;
+  const pageRect = geometry.pageElement.getBoundingClientRect();
+  const hostRect = host.getBoundingClientRect();
+  const points = projectedQuads[0];
+  const targetTop = pageRect.top + Math.min(...points.map(([, y]) => y));
+  const targetCenterX = pageRect.left + (Math.min(...points.map(([x]) => x))
+    + Math.max(...points.map(([x]) => x))) / 2;
+  const hostHeight = host.clientHeight || window.innerHeight || 800;
+  const safeTop = hostRect.top + Math.max(24, Math.min(96, hostHeight * 0.18));
+  const pageWidth = pageRect.width || geometry.viewport.width || 0;
+  const horizontalDelta = pageWidth > (host.clientWidth || window.innerWidth)
+    ? targetCenterX - (hostRect.left + (host.clientWidth || window.innerWidth) / 2)
+    : 0;
+  const options = {
+    top: targetTop - safeTop,
+    left: horizontalDelta,
+    behavior: 'auto'
+  };
+  if (typeof host.scrollBy === 'function') host.scrollBy(options);
+  else {
+    host.scrollTop += options.top;
+    host.scrollLeft += options.left;
+  }
+  return true;
+}
+
+async function navigateToPdfAnnotation(annotation) {
+  if (!annotation || state.contentType !== 'pdf') return false;
+  setNotesItemError(annotation.id, '');
+  if (annotation.sourceStale === true) {
+    setNotesItemError(annotation.id, '原文已变化，不能定位；可删除旧标记');
+    return false;
+  }
+  const controller = window.pdfReaderController;
+  const pageCount = controller?.getPageCount?.() || 0;
+  const targets = Array.isArray(annotation.targets) ? annotation.targets : [];
+  const target = targets.find((item) => Number.isInteger(item?.pageIndex)
+      && item.pageIndex >= 0 && item.pageIndex < pageCount && Array.isArray(item.quads) && item.quads.length)
+    || targets.find((item) => Number.isInteger(item?.pageIndex)
+      && item.pageIndex >= 0 && item.pageIndex < pageCount);
+  const pageIndex = target?.pageIndex;
+  if (!Number.isInteger(pageIndex) || !controller || !state.currentBookId
+      || controller.getCurrentBookId?.() !== state.currentBookId) {
+    setNotesItemError(annotation.id, '原文位置已变化');
+    return false;
+  }
+  const bookId = state.currentBookId;
+  const generation = controller.getGeneration?.();
+  if (!controller.goToPdfPage(pageIndex)) {
+    setNotesItemError(annotation.id, '页面加载失败，请重试');
+    return false;
+  }
+
+  if (!Array.isArray(target.quads) || target.quads.length === 0
+      || !Number.isInteger(generation)) {
+    setNotesItemError(annotation.id, `已定位到第 ${pageIndex + 1} 页；精确原文位置不可用`);
+    return true;
+  }
+  const ready = await waitForPdfAnnotationGeometry(controller, pageIndex, bookId, generation);
+  if (ready?.stale) {
+    setNotesItemError(annotation.id, '书籍或页面已切换，已取消旧位置定位');
+    return false;
+  }
+  const geometry = ready?.geometry;
+  const projectedQuads = geometry && window.pdfAnnotationGeometry?.projectPdfAnnotationTarget(target, geometry);
+  if (!geometry || !Array.isArray(projectedQuads) || !projectedQuads.length) {
+    setNotesItemError(annotation.id, `已定位到第 ${pageIndex + 1} 页；精确原文位置暂不可用`);
+    return true;
+  }
+  const host = document.getElementById('pdfPages');
+  if (!scrollPdfAnnotationTarget(host, geometry, projectedQuads)) {
+    setNotesItemError(annotation.id, `已定位到第 ${pageIndex + 1} 页；精确原文位置暂不可用`);
+    return true;
+  }
+  showPdfAnnotationTarget(geometry.pageElement, projectedQuads);
+  return true;
+}
+
+async function navigateToAnnotation(annotationId) {
+  const annotation = notesAnnotationById(annotationId);
+  if (!annotation) return false;
+  return currentAnnotationAdapter(state.contentType).navigate(annotation);
+}
+
 function filteredNotesPanelAnnotations(annotations) {
   if (_notesPanelFilter === 'marker') return annotations.filter(notesAnnotationHasMark);
   if (_notesPanelFilter === 'thought') return annotations.filter((annotation) => Boolean(notesAnnotationThought(annotation)));
@@ -138,30 +271,33 @@ function filteredNotesPanelAnnotations(annotations) {
 
 function sortNotesPanelAnnotations(annotations) {
   return annotations
-    .map((annotation, index) => ({ annotation, index, chapter: notesChapterInfo(annotation) }))
+    .map((annotation, index) => ({ annotation, index, view: annotationViewModel(annotation, state.contentType) }))
     .sort((left, right) => {
       if (_notesPanelSort === 'time') {
         const rightTime = String(right.annotation.updatedAt || right.annotation.createdAt || right.annotation.date || '');
         const leftTime = String(left.annotation.updatedAt || left.annotation.createdAt || left.annotation.date || '');
         return rightTime.localeCompare(leftTime) || left.index - right.index;
       }
-      return left.chapter.order - right.chapter.order || left.index - right.index;
+      return left.view.locationOrder - right.view.locationOrder || left.index - right.index;
     });
 }
 
 function createNotesPanelItem(annotation, chapter) {
+  const view = annotationViewModel(annotation, state.contentType);
   const item = document.createElement('article');
   item.className = 'notes-item';
-  item.dataset.annotationId = annotation.id || '';
-  item.tabIndex = 0;
-  item.setAttribute('role', 'button');
-  item.setAttribute('aria-label', `定位到${chapter.label}的标记`);
+  item.dataset.annotationId = view.id;
+  item.dataset.annotationNavigable = view.canNavigate ? 'true' : 'false';
+  item.tabIndex = view.canNavigate ? 0 : -1;
+  item.setAttribute('role', 'group');
+  item.setAttribute('aria-label', view.canNavigate ? `定位到${view.locationLabel}的标记` : `${view.locationLabel}，原文已变化`);
+  if (view.isStale) item.setAttribute('aria-disabled', 'true');
 
   const meta = document.createElement('div');
   meta.className = 'notes-item-meta';
   const chapterLabel = document.createElement('span');
   chapterLabel.className = 'notes-item-chapter';
-  chapterLabel.textContent = chapter.label;
+  chapterLabel.textContent = view.locationLabel;
   const styleLabel = document.createElement('span');
   styleLabel.className = 'notes-item-style';
   styleLabel.textContent = notesAnnotationStyleLabel(annotation);
@@ -172,7 +308,13 @@ function createNotesPanelItem(annotation, chapter) {
   quote.textContent = annotation.text || '';
 
   item.append(meta, quote);
-  const thought = notesAnnotationThought(annotation);
+  if (view.isStale) {
+    const stale = document.createElement('p');
+    stale.className = 'notes-item-stale';
+    stale.textContent = '原文已变化，不能定位或编辑';
+    item.appendChild(stale);
+  }
+  const thought = view.thought;
   if (thought) {
     const thoughtElement = document.createElement('p');
     thoughtElement.className = 'notes-item-thought';
@@ -182,17 +324,20 @@ function createNotesPanelItem(annotation, chapter) {
 
   const actions = document.createElement('div');
   actions.className = 'notes-item-actions';
-  const edit = document.createElement('button');
-  edit.type = 'button';
-  edit.dataset.notesAction = 'edit';
-  edit.setAttribute('aria-label', `编辑${thought ? '想法' : '批注'}`);
-  edit.textContent = '编辑';
+  if (view.canEdit) {
+    const edit = document.createElement('button');
+    edit.type = 'button';
+    edit.dataset.notesAction = 'edit';
+    edit.setAttribute('aria-label', `编辑${thought ? '想法' : '批注'}`);
+    edit.textContent = '编辑';
+    actions.append(edit);
+  }
   const remove = document.createElement('button');
   remove.type = 'button';
   remove.dataset.notesAction = 'delete';
   remove.setAttribute('aria-label', '删除批注');
   remove.textContent = '删除';
-  actions.append(edit, remove);
+  actions.append(remove);
   item.appendChild(actions);
   return item;
 }
@@ -205,7 +350,7 @@ function renderNotesPanel() {
   if (!panel || !list || !emptyState || !summary) return false;
 
   const annotations = notesPanelAnnotations();
-  const markCount = annotations.filter(notesAnnotationHasMark).length;
+  const markCount = annotations.filter((annotation) => annotationViewModel(annotation, state.contentType).hasMark).length;
   const thoughtCount = annotations.filter((annotation) => Boolean(notesAnnotationThought(annotation))).length;
   summary.textContent = `${markCount} 条标记 · ${thoughtCount} 条想法`;
 
@@ -215,14 +360,18 @@ function renderNotesPanel() {
     button.tabIndex = selected ? 0 : -1;
   });
   const sort = document.getElementById('notesSort');
+  const locationOption = sort?.querySelector('option[value="chapter"]');
+  if (locationOption) locationOption.textContent = state.contentType === 'pdf' ? '按页' : '按章节';
   if (sort && sort.value !== _notesPanelSort) sort.value = _notesPanelSort;
+  if (typeof syncCustomSelectValue === 'function') syncCustomSelectValue(sort);
 
   list.replaceChildren();
   const visible = sortNotesPanelAnnotations(filteredNotesPanelAnnotations(annotations));
-  for (const { annotation, chapter } of visible) {
-    list.appendChild(createNotesPanelItem(annotation, chapter));
+  for (const { annotation, view } of visible) {
+    list.appendChild(createNotesPanelItem(annotation, view));
   }
   emptyState.hidden = visible.length > 0;
+  emptyState.textContent = annotations.length ? '当前筛选下没有内容，试试其他筛选。' : '还没有标记或想法。选中正文后，可划线或写下想法。';
   list.hidden = visible.length === 0;
   return true;
 }
@@ -270,11 +419,13 @@ function setupNotesPanel() {
     }
     const item = event.target.closest?.('#notesList [data-annotation-id]');
     if (!item || event.target.closest('button, a, input, textarea, select')) return;
+    if (item.dataset.annotationNavigable !== 'true') return;
     void navigateToAnnotation(item.dataset.annotationId);
   });
   document.addEventListener('keydown', (event) => {
+    if (event.target.closest?.('#notesList button, #notesList a, #notesList input, #notesList textarea, #notesList select')) return;
     const item = event.target.closest?.('#notesList [data-annotation-id]');
-    if (!item || !['Enter', ' '].includes(event.key)) return;
+    if (!item || item.dataset.annotationNavigable !== 'true' || !['Enter', ' '].includes(event.key)) return;
     event.preventDefault();
     void navigateToAnnotation(item.dataset.annotationId);
   });

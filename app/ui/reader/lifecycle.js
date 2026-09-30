@@ -2,7 +2,16 @@
 
 'use strict';
 
-async function returnToLibrary() {
+let libraryReturnPending = null;
+
+function returnToLibrary() {
+  if (libraryReturnPending) return libraryReturnPending;
+  libraryReturnPending = performReturnToLibrary().finally(() => { libraryReturnPending = null; });
+  return libraryReturnPending;
+}
+
+async function performReturnToLibrary() {
+  if (typeof closeHighlightEditor === 'function' && closeHighlightEditor({ restoreFocus: false }) === false) return;
   const bookId = state.currentBookId;
   const reader = document.getElementById('reader');
   const backButtons = [
@@ -18,6 +27,9 @@ async function returnToLibrary() {
 
   backButtons.forEach((button) => { button.disabled = true; });
   try {
+    if (state.contentType === 'pdf' && typeof flushPdfProgressSave === 'function') {
+      await flushPdfProgressSave();
+    }
     await Promise.all([
       saveTextScroll.flush(),
       flushUserSettings()
@@ -26,9 +38,17 @@ async function returnToLibrary() {
       flushPendingHighlightSaves(),
       flushPendingProgressSave()
     ]);
-    _lastLibraryFocusBookId = bookId;
     const library = await window.browserHost.getLibrary();
+    if (library?.features?.libraryOrganization === true) {
+      library.organization = await window.browserHost.getLibraryOrganization();
+    }
+    // No renderer or search state is discarded until all fallible I/O succeeds.
+    if (typeof destroyPdfReader === 'function') await destroyPdfReader();
+    if (typeof resetReaderSearch === 'function') resetReaderSearch();
+    _lastLibraryFocusBookId = bookId;
     renderLibrary(library);
+    const card = [...document.querySelectorAll('[data-book-id]')].find((item) => item.dataset.bookId === bookId);
+    (card?.matches('button') ? card : card?.querySelector('button'))?.focus({ preventScroll: true });
   } catch (error) {
     showHighlightHint(error.message || '返回书架失败');
   } finally {

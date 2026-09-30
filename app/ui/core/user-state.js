@@ -19,6 +19,8 @@ function currentUserSettings() {
     lineHeight: state.lineHeight,
     pageMargin: state.pageMargin,
     readingMode,
+    pdfLayoutMode: ['continuous', 'single', 'double'].includes(state.pdfLayoutMode)
+      ? state.pdfLayoutMode : 'continuous',
     continuousScroll: readingMode === 'scroll',
     tocOpen: state.tocOpen,
     highlightColor: state.highlightColor,
@@ -60,6 +62,8 @@ function applyUserState(userState) {
   const mobileDefault = typeof isMobileReaderSurface === 'function' && isMobileReaderSurface();
   state.readingModeAutoApplied = mobileDefault && restoredMode !== 'scroll';
   state.readingMode = mobileDefault ? 'scroll' : restoredMode;
+  state.pdfLayoutMode = ['continuous', 'single', 'double'].includes(settings.pdfLayoutMode)
+    ? settings.pdfLayoutMode : 'continuous';
   state.continuousScroll = state.readingMode === 'scroll';
   state.effectiveReadingMode = state.readingMode;
   state.tocOpen = settings.tocOpen !== false;
@@ -162,7 +166,7 @@ function savedPosition() {
 
 let _progressSaveChain = Promise.resolve();
 
-function savePosition(value) {
+function savePosition(value, { keepalive = false } = {}) {
   const key = storageKey('position');
   if (!key || !value) return Promise.resolve();
   localStorage.setItem(key, JSON.stringify(value));
@@ -176,14 +180,15 @@ function savePosition(value) {
   const previous = currentServerBookState();
   state.userState.books[bookId] = {
     ...previous,
-    progress
+    progress: { ...progress, updatedAt: new Date().toISOString() }
   };
 
   _progressSaveChain = _progressSaveChain.catch(() => {}).then(() => {
     if (!bookId) return;
     return apiRequest(`/books/${encodeURIComponent(bookId)}/progress`, {
       method: 'PUT',
-      body: JSON.stringify(progress)
+      body: JSON.stringify(progress),
+      ...(keepalive ? { keepalive: true } : {})
     });
   }).catch((error) => {
     console.error('保存阅读进度失败', { bookId, error });
@@ -242,4 +247,18 @@ function loadHighlights() {
       updatedAt: String(highlight.updatedAt || highlight.createdAt || '')
     };
   });
+}
+
+function savePdfAnnotations(bookId, annotations) {
+  if (!bookId || !Array.isArray(annotations)) return false;
+  const previous = state.userState.books[bookId] || {};
+  state.userState.books[bookId] = { ...previous, pdfAnnotations: annotations };
+  if (state.currentBookId === bookId && state.contentType === 'pdf'
+      && typeof renderNotesPanel === 'function') renderNotesPanel();
+  return true;
+}
+
+function loadPdfAnnotations(bookId = state.currentBookId) {
+  const annotations = state.userState.books?.[bookId]?.pdfAnnotations;
+  return Array.isArray(annotations) ? annotations : [];
 }

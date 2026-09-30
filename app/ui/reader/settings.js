@@ -160,7 +160,11 @@ function syncCustomSelectValue(select) {
   if (!instance) return;
   const option = select.options[select.selectedIndex];
   instance.trigger.textContent = option?.textContent || '';
+  instance.trigger.disabled = select.disabled;
   instance.options.forEach((item) => {
+    const nativeOption = [...select.options].find((entry) => entry.value === item.dataset.value);
+    if (nativeOption) item.textContent = nativeOption.textContent;
+    item.disabled = select.disabled || Boolean(nativeOption?.disabled);
     const selected = item.dataset.value === select.value;
     item.setAttribute('aria-selected', String(selected));
     item.classList.toggle('is-selected', selected);
@@ -235,7 +239,10 @@ function setupCustomSelectGlobalEvents() {
     closeAllCustomSelects();
   });
   document.addEventListener('keydown', (event) => {
-    if (event.key === 'Escape') closeAllCustomSelects();
+    if (event.key === 'Escape' && !event.defaultPrevented && [...customSelectInstances].some((item) => !item.menu.hidden)) {
+      event.preventDefault();
+      closeAllCustomSelects();
+    }
   });
   window.addEventListener('resize', () => {
     customSelectInstances.forEach(positionCustomSelectMenu);
@@ -344,12 +351,23 @@ function setupCustomSelects() {
 }
 
 function syncSettingsPanel() {
+  const settingsPanel = document.getElementById('readerPanelSettings');
+  const format = state.contentType === 'pdf' ? 'pdf' : 'reflow';
+  if (settingsPanel && settingsPanel.dataset.contentFormat !== format) {
+    closeAllCustomSelects();
+    settingsPanel.dataset.contentFormat = format;
+  }
+  document.querySelectorAll('#readerPanelSettings [data-pdf-inapplicable]')
+    .forEach((field) => { field.hidden = format === 'pdf'; });
+  document.querySelectorAll('#readerPanelSettings [data-pdf-only]')
+    .forEach((field) => { field.hidden = format !== 'pdf'; });
   const theme = document.getElementById('settingTheme');
   const fontSize = document.getElementById('settingFontSize');
   const lineHeight = document.getElementById('settingLineHeight');
   const pageMargin = document.getElementById('settingPageMargin');
   const highlightColor = document.getElementById('settingHighlightColor');
   const readingMode = document.getElementById('settingReadingMode');
+  const pdfLayoutMode = document.getElementById('settingPdfLayoutMode');
   const tocOpen = document.getElementById('settingTocOpen');
   const fontFamily = document.getElementById('settingFontFamily');
   const textIndent = document.getElementById('settingTextIndent');
@@ -374,6 +392,7 @@ function syncSettingsPanel() {
   }
   if (highlightColor) highlightColor.value = state.highlightColor;
   if (readingMode) readingMode.value = state.readingMode;
+  if (pdfLayoutMode) pdfLayoutMode.value = state.pdfLayoutMode;
   if (fontFamily) fontFamily.value = state.fontFamily;
   if (textIndent) {
     textIndent.value = String(state.textIndent);
@@ -392,7 +411,7 @@ function syncSettingsPanel() {
       : '';
   }
   setupCustomSelects();
-  [theme, fontFamily, readingMode, highlightColor].forEach(syncCustomSelectValue);
+  [theme, fontFamily, readingMode, pdfLayoutMode, highlightColor].forEach(syncCustomSelectValue);
 }
 
 
@@ -458,6 +477,7 @@ function setupSettingsPanel() {
   const pageMargin = document.getElementById('settingPageMargin');
   const highlightColor = document.getElementById('settingHighlightColor');
   const readingMode = document.getElementById('settingReadingMode');
+  const pdfLayoutMode = document.getElementById('settingPdfLayoutMode');
   const tocOpen = document.getElementById('settingTocOpen');
   const fontFamily = document.getElementById('settingFontFamily');
   const textIndent = document.getElementById('settingTextIndent');
@@ -484,11 +504,23 @@ function setupSettingsPanel() {
     state.highlightColor = ['yellow', 'green', 'blue', 'pink'].includes(highlightColor.value)
       ? highlightColor.value
       : 'yellow';
-    applyZoom();
+    if (state.contentType === 'pdf') {
+      document.body.dataset.highlightColor = state.highlightColor;
+    } else {
+      applyZoom();
+    }
     persistUserSettings();
   });
   readingMode?.addEventListener('change', () => {
     setReadingMode(readingMode.value);
+  });
+  pdfLayoutMode?.addEventListener('change', () => {
+    if (state.contentType !== 'pdf'
+        || !['continuous', 'single', 'double'].includes(pdfLayoutMode.value)
+        || !window.pdfReaderController?.setLayoutMode(pdfLayoutMode.value)) return;
+    state.pdfLayoutMode = pdfLayoutMode.value;
+    syncSettingsPanel();
+    persistUserSettings();
   });
   tocOpen?.addEventListener('change', () => {
     state.tocOpen = tocOpen.checked;

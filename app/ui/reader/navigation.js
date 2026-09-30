@@ -16,9 +16,7 @@ function handleKeyboardShortcut(e) {
   switch (e.key.toLowerCase()) {
     case 'o':
       e.preventDefault();
-      window.browserHost.getLibrary()
-        .then(renderLibrary)
-        .catch((error) => showHighlightHint(error.message));
+      void returnToLibrary();
       return true;
 
     case 's':
@@ -33,18 +31,30 @@ function handleKeyboardShortcut(e) {
     case '=':
     case '+':
       e.preventDefault();
+      if (state.contentType === 'pdf') {
+        window.pdfReaderController?.zoomBy(0.1);
+        return true;
+      }
       zoomLevel = Math.min(200, zoomLevel + 10);
       applyZoom();
       return true;
 
     case '-':
       e.preventDefault();
+      if (state.contentType === 'pdf') {
+        window.pdfReaderController?.zoomBy(-0.1);
+        return true;
+      }
       zoomLevel = Math.max(60, zoomLevel - 10);
       applyZoom();
       return true;
 
     case '0':
       e.preventDefault();
+      if (state.contentType === 'pdf') {
+        window.pdfReaderController?.setPdfScale(1);
+        return true;
+      }
       zoomLevel = 100;
       applyZoom();
       return true;
@@ -60,7 +70,9 @@ function handleKeyboardShortcut(e) {
       return false;
 
     case 'e':
-      if (e.shiftKey && state.contentType === 'epub') {
+      if (e.shiftKey && state.contentType === 'pdf'
+        && e.target?.closest?.('input, textarea, [contenteditable="true"]')) return false;
+      if (e.shiftKey && (state.contentType === 'epub' || state.contentType === 'pdf')) {
         e.preventDefault();
         exportHighlights();
         return true;
@@ -212,6 +224,13 @@ function setupTocNavigation() {
       e.preventDefault();
       e.stopPropagation();
       const target = tocLink.getAttribute('data-target');
+      if (state.contentType === 'pdf') {
+        const match = /^pdf-page:(\d+)$/.exec(target || '');
+        if (!match || !window.pdfReaderController?.goToPdfPage(Number(match[1]))) {
+          showHighlightHint('无法定位到该 PDF 页面');
+        }
+        return;
+      }
       navigateEpubTarget(target).then((navigated) => {
         if (!navigated) showHighlightHint(describeEpubNavigationFailure(target));
       });

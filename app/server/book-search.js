@@ -1,5 +1,6 @@
 'use strict';
 
+const crypto = require('node:crypto');
 const { ensureIndex, toFtsQuery } = require('./ai-fts');
 
 const BOOK_SEARCH_MAX_QUERY_LENGTH = 80;
@@ -7,6 +8,7 @@ const BOOK_SEARCH_DEFAULT_LIMIT = 20;
 const BOOK_SEARCH_MAX_LIMIT = 50;
 const BOOK_SEARCH_MAX_CANDIDATES = 2000;
 const BOOK_SEARCH_SNIPPET_CONTEXT = 64;
+const BOOK_SEARCH_MAX_CURSOR_LENGTH = 512;
 
 let DatabaseSync = null;
 let sqliteCapabilityChecked = false;
@@ -28,6 +30,67 @@ function searchInputError(message) {
     code: 'SEARCH_QUERY_INVALID',
     statusCode: 400
   });
+}
+
+function searchCursorError(message, statusCode = 400) {
+  return Object.assign(new Error(message), {
+    code: statusCode === 409 ? 'SEARCH_CURSOR_STALE' : 'SEARCH_CURSOR_INVALID',
+    statusCode
+  });
+}
+
+function digest(value) {
+  return crypto.createHash('sha256').update(String(value)).digest('hex');
+}
+
+function decodeSearchCursor(value) {
+  if (value === undefined || value === null || value === '') return null;
+  if (typeof value === 'object' && !Array.isArray(value)) return validateSearchCursor(value);
+  const token = String(value);
+  if (token.length > BOOK_SEARCH_MAX_CURSOR_LENGTH || !/^[A-Za-z0-9_-]+$/.test(token)) {
+    throw searchCursorError('搜索游标无效，请重新搜索');
+  }
+  let cursor;
+  try {
+    const decoded = Buffer.from(token, 'base64url');
+    if (decoded.toString('base64url') !== token) throw new Error('non-canonical');
+    cursor = JSON.parse(decoded.toString('utf8'));
+  } catch {
+    throw searchCursorError('搜索游标无效，请重新搜索');
+  }
+  return validateSearchCursor(cursor);
+}
+
+function validateSearchCursor(cursor) {
+  const validDigest = (item) => typeof item === 'string' && /^[a-f0-9]{64}$/.test(item);
+  const validPosition = Number.isSafeInteger(cursor?.r) && cursor.r > 0;
+  const validKey = cursor?.k === null || (
+    Array.isArray(cursor?.k)
+    && cursor.k.length === 2
+    && Number.isSafeInteger(cursor.k[0]) && cursor.k[0] >= 0
+    && Number.isSafeInteger(cursor.k[1]) && cursor.k[1] >= 0
+  );
+  if (cursor?.v !== 1
+    || !validDigest(cursor.b)
+    || !validDigest(cursor.q)
+    || !validDigest(cursor.f)
+    || !['book', 'chapter'].includes(cursor.s)
+    || !(cursor.c === null || (Number.isSafeInteger(cursor.c) && cursor.c >= 0))
+    || !Number.isSafeInteger(cursor.l) || cursor.l < 1 || cursor.l > BOOK_SEARCH_MAX_LIMIT
+    || !validPosition
+    || typeof cursor.i !== 'boolean'
+    || !validKey) {
+    throw searchCursorError('搜索游标无效，请重新搜索');
+  }
+  return cursor;
+}
+
+function encodeSearchCursor(cursor) {
+  const token = Buffer.from(JSON.stringify(cursor)).toString('base64url');
+  if (token.length > BOOK_SEARCH_MAX_CURSOR_LENGTH) {
+    throw searchCursorError('搜索游标无效，请重新搜索');
+  }
+  return token;
 }
 
 function normalizeSearchText(value) {
@@ -76,12 +139,14 @@ function normalizeBookSearchOptions(options = {}) {
   const requestedLimit = Number(options.limit ?? BOOK_SEARCH_DEFAULT_LIMIT);
   if (!Number.isFinite(requestedLimit) || requestedLimit <= 0) throw searchInputError('搜索结果数量无效');
 
-  return {
+  const normalized = {
     query,
     scope,
     chapterIndex,
     limit: Math.max(1, Math.min(BOOK_SEARCH_MAX_LIMIT, Math.trunc(requestedLimit)))
   };
+  normalized.cursor = decodeSearchCursor(options.cursor);
+  return normalized;
 }
 
 function parseBookSearchParams(searchParams) {
@@ -92,7 +157,8 @@ function parseBookSearchParams(searchParams) {
     query: params.get('q') || '',
     scope: params.get('scope') || 'book',
     chapterIndex: params.get('chapterIndex'),
-    limit: params.get('limit') || undefined
+    limit: params.get('limit') || undefined,
+    cursor: params.get('cursor') || undefined
   });
 }
 
@@ -145,20 +211,37 @@ function searchScopeClause(scope, chapterIndex) {
     : { sql: '', params: [] };
 }
 
-function buildSearchMatch(row, match) {
+function buildSearchMatch(row, match, bookType = 'text') {
   const chapterIndex = Number(row.chapterIndex);
   const startOffset = Number(row.startOffset || 0);
   const absoluteOffset = startOffset + match.start;
   const chapterHref = String(row.chapterHref || '');
   const chapterLabel = String(row.chapterLabel || '');
-  return {
-    id: `${chapterIndex}:${absoluteOffset}:${match.text.length}`,
+  const pageIndex = chapterIndex;
+  const common = {
     chapterIndex,
     chapterHref,
     chapterLabel,
     snippet: makeSearchSnippet(row.bodyText, match.start, match.end),
     matchText: match.text,
-    matchOffset: match.start,
+    matchOffset: match.start
+  };
+  if (bookType === 'pdf') {
+    return {
+      id: `pdf:${pageIndex}:${absoluteOffset}:${match.text.length}`,
+      ...common,
+      locator: {
+        version: 1,
+        type: 'pdf',
+        pageIndex,
+        textOffset: absoluteOffset,
+        quote: match.text
+      }
+    };
+  }
+  return {
+    id: `${chapterIndex}:${absoluteOffset}:${match.text.length}`,
+    ...common,
     locator: {
       version: 1,
       type: 'text-search',
@@ -177,25 +260,59 @@ async function searchBookText(book, dataRoot, options = {}) {
     query: normalized.query,
     scope: normalized.scope,
     results: [],
+    hasMore: false,
+    nextCursor: null,
     truncated: false
   };
+  const unavailableForBook = (reason = null) => ({
+    ...unavailable,
+    ...(book.type === 'pdf' && reason ? { unavailableReason: reason } : {})
+  });
 
   let filePath;
   try {
-    filePath = await ensureIndex(book, dataRoot);
-  } catch {
-    return unavailable;
+    filePath = await ensureIndex(book, dataRoot, { signal: options.signal });
+  } catch (error) {
+    if (options.signal?.aborted) throw Object.assign(new Error('PDF search was cancelled'), { code: 'PDF_EXTRACTION_ABORTED' });
+    const reason = book.type === 'pdf'
+      ? error?.code === 'PDF_EXTRACTION_BUDGET' ? 'pdf_extraction_limit'
+        : error?.code === 'PDF_PASSWORD_REQUIRED' ? 'pdf_password_protected'
+          : 'pdf_text_unavailable'
+      : null;
+    return unavailableForBook(reason);
   }
-  if (!filePath) return unavailable;
+  if (!filePath) return unavailableForBook(book.type === 'pdf' ? 'pdf_text_unavailable' : null);
+  if (options.signal?.aborted) throw Object.assign(new Error('PDF search was cancelled'), { code: 'PDF_EXTRACTION_ABORTED' });
 
   let db;
   try {
     db = openSearchDatabase(filePath);
     if (!db) return unavailable;
 
+    if (book.type === 'pdf') {
+      const statusRow = db.prepare("SELECT value FROM ai_meta WHERE key = 'pdfSearchStatus'").get();
+      if (statusRow?.value === 'no-text') return unavailableForBook('pdf_no_searchable_text');
+    }
+
+    const context = normalized.cursor;
+    if (context && (context.b !== digest(book.id)
+      || context.q !== digest(normalized.query)
+      || context.s !== normalized.scope
+      || context.c !== normalized.chapterIndex
+      || context.l !== normalized.limit)) {
+      throw searchCursorError('搜索条件已变化，请重新搜索');
+    }
+    const fingerprintRow = db.prepare("SELECT value FROM ai_meta WHERE key = 'fingerprint'").get();
+    const fingerprint = fingerprintRow?.value;
+    if (context && (!fingerprint || context.f !== digest(fingerprint))) {
+      throw searchCursorError('书籍索引已更新，请重新搜索', 409);
+    }
+
     const scope = searchScopeClause(normalized.scope, normalized.chapterIndex);
     const ftsQuery = toFtsQuery(normalized.query);
     const candidateLimit = BOOK_SEARCH_MAX_CANDIDATES + 1;
+    const rowidClause = context ? ` AND ai_chunks.rowid ${context.i ? '>=' : '>'} ?` : '';
+    const seekParams = context ? [context.r] : [];
     const baseSelect = `
       SELECT
         ai_chunks.rowid,
@@ -210,41 +327,82 @@ async function searchBookText(book, dataRoot, options = {}) {
     let rows;
     if (ftsQuery) {
       rows = db.prepare(`${baseSelect}
-        WHERE ai_chunks MATCH ?${scope.sql}
-        ORDER BY CAST(ai_chunks.chapterIndex AS INTEGER), CAST(ai_chunks.startOffset AS INTEGER), ai_chunks.rowid
-        LIMIT ?`).all(ftsQuery, ...scope.params, candidateLimit);
+        WHERE ai_chunks MATCH ?${scope.sql}${rowidClause}
+        ORDER BY ai_chunks.rowid
+        LIMIT ?`).all(ftsQuery, ...scope.params, ...seekParams, candidateLimit);
     } else {
       rows = db.prepare(`${baseSelect}
-        WHERE 1 = 1${scope.sql}
-        ORDER BY CAST(ai_chunks.chapterIndex AS INTEGER), CAST(ai_chunks.startOffset AS INTEGER), ai_chunks.rowid
-        LIMIT ?`).all(...scope.params, candidateLimit);
+        WHERE 1 = 1${scope.sql}${rowidClause}
+        ORDER BY ai_chunks.rowid
+        LIMIT ?`).all(...scope.params, ...seekParams, candidateLimit);
     }
 
     const candidateTruncated = rows.length > BOOK_SEARCH_MAX_CANDIDATES;
-    const unique = new Map();
+    const page = [];
+    const unique = new Set();
+    let resultTruncated = false;
+    let lastScannedRowId = context?.r || 0;
+    let continuationRowId = null;
+    let continuationInclusive = false;
+    const previousKey = context?.k || null;
+    const isAfterKey = (result) => !previousKey
+      || result.chapterIndex > previousKey[0]
+      || (result.chapterIndex === previousKey[0]
+        && (result.locator.type === 'pdf' ? result.locator.textOffset : result.locator.offset) > previousKey[1]);
     for (const row of rows.slice(0, BOOK_SEARCH_MAX_CANDIDATES)) {
+      lastScannedRowId = Number(row.rowid);
       for (const match of findExactMatches(row.bodyText, normalized.query)) {
-        const result = buildSearchMatch(row, match);
-        const key = result.id;
-        if (!unique.has(key)) unique.set(key, result);
-        if (unique.size > normalized.limit) break;
+        const result = buildSearchMatch(row, match, book.type);
+        if (!isAfterKey(result) || unique.has(result.id)) continue;
+        unique.add(result.id);
+        page.push({ result, rowid: Number(row.rowid) });
+        if (page.length > normalized.limit) {
+          resultTruncated = true;
+          break;
+        }
       }
-      if (unique.size > normalized.limit) break;
+      if (resultTruncated) break;
     }
 
-    const allResults = [...unique.values()].sort((left, right) => (
-      left.chapterIndex - right.chapterIndex
-      || left.locator.offset - right.locator.offset
-      || left.matchOffset - right.matchOffset
-    ));
+    const hasMore = resultTruncated || candidateTruncated;
+    if (resultTruncated) {
+      continuationRowId = page[normalized.limit - 1].rowid;
+      continuationInclusive = true;
+    } else if (candidateTruncated) {
+      continuationRowId = lastScannedRowId;
+    }
+    const visible = page.slice(0, normalized.limit);
+    const lastVisible = visible.at(-1)?.result;
+    const cursorKey = lastVisible
+      ? [lastVisible.chapterIndex, lastVisible.locator.type === 'pdf'
+        ? lastVisible.locator.textOffset
+        : lastVisible.locator.offset]
+      : previousKey;
+    const nextCursor = hasMore && continuationRowId
+      ? encodeSearchCursor({
+        v: 1,
+        b: digest(book.id),
+        q: digest(normalized.query),
+        s: normalized.scope,
+        c: normalized.chapterIndex,
+        l: normalized.limit,
+        f: digest(fingerprint || ''),
+        r: continuationRowId,
+        i: continuationInclusive,
+        k: cursorKey
+      })
+      : null;
     return {
       available: true,
       query: normalized.query,
       scope: normalized.scope,
-      results: allResults.slice(0, normalized.limit),
-      truncated: candidateTruncated || allResults.length > normalized.limit
+      results: visible.map(({ result }) => result),
+      hasMore,
+      nextCursor,
+      truncated: hasMore
     };
-  } catch {
+  } catch (error) {
+    if (error?.code === 'SEARCH_CURSOR_INVALID' || error?.code === 'SEARCH_CURSOR_STALE') throw error;
     return unavailable;
   } finally {
     db?.close();

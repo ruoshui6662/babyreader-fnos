@@ -125,17 +125,23 @@ function containsBookText(source, value, minimumLength = 4) {
 
 async function validateAiBookContext(book, input, fsImpl = fs) {
   const sources = await loadBookSources(book, fsImpl);
+  const verifiedContext = [];
   for (const item of input?.context || []) {
     const href = normalizeArchivePath(item.chapterHref);
-    if (book.type === 'epub' && item.chapterHref && !sources.chapters.has(href)) throw contextError();
-    if (book.type === 'epub' && Number.isInteger(item.chapterIndex) && item.chapterIndex < 0) throw contextError();
-    if (book.type === 'epub' && Number.isInteger(item.chapterIndex) && sources.chapterIndexes.size) {
-      if (sources.chapterIndexes.get(item.chapterIndex) !== href) throw contextError();
+    if (book.type === 'epub') {
+      if (!href || !Number.isInteger(item.chapterIndex) || item.chapterIndex < 0) throw contextError();
+      if (!sources.chapters.has(href) || sources.chapterIndexes.get(item.chapterIndex) !== href) throw contextError();
     }
     const source = book.type === 'epub' && href ? sources.chapters.get(href) : sources.all;
     if (!containsBookText(source, item.text)) throw contextError();
+    verifiedContext.push({
+      ...item,
+      chapterHref: book.type === 'epub' ? href : '',
+      chapterLabel: book.type === 'epub' ? `书内位置 ${item.chapterIndex + 1}` : '本书'
+    });
   }
   if (input?.selectedText && !containsBookText(sources.all, input.selectedText, 1)) throw contextError();
+  if (input && Array.isArray(input.context)) input.context = verifiedContext;
   return true;
 }
 
