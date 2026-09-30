@@ -640,13 +640,83 @@ check_device() {
   return 1
 }
 
+# Book-import prerequisites (MOBI/import plan Task 0). Read-only for user data:
+# the share probe creates and removes one dot-file as the package user, and the
+# gateway probe sends invalid JSON to an endpoint that rejects it before any
+# write, so only the response origin (app JSON vs Gateway) is observed.
+import_probe() {
+  SHARE_LINK="$PKG_ROOT/share"
+  SHARE_DIR=""
+  for candidate in $(printf '%s' "${TRIM_DATA_SHARE_PATHS:-}" | tr ':' ' ') "$SHARE_LINK/babyreader-fnos/library" "$SHARE_LINK/library"; do
+    if [ -d "$candidate" ]; then SHARE_DIR="$candidate"; break; fi
+  done
+  if [ -z "$SHARE_DIR" ]; then
+    fail "data-share library directory not found (TRIM_DATA_SHARE_PATHS or $SHARE_LINK)"
+  else
+    info "share_dir=$SHARE_DIR"
+    info "share_dir_real=$(readlink -f "$SHARE_DIR" 2>/dev/null || printf unknown)"
+    info "share_dir_stat=$(stat -c '%U:%G %a' "$(readlink -f "$SHARE_DIR" 2>/dev/null || printf '%s' "$SHARE_DIR")" 2>/dev/null || printf unknown)"
+    PROBE_FILE="$SHARE_DIR/.babyreader-import-probe.$$"
+    if command -v runuser >/dev/null 2>&1; then
+      if runuser -u "$PACKAGE_USER" -- sh -c "umask 027 && : > '$PROBE_FILE' && rm -f '$PROBE_FILE'"; then
+        pass "package user can create and remove files in the share directory"
+      else
+        fail "package user cannot write the share directory"
+        rm -f "$PROBE_FILE" 2>/dev/null || true
+      fi
+    else
+      skip "runuser unavailable; share write check needs root or the package user"
+    fi
+    if command -v getfacl >/dev/null 2>&1; then
+      info "share_acl=$(getfacl -cp "$SHARE_DIR" 2>/dev/null | tr '\n' ' ')"
+    fi
+  fi
+
+  if ! command -v curl >/dev/null 2>&1 || [ -z "${BABYREADER_GATEWAY_URL:-}" ] \
+      || [ -z "${BABYREADER_GATEWAY_COOKIE:-}" ]; then
+    skip "Gateway upload probe needs curl, BABYREADER_GATEWAY_URL and BABYREADER_GATEWAY_COOKIE"
+  else
+    PROBE_URL="${BABYREADER_GATEWAY_URL%/}/app/babyreader-fnos/api/library/organization/preferences"
+    PROBE_BODY="${TMPDIR:-/tmp}/babyreader-upload-probe.$$"
+    PROBE_RESPONSE="${TMPDIR:-/tmp}/babyreader-upload-response.$$"
+    for size_mib in ${BABYREADER_PROBE_SIZES_MIB:-1 16 64 256}; do
+      if ! dd if=/dev/zero of="$PROBE_BODY" bs=1048576 count="$size_mib" 2>/dev/null; then
+        fail "could not create ${size_mib} MiB probe body"
+        continue
+      fi
+      PROBE_RESULT="$(curl -sS -X PUT -H "Cookie: $BABYREADER_GATEWAY_COOKIE" \
+        -H 'Content-Type: application/json' --data-binary "@$PROBE_BODY" \
+        -o "$PROBE_RESPONSE" -w '%{http_code} %{content_type} %{time_total}' \
+        --max-time 600 "$PROBE_URL" 2>/dev/null || printf 'error - -')"
+      PROBE_CODE="${PROBE_RESULT%% *}"
+      # The organization route maps body errors to its own JSON envelope
+      # ({"error":"请求无效"}, status 400/413); anything else came from the Gateway.
+      if grep -q '^{"error":' "$PROBE_RESPONSE" 2>/dev/null && printf '%s' "$PROBE_RESULT" | grep -q 'application/json'; then
+        pass "gateway forwarded ${size_mib} MiB body to the app (app replied $PROBE_CODE)"
+      else
+        info "gateway did not forward ${size_mib} MiB body: $PROBE_RESULT body=$(head -c 200 "$PROBE_RESPONSE" 2>/dev/null | tr '\n' ' ')"
+      fi
+      info "upload_probe_${size_mib}MiB=$PROBE_RESULT"
+    done
+    rm -f "$PROBE_BODY" "$PROBE_RESPONSE"
+  fi
+
+  if [ "$FAILURES" -eq 0 ]; then
+    printf 'RESULT | PASS\n'
+    return 0
+  fi
+  printf 'RESULT | FAIL | count=%s\n' "$FAILURES" >&2
+  return 1
+}
+
 case "${1:-check}" in
   check) check_device ;;
   ai-test) ai_test_connection ;;
+  import-probe) import_probe ;;
   snapshot) snapshot "${2:-}" ;;
   compare) compare_snapshots "${2:-}" "${3:-}" ;;
   *)
-    printf 'usage: %s {check|ai-test|snapshot <file>|compare <before> <after>}\n' "$0" >&2
+    printf 'usage: %s {check|ai-test|import-probe|snapshot <file>|compare <before> <after>}\n' "$0" >&2
     exit 2
     ;;
 esac

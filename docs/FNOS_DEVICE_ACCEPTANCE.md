@@ -61,6 +61,20 @@ sh /var/apps/babyreader-fnos/target/docs/fnos-device-acceptance.sh ai-test
 
 失败时先在 AI 设置中使用“测试连接”确认 URL、模型和 Key，再检查 DNS、出口网络、供应商配额和模型权限。不要把 API Key 作为脚本参数传入；完成验收后立即清除当前终端变量和临时 Cookie。
 
+## 3.1.1 书籍导入前置条件探测（MOBI/导入计划 Task 0）
+
+以 root 在 NAS 上执行（共享目录写入检查需要 `runuser` 切换到包用户），并用管理员账号的登录 Cookie：
+
+```sh
+BABYREADER_GATEWAY_URL="https://你的-fnOS-地址" \
+BABYREADER_GATEWAY_COOKIE="实际登录 Cookie" \
+sh /var/apps/babyreader-fnos/target/docs/fnos-device-acceptance.sh import-probe
+```
+
+- 共享目录：以包用户身份创建并删除一个隐藏探测文件，并输出目录属主、权限和 ACL。
+- 网关请求体上限：依次发送 1/16/64/256 MiB 的无效 JSON（可用 `BABYREADER_PROBE_SIZES_MIB` 调整）到书库偏好接口。该接口解析失败即拒绝，不会写入任何数据。响应是应用的 JSON 错误，说明网关已转发；否则记录网关返回的状态码和响应片段。
+- 请把完整输出（先删掉 Cookie）回填到 `docs/superpowers/progress/2026-09-30-mobi-and-book-import-progress.md`。
+
 ## 3.2 PDF 结构化问书候选验收
 
 PDF 结构化检索目前由 `BABYREADER_ENABLE_PDF_AI_STRUCTURE` 控制，默认必须保持关闭。此项不是普通用户设置，不得通过生产 `settings.json` 或包内默认环境开启。
