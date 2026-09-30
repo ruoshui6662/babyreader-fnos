@@ -194,6 +194,14 @@ test('fnOS app settings expose a MOBI acceptance switch that starts disabled', (
   assert.equal(switchItem.initValue, 'false');
 });
 
+test('fnOS app settings expose an admin book-import switch that starts disabled', () => {
+  const steps = JSON.parse(read('wizard/config'));
+  const switchItem = steps.flatMap((step) => step.items || [])
+    .find((item) => item.field === 'wizard_import_enabled');
+  assert.equal(switchItem.type, 'switch');
+  assert.equal(switchItem.initValue, 'false');
+});
+
 test('PDF configuration callback persists the setting without restarting or touching service state', {
   skip: !availableShell() ? 'POSIX shell is unavailable' : false
 }, (t) => {
@@ -209,6 +217,7 @@ test('PDF configuration callback persists the setting without restarting or touc
   fs.cpSync(path.join(root, 'cmd', 'main'), path.join(appDest, 'cmd', 'main'));
   fs.cpSync(path.join(root, 'app', 'server', 'pdf-feature-config.js'), path.join(appDest, 'server', 'pdf-feature-config.js'));
   fs.cpSync(path.join(root, 'app', 'server', 'mobi-feature-config.js'), path.join(appDest, 'server', 'mobi-feature-config.js'));
+  fs.cpSync(path.join(root, 'app', 'server', 'import-feature-config.js'), path.join(appDest, 'server', 'import-feature-config.js'));
   fs.cpSync(path.join(root, 'app', 'server', 'fnos-roots-config.js'), path.join(appDest, 'server', 'fnos-roots-config.js'));
   fs.cpSync(path.join(root, 'app', 'server', 'library-roots.js'), path.join(appDest, 'server', 'library-roots.js'));
   fs.chmodSync(path.join(appDest, 'cmd', 'main'), 0o755);
@@ -251,6 +260,15 @@ test('PDF configuration callback persists the setting without restarting or touc
   });
   assert.equal(mobi.status, 0, mobi.stderr);
   assert.deepEqual(JSON.parse(fs.readFileSync(path.join(configRoot, 'mobi-feature.json'), 'utf8')), { version: 1, enabled: true });
+  assert.equal(fs.readFileSync(configFile, 'utf8'), before);
+
+  const imports = spawnSync(availableShell(), [path.join(appDest, 'cmd', 'config_callback')], {
+    encoding: 'utf8',
+    env: { ...process.env, TRIM_APPDEST: appDest, TRIM_PKGETC: configRoot, TRIM_PKGTMP: tempRoot, wizard_import_enabled: 'true' },
+    timeout: 10000
+  });
+  assert.equal(imports.status, 0, imports.stderr);
+  assert.deepEqual(JSON.parse(fs.readFileSync(path.join(configRoot, 'import-feature.json'), 'utf8')), { version: 1, enabled: true });
   assert.equal(fs.readFileSync(configFile, 'utf8'), before);
 });
 

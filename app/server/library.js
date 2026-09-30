@@ -215,6 +215,99 @@ async function writeCover(coverDirectory, id, cover) {
   return `/app/babyreader-fnos/api/books/${id}/cover`;
 }
 
+// Indexes one authorized file. Shared by full scans and single-book imports so
+// both produce identical catalog entries.
+// Returns { kind: 'reused'|'indexed'|'error', book } or { kind: 'drm', relativePath }.
+async function indexBookFile({ filePath, realRoot, validRoots, coverDirectory = null, previousById = new Map() }) {
+  const relativePath = path.relative(realRoot, filePath).split(path.sep).join('/');
+  const safeSourceRootId = sourceRootId(realRoot);
+  const safeSourcePathSegments = sourcePathSegments(relativePath);
+  let id = hashBook(filePath);
+  try {
+    const safePath = await resolveAuthorizedPath(filePath, validRoots);
+    const stat = await fs.stat(safePath);
+    const extension = path.extname(safePath).toLowerCase();
+    id = hashBook(safePath);
+    const fingerprint = fingerprintBook(safePath, stat);
+    const previous = previousById.get(id);
+
+    if (previous && !previous.error && previous.fingerprint === fingerprint) {
+      return {
+        kind: 'reused',
+        book: {
+          ...previous,
+          root: realRoot,
+          path: safePath,
+          relativePath,
+          sourceRootId: safeSourceRootId,
+          sourcePathSegments: safeSourcePathSegments,
+          size: stat.size,
+          modifiedAt: stat.mtime.toISOString()
+        }
+      };
+    }
+
+    let metadata;
+    let coverUrl = null;
+    if (extension === '.pdf') {
+      // PDF discovery is intentionally metadata-only. Do not feed potentially
+      // large binary documents into the generic UTF-8 metadata path.
+      await validatePdfHeader(safePath);
+      metadata = { title: path.basename(safePath, extension), author: '' };
+    } else if (extension === '.epub') {
+      const bytes = await fs.readFile(safePath);
+      metadata = extractEpubMetadata(bytes);
+      if (coverDirectory) coverUrl = await writeCover(coverDirectory, id, metadata.cover);
+    } else if (MOBI_EXTENSIONS.has(extension)) {
+      // Metadata only: the PDB table, record 0 and the cover record.
+      metadata = await readMobiMetadata(safePath);
+      // DRM is an expected state for Kindle users, not a scan failure:
+      // counting it as an error would mark the whole library unhealthy
+      // and block category editing and index cleanup.
+      if (metadata.drm) return { kind: 'drm', relativePath };
+      if (coverDirectory) coverUrl = await writeCover(coverDirectory, id, metadata.cover);
+    } else {
+      if (stat.size > MAX_TEXT_BYTES) throw new Error('Text document exceeds size limit');
+      metadata = extractTextMetadata(safePath, await fs.readFile(safePath, 'utf8'));
+    }
+
+    return {
+      kind: 'indexed',
+      book: {
+        id,
+        fingerprint,
+        type: bookType(extension),
+        ...(metadata.format ? { sourceFormat: metadata.format } : {}),
+        title: metadata.title || path.basename(safePath, extension),
+        author: metadata.author || '',
+        language: metadata.language || '',
+        publisher: metadata.publisher || '',
+        relativePath,
+        sourceRootId: safeSourceRootId,
+        sourcePathSegments: safeSourcePathSegments,
+        root: realRoot,
+        path: safePath,
+        size: stat.size,
+        modifiedAt: stat.mtime.toISOString(),
+        coverUrl
+      }
+    };
+  } catch (error) {
+    return {
+      kind: 'error',
+      book: {
+        id,
+        relativePath,
+        sourceRootId: safeSourceRootId,
+        sourcePathSegments: safeSourcePathSegments,
+        root: realRoot,
+        path: filePath,
+        error: String(error.message || error)
+      }
+    };
+  }
+}
+
 async function scanLibrary(authorizedRoots, options = {}) {
   const coverDirectory = options.coverDirectory ? path.resolve(options.coverDirectory) : null;
   const previousBooks = Array.isArray(options.previousIndex?.books) ? options.previousIndex.books : [];
@@ -252,90 +345,16 @@ async function scanLibrary(authorizedRoots, options = {}) {
     discoveredCount += discovered.files.length;
     hiddenMobiCount += discovered.hiddenMobiCount;
     for (const filePath of discovered.files) {
-      const relativePath = path.relative(discovered.realRoot, filePath).split(path.sep).join('/');
-      const safeSourceRootId = sourceRootId(discovered.realRoot);
-      const safeSourcePathSegments = sourcePathSegments(relativePath);
-      let id = hashBook(filePath);
-      try {
-        const safePath = await resolveAuthorizedPath(filePath, validRoots);
-        const stat = await fs.stat(safePath);
-        const extension = path.extname(safePath).toLowerCase();
-        id = hashBook(safePath);
-        const fingerprint = fingerprintBook(safePath, stat);
-        const previous = previousById.get(id);
-
-        if (previous && !previous.error && previous.fingerprint === fingerprint) {
-          books.push({
-            ...previous,
-            root: discovered.realRoot,
-            path: safePath,
-            relativePath,
-            sourceRootId: safeSourceRootId,
-            sourcePathSegments: safeSourcePathSegments,
-            size: stat.size,
-            modifiedAt: stat.mtime.toISOString()
-          });
-          reusedCount += 1;
-          continue;
-        }
-
-        let metadata;
-        let coverUrl = null;
-        if (extension === '.pdf') {
-          // PDF discovery is intentionally metadata-only. Do not feed potentially
-          // large binary documents into the generic UTF-8 metadata path.
-          await validatePdfHeader(safePath);
-          metadata = { title: path.basename(safePath, extension), author: '' };
-        } else if (extension === '.epub') {
-          const bytes = await fs.readFile(safePath);
-          metadata = extractEpubMetadata(bytes);
-          if (coverDirectory) coverUrl = await writeCover(coverDirectory, id, metadata.cover);
-        } else if (MOBI_EXTENSIONS.has(extension)) {
-          // Metadata only: the PDB table, record 0 and the cover record.
-          metadata = await readMobiMetadata(safePath);
-          if (metadata.drm) {
-            // DRM is an expected state for Kindle users, not a scan failure:
-            // counting it as an error would mark the whole library unhealthy
-            // and block category editing and index cleanup.
-            drmProtected.push({ relativePath });
-            continue;
-          }
-          if (coverDirectory) coverUrl = await writeCover(coverDirectory, id, metadata.cover);
-        } else {
-          if (stat.size > MAX_TEXT_BYTES) throw new Error('Text document exceeds size limit');
-          metadata = extractTextMetadata(safePath, await fs.readFile(safePath, 'utf8'));
-        }
-
-        books.push({
-          id,
-          fingerprint,
-          type: bookType(extension),
-          ...(metadata.format ? { sourceFormat: metadata.format } : {}),
-          title: metadata.title || path.basename(safePath, extension),
-          author: metadata.author || '',
-          language: metadata.language || '',
-          publisher: metadata.publisher || '',
-          relativePath,
-          sourceRootId: safeSourceRootId,
-          sourcePathSegments: safeSourcePathSegments,
-          root: discovered.realRoot,
-          path: safePath,
-          size: stat.size,
-          modifiedAt: stat.mtime.toISOString(),
-          coverUrl
-        });
-        indexedCount += 1;
-      } catch (error) {
-        books.push({
-          id,
-          relativePath,
-          sourceRootId: safeSourceRootId,
-          sourcePathSegments: safeSourcePathSegments,
-          root: discovered.realRoot,
-          path: filePath,
-          error: String(error.message || error)
-        });
+      const outcome = await indexBookFile({
+        filePath, realRoot: discovered.realRoot, validRoots, coverDirectory, previousById
+      });
+      if (outcome.kind === 'drm') {
+        drmProtected.push({ relativePath: outcome.relativePath });
+        continue;
       }
+      books.push(outcome.book);
+      if (outcome.kind === 'reused') reusedCount += 1;
+      if (outcome.kind === 'indexed') indexedCount += 1;
     }
   }
 
@@ -373,6 +392,7 @@ module.exports = {
   extractEpubMetadata,
   extractTextMetadata,
   fingerprintBook,
+  indexBookFile,
   sourcePathSegments,
   sourceRootId,
   scanLibrary

@@ -21,6 +21,10 @@ if [ "${wizard_mobi_reader_enabled+x}" = x ]; then
   TRIM_PKGETC="$PKG_ETC" "$NODE_BIN" "$APP_DEST/server/mobi-feature-config.js" set "$wizard_mobi_reader_enabled"
 fi
 
+if [ "${wizard_import_enabled+x}" = x ]; then
+  TRIM_PKGETC="$PKG_ETC" "$NODE_BIN" "$APP_DEST/server/import-feature-config.js" set "$wizard_import_enabled"
+fi
+
 TRIM_DATA_ACCESSIBLE_PATHS="${TRIM_DATA_ACCESSIBLE_PATHS:-}" TRIM_PKGETC="$PKG_ETC" \
   "$NODE_BIN" "$APP_DEST/server/fnos-roots-config.js" set || {
   MESSAGE="无法保存 fnOS 书库授权状态；请检查应用配置目录权限。"
