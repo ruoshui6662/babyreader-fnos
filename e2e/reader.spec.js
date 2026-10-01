@@ -262,7 +262,7 @@ test('library organization reorders books through a real desktop mouse drag', as
   await page.locator('.library-mode-button').filter({ hasText: '整理' }).click();
   await expect(page.locator('.library-grid .library-reorder-handle')).toHaveCount(2);
 
-  const source = await page.locator('.library-grid .library-reorder-handle').first().boundingBox();
+  const source = await page.locator('.library-grid .library-book-cover').first().boundingBox();
   const target = await page.locator('.library-reorder-item').nth(1).boundingBox();
   const sourceItem = page.locator('.library-reorder-item').first();
   expect(source).toBeTruthy();

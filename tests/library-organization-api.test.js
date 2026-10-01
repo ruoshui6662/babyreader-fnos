@@ -359,3 +359,40 @@ test('organization reconcile fails closed when the library scan is unhealthy', a
     await fs.writeFile(libraryPath, original, 'utf8');
   }
 });
+
+test('book rename is per user, shows everywhere for that user and can be reset', async () => {
+  const headers = userHeaders('rename-user');
+  const url = `/app/zhenshu/api/library/books/${BOOK_ID}/title`;
+  const renamed = await jsonRequest(url, 'PUT', { title: '  我的  书名 ', revision: 0 }, headers);
+  assert.equal(renamed.status, 200);
+  assert.deepEqual(renamed.body.bookTitles, { [BOOK_ID]: '我的 书名' });
+  const book = renamed.body.books.find((entry) => entry.id === BOOK_ID);
+  assert.equal(book.title, '我的 书名');
+  assert.equal(book.originalTitle, '第一本书');
+
+  // The flat library (used by the shelf, 继续阅读 and the reader) agrees.
+  const library = await request('/app/zhenshu/api/library', { headers });
+  assert.equal(library.body.books.find((entry) => entry.id === BOOK_ID).title, '我的 书名');
+  // Other readers keep the book's own title.
+  const other = await request('/app/zhenshu/api/library', { headers: userHeaders('rename-other') });
+  assert.equal(other.body.books.find((entry) => entry.id === BOOK_ID).title, '第一本书');
+
+  // Stale revisions and invalid titles are refused.
+  assert.equal((await jsonRequest(url, 'PUT', { title: '再改', revision: 0 }, headers)).status, 409);
+  const tooLong = await jsonRequest(url, 'PUT', { title: '长'.repeat(201), revision: 1 }, headers);
+  assert.equal(tooLong.status, 400);
+  assert.match(tooLong.body.error, /200/);
+  const control = await jsonRequest(url, 'PUT', { title: 'a\u0007b', revision: 1 }, headers);
+  assert.equal(control.status, 400);
+
+  // Naming it back (or clearing the name) restores the original.
+  const reset = await jsonRequest(url, 'PUT', { title: '第一本书', revision: 1 }, headers);
+  assert.equal(reset.status, 200);
+  assert.deepEqual(reset.body.bookTitles, {});
+  const restored = reset.body.books.find((entry) => entry.id === BOOK_ID);
+  assert.equal(restored.title, '第一本书');
+  assert.equal('originalTitle' in restored, false);
+
+  const missing = await jsonRequest(`/app/zhenshu/api/library/books/${'f'.repeat(64)}/title`, 'PUT', { title: 'x', revision: 2 }, headers);
+  assert.equal(missing.status, 404);
+});

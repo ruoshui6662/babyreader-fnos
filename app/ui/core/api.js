@@ -180,6 +180,14 @@ window.browserHost = {
     })).json();
   },
 
+  async renameLibraryBook(bookId, title, revision) {
+    if (!bookId) throw new Error('书籍标识无效');
+    return (await apiRequest(`/library/books/${encodeURIComponent(bookId)}/title`, {
+      method: 'PUT',
+      body: JSON.stringify({ title: title ?? '', revision })
+    })).json();
+  },
+
   async reorderLibraryOrganization(scope, order, revision) {
     return (await apiRequest('/library/organization/order', {
       method: 'PUT',
