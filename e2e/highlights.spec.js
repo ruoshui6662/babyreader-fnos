@@ -59,7 +59,7 @@ test.describe('Highlight CRUD', () => {
     // Select unique text in chapter1
     await expect(selectArticleText(page, FIXTURE_TEXT.firstParagraph)).resolves.toBeTruthy();
 
-    const btnHighlight = page.locator('#btnHighlight');
+    const btnHighlight = page.locator('#selectionMenu [data-selection-action="marker"]');
     const savePromise = waitForHighlightsSave(page);
     await btnHighlight.click();
     const saveRes = await savePromise;
@@ -79,7 +79,7 @@ test.describe('Highlight CRUD', () => {
     // First create one highlight (yellow)
     await expect(selectArticleText(page, FIXTURE_TEXT.firstParagraph)).resolves.toBeTruthy();
     const firstSave = waitForHighlightsSave(page);
-    await page.locator('#btnHighlight').click();
+    await page.locator('#selectionMenu [data-selection-action="marker"]').click();
     await firstSave;
     await expect(page.locator('.br-highlight-box')).toHaveCount(1);
 
@@ -112,7 +112,7 @@ test.describe('Highlight CRUD', () => {
     // Create first highlight
     await expect(selectArticleText(page, FIXTURE_TEXT.firstParagraph)).resolves.toBeTruthy();
     const firstSave = waitForHighlightsSave(page);
-    await page.locator('#btnHighlight').click();
+    await page.locator('#selectionMenu [data-selection-action="marker"]').click();
     await firstSave;
 
     // Edit thought
@@ -382,13 +382,13 @@ test.describe('Highlight CRUD', () => {
     // Create two identical-text highlights using different DOM ranges.
     await expect(selectNthArticleText(page, FIXTURE_TEXT.repeatedPhrase, 0)).resolves.toBeTruthy();
     const firstSave = waitForHighlightsSave(page);
-    await page.locator('#btnHighlight').click();
+    await page.locator('#selectionMenu [data-selection-action="marker"]').click();
     await firstSave;
 
     // Select second occurrence (same text, different locator → different ID)
     await expect(selectNthArticleText(page, FIXTURE_TEXT.repeatedPhrase, 1)).resolves.toBeTruthy();
     const secondSave = waitForHighlightsSave(page);
-    await page.locator('#btnHighlight').click();
+    await page.locator('#selectionMenu [data-selection-action="marker"]').click();
     await secondSave;
 
     const idsBefore = await page.locator('.br-highlight-box').evaluateAll((elements) => [
@@ -429,7 +429,7 @@ test.describe('Highlight CRUD', () => {
     // Create two highlights in different chapters
     await expect(selectArticleText(page, FIXTURE_TEXT.firstParagraph)).resolves.toBeTruthy();
     const firstSave = waitForHighlightsSave(page);
-    await page.locator('#btnHighlight').click();
+    await page.locator('#selectionMenu [data-selection-action="marker"]').click();
     await firstSave;
 
     const firstBox = page.locator('.br-highlight-box').first();
@@ -453,7 +453,7 @@ test.describe('Highlight CRUD', () => {
     await expect(page.locator('#readingProgress')).toContainText('2/3');
     await expect(selectArticleText(page, FIXTURE_TEXT.secondParagraph)).resolves.toBeTruthy();
     const secondSave = waitForHighlightsSave(page);
-    await page.locator('#btnHighlight').click();
+    await page.locator('#selectionMenu [data-selection-action="marker"]').click();
     await secondSave;
     const secondId = await page.locator('.br-highlight-box').first().getAttribute('data-highlight-id');
     await expect(page.locator('.br-highlight-box')).toHaveCount(1);
@@ -480,7 +480,9 @@ test.describe('Highlight CRUD', () => {
     // Enable download capture
     // Click export button
     const downloadPromise = page.waitForEvent('download');
-    await page.locator('#btnExportHighlights').click();
+    // Export lives in the notes panel (it left the rail in the 2026-10 shell).
+    await page.locator('#btnNotes').click();
+    await page.locator('#readerPanelNotes .notes-panel-export').click();
     const download = await downloadPromise;
 
     const savedFile = await download.path();
@@ -652,7 +654,7 @@ test('highlights: marker stays on the visible later spread in double-page mode',
     expect(selectedBounds).not.toBeNull();
 
     const save = waitForHighlightsSave(page);
-    await page.locator('#btnHighlight').click();
+    await page.locator('#selectionMenu [data-selection-action="marker"]').click();
     await save;
     const visibleMarker = await page.evaluate(() => {
       const article = document.querySelector('#article').getBoundingClientRect();

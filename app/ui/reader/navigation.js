@@ -232,16 +232,16 @@ function setupTocNavigation() {
           closeReaderPanel({ restoreFocus: false });
         }
       };
+      const jump = (typeof withJumpBack === 'function' ? withJumpBack : (jump) => jump());
       if (state.contentType === 'pdf') {
         const match = /^pdf-page:(\d+)$/.exec(target || '');
-        if (!match || !window.pdfReaderController?.goToPdfPage(Number(match[1]))) {
-          showHighlightHint('无法定位到该 PDF 页面');
-        } else {
-          closeSheetOnPhone();
-        }
+        void jump(() => Boolean(match && window.pdfReaderController?.goToPdfPage(Number(match[1])))).then((navigated) => {
+          if (!navigated) showHighlightHint('无法定位到该 PDF 页面');
+          else closeSheetOnPhone();
+        });
         return;
       }
-      navigateEpubTarget(target).then((navigated) => {
+      void jump(() => navigateEpubTarget(target)).then((navigated) => {
         if (!navigated) showHighlightHint(describeEpubNavigationFailure(target));
         else closeSheetOnPhone();
       });

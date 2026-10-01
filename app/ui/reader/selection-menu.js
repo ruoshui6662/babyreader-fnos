@@ -32,6 +32,18 @@ const selectionActions = Object.freeze({
     if (typeof openAiForSelection === 'function') return openAiForSelection(session);
     showHighlightHint('问 AI 将在下一阶段开放');
     return false;
+  },
+  // Find the selected words elsewhere in the book (WeChat Reading / Apple Books).
+  search: () => {
+    const query = normalizedSelectionText(_activeSelectionSession?.text).slice(0, 80);
+    closeSelectionMenu({ clearSelection: false });
+    const form = document.getElementById('readerSearchForm');
+    const input = document.getElementById('readerSearchQuery');
+    if (!query || !form || !input || typeof openReaderPanel !== 'function') return false;
+    openReaderPanel('search');
+    input.value = query;
+    form.requestSubmit();
+    return true;
   }
 });
 
@@ -99,6 +111,7 @@ function ensureSelectionMenu() {
     ['wave', '波浪线'],
     ['line', '直线'],
     ['thought', '写想法'],
+    ['search', '搜索'],
     ['ai', '问 AI']
   ];
   for (const [action, label] of items) {

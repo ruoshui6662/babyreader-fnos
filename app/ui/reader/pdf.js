@@ -860,11 +860,25 @@ function createPdfReaderController({
     return result;
   }
 
+  // Without an outline the contents fall back to a page list, so every
+  // format offers the same 目录 entry (thinned out for very long PDFs).
+  function pageListOutline() {
+    const pageCount = Number(pdfDocument?.numPages) || 0;
+    const step = Math.max(1, Math.ceil(pageCount / maxOutlineEntries));
+    const entries = [];
+    for (let pageIndex = 0; pageIndex < pageCount; pageIndex += step) {
+      entries.push({ label: `第 ${pageIndex + 1} 页`, target: `pdf-page:${pageIndex}`, depth: 0, generated: true });
+    }
+    return entries;
+  }
+
   async function loadOutline(expectedGeneration) {
     if (typeof pdfDocument?.getOutline !== 'function') return;
     const outline = await pdfDocument.getOutline();
-    if (destroyed || expectedGeneration !== generation || !outline) return;
-    onOutline(await resolveOutline(outline, expectedGeneration));
+    if (destroyed || expectedGeneration !== generation) return;
+    const resolved = outline ? await resolveOutline(outline, expectedGeneration) : [];
+    if (destroyed || expectedGeneration !== generation) return;
+    onOutline(resolved.length ? resolved : pageListOutline());
   }
 
   async function openPdf(bookId, contentUrl = getContentUrl(bookId), savedLocator = null) {

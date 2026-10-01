@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>BabyReader</title>
-  <link rel="stylesheet" href="styles.css?v=74">
+  <link rel="stylesheet" href="styles.css?v=78">
 </head>
 <body class="is-welcome">
   <!-- Reader Shell: low-distraction navigation with stable legacy IDs -->
@@ -16,17 +16,18 @@
       <span class="app-name">BabyReader</span>
       <span class="file-name" id="fileName"></span>
     </div>
+    <!-- One position pill for every format: ‹ chapter · % › (EPUB/MOBI);
+         PDF shows its own page/zoom pill in the same place. -->
     <div class="reader-status" aria-label="阅读状态">
-      <span class="pagination-status" id="paginationStatus" hidden aria-live="polite"></span>
-      <span class="reading-progress" id="readingProgress" hidden aria-live="polite"></span>
-    </div>
-    <div class="topbar-right">
       <button class="reader-nav-button chapter-nav-btn" id="btnPreviousChapter" type="button" hidden data-reader-action="previousChapter" aria-label="上一章" title="上一章">
         <svg viewBox="0 0 24 24" data-icon="chapter-previous" aria-hidden="true" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 5v14"></path><path d="m17 7-5 5 5 5"></path></svg>
       </button>
+      <span class="reading-progress" id="readingProgress" hidden aria-live="polite"></span>
       <button class="reader-nav-button chapter-nav-btn" id="btnNextChapter" type="button" hidden data-reader-action="nextChapter" aria-label="下一章" title="下一章">
         <svg viewBox="0 0 24 24" data-icon="chapter-next" aria-hidden="true" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M18 5v14"></path><path d="m7 7 5 5-5 5"></path></svg>
       </button>
+    </div>
+    <div class="topbar-right">
       <button class="reader-nav-button library-theme-toggle" id="btnLibraryTheme" type="button" data-reader-action="toggleTheme" aria-label="切换浅色模式" title="切换浅色模式"></button>
     </div>
   </header>
@@ -471,6 +472,7 @@
     <button class="reader-nav-button page-nav-btn reader-page-nav-btn" id="btnNextPage" type="button" hidden data-reader-action="nextPage" aria-label="下一页" title="下一页">
       <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"></path></svg>
     </button>
+    <span class="pagination-status" id="paginationStatus" hidden aria-live="polite"></span>
     <section class="pdf-reader-surface" id="pdfReaderSurface" hidden aria-label="PDF 阅读器">
       <div class="pdf-reader-controls" role="toolbar" aria-label="PDF 阅读控制">
         <div class="pdf-control-group" aria-label="翻页">
@@ -528,27 +530,28 @@
   <script src="reader/highlights.js?v=36"></script>
   <script src="reader/ai.js?v=2"></script>
   <script src="reader/ai-index-manager.js?v=1"></script>
-  <script src="reader/selection-menu.js?v=4"></script>
+  <script src="reader/selection-menu.js?v=5"></script>
   <script src="reader/pdf-notes-export.js?v=1"></script>
   <script src="reader/actions.js?v=28"></script>
-  <script src="reader/notes-panel.js?v=3"></script>
-  <script src="reader/progress.js?v=34"></script>
-  <script src="reader/bookmarks.js?v=2"></script>
-  <script src="reader/pagination.js?v=35"></script>
+  <script src="reader/notes-panel.js?v=4"></script>
+  <script src="reader/progress.js?v=35"></script>
+  <script src="reader/bookmarks.js?v=3"></script>
+  <script src="reader/pagination.js?v=36"></script>
   <script src="reader/settings.js?v=30"></script>
-  <script src="reader/navigation.js?v=29"></script>
+  <script src="reader/jump-back.js?v=1"></script>
+  <script src="reader/navigation.js?v=30"></script>
   <script src="reader/pdf-annotation-geometry.js?v=1"></script>
   <script src="reader/pdf-annotations.js?v=1"></script>
   <script src="reader/pdf-render-scheduler.js?v=1"></script>
-  <script src="reader/pdf.js?v=12"></script>
+  <script src="reader/pdf.js?v=14"></script>
   <script src="reader/lifecycle.js?v=32"></script>
-  <script src="reader/search.js?v=3"></script>
+  <script src="reader/search.js?v=4"></script>
   <script src="shell/drawer.js?v=32"></script>
   <script src="library/reorder.js?v=1"></script>
   <script src="library/pdf-covers.js?v=1"></script>
   <script src="library/import.js?v=1"></script>
   <script src="library/organization.js?v=12"></script>
   <script src="library/view.js?v=36"></script>
-  <script src="app.js?v=35"></script>
+  <script src="app.js?v=37"></script>
 </body>
 </html>

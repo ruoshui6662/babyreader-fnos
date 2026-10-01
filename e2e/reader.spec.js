@@ -471,9 +471,9 @@ test('continuous scroll chapter boundary renders dedicated previous and next con
   await expect(page.locator('#btnScrollPreviousChapter')).toBeHidden();
   await expect(page.locator('#scrollChapterFooter')).toBeVisible();
   await expect(page.locator('#btnScrollNextChapter')).toBeVisible();
-  await expect(page.locator('.topbar-right .chapter-nav-btn')).toHaveCount(2);
-  await expect(page.locator('.topbar-right .chapter-nav-btn').first()).toBeHidden();
-  await expect(page.locator('.topbar-right .chapter-nav-btn').last()).toBeHidden();
+  await expect(page.locator('.reader-status .chapter-nav-btn')).toHaveCount(2);
+  await expect(page.locator('.reader-status .chapter-nav-btn').first()).toBeHidden();
+  await expect(page.locator('.reader-status .chapter-nav-btn').last()).toBeHidden();
 
   await expect(page.locator('#article .epub-chapter')).toHaveCount(1);
   await expect(page.locator('#article .epub-chapter')).toHaveAttribute('data-source-path', /chapter1\.xhtml/);
@@ -563,10 +563,12 @@ test('reader navigation and floating toolbar controls keep 44px icon targets', a
     'btnNextPage',
     'btnNextChapter',
     'btnToc',
-    'btnHighlight',
-    'btnExportHighlights',
-    'btnTheme',
-    'btnSettings'
+    'btnSearch',
+    'btnBookmarks',
+    'btnNotes',
+    'btnAi',
+    'btnSettings',
+    'btnLibraryTheme'
   ]) {
     await expect(page.locator(`#${id}`)).toHaveCSS('width', '44px');
   }

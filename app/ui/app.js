@@ -49,6 +49,9 @@ async function loadReaderSession() {
 
 function openDefaultReaderToc() {
   if (!state.tocOpen || state.toc.length === 0 || typeof openReaderPanel !== 'function') return false;
+  // A generated page list (PDF without an outline) is navigation, not a
+  // table of contents worth opening on arrival.
+  if (state.toc.every((item) => item?.generated === true)) return false;
   const trigger = document.getElementById('btnToc') || document.activeElement;
   return openReaderPanel('toc', trigger);
 }
@@ -155,6 +158,7 @@ window.appHost = {
     if (typeof setMobileChromeOpen === 'function') setMobileChromeOpen(false);
     if (typeof setMobileTopbarHidden === 'function') setMobileTopbarHidden(false);
     if (typeof setDesktopTopbarHidden === 'function') setDesktopTopbarHidden(false);
+    if (typeof dismissJumpBack === 'function') dismissJumpBack();
     state.currentBookId = bookId || null;
     state.currentPath  = path;
     state.currentName  = name;

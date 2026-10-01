@@ -127,11 +127,14 @@ test('PDF notes export downloads the current server records with page labels', a
     }, bookId);
   }, { id: annotationId, bookId });
   try {
-    await expect(page.locator('#btnExportHighlights')).toBeVisible();
+    // Export lives in the notes panel (it left the rail in the 2026-10 shell).
+    await page.locator('#btnNotes').click();
+    const exportButton = page.locator('#readerPanelNotes .notes-panel-export');
+    await expect(exportButton).toBeVisible();
     const freshRead = page.waitForResponse((response) => response.request().method() === 'GET'
       && response.url().includes(`/api/books/${bookId}/pdf-annotations`));
     const downloadReady = page.waitForEvent('download');
-    await page.locator('#btnExportHighlights').click();
+    await exportButton.click();
     expect((await freshRead).ok()).toBeTruthy();
     const download = await downloadReady;
     expect(download.suggestedFilename()).toBe('e2e-reader.md');

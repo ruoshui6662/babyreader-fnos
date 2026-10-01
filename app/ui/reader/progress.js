@@ -143,10 +143,16 @@ function updateReadingProgress(options = {}) {
   }
   state.currentChapterIndex = chapterIndex;
   const chapterPercentage = paged ? null : chapterScrollPercentage(reader);
+  // Always progress through the whole book. A chapter-windowed (archive)
+  // EPUB paginates one chapter at a time, so its page fraction is
+  // chapter-local and is scaled into the chapter's share of the book.
+  const pageFraction = Math.max(0, Math.min(1, (state.pageNumber - 1) / Math.max(1, state.pageCount - 1)));
   const percentage = paged
-    ? Math.max(0, Math.min(1, (state.pageNumber - 1) / Math.max(1, state.pageCount - 1)))
+    ? state.epubArchive
+      ? Math.max(0, Math.min(1, (chapterIndex + pageFraction) / chapterCount))
+      : pageFraction
     : Math.max(0, Math.min(1, (chapterIndex + chapterPercentage) / chapterCount));
-  progress.textContent = `${Math.round(percentage * 100)}% · ${chapterIndex + 1}/${chapterCount}`;
+  progress.textContent = `第 ${chapterIndex + 1}/${chapterCount} 章 · ${Math.round(percentage * 100)}%`;
 
   const previous = document.getElementById('btnPreviousChapter');
   const next = document.getElementById('btnNextChapter');
