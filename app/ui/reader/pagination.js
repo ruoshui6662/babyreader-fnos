@@ -302,7 +302,7 @@ function navigateToSemanticTarget(target, { behavior = 'auto' } = {}) {
     const reader = document.getElementById('reader');
     if (rangeRects.length && reader) {
       const readerRect = reader.getBoundingClientRect();
-      const top = rangeRects[0].top - readerRect.top - 24;
+      const top = rangeRects[0].top - readerRect.top - readerTopInset(reader) - 24;
       reader.scrollTop = Math.max(0, reader.scrollTop + top);
     } else {
       fallbackTarget.scrollIntoView({ block: 'start', behavior });

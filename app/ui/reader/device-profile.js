@@ -55,6 +55,27 @@ function setMobileTopbarHidden(hidden) {
   return shouldHide;
 }
 
+// Desktop continuous scroll lets text run under the frosted top bar and hides
+// the bar while reading forward (WeChat Reading). Paged and mobile surfaces
+// keep their own chrome rules.
+function setDesktopTopbarHidden(hidden) {
+  const shouldHide = Boolean(
+    hidden
+    && !isMobileReaderSurface()
+    && state.contentType === 'epub'
+    && state.effectiveReadingMode === 'scroll'
+  );
+  document.body.classList.toggle('reader-topbar-hidden', shouldHide);
+  return shouldHide;
+}
+
+// Height of the top bar overlapping the reader's scroll viewport; CSS states
+// it as the reader's scroll-padding-top (0 where the bar does not overlap).
+function readerTopInset(reader) {
+  if (!reader) return 0;
+  return Math.max(0, parseFloat(window.getComputedStyle(reader).scrollPaddingTop) || 0);
+}
+
 function setMobileChromeOpen(open) {
   _mobileChromeOpen = Boolean(open);
   const hasDocument = Boolean(state.currentPath);
@@ -79,6 +100,7 @@ function applyReaderDeviceProfile(profile) {
   document.documentElement.dataset.readerSurface = profile.surface;
   document.documentElement.dataset.readerDevice = profile.kind;
   setMobileTopbarHidden(false);
+  setDesktopTopbarHidden(false);
   setMobileChromeOpen(_mobileChromeOpen);
   return profile;
 }

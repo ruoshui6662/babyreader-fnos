@@ -117,7 +117,9 @@ async function openEpubFixture(page) {
   const book = page.locator('.library-book').filter({ hasText: 'E2E EPUB' });
   await expect(book).toBeVisible();
   await book.click();
-  await expect(page.locator('#article')).toContainText('E2E EPUB Chapter 1');
+  // Any chapter: a reopened book restores its saved chapter, so chapter 1 may
+  // never be on screen (waiting for it raced the restore).
+  await expect(page.locator('#article')).toContainText(/E2E EPUB Chapter \d/);
   // The EPUB receive flow opens the default TOC after the first chapter has
   // rendered. Give that final UI step a turn before normalizing the helper to
   // a closed reader surface.

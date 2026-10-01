@@ -154,6 +154,7 @@ window.appHost = {
     }
     if (typeof setMobileChromeOpen === 'function') setMobileChromeOpen(false);
     if (typeof setMobileTopbarHidden === 'function') setMobileTopbarHidden(false);
+    if (typeof setDesktopTopbarHidden === 'function') setDesktopTopbarHidden(false);
     state.currentBookId = bookId || null;
     state.currentPath  = path;
     state.currentName  = name;
