@@ -74,11 +74,13 @@ test('loads split UI modules in Chromium and opens a real library book', async (
     expect(loadedScripts).toContain(modulePath);
   }
 
-  await expect(page.locator('script[src*="reader/settings.js?v=30"]')).toHaveCount(1);
-  await expect(page.locator('script[src*="reader/highlights.js?v=36"]')).toHaveCount(1);
-  await expect(page.locator('script[src*="reader/ai.js?v=1"]')).toHaveCount(1);
-  await expect(page.locator('script[src*="reader/search.js?v=3"]')).toHaveCount(1);
-  await expect(page.locator('script[src*="shell/drawer.js?v=32"]')).toHaveCount(1);
+  // Each module carries a cache-busting version (bumped whenever it changes),
+  // so a NAS browser never keeps serving a stale copy after an upgrade.
+  for (const module of ['reader/settings.js', 'reader/highlights.js', 'reader/ai.js', 'reader/search.js', 'shell/drawer.js']) {
+    const src = await page.locator(`script[src*="${module}?v="]`).getAttribute('src');
+    expect(src.startsWith(`${module}?v=`)).toBe(true);
+    expect(src).toMatch(/\?v=\d+$/);
+  }
 
   expect(pageErrors).toEqual([]);
 });
@@ -1586,7 +1588,11 @@ test('AI desktop panel floats left of the toolbar and remains open until manuall
 
   await page.mouse.click(40, 400);
   await expect(page.locator('#aiModal')).toBeVisible();
+  // Escape is a deliberate close: one press closes the top layer
+  // (2026-09-28 interaction plan, UX06). Reopen for the coexistence checks.
   await page.keyboard.press('Escape');
+  await expect(page.locator('#aiModal')).toBeHidden();
+  await page.locator('#btnAi').click();
   await expect(page.locator('#aiModal')).toBeVisible();
 
   await page.locator('#btnSettings').click();

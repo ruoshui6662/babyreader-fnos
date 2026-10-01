@@ -5569,12 +5569,15 @@ body.ai-modal-open .reader::-webkit-scrollbar {
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-focus) 16%, transparent);
 }
 
+/* The question box has a fixed two-row height, so the send button is centred
+   on it rather than pinned to the bottom edge (which sat ~9px low). */
 .ai-question-actions {
   position: absolute;
-  bottom: 8px;
+  top: 50%;
   right: 8px;
   display: block;
   margin: 0;
+  transform: translateY(-50%);
 }
 
 .ai-question-hint {

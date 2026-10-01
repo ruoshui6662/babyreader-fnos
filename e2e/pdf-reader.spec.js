@@ -699,6 +699,11 @@ test('PDF selection menu creates a persistent annotation that can be located, ed
   expect((await removeThoughtRequest).ok()).toBeTruthy();
   await expect(page.locator('#notesList .notes-item-thought')).toHaveCount(0);
 
+  // Deleting asks for confirmation; Playwright dismisses dialogs by default.
+  page.once('dialog', (dialog) => {
+    expect(dialog.message()).toContain('删除');
+    void dialog.accept();
+  });
   const deleteRequest = page.waitForResponse((response) =>
     response.request().method() === 'DELETE' && response.url().includes('/pdf-annotations/'));
   await page.locator('#notesList [data-notes-action="delete"]').click();
@@ -1678,5 +1683,7 @@ test('PDF search falls back to an explicit page-only message when the text layer
   await expect(page.locator('#pdfReaderSurface')).toHaveAttribute('data-current-page', '2');
   await expect(page.locator('#readerSearchSheet')).toBeVisible();
   await expect(page.locator('.pdf-page[data-page-index="2"] .pdf-search-hit-layer')).toHaveCount(0);
-  await expect(page.locator('#fileName')).toContainText('无法确认精确文本');
+  // The hint is shown in the reader feedback bar (it used to overwrite the title).
+  await expect(page.locator('#readerFeedback')).toContainText('已定位到第 3 页，但无法确认精确文本');
+  await expect(page.locator('#fileName')).toHaveText('e2e-reader');
 });

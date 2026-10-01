@@ -366,6 +366,11 @@ test.describe('Highlight CRUD', () => {
     await editSave;
     await expect(row).toContainText('从侧栏编辑的想法');
 
+    // Deleting asks for confirmation; Playwright dismisses dialogs by default.
+    page.once('dialog', (dialog) => {
+      expect(dialog.message()).toContain('删除');
+      void dialog.accept();
+    });
     const deleteSave = waitForHighlightsSave(page);
     await row.locator('[data-notes-action="delete"]').click();
     await deleteSave;
@@ -397,6 +402,11 @@ test.describe('Highlight CRUD', () => {
 
     await page.locator(`.br-highlight-box[data-highlight-id="${firstId}"]`).first().click();
     await expect(page.locator('#highlightEditor')).toBeVisible();
+    // Deleting asks for confirmation; Playwright dismisses dialogs by default.
+    page.once('dialog', (dialog) => {
+      expect(dialog.message()).toContain('删除');
+      void dialog.accept();
+    });
     const deleteSave = waitForHighlightsSave(page);
     await page.locator('#btnDeleteHighlight').click();
     await deleteSave;
