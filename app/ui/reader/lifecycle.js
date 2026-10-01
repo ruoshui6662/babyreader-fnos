@@ -20,6 +20,7 @@ async function performReturnToLibrary() {
   ].filter(Boolean);
 
   if (typeof setMobileTopbarHidden === 'function') setMobileTopbarHidden(false);
+  if (typeof setDesktopTopbarHidden === 'function') setDesktopTopbarHidden(false);
 
   if (bookId && reader && state.contentType === 'epub') {
     saveTextScroll();
@@ -99,6 +100,11 @@ function setupReaderNavigation() {
 
     if (!isMobileEpub) {
       if (typeof setMobileTopbarHidden === 'function') setMobileTopbarHidden(false);
+      if (typeof setDesktopTopbarHidden === 'function') {
+        const delta = currentScrollTop - lastScrollTop;
+        if (currentScrollTop <= 8 || delta < -4) setDesktopTopbarHidden(false);
+        else if (delta > 4) setDesktopTopbarHidden(true);
+      }
       lastScrollTop = currentScrollTop;
       return;
     }
@@ -113,6 +119,15 @@ function setupReaderNavigation() {
     }
     lastScrollTop = currentScrollTop;
   }, { passive: true });
+
+  // A hidden desktop top bar comes back when the pointer reaches the top edge
+  // or keyboard focus enters it.
+  document.addEventListener('mousemove', (event) => {
+    if (event.clientY <= 64 && document.body.classList.contains('reader-topbar-hidden')) {
+      setDesktopTopbarHidden(false);
+    }
+  }, { passive: true });
+  document.querySelector('.reader-shell-nav')?.addEventListener('focusin', () => setDesktopTopbarHidden(false));
 }
 
 function isTextInputTarget(target) {

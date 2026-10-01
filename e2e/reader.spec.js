@@ -362,6 +362,53 @@ test('switching EPUB to continuous scroll mounts chapter HTML instead of object 
   await expect(page.locator('#article')).not.toContainText('[object Object]');
 });
 
+test('desktop continuous scroll runs text under the frosted top bar and hides it while reading forward', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.evaluate(async () => {
+    const response = await fetch('/app/babyreader-fnos/api/settings', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ readingMode: 'scroll', continuousScroll: true })
+    });
+    if (!response.ok) throw new Error(`Settings setup failed: ${response.status}`);
+  });
+  await page.reload({ waitUntil: 'load' });
+  await openEpubFixture(page);
+  await expect(page.locator('body')).toHaveClass(/continuous-scroll/);
+
+  const reader = page.locator('#reader');
+  const nav = page.locator('.reader-shell-nav');
+  // The scroll viewport starts under the bar, so text never meets a hard cut.
+  await expect(reader).toHaveCSS('top', '0px');
+  await expect(reader).toHaveCSS('scroll-padding-top', '52px');
+
+  await page.locator('#article').evaluate((article) => {
+    for (let index = 0; index < 60; index += 1) {
+      const paragraph = document.createElement('p');
+      paragraph.textContent = `滚动测试段落 ${index}：用于验证顶栏在向下阅读时隐藏。`;
+      article.appendChild(paragraph);
+    }
+  });
+  const scrollBy = (delta) => reader.evaluate((element, amount) => {
+    element.scrollTop += amount;
+    element.dispatchEvent(new Event('scroll'));
+  }, delta);
+
+  await scrollBy(300);
+  await scrollBy(300);
+  await expect(page.locator('body')).toHaveClass(/reader-topbar-hidden/);
+  await expect(nav).toHaveCSS('opacity', '0');
+
+  await scrollBy(-120);
+  await expect(page.locator('body')).not.toHaveClass(/reader-topbar-hidden/);
+  await expect(nav).toHaveCSS('opacity', '1');
+
+  await scrollBy(300);
+  await expect(page.locator('body')).toHaveClass(/reader-topbar-hidden/);
+  await page.mouse.move(600, 10);
+  await expect(page.locator('body')).not.toHaveClass(/reader-topbar-hidden/);
+});
+
 test('EPUB continuous and paged modes keep the same reading surface color', async ({ page }) => {
   await openEpubFixture(page);
   if (await page.locator('#readerDrawer').isVisible()) {

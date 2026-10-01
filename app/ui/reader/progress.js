@@ -40,7 +40,7 @@ function currentReadingLocator(reader) {
   const chapterCount = state.epubArchive ? Math.max(1, state.epubChapterCount) : Math.max(1, chapters.length);
   const readerRect = reader.getBoundingClientRect();
   const paged = state.effectiveReadingMode !== 'scroll';
-  const viewportTop = readerRect.top + 8;
+  const viewportTop = readerRect.top + (paged ? 0 : readerTopInset(reader)) + 8;
   const viewportLeft = readerRect.left + 8;
   const viewportRight = readerRect.right - 8;
   let chapter = chapters[0] || null;
@@ -118,7 +118,7 @@ function updateReadingProgress(options = {}) {
   const visibleRect = paged
     ? document.getElementById('article')?.getBoundingClientRect() ?? reader.getBoundingClientRect()
     : reader.getBoundingClientRect();
-  const viewportTop = visibleRect.top + 8;
+  const viewportTop = visibleRect.top + (paged ? 0 : readerTopInset(reader)) + 8;
   const viewportLeft = visibleRect.left + 8;
   const viewportRight = visibleRect.right - 8;
   const chapterIndexHint = typeof options === 'object' && Number.isInteger(options?.chapterIndexHint)
