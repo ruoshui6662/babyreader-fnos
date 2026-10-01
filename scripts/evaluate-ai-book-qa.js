@@ -96,10 +96,23 @@ function liveContext(context, usage) {
   if (!liveMap) {
     const { createBookMapStore } = require('../app/server/ai-book-map-store');
     const { createBookMapService } = require('../app/server/ai-book-map');
+    const { createEmbeddingService } = require('../app/server/ai-embeddings');
+    const { embeddingSettings } = require('../app/server/ai-config');
+    const { readAllPassages } = require('../app/server/ai-fts');
     const store = createBookMapStore({ dataRoot: context.dataRoot });
-    liveMap = { store, service: createBookMapService({ dataRoot: context.dataRoot, store }), bookSummary: '' };
+    const vectorSettings = embeddingSettings({}, process.env);
+    liveMap = {
+      store,
+      service: createBookMapService({ dataRoot: context.dataRoot, store }),
+      bookSummary: '',
+      semantic: vectorSettings.configured
+        ? { service: createEmbeddingService({ dataRoot: context.dataRoot, readPassages: (book) => readAllPassages(book, context.dataRoot) }), settings: vectorSettings }
+        : null,
+      vectorsReady: null
+    };
   }
   return {
+    semantic: liveMap.semantic,
     savedConfig: {},
     env: process.env,
     onUsage: usage,
@@ -122,6 +135,11 @@ async function plannedPipeline(item, context) {
   if (live && liveMap) {
     const latest = await liveMap.store.latest(context.book.id);
     liveMap.bookSummary = latest.get('__book__')?.summary || '';
+    // Embed the evaluation book once before the first question.
+    if (liveMap.semantic && !liveMap.vectorsReady) {
+      liveMap.vectorsReady = liveMap.semantic.service.run(context.book, liveMap.semantic.settings);
+    }
+    if (liveMap.vectorsReady) await liveMap.vectorsReady;
   }
   const outcome = await planner.evaluatePlan({
     ...context, question: item.question, selectedText: item.selectedText || '', chapter: chapterLocator(item.position), live

@@ -255,29 +255,76 @@ async function expandHits(book, dataRoot, hits) {
   return passages;
 }
 
-async function lookupEvidence(book, dataRoot, nodes, plan, question, selectedText) {
+// Passages similar in meaning (when an embedding model is configured), as
+// search-style matches.
+async function semanticMatches(book, dataRoot, nodes, plan, query, semantic) {
+  if (!semantic?.service || !semantic.settings?.configured) return [];
+  try {
+    const byId = nodeMap(nodes);
+    const ranges = plan.nodeIds.map((id) => byId.get(id)).filter((node) => node && node.firstRow !== null)
+      .map((node) => [node.firstRow, node.lastRow]);
+    const scored = await semantic.service.search(book, semantic.settings, query, {
+      limit: 20, rowRanges: ranges.length ? ranges : null, signal: semantic.signal
+    });
+    if (!scored.length) return [];
+    const rows = await readRowsAround(book, dataRoot, scored.map((item) => item.rowid), { before: 0, after: 0 });
+    const byRow = new Map(rows.map((row) => [row.rowid, row]));
+    return scored.map((item) => byRow.get(item.rowid)).filter(Boolean)
+      .map((row) => ({ ...row, headings: row.headings || [], retrievalSources: ['semantic'] }));
+  } catch {
+    // Semantic retrieval is an enhancement; keyword search still answers.
+    return [];
+  }
+}
+
+// Reciprocal-rank fusion of ranked lists (strict keywords, any keyword, meaning).
+function fuseLists(lists, limit) {
+  const scores = new Map();
+  for (const { matches, weight } of lists) {
+    matches.forEach((match, rank) => {
+      const key = Number.isSafeInteger(match.rowid) ? `row:${match.rowid}` : `${match.chapterHref}:${match.start}`;
+      const entry = scores.get(key) || { match, score: 0 };
+      entry.score += weight / (60 + rank + 1);
+      scores.set(key, entry);
+    });
+  }
+  return [...scores.values()].sort((left, right) => right.score - left.score).slice(0, limit).map((entry) => entry.match);
+}
+
+async function lookupEvidence(book, dataRoot, nodes, plan, question, selectedText, semantic = null) {
   const query = [question, ...(plan.queries || [])].join(' ');
   const keywords = searchKeywords(query);
   const strictQuery = toFtsAllTermsQuery(keywords);
-  const matches = [];
+  const strictMatches = [];
+  const looseMatches = [];
   for (const scope of await searchScopes(book, dataRoot, nodes, plan)) {
     // Passages with every keyword rank first; any-keyword matches fill the rest.
     const strict = strictQuery
       ? await runSearch(book, dataRoot, scope, { query, selectedText, ftsQuery: strictQuery, lexicalFallback: false })
       : [];
-    const loose = strict.length >= BUDGETS.lookupHits ? [] : await runSearch(book, dataRoot, scope, { query, selectedText });
-    matches.push(...strict, ...loose);
+    const loose = strict.length >= BUDGETS.lookupHits && !semantic ? [] : await runSearch(book, dataRoot, scope, { query, selectedText });
+    strictMatches.push(...strict);
+    looseMatches.push(...loose);
   }
-  if (!matches.length && plan.nodeIds.length) {
-    matches.push(...await runSearch(book, dataRoot, {}, { query, selectedText }));
+  if (!strictMatches.length && !looseMatches.length && plan.nodeIds.length) {
+    looseMatches.push(...await runSearch(book, dataRoot, {}, { query, selectedText }));
   }
-  const seen = new Set();
-  const hits = matches.filter((match) => {
-    const key = `${match.chapterHref}:${match.start}`;
-    if (seen.has(key)) return false;
-    seen.add(key);
-    return true;
-  }).slice(0, BUDGETS.lookupHits);
+  const meaning = await semanticMatches(book, dataRoot, nodes, plan, [question, selectedText].filter(Boolean).join('\n'), semantic);
+  const hits = meaning.length
+    ? fuseLists([
+      { matches: strictMatches, weight: 1.2 },
+      { matches: looseMatches, weight: 1 },
+      { matches: meaning, weight: 1.2 }
+    ], BUDGETS.lookupHits)
+    : (() => {
+      const seen = new Set();
+      return [...strictMatches, ...looseMatches].filter((match) => {
+        const key = `${match.chapterHref}:${match.start}`;
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      }).slice(0, BUDGETS.lookupHits);
+    })();
   const passages = await expandHits(book, dataRoot, hits);
   const context = [];
   let used = 0;
@@ -373,7 +420,7 @@ function mapOverviewContext(nodes, summaries) {
  * Evidence for a plan, sized by question type.
  * @returns {Promise<{context: Array, scopeLabel: string, coverage: object}>}
  */
-async function gatherEvidence({ book, dataRoot, plan, question, selectedText = '', map = null }) {
+async function gatherEvidence({ book, dataRoot, plan, question, selectedText = '', map = null, semantic = null }) {
   const nodes = plan.outline.nodes;
   const byId = nodeMap(nodes);
   const coverage = { type: plan.type, nodes: plan.nodeIds.map((id) => byId.get(id)?.label).filter(Boolean) };
@@ -471,7 +518,7 @@ async function gatherEvidence({ book, dataRoot, plan, question, selectedText = '
 
   if (plan.type === 'explain_selection' && selectedText) {
     const around = await selectionEvidence(book, dataRoot, nodes, plan, selectedText);
-    const related = await lookupEvidence(book, dataRoot, nodes, { ...plan, nodeIds: [] }, question, selectedText);
+    const related = await lookupEvidence(book, dataRoot, nodes, { ...plan, nodeIds: [] }, question, selectedText, semantic);
     // The 导读 of the part the selection is in, when it already exists.
     const place = plan.position?.sectionId || plan.position?.chapterId;
     const known = place && map?.summaries?.get(place);
@@ -483,9 +530,9 @@ async function gatherEvidence({ book, dataRoot, plan, question, selectedText = '
     return { context, scopeLabel: around ? '选中文字及其上下文' : '书中相关段落', coverage: { ...coverage, mode: around ? 'selection' : 'search' } };
   }
 
-  const context = await lookupEvidence(book, dataRoot, nodes, plan, question, selectedText);
+  const context = await lookupEvidence(book, dataRoot, nodes, plan, question, selectedText, semantic);
   const scopeLabel = plan.nodeIds.length ? `${plan.nodeIds.map((id) => byId.get(id)?.label).filter(Boolean).join('、')}内检索` : '全书检索';
-  return { context, scopeLabel, coverage: { ...coverage, mode: 'search' } };
+  return { context, scopeLabel, coverage: { ...coverage, mode: semantic?.settings?.configured ? 'hybrid-search' : 'search' } };
 }
 
 function bookCard(book, nodes, bookSummary = '') {
@@ -545,7 +592,7 @@ async function evaluatePlan({ book, dataRoot, question, selectedText = '', chapt
     book, dataRoot, question, selectedText, chapter,
     allowNavigator: Boolean(live), savedConfig: live?.savedConfig || null, env: live?.env, onUsage: live?.onUsage
   });
-  const evidence = await gatherEvidence({ book, dataRoot, plan, question, selectedText, map: live?.map || null });
+  const evidence = await gatherEvidence({ book, dataRoot, plan, question, selectedText, map: live?.map || null, semantic: live?.semantic || null });
   const byId = nodeMap(plan.outline.nodes);
   const scope = plan.type === 'overview' || plan.type === 'compare' ? 'book'
     : plan.type === 'chapter_summary' ? 'chapter'

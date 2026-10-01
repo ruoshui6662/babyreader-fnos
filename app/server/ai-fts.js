@@ -1495,6 +1495,18 @@ async function readRowsAround(book, dataRoot, rowids, { before = 1, after = 1 } 
   }
 }
 
+// Every index row's text, for building embeddings.
+async function readAllPassages(book, dataRoot) {
+  try {
+    const result = await withIndexDb(book, dataRoot, (db) => db.prepare('SELECT rowid, bodyText FROM ai_chunk_text ORDER BY rowid').all()
+      .map((row) => ({ rowid: Number(row.rowid), text: String(row.bodyText || '') }))
+      .filter((row) => row.text.trim()));
+    return result || [];
+  } catch {
+    return [];
+  }
+}
+
 // Finds the deepest node containing a verbatim snippet of book text (the
 // visible paragraph or a selection). Returns the row too, so callers can read
 // the passage around it.
@@ -1562,6 +1574,7 @@ module.exports = {
   readBookOutline,
   readNodeSegments,
   readRowsAround,
+  readAllPassages,
   locateTextInBook,
   rowsToSegments,
   TEXT_STRUCTURE_VERSION,

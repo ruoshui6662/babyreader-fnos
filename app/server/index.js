@@ -14,13 +14,14 @@ const { getMobiReaderEnabled } = require('./mobi-feature-config');
 const { createMobiDerivedStore } = require('./mobi-derived');
 const { getBookImportEnabled } = require('./import-feature-config');
 const { createBookImporter, hashFile, ImportError, IMPORT_DIRECTORY_NAME } = require('./book-import');
-const { AiConfigStorage, normalizeAiSettings, publicAiConfig } = require('./ai-config');
+const { AiConfigStorage, embeddingSettings, normalizeAiSettings, publicAiConfig } = require('./ai-config');
 const { validateAiBookContext } = require('./ai-book-context');
 const {
   AI_FTS_SCHEMA_VERSION,
   resolveBookPosition,
   readChapterEvidence,
   readBookNavigation,
+  readAllPassages,
   listCachedChapterSummaries,
   getOrCreateChapterSummary,
   getOrCreateChapterSummarySegment,
@@ -44,6 +45,7 @@ const { createDirectAccess } = require('./direct-access');
 const { buildAnswerPayload, gatherEvidence, planQuestion, MAP_ROOT_ID, TYPE_LABELS } = require('./ai-answer-pipeline');
 const { createBookMapStore } = require('./ai-book-map-store');
 const { createBookMapService } = require('./ai-book-map');
+const { createEmbeddingService } = require('./ai-embeddings');
 const { addUsage } = require('./ai-transport');
 const {
   BOOK_ID_PATTERN,
@@ -840,6 +842,14 @@ function getBookMapStore() {
   return bookMapStore;
 }
 
+let embeddingService = null;
+function getEmbeddingService() {
+  if (!embeddingService) {
+    embeddingService = createEmbeddingService({ dataRoot: DATA_ROOT, readPassages: (book) => readAllPassages(book, DATA_ROOT) });
+  }
+  return embeddingService;
+}
+
 async function bookMapSummaries(bookId) {
   try {
     return await getBookMapStore().latest(bookId);
@@ -881,9 +891,14 @@ async function handlePlannedAiStream(request, response, user, book, bookId, body
     });
     if (signal.aborted) return;
     progress({ stage: 'reading', message: '正在读取书中相关内容…' });
+    const vectorSettings = embeddingSettings(savedConfig, process.env);
+    const semantic = vectorSettings.configured ? { service: getEmbeddingService(), settings: vectorSettings, signal } : null;
+    // Build the book's semantic index in the background for later questions.
+    if (semantic) semantic.service.ensureInBackground(book, vectorSettings).catch(() => {});
     const evidence = await gatherEvidence({
       book, dataRoot: DATA_ROOT, plan, question: input.question, selectedText: input.selectedText,
-      map: { service: getBookMapService(), savedConfig, env: process.env, onUsage, onProgress: progress, summaries }
+      map: { service: getBookMapService(), savedConfig, env: process.env, onUsage, onProgress: progress, summaries },
+      semantic
     });
     if (signal.aborted) return;
     if (!evidence.context.length) {
@@ -1944,12 +1959,17 @@ async function handleApi(request, response, pathname, searchParams = new URLSear
     const book = await findBook(aiMapMatch[1]);
     if (book.type === 'pdf') return sendError(response, 409, 'PDF 暂不支持导读。');
     const service = getBookMapService();
+    const vectorSettings = embeddingSettings(await aiConfigStorage.get(user.uid), process.env);
+    const mapStatus = async () => ({
+      ...(await service.status(book)),
+      vectors: await getEmbeddingService().status(book, vectorSettings).catch(() => ({ state: 'off' }))
+    });
     if (aiMapMatch[2]) {
       if (request.method !== 'DELETE') return sendError(response, 405, 'Method not allowed');
       service.cancel(book.id);
-      return sendJson(response, 200, await service.status(book));
+      return sendJson(response, 200, await mapStatus());
     }
-    if (request.method === 'GET') return sendJson(response, 200, await service.status(book));
+    if (request.method === 'GET') return sendJson(response, 200, await mapStatus());
     if (request.method === 'POST') {
       const body = await readJsonBody(request);
       const savedConfig = await aiConfigStorage.get(user.uid);
@@ -1958,9 +1978,32 @@ async function handleApi(request, response, pathname, searchParams = new URLSear
         service.run(book, { savedConfig, env: process.env, force: body?.force === true })
           .catch((error) => { if (error.code !== 'AI_ABORTED') recordError(error, { operation: 'ai-book-map', bookId: book.id, code: error.code || null }); });
       }
-      return sendJson(response, 202, await service.status(book));
+      return sendJson(response, 202, await mapStatus());
     }
     return sendError(response, 405, 'Method not allowed');
+  }
+
+  // Semantic index (向量): start building or stop.
+  const aiVectorsMatch = pathname.match(new RegExp(`^${APP_PREFIX}/api/books/([a-f0-9]{64})/ai/vectors(/job)?$`));
+  if (aiVectorsMatch) {
+    const book = await findBook(aiVectorsMatch[1]);
+    if (book.type === 'pdf') return sendError(response, 409, 'PDF 暂不支持语义检索。');
+    const settings = embeddingSettings(await aiConfigStorage.get(user.uid), process.env);
+    if (!settings.configured) return sendError(response, 503, '尚未配置嵌入模型');
+    const service = getEmbeddingService();
+    if (aiVectorsMatch[2]) {
+      if (request.method !== 'DELETE') return sendError(response, 405, 'Method not allowed');
+      service.cancel(book.id);
+    } else if (request.method === 'POST') {
+      if (!service.isRunning(book.id)) {
+        service.run(book, settings).catch((error) => {
+          if (error.code !== 'AI_ABORTED') recordError(error, { operation: 'ai-vectors', bookId: book.id, code: error.code || null });
+        });
+      }
+    } else {
+      return sendError(response, 405, 'Method not allowed');
+    }
+    return sendJson(response, request.method === 'POST' ? 202 : 200, await service.status(book, settings));
   }
 
   const aiStreamMatch = pathname.match(new RegExp(`^${APP_PREFIX}/api/books/([a-f0-9]{64})/ai/ask/stream$`));

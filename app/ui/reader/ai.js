@@ -715,8 +715,33 @@ function aiBookMapStatusText(status) {
   return `还没有导读。生成需要 AI 通读全书，${cost}${sampled}。也可以直接提问，问到全书时会自动生成。`;
 }
 
+function aiVectorsText(vectors) {
+  if (vectors.state === 'ready') return '语义检索：已建立，查找内容时会同时按意思匹配。';
+  if (vectors.state === 'running') return `语义检索：正在建立（${vectors.progress?.done || 0}/${vectors.progress?.total || 0}）…`;
+  const cost = `约 ${formatAiTokens(vectors.estimateTokens)} tokens`;
+  if (vectors.state === 'partial') return `语义检索：已建立一部分，补全${cost}。`;
+  return vectors.automatic
+    ? `语义检索：未建立（${cost}），提问时会自动在后台建立。`
+    : `语义检索：未建立。这本书较长，需要手动建立（${cost}）。`;
+}
+
+function renderAiVectors(vectors) {
+  const row = aiElement('aiBookMapVectors');
+  const text = aiElement('aiBookMapVectorsText');
+  const build = aiElement('btnBuildAiVectors');
+  const visible = Boolean(vectors) && vectors.state !== 'off';
+  if (row) row.hidden = !visible;
+  if (!visible) return;
+  if (text) text.textContent = `${aiVectorsText(vectors)}${vectors.error && vectors.state !== 'running' ? `（上次：${vectors.error}）` : ''}`;
+  if (build) {
+    build.hidden = vectors.state === 'ready' || vectors.state === 'running';
+    build.disabled = false;
+  }
+}
+
 function renderAiBookMap(status) {
   _aiBookMapStatus = status;
+  renderAiVectors(status.vectors);
   const statusElement = aiElement('aiBookMapStatus');
   const generate = aiElement('btnGenerateAiBookMap');
   const cancel = aiElement('btnCancelAiBookMap');
@@ -813,7 +838,9 @@ async function refreshAiBookMap() {
     const status = await browserHost.getAiBookMap(bookId);
     if (bookId !== state.currentBookId || aiElement('aiBookMapView')?.hidden !== false) return status;
     renderAiBookMap(status);
-    if (status.state === 'running') _aiBookMapPoll = window.setTimeout(() => void refreshAiBookMap(), 2000);
+    if (status.state === 'running' || status.vectors?.state === 'running') {
+      _aiBookMapPoll = window.setTimeout(() => void refreshAiBookMap(), 2000);
+    }
     return status;
   } catch (error) {
     const statusElement = aiElement('aiBookMapStatus');
@@ -860,6 +887,19 @@ async function startAiBookMapGeneration() {
     if (statusElement) statusElement.textContent = error.message || '无法开始生成导读';
     if (button) button.disabled = false;
     return false;
+  }
+}
+
+async function buildAiVectorsFromSheet() {
+  const button = aiElement('btnBuildAiVectors');
+  if (button) button.disabled = true;
+  try {
+    await browserHost.buildAiVectors(state.currentBookId);
+    _aiBookMapPoll = window.setTimeout(() => void refreshAiBookMap(), 1000);
+  } catch (error) {
+    const text = aiElement('aiBookMapVectorsText');
+    if (text) text.textContent = error.message || '语义索引建立失败';
+    if (button) button.disabled = false;
   }
 }
 
@@ -1979,6 +2019,7 @@ function setupAiPanel() {
   aiElement('btnCloseAiBookMapBackdrop')?.addEventListener('click', () => closeAiBookMapSheet());
   aiElement('btnGenerateAiBookMap')?.addEventListener('click', () => void startAiBookMapGeneration());
   aiElement('btnCancelAiBookMap')?.addEventListener('click', () => void cancelAiBookMapGeneration());
+  aiElement('btnBuildAiVectors')?.addEventListener('click', () => void buildAiVectorsFromSheet());
   aiElement('btnRefreshAiConversations')?.addEventListener('click', () => {
     void refreshAiConversationList();
   });

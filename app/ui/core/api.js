@@ -473,6 +473,11 @@ window.browserHost = {
     return (await apiRequest(`/books/${encodeURIComponent(bookId)}/ai/map/job`, { method: 'DELETE' })).json();
   },
 
+  async buildAiVectors(bookId) {
+    if (!bookId) throw new Error('当前没有打开的书');
+    return (await apiRequest(`/books/${encodeURIComponent(bookId)}/ai/vectors`, { method: 'POST', body: JSON.stringify({}) })).json();
+  },
+
   async askAiStream(bookId, payload, handlers = {}, signal) {
     if (!bookId) throw new Error('当前没有打开的书');
     const response = await fetch(`${API_PREFIX}/books/${encodeURIComponent(bookId)}/ai/ask/stream`, {

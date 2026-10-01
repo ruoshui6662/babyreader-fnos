@@ -5719,6 +5719,7 @@ test('the 导读 sheet shows the estimate, starts generation and is hidden for P
     progress: { done: 0, total: 9 },
     estimate: { calls: 9, inputTokens: 44000, outputTokens: 3150, sampled: false },
     fullEstimate: { calls: 9, inputTokens: 44000, outputTokens: 3150 },
+    vectors: { state: 'none', automatic: false, estimateTokens: 30000, progress: { done: 0, total: 80 } },
     book: null,
     nodes: [
       { id: 'c1', label: '第一章 初到云岭', depth: 0, anchor: { chapterIndex: 0 } },
@@ -5733,7 +5734,8 @@ test('the 导读 sheet shows the estimate, starts generation and is hidden for P
       calls.push(['generate', id, options]);
       return { ...none, state: 'running', progress: { done: 1, total: 9 } };
     },
-    cancelAiBookMap: async (id) => { calls.push(['cancel', id]); return none; }
+    cancelAiBookMap: async (id) => { calls.push(['cancel', id]); return none; },
+    buildAiVectors: async (id) => { calls.push(['vectors', id]); return { state: 'running' }; }
   };
   api.state.contentType = 'epub';
   api.state.currentBookId = bookId;
@@ -5744,6 +5746,10 @@ test('the 导读 sheet shows the estimate, starts generation and is hidden for P
   button.click();
   await waitFor(() => window.document.querySelectorAll('.ai-book-map-node').length === 2, '导读 outline did not render');
   assert.match(window.document.getElementById('aiBookMapStatus').textContent, /约 4\.7 万 tokens，9 次调用/);
+  assert.equal(window.document.getElementById('aiBookMapVectors').hidden, false);
+  assert.match(window.document.getElementById('aiBookMapVectorsText').textContent, /需要手动建立（约 3\.0 万 tokens）/);
+  window.document.getElementById('btnBuildAiVectors').click();
+  await waitFor(() => calls.some(([kind]) => kind === 'vectors'), 'semantic index build did not start');
   const generate = window.document.getElementById('btnGenerateAiBookMap');
   assert.equal(generate.textContent, '生成导读');
   assert.equal(window.document.querySelector('.ai-book-map-node[data-depth="1"]') !== null, true);
