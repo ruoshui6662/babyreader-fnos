@@ -905,6 +905,8 @@ body.is-pdf-reader .pdf-reader-status {
   color-scheme: only light;
   user-select: text;
   -webkit-user-select: text;
+  /* Multiply the (opaque) selection tint onto the canvas: see ::selection. */
+  mix-blend-mode: multiply;
 }
 
 .pdf-page-text-layer span,
@@ -917,11 +919,16 @@ body.is-pdf-reader .pdf-reader-status {
 }
 
 /* PDF glyphs are painted by the canvas. Keep the overlay text transparent
-   while selected too, so browser font rasterization cannot change their look. */
+   while selected too, so browser font rasterization cannot change their look.
+   PDF.js splits a line into one span per font run (CJK, quotes, Latin...) and
+   neighbouring spans overlap; a translucent tint stacked where they overlap
+   and left darker blocks. An opaque tint multiplied onto the page (see
+   mix-blend-mode above) is identical however many spans overlap, and the
+   canvas glyphs still show through because multiply keeps dark pixels dark. */
 .pdf-page-text-layer ::selection {
   color: transparent;
   -webkit-text-fill-color: transparent;
-  background: color-mix(in srgb, var(--selection-bg) 28%, transparent);
+  background: color-mix(in srgb, var(--selection-bg) 30%, #fff);
 }
 
 .pdf-page-text-layer br::selection { background: transparent; }
