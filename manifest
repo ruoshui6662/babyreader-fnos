@@ -1,5 +1,5 @@
 appname=zhenshu
-version=0.0.1
+version=0.0.2
 display_name=枕书
 desc=枕书：飞牛 fnOS 上的私人书房。阅读 EPUB、PDF、MOBI/AZW3、Markdown 和 TXT，支持划线笔记、全文搜索与 AI 问书，阅读进度多端同步。
 source=thirdparty
@@ -13,4 +13,4 @@ desktop_applaunchname=zhenshu.main
 ctl_stop=true
 checkport=false
 disable_authorization_path=false
-changelog=枕书首个版本（由 BabyReader fnOS 版更名而来，作为新应用安装，旧版数据不会迁移）。新增可选的“直连访问”：安装时或在应用设置中开启后，可用自定义端口加访问密码直接在浏览器阅读；AI 问书面板只保留一个关闭按钮，未配置时可一键去设置。
+changelog=书籍可以重命名：在“整理”中点铅笔按钮修改书名或恢复原名，只对自己生效，不改动 NAS 上的文件；整理模式下分类选择框统一对齐到卡片底部；去掉书卡右上角的拖动手柄，直接拖动封面即可调整顺序（手机长按后拖动）。
