@@ -613,7 +613,7 @@ test('reader controls use grouped Apple-style icon geometry', async ({ page }) =
     .filter((button) => !button.hidden && getComputedStyle(button).display !== 'none')
     .map((button) => button.querySelector('.rail-label')?.textContent));
   expect(captions).toEqual(['目录', '搜索', '书签', '笔记', 'AI', '设置']);
-  await expect(page.locator('button.ui-close')).toHaveCount(7);
+  await expect(page.locator('button.ui-close')).toHaveCount(8);
 });
 
 test('double-page navigation places previous and next controls at the lower corners', async ({ page }) => {
@@ -1042,9 +1042,11 @@ test('reader shell has unique IDs, feature availability, and restores Drawer foc
   expect(duplicateIds).toEqual([]);
 
   await expect(page.locator('#btnSearch')).toBeEnabled();
-  for (const selector of ['#btnBookmarks', '#btnNotes', '#btnAi']) {
+  for (const selector of ['#btnBookmarks', '#btnNotes']) {
     await expect(page.locator(selector)).toBeDisabled();
   }
+  // AI 问书 works for plain-text and Markdown books too (the server reads them).
+  await expect(page.locator('#btnAi')).toBeEnabled();
   await expect(page.locator('#btnBookmarks')).not.toHaveAttribute('data-reader-status', 'reserved');
 
   const settingsButton = page.locator('#btnSettings');

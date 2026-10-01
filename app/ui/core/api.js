@@ -455,6 +455,24 @@ window.browserHost = {
     })).json();
   },
 
+  async getAiBookMap(bookId) {
+    if (!bookId) throw new Error('当前没有打开的书');
+    return (await apiRequest(`/books/${encodeURIComponent(bookId)}/ai/map`)).json();
+  },
+
+  async generateAiBookMap(bookId, { force = false } = {}) {
+    if (!bookId) throw new Error('当前没有打开的书');
+    return (await apiRequest(`/books/${encodeURIComponent(bookId)}/ai/map`, {
+      method: 'POST',
+      body: JSON.stringify({ force })
+    })).json();
+  },
+
+  async cancelAiBookMap(bookId) {
+    if (!bookId) throw new Error('当前没有打开的书');
+    return (await apiRequest(`/books/${encodeURIComponent(bookId)}/ai/map/job`, { method: 'DELETE' })).json();
+  },
+
   async askAiStream(bookId, payload, handlers = {}, signal) {
     if (!bookId) throw new Error('当前没有打开的书');
     const response = await fetch(`${API_PREFIX}/books/${encodeURIComponent(bookId)}/ai/ask/stream`, {

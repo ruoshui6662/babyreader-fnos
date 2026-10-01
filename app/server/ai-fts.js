@@ -1350,7 +1350,12 @@ async function readBookOutline(book, dataRoot) {
   try {
     const result = await withIndexDb(book, dataRoot, (db) => {
       const meta = Object.fromEntries(db.prepare('SELECT key, value FROM ai_meta').all().map((row) => [row.key, row.value]));
-      const nodes = db.prepare('SELECT ord, id, parentId, depth, label, firstRow, lastRow, chars FROM ai_nodes ORDER BY ord').all()
+      const nodes = db.prepare(`
+        SELECT ai_nodes.ord, ai_nodes.id, ai_nodes.parentId, ai_nodes.depth, ai_nodes.label, ai_nodes.firstRow,
+          ai_nodes.lastRow, ai_nodes.chars, ai_chunks.chapterIndex, ai_chunks.chapterHref, ai_chunks.startOffset
+        FROM ai_nodes LEFT JOIN ai_chunks ON ai_chunks.rowid = ai_nodes.firstRow
+        ORDER BY ai_nodes.ord
+      `).all()
         .map((row) => ({
           id: String(row.id),
           parentId: row.parentId ? String(row.parentId) : null,
@@ -1359,7 +1364,13 @@ async function readBookOutline(book, dataRoot) {
           label: String(row.label || ''),
           firstRow: row.firstRow === null ? null : Number(row.firstRow),
           lastRow: row.lastRow === null ? null : Number(row.lastRow),
-          chars: Number(row.chars) || 0
+          chars: Number(row.chars) || 0,
+          // Where the node starts, for jumping back to the text.
+          anchor: row.firstRow === null ? null : {
+            chapterIndex: Number(row.chapterIndex),
+            chapterHref: String(row.chapterHref || ''),
+            start: Number(row.startOffset || 0)
+          }
         }));
       const totalChars = db.prepare('SELECT COALESCE(SUM(LENGTH(bodyText)), 0) AS chars FROM ai_chunk_text').get().chars;
       return { available: true, nodes, fingerprint: meta.fingerprint || '', parserVersion: meta.parserVersion || '', totalChars: Number(totalChars) || 0 };

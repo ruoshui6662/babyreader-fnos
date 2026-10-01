@@ -41,7 +41,9 @@ const { parseBookSearchParams, searchBookText } = require('./book-search');
 const { parsePathList, resolveLibraryRoots } = require('./library-roots');
 const { readFnOSAuthorizedRoots, fnOSAuthorizationRevision } = require('./fnos-roots-config');
 const { createDirectAccess } = require('./direct-access');
-const { buildAnswerPayload, gatherEvidence, planQuestion, TYPE_LABELS } = require('./ai-answer-pipeline');
+const { buildAnswerPayload, gatherEvidence, planQuestion, MAP_ROOT_ID, TYPE_LABELS } = require('./ai-answer-pipeline');
+const { createBookMapStore } = require('./ai-book-map-store');
+const { createBookMapService } = require('./ai-book-map');
 const { addUsage } = require('./ai-transport');
 const {
   BOOK_ID_PATTERN,
@@ -825,6 +827,27 @@ function plannedAiInput(body) {
   };
 }
 
+let bookMapService = null;
+function getBookMapService() {
+  if (!bookMapService) {
+    bookMapService = createBookMapService({ dataRoot: DATA_ROOT, store: getBookMapStore() });
+  }
+  return bookMapService;
+}
+let bookMapStore = null;
+function getBookMapStore() {
+  if (!bookMapStore) bookMapStore = createBookMapStore({ dataRoot: DATA_ROOT });
+  return bookMapStore;
+}
+
+async function bookMapSummaries(bookId) {
+  try {
+    return await getBookMapStore().latest(bookId);
+  } catch {
+    return new Map();
+  }
+}
+
 // 问书 with server-side routing and evidence. Events: progress → meta → delta… → done.
 async function handlePlannedAiStream(request, response, user, book, bookId, body) {
   const input = plannedAiInput(body);
@@ -850,13 +873,18 @@ async function handlePlannedAiStream(request, response, user, book, bookId, body
   sendSseHeaders(response);
   try {
     progress({ stage: 'routing', message: '正在理解问题…' });
+    const summaries = await bookMapSummaries(book.id);
     const plan = await planQuestion({
       book, dataRoot: DATA_ROOT, question: input.question, selectedText: input.selectedText,
-      chapter: input.chapter, savedConfig, env: process.env, signal, onUsage, onProgress: progress
+      chapter: input.chapter, savedConfig, env: process.env, signal, onUsage, onProgress: progress,
+      summaries: new Map([...summaries].map(([id, entry]) => [id, entry.summary]))
     });
     if (signal.aborted) return;
     progress({ stage: 'reading', message: '正在读取书中相关内容…' });
-    const evidence = await gatherEvidence({ book, dataRoot: DATA_ROOT, plan, question: input.question, selectedText: input.selectedText });
+    const evidence = await gatherEvidence({
+      book, dataRoot: DATA_ROOT, plan, question: input.question, selectedText: input.selectedText,
+      map: { service: getBookMapService(), savedConfig, env: process.env, onUsage, onProgress: progress, summaries }
+    });
     if (signal.aborted) return;
     if (!evidence.context.length) {
       sendSseEvent(response, 'error', { code: 'AI_NO_EVIDENCE', message: '没有在书中找到相关内容，请换一种问法。' });
@@ -868,7 +896,8 @@ async function handlePlannedAiStream(request, response, user, book, bookId, body
       scopeLabel: evidence.scopeLabel,
       nodes: evidence.coverage?.nodes || [],
       mode: evidence.coverage?.mode || '',
-      navigated: Boolean(plan.navigated)
+      navigated: Boolean(plan.navigated),
+      ...(evidence.coverage?.mapEstimate ? { mapEstimate: evidence.coverage.mapEstimate } : {})
     };
     const sources = aiSourcesFromContext(evidence.context);
     sendSseEvent(response, 'meta', {
@@ -879,7 +908,10 @@ async function handlePlannedAiStream(request, response, user, book, bookId, body
     });
     progress({ stage: 'answering', message: '正在生成回答…' });
     const result = await requestOpenAiStream({
-      request: { rawPayload: buildAnswerPayload({ book, plan, evidence, question: input.question, selectedText: input.selectedText, history: input.history }) },
+      request: { rawPayload: buildAnswerPayload({
+        book, plan, evidence, question: input.question, selectedText: input.selectedText, history: input.history,
+        bookSummary: (await bookMapSummaries(book.id)).get(MAP_ROOT_ID)?.summary || ''
+      }) },
       env: process.env,
       savedConfig,
       signal,
@@ -1904,6 +1936,31 @@ async function handleApi(request, response, pathname, searchParams = new URLSear
       scopeConfidence: chapterResolution?.mappingQuality || intent.scopeConfidence,
       chapterResolution
     });
+  }
+
+  // 导读图: status and outline, start generating, cancel.
+  const aiMapMatch = pathname.match(new RegExp(`^${APP_PREFIX}/api/books/([a-f0-9]{64})/ai/map(/job)?$`));
+  if (aiMapMatch) {
+    const book = await findBook(aiMapMatch[1]);
+    if (book.type === 'pdf') return sendError(response, 409, 'PDF 暂不支持导读。');
+    const service = getBookMapService();
+    if (aiMapMatch[2]) {
+      if (request.method !== 'DELETE') return sendError(response, 405, 'Method not allowed');
+      service.cancel(book.id);
+      return sendJson(response, 200, await service.status(book));
+    }
+    if (request.method === 'GET') return sendJson(response, 200, await service.status(book));
+    if (request.method === 'POST') {
+      const body = await readJsonBody(request);
+      const savedConfig = await aiConfigStorage.get(user.uid);
+      if (!publicAiConfig(savedConfig, process.env).configured) return sendError(response, 503, 'AI 服务尚未配置');
+      if (!service.isRunning(book.id)) {
+        service.run(book, { savedConfig, env: process.env, force: body?.force === true })
+          .catch((error) => { if (error.code !== 'AI_ABORTED') recordError(error, { operation: 'ai-book-map', bookId: book.id, code: error.code || null }); });
+      }
+      return sendJson(response, 202, await service.status(book));
+    }
+    return sendError(response, 405, 'Method not allowed');
   }
 
   const aiStreamMatch = pathname.match(new RegExp(`^${APP_PREFIX}/api/books/([a-f0-9]{64})/ai/ask/stream$`));

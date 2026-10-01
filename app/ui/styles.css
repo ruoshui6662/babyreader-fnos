@@ -7925,3 +7925,101 @@ button.ui-close,
   background: var(--color-fill);
   border-color: transparent;
 }
+
+/* AI 问书：本书导读 */
+.ai-book-map-content {
+  display: grid;
+  gap: 12px;
+}
+.ai-book-map-status {
+  margin: 0;
+  color: var(--color-text-2);
+  font-size: 13px;
+  line-height: 1.6;
+}
+.ai-book-map-progress {
+  height: 4px;
+  overflow: hidden;
+  border-radius: 2px;
+  background: var(--color-fill);
+}
+.ai-book-map-progress > span {
+  display: block;
+  width: 0;
+  height: 100%;
+  background: var(--color-accent);
+  transition: width var(--dur-med) var(--ease-out);
+}
+.ai-book-map-actions {
+  display: flex;
+  gap: 8px;
+}
+.ai-book-map-actions > button:not([hidden]) {
+  min-height: 34px;
+  padding: 0 16px;
+  border-radius: var(--radius-pill);
+  font: inherit;
+  font-size: 12px;
+}
+.ai-book-map-summary {
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: var(--color-fill);
+  font-size: 13px;
+  line-height: 1.7;
+}
+.ai-book-map-summary h4 {
+  margin: 0 0 6px;
+  font-size: 13px;
+}
+.ai-book-map-summary p,
+.ai-book-map-summary ul {
+  margin: 0 0 6px;
+}
+.ai-book-map-summary ul {
+  padding-left: 18px;
+}
+.ai-book-map-structure {
+  color: var(--color-text-2);
+}
+.ai-book-map-outline {
+  display: grid;
+  gap: 2px;
+}
+.ai-book-map-node {
+  padding: 6px 4px;
+  border-bottom: 1px solid var(--color-separator);
+  font-size: 13px;
+}
+.ai-book-map-node[data-depth="1"] { padding-left: 16px; }
+.ai-book-map-node[data-depth="2"] { padding-left: 28px; }
+.ai-book-map-node > summary {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  cursor: pointer;
+  color: var(--color-text);
+}
+.ai-book-map-label {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.ai-book-map-pending {
+  flex: 0 0 auto;
+  color: var(--color-text-3, var(--color-text-2));
+  font-size: 11px;
+}
+.ai-book-map-node > p {
+  margin: 6px 0 4px;
+  color: var(--color-text-2);
+  line-height: 1.7;
+}
+.ai-book-map-jump {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--color-accent);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}

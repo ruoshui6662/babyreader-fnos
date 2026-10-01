@@ -15,8 +15,11 @@ const { buildNavigatorPayload, chapterLevel, normalizeLabel, parseNavigatorReply
 const { requestOpenAiAnswer } = require('./ai-service');
 const { normalizeBookText } = require('./ai-book-context');
 
+const MAP_ROOT_ID = '__book__';
+
 const BUDGETS = Object.freeze({
   chapterFullText: 36000,
+  longChapterText: 20000,
   overview: 30000,
   lookupSegment: 3000,
   compare: 30000,
@@ -234,27 +237,120 @@ async function selectionEvidence(book, dataRoot, nodes, plan, selectedText) {
   return [contextItem({ ...located.row, text: window }, `${label}（选中文字所在段落）`)];
 }
 
+function summaryText(entry) {
+  return [entry.summary, entry.points?.length ? `要点：${entry.points.join('；')}` : ''].filter(Boolean).join('\n');
+}
+
+// A book-map summary as evidence: labelled 导读, pointing at where the node starts.
+function summaryItem(nodes, nodeId, entry) {
+  const node = nodes.find((item) => item.id === nodeId);
+  const anchor = node?.anchor || null;
+  return {
+    text: summaryText(entry),
+    chapterIndex: anchor && Number.isInteger(anchor.chapterIndex) ? anchor.chapterIndex : null,
+    chapterHref: anchor?.chapterHref || '',
+    chapterLabel: `导读 · ${nodeId === MAP_ROOT_ID ? '全书' : nodePath(nodes, nodeId)}`.slice(0, 200),
+    startOffset: anchor?.start || 0
+  };
+}
+
+function mapProgress(map) {
+  return (progress) => map.onProgress?.({
+    stage: 'map',
+    message: `正在生成本书导读（${progress.done}/${progress.total}）；首次需要通读，之后会直接复用…`
+  });
+}
+
+async function ensureMap(map, book, nodeIds) {
+  if (!map?.service) return { ok: false, reason: 'unavailable' };
+  try {
+    return await map.service.ensure(book, nodeIds, {
+      savedConfig: map.savedConfig,
+      env: map.env,
+      onUsage: map.onUsage,
+      onProgress: mapProgress(map)
+    });
+  } catch (error) {
+    if (error.code === 'AI_ABORTED') throw error;
+    return { ok: false, reason: 'failed', error };
+  }
+}
+
+// Whole-book evidence from the map: the book summary, every top-level part,
+// and chapter summaries when they fit the budget.
+function mapOverviewContext(nodes, summaries) {
+  const context = [];
+  let used = 0;
+  const push = (nodeId) => {
+    const entry = summaries.get(nodeId);
+    if (!entry) return false;
+    const item = summaryItem(nodes, nodeId, entry);
+    if (used + item.text.length > BUDGETS.overview && context.length) return false;
+    context.push(item);
+    used += item.text.length;
+    return true;
+  };
+  push(MAP_ROOT_ID);
+  const top = nodes.filter((node) => node.depth === 0 && summaries.has(node.id));
+  for (const node of top) push(node.id);
+  const level = chapterLevel(nodes);
+  if (level.depth > 0) {
+    const chapters = level.nodes.filter((node) => summaries.has(node.id));
+    const chapterChars = chapters.reduce((sum, node) => sum + summaryText(summaries.get(node.id)).length, 0);
+    if (used + chapterChars <= BUDGETS.overview) for (const node of chapters) push(node.id);
+  }
+  return context;
+}
+
 /**
  * Evidence for a plan, sized by question type.
  * @returns {Promise<{context: Array, scopeLabel: string, coverage: object}>}
  */
-async function gatherEvidence({ book, dataRoot, plan, question, selectedText = '' }) {
+async function gatherEvidence({ book, dataRoot, plan, question, selectedText = '', map = null }) {
   const nodes = plan.outline.nodes;
   const byId = nodeMap(nodes);
   const coverage = { type: plan.type, nodes: plan.nodeIds.map((id) => byId.get(id)?.label).filter(Boolean) };
 
   if ((plan.type === 'chapter_summary' || plan.type === 'section_summary') && plan.nodeIds[0]) {
-    const evidence = await nodeEvidence(book, dataRoot, nodes, plan.nodeIds[0], BUDGETS.chapterFullText);
+    const nodeId = plan.nodeIds[0];
+    const evidence = await nodeEvidence(book, dataRoot, nodes, nodeId, BUDGETS.chapterFullText);
     coverage.chars = evidence.chars;
-    coverage.mode = evidence.truncated ? 'sampled' : 'full-text';
+    if (!evidence.truncated) {
+      coverage.mode = 'full-text';
+      return { context: evidence.context, scopeLabel: `${nodePath(nodes, nodeId)}（全文）`, coverage };
+    }
+    // Too long to send whole: its 导读 (sections and chapter) plus sampled text.
+    const ensured = await ensureMap(map, book, [nodeId]);
+    if (ensured.ok) {
+      const summaryIds = [nodeId, ...nodes.filter((node) => node.parentId === nodeId).map((node) => node.id)]
+        .filter((id) => ensured.summaries.has(id));
+      const summaries = summaryIds.map((id) => summaryItem(nodes, id, ensured.summaries.get(id)));
+      const sampled = await nodeEvidence(book, dataRoot, nodes, nodeId, BUDGETS.longChapterText);
+      coverage.mode = 'map+sampled';
+      return {
+        context: [...summaries, ...sampled.context],
+        scopeLabel: `${nodePath(nodes, nodeId)}（本章导读 + 按开头、中间、结尾抽取的原文）`,
+        coverage
+      };
+    }
+    coverage.mode = 'sampled';
     return {
       context: evidence.context,
-      scopeLabel: `${nodePath(nodes, plan.nodeIds[0])}（${evidence.truncated ? '较长，按开头、中间、结尾抽取原文' : '全文'}）`,
+      scopeLabel: `${nodePath(nodes, nodeId)}（较长，按开头、中间、结尾抽取原文）`,
       coverage
     };
   }
 
   if (plan.type === 'overview') {
+    const ensured = await ensureMap(map, book, 'book');
+    if (ensured.ok) {
+      const context = mapOverviewContext(nodes, ensured.summaries);
+      if (context.length) {
+        coverage.mode = 'map';
+        return { context, scopeLabel: '本书导读（AI 预先通读全书生成）', coverage };
+      }
+    }
+    if (ensured.reason === 'too-large') coverage.mapEstimate = ensured.estimate;
     const level = chapterLevel(nodes).nodes;
     if (!level.length) {
       const context = await lookupEvidence(book, dataRoot, nodes, { ...plan, nodeIds: [] }, question, selectedText);
@@ -278,11 +374,14 @@ async function gatherEvidence({ book, dataRoot, plan, question, selectedText = '
     coverage.mode = 'chapter-samples';
     coverage.chapters = level.length;
     coverage.sampledChapters = sampled.length;
+    const base = sampled.length < level.length
+      ? `全书 ${level.length} 章中均匀抽取 ${sampled.length} 章的原文`
+      : `全书 ${level.length} 章（每章抽取原文）`;
     return {
       context,
-      scopeLabel: sampled.length < level.length
-        ? `全书 ${level.length} 章中均匀抽取 ${sampled.length} 章的原文`
-        : `全书 ${level.length} 章（每章抽取原文）`,
+      scopeLabel: coverage.mapEstimate
+        ? `${base}；这本书较长，完整导读约需 ${Math.round(coverage.mapEstimate.inputTokens / 1000)}k tokens，可在“导读”页生成`
+        : base,
       coverage
     };
   }
@@ -290,9 +389,14 @@ async function gatherEvidence({ book, dataRoot, plan, question, selectedText = '
   if (plan.type === 'compare' && plan.nodeIds.length) {
     const ids = plan.nodeIds.slice(0, 3);
     const perNode = Math.floor(BUDGETS.compare / ids.length);
+    // Parts too long to read whole are represented by their 导读 first.
+    const long = ids.filter((id) => (byId.get(id)?.chars || 0) > perNode);
+    const ensured = long.length ? await ensureMap(map, book, long) : { ok: false };
     const context = [];
     for (const id of ids) {
-      const evidence = await nodeEvidence(book, dataRoot, nodes, id, perNode);
+      const entry = ensured.ok ? ensured.summaries.get(id) : null;
+      if (entry) context.push(summaryItem(nodes, id, entry));
+      const evidence = await nodeEvidence(book, dataRoot, nodes, id, entry ? Math.floor(perNode * 0.7) : perNode);
       context.push(...evidence.context);
     }
     return { context, scopeLabel: ids.map((id) => byId.get(id)?.label).filter(Boolean).join('、'), coverage: { ...coverage, mode: 'compare' } };
@@ -301,7 +405,14 @@ async function gatherEvidence({ book, dataRoot, plan, question, selectedText = '
   if (plan.type === 'explain_selection' && selectedText) {
     const around = await selectionEvidence(book, dataRoot, nodes, plan, selectedText);
     const related = await lookupEvidence(book, dataRoot, nodes, { ...plan, nodeIds: [] }, question, selectedText);
-    const context = [...(around || []), ...related.filter((item) => !around?.some((first) => first.text.includes(item.text.slice(0, 40))))].slice(0, 6);
+    // The 导读 of the part the selection is in, when it already exists.
+    const place = plan.position?.sectionId || plan.position?.chapterId;
+    const known = place && map?.summaries?.get(place);
+    const context = [
+      ...(around || []),
+      ...(known ? [summaryItem(nodes, place, known)] : []),
+      ...related.filter((item) => !around?.some((first) => first.text.includes(item.text.slice(0, 40))))
+    ].slice(0, 6);
     return { context, scopeLabel: around ? '选中文字及其上下文' : '书中相关段落', coverage: { ...coverage, mode: around ? 'selection' : 'search' } };
   }
 
@@ -310,11 +421,12 @@ async function gatherEvidence({ book, dataRoot, plan, question, selectedText = '
   return { context, scopeLabel, coverage: { ...coverage, mode: 'search' } };
 }
 
-function bookCard(book, nodes) {
+function bookCard(book, nodes, bookSummary = '') {
   const level = chapterLevel(nodes).nodes.slice(0, BUDGETS.outlineInPrompt);
   return [
     `书名：《${book.title || '未命名'}》${book.author ? `　作者：${book.author}` : ''}`,
-    level.length ? `目录：${level.map((node) => node.label).join('；')}` : ''
+    level.length ? `目录：${level.map((node) => node.label).join('；')}` : '',
+    bookSummary ? `全书导读：${String(bookSummary).slice(0, 800)}` : ''
   ].filter(Boolean).join('\n');
 }
 
@@ -328,7 +440,7 @@ const ANSWER_RULES = [
 ].join('\n');
 
 /** The answer request in Responses shape (the transport converts it). */
-function buildAnswerPayload({ book, plan, evidence, question, selectedText = '', history = [] }) {
+function buildAnswerPayload({ book, plan, evidence, question, selectedText = '', history = [], bookSummary = '' }) {
   const material = evidence.context.map((item, index) => `【${index + 1}】${item.chapterLabel || ''}\n${item.text}`).join('\n\n');
   const user = [
     `问题：${question}`,
@@ -338,6 +450,9 @@ function buildAnswerPayload({ book, plan, evidence, question, selectedText = '',
       ? '说明：以下是每章抽取的部分原文，不是全文；请据此概括全书，并说明哪些判断来自哪一章。'
       : '',
     evidence.coverage?.mode === 'sampled' ? '说明：本章较长，以下是按开头、中间、结尾抽取的原文。' : '',
+    ['map', 'map+sampled'].includes(evidence.coverage?.mode)
+      ? '说明：标为“导读”的材料是 AI 事先通读原文写成的摘要，可作为概括依据；具体细节以原文材料为准。'
+      : '',
     '书本材料：',
     material || '（没有找到相关材料）'
   ].filter(Boolean).join('\n\n');
@@ -349,17 +464,21 @@ function buildAnswerPayload({ book, plan, evidence, question, selectedText = '',
   const longForm = ['overview', 'chapter_summary', 'section_summary', 'compare'].includes(plan.type);
   return {
     // Stable prefix: rules + book card, identical for every question on this book.
-    instructions: `${ANSWER_RULES}\n\n${bookCard(book, plan.outline.nodes)}`,
+    instructions: `${ANSWER_RULES}\n\n${bookCard(book, plan.outline.nodes, bookSummary)}`,
     input,
     max_output_tokens: longForm ? 1600 : 900,
     store: false
   };
 }
 
-// Offline evaluation hook: plan + evidence without calling a model.
-async function evaluatePlan({ book, dataRoot, question, selectedText = '', chapter = null }) {
-  const plan = await planQuestion({ book, dataRoot, question, selectedText, chapter, allowNavigator: false });
-  const evidence = await gatherEvidence({ book, dataRoot, plan, question, selectedText });
+// Evaluation hook: plan + evidence (and, with a model configured, the exact
+// answer request the server would send).
+async function evaluatePlan({ book, dataRoot, question, selectedText = '', chapter = null, live = null }) {
+  const plan = await planQuestion({
+    book, dataRoot, question, selectedText, chapter,
+    allowNavigator: Boolean(live), savedConfig: live?.savedConfig || null, env: live?.env, onUsage: live?.onUsage
+  });
+  const evidence = await gatherEvidence({ book, dataRoot, plan, question, selectedText, map: live?.map || null });
   const byId = nodeMap(plan.outline.nodes);
   const scope = plan.type === 'overview' || plan.type === 'compare' ? 'book'
     : plan.type === 'chapter_summary' ? 'chapter'
@@ -369,12 +488,14 @@ async function evaluatePlan({ book, dataRoot, question, selectedText = '', chapt
     scope,
     type: plan.type,
     nodes: plan.nodeIds.map((id) => byId.get(id)?.label).filter(Boolean),
-    evidence: evidence.context.map((item) => ({ text: item.text, label: item.chapterLabel, headings: [] }))
+    evidence: evidence.context.map((item) => ({ text: item.text, label: item.chapterLabel, headings: [] })),
+    ...(live ? { answerPayload: buildAnswerPayload({ book, plan, evidence, question, selectedText, bookSummary: live.bookSummary?.() || '' }) } : {})
   };
 }
 
 module.exports = {
   BUDGETS,
+  MAP_ROOT_ID,
   TYPE_LABELS,
   buildAnswerPayload,
   chapterAncestor,

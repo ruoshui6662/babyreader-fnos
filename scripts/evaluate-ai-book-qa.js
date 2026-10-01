@@ -87,14 +87,46 @@ async function legacyPipeline(item, { book, dataRoot }) {
   };
 }
 
-async function plannedPipeline(item, context) {
-  let planner;
-  try {
-    planner = require('../app/server/ai-answer-pipeline');
-  } catch {
-    throw new Error('planned 管线尚未实现（P1）');
+let liveMap = null;
+
+// With a model configured the planned pipeline also uses the book map (导读),
+// generated once for the evaluation book and shared by every case.
+function liveContext(context, usage) {
+  if (!LIVE) return null;
+  if (!liveMap) {
+    const { createBookMapStore } = require('../app/server/ai-book-map-store');
+    const { createBookMapService } = require('../app/server/ai-book-map');
+    const store = createBookMapStore({ dataRoot: context.dataRoot });
+    liveMap = { store, service: createBookMapService({ dataRoot: context.dataRoot, store }), bookSummary: '' };
   }
-  return planner.evaluatePlan({ ...context, question: item.question, selectedText: item.selectedText || '', chapter: chapterLocator(item.position) });
+  return {
+    savedConfig: {},
+    env: process.env,
+    onUsage: usage,
+    map: { service: liveMap.service, savedConfig: {}, env: process.env, onUsage: usage, summaries: new Map() },
+    bookSummary: () => liveMap.bookSummary
+  };
+}
+
+async function plannedPipeline(item, context) {
+  const planner = require('../app/server/ai-answer-pipeline');
+  let usage = null;
+  const onUsage = (value) => {
+    usage = {
+      inputTokens: (usage?.inputTokens || 0) + (value?.inputTokens || 0),
+      outputTokens: (usage?.outputTokens || 0) + (value?.outputTokens || 0),
+      cachedTokens: (usage?.cachedTokens || 0) + (value?.cachedTokens || 0)
+    };
+  };
+  const live = liveContext(context, onUsage);
+  if (live && liveMap) {
+    const latest = await liveMap.store.latest(context.book.id);
+    liveMap.bookSummary = latest.get('__book__')?.summary || '';
+  }
+  const outcome = await planner.evaluatePlan({
+    ...context, question: item.question, selectedText: item.selectedText || '', chapter: chapterLocator(item.position), live
+  });
+  return { ...outcome, usage };
 }
 
 function expectedScopeMatches(item, actual) {
@@ -141,7 +173,12 @@ async function liveAnswer(item, outcome) {
     };
   };
   const startedAt = Date.now();
-  const answer = outcome.answer || await requestOpenAiAnswer({
+  const answer = outcome.answerPayload ? await requestOpenAiAnswer({
+    request: { rawPayload: outcome.answerPayload },
+    env: process.env,
+    onUsage: addUsage,
+    timeoutMs: 120000
+  }) : await requestOpenAiAnswer({
     request: {
       question: item.question,
       selectedText: item.selectedText || '',
