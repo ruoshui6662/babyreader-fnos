@@ -1,6 +1,6 @@
 {
   "name": "babyreader-fnos",
-  "version": "1.3.5",
+  "version": "1.3.6",
   "description": "BabyReader EPUB, Markdown and TXT reader for fnOS",
   "main": "app/server/index.js",
   "directories": {
