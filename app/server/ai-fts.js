@@ -188,6 +188,17 @@ function toFtsQuery(value) {
     .join(' OR ');
 }
 
+// Every keyword must appear (any of its two-character terms counts, so a
+// keyword cut slightly wrong from the question still matches). Used first for
+// 问书 lookups; the OR query above is the fallback.
+function toFtsAllTermsQuery(keywords) {
+  const groups = (Array.isArray(keywords) ? keywords : [])
+    .map((keyword) => aiTerms(keyword).slice(0, 8).map((term) => `"${term.replace(/"/g, '""')}"`))
+    .filter((terms) => terms.length)
+    .slice(0, 8);
+  return groups.length ? groups.map((terms) => `(${terms.join(' OR ')})`).join(' AND ') : '';
+}
+
 function chunkChapter(chapter) {
   const chars = Array.from(normalizeBookText(chapter.text));
   const chunks = [];
@@ -898,6 +909,7 @@ function rankFtsCandidates(rows, currentChapterIndex) {
     const relevanceScore = Number.isFinite(bm25Score) ? -bm25Score : 0;
     const chapterScore = Number.isInteger(currentChapterIndex) && Number(row.chapterIndex) === currentChapterIndex ? 2 : 0;
     return {
+      rowid: Number(row.rowid),
       text: row.bodyText,
       title: row.titleText,
       headings: row.headingsText ? row.headingsText.split('\n').filter(Boolean) : [],
@@ -994,7 +1006,9 @@ async function searchBook(book, dataRoot, {
   logicalChapterId = null,
   logicalSectionId = null,
   intent = 'lookup',
-  limit = AI_FTS_MAX_RESULTS
+  limit = AI_FTS_MAX_RESULTS,
+  ftsQuery: ftsQueryOverride = '',
+  lexicalFallback = true
 } = {}) {
   const resultLimit = normalizeLimit(limit);
   let filePath;
@@ -1044,7 +1058,7 @@ async function searchBook(book, dataRoot, {
           retrievalStatus: sampled.matches.length ? 'ok' : 'insufficient_scope'
         };
       }
-      const ftsQuery = toFtsQuery(`${query} ${selectedText}`);
+      const ftsQuery = ftsQueryOverride || toFtsQuery(`${query} ${selectedText}`);
       if (!ftsQuery) return { available: true, matches: [], confidence: assessRetrievalConfidence([]), coverage: null };
       const scopeSql = scopeColumn ? ` AND ${scopeColumn} = ?` : '';
       const scopeParams = scopeColumn ? [scopeId] : [];
@@ -1086,6 +1100,9 @@ async function searchBook(book, dataRoot, {
       };
     }), currentChapterIndex);
     let lexicalPool = ftsCandidates;
+    if (!ftsCandidates.length && !lexicalFallback) {
+      return { available: true, matches: [], confidence: assessRetrievalConfidence([]), coverage: null, retrievalStatus: 'no_matches' };
+    }
     if (!ftsCandidates.length) {
       const allRows = db.prepare(`
         SELECT
@@ -1104,6 +1121,7 @@ async function searchBook(book, dataRoot, {
         ${scopeColumn ? `WHERE ai_chunks.${scopeColumn} = ?` : ''}
       `).all(...scopeParams);
       lexicalPool = allRows.map((row) => ({
+        rowid: Number(row.rowid),
         text: decodeIndexedText(row.bodyText),
         title: decodeIndexedText(row.titleText),
         headings: decodeIndexedText(row.headingsText),
@@ -1116,6 +1134,7 @@ async function searchBook(book, dataRoot, {
       }));
     }
     const lexicalCandidates = rankLexicalCandidates(lexicalPool.map((row) => ({
+      rowid: row.rowid,
       text: row.text || decodeIndexedText(row.bodyText),
       title: row.title || decodeIndexedText(row.titleText),
       headings: row.headings || decodeIndexedText(row.headingsText),
@@ -1532,6 +1551,7 @@ module.exports = {
   aiTerms,
   toFtsDocument,
   toFtsQuery,
+  toFtsAllTermsQuery,
   chunkChapter,
   indexPath,
   isFtsAvailable,

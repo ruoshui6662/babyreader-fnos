@@ -154,6 +154,8 @@ function score(item, outcome) {
     type: item.type,
     scopeOk: !outcome.failed && expectedScopeMatches(item, outcome.scope),
     goldRecall: gold.length ? goldHits / gold.length : null,
+    // Ranking quality: does the first piece of evidence already hold an answer?
+    topHit: gold.length && item.type === 'lookup' ? (gold.some((snippet) => String(outcome.evidence[0]?.text || '').includes(snippet)) ? 1 : 0) : null,
     nodeRecall: expectedNodes.length ? nodeHits / expectedNodes.length : null,
     chapterCoverage: item.type === 'overview' ? coveredChapters.size / CHAPTER_TITLES.length : null,
     evidenceChars: evidenceText.length,
@@ -229,6 +231,7 @@ function summarize(rows) {
     cases: list.length,
     scopeAccuracy: average(list.map((row) => (row.scopeOk ? 1 : 0))),
     goldRecall: average(list.map((row) => row.goldRecall)),
+    topHit: average(list.map((row) => row.topHit)),
     nodeRecall: average(list.map((row) => row.nodeRecall)),
     chapterCoverage: average(list.map((row) => row.chapterCoverage)),
     evidenceChars: average(list.map((row) => row.evidenceChars)),
@@ -248,10 +251,10 @@ function printTable(summary) {
   const lines = [
     `管线：${PIPELINE}　格式：${FORMAT}　真实模型：${LIVE ? '是' : '否'}`,
     '',
-    '| 类型 | 题数 | 范围正确 | 证据命中 | 节点命中 | 章节覆盖 | 平均证据字数 | 失败 | 回答得分 | 平均输入 token |',
-    '| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |'
+    '| 类型 | 题数 | 范围正确 | 证据命中 | 首条命中 | 节点命中 | 章节覆盖 | 平均证据字数 | 失败 | 回答得分 | 平均输入 token |',
+    '| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |'
   ];
-  const row = (name, data) => lines.push(`| ${name} | ${data.cases} | ${percent(data.scopeAccuracy)} | ${percent(data.goldRecall)} | ${percent(data.nodeRecall)} | ${percent(data.chapterCoverage)} | ${data.evidenceChars === null ? '—' : Math.round(data.evidenceChars)} | ${data.failures} | ${percent(data.answerScore)} | ${data.inputTokens === null ? '—' : Math.round(data.inputTokens)} |`);
+  const row = (name, data) => lines.push(`| ${name} | ${data.cases} | ${percent(data.scopeAccuracy)} | ${percent(data.goldRecall)} | ${percent(data.topHit)} | ${percent(data.nodeRecall)} | ${percent(data.chapterCoverage)} | ${data.evidenceChars === null ? '—' : Math.round(data.evidenceChars)} | ${data.failures} | ${percent(data.answerScore)} | ${data.inputTokens === null ? '—' : Math.round(data.inputTokens)} |`);
   for (const [type, data] of Object.entries(summary.byType)) row(type, data);
   row('合计', summary.overall);
   console.log(lines.join('\n'));

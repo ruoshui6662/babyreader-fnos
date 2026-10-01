@@ -8,8 +8,11 @@ const {
   locateTextInBook,
   readBookOutline,
   readNodeSegments,
+  readRowsAround,
   resolveBookPosition,
-  searchBook
+  rowsToSegments,
+  searchBook,
+  toFtsAllTermsQuery
 } = require('./ai-fts');
 const { buildNavigatorPayload, chapterLevel, normalizeLabel, parseNavigatorReply, routeQuestion } = require('./ai-router');
 const { requestOpenAiAnswer } = require('./ai-service');
@@ -22,6 +25,8 @@ const BUDGETS = Object.freeze({
   longChapterText: 20000,
   overview: 30000,
   lookupSegment: 3000,
+  lookupTotal: 14000,
+  lookupHits: 6,
   compare: 30000,
   selectionWindow: 1500,
   navigatorTimeoutMs: 8000,
@@ -186,11 +191,25 @@ async function nodeEvidence(book, dataRoot, nodes, nodeId, maxChars) {
   };
 }
 
-async function lookupEvidence(book, dataRoot, nodes, plan, question, selectedText) {
+// Question wording that says nothing about the book's content.
+const QUERY_STOP_PHRASES = /(?:这本书|本书|书中|书里|文中|作者|请问|一下|是什么|是谁|什么|怎么样|怎么|为什么|为何|如何|哪些|哪个|哪里|哪儿|多少|几个|几倍|是否|有没有|有哪些|讲的是|讲了|提到|关于|描述|说明|介绍)/g;
+const QUERY_STOP_CHARS = /[的了和与及在是有就都也还又把被对从向给为以而或之其这那个些吗呢吧啊呀请？?。，,！!、；;：:“”"'‘’（）()《》【】\s]+/g;
+
+// “陈守义用什么来烘焙茶叶？” → ["陈守义", "用", "来烘焙茶叶"] → keywords of 2+ characters.
+function searchKeywords(text) {
+  return [...new Set(String(text || '')
+    .replace(QUERY_STOP_PHRASES, ' ')
+    .replace(QUERY_STOP_CHARS, ' ')
+    .split(' ')
+    .map((item) => item.trim())
+    .filter((item) => Array.from(item).length >= 2))]
+    .slice(0, 8);
+}
+
+async function searchScopes(book, dataRoot, nodes, plan) {
   const byId = nodeMap(nodes);
-  const queries = [question, ...(plan.queries || [])].join(' ');
   const scoped = plan.nodeIds.map((id) => byId.get(id)).filter(Boolean);
-  const runs = scoped.length
+  return scoped.length
     ? scoped.map((node) => {
       const chapterNode = chapterAncestor(nodes, node.id);
       return node.id === chapterNode?.id
@@ -198,35 +217,83 @@ async function lookupEvidence(book, dataRoot, nodes, plan, question, selectedTex
         : { logicalChapterId: chapterNode?.id || null, logicalSectionId: node.id, intent: 'section_lookup' };
     })
     : [{}];
-  const matches = [];
-  for (const scope of runs) {
-    const result = await searchBook(book, dataRoot, {
-      query: queries,
-      selectedText,
-      intent: scope.intent || 'lookup',
-      logicalChapterId: scope.logicalChapterId || null,
-      logicalSectionId: scope.logicalSectionId || null,
-      limit: 6
-    });
-    matches.push(...(result.matches || []));
+}
+
+async function runSearch(book, dataRoot, scope, options) {
+  const result = await searchBook(book, dataRoot, {
+    intent: scope.intent || 'lookup',
+    logicalChapterId: scope.logicalChapterId || null,
+    logicalSectionId: scope.logicalSectionId || null,
+    limit: BUDGETS.lookupHits,
+    ...options
+  });
+  return result.matches || [];
+}
+
+// Each hit grows to its neighbouring index rows, so the model reads the whole
+// passage rather than a 900-character window cut mid-sentence.
+async function expandHits(book, dataRoot, hits) {
+  const withRows = hits.filter((hit) => Number.isSafeInteger(hit.rowid));
+  if (!withRows.length) return hits.map((hit) => ({ hit, text: hit.text, start: hit.start }));
+  const rows = await readRowsAround(book, dataRoot, withRows.map((hit) => hit.rowid), { before: 1, after: 1 });
+  const byRow = new Map(rows.map((row) => [row.rowid, row]));
+  const used = new Set();
+  const passages = [];
+  for (const hit of hits) {
+    if (!Number.isSafeInteger(hit.rowid)) {
+      passages.push({ hit, text: hit.text, start: hit.start });
+      continue;
+    }
+    if (used.has(hit.rowid)) continue;
+    const window = [hit.rowid - 1, hit.rowid, hit.rowid + 1]
+      .map((rowid) => byRow.get(rowid))
+      .filter((row) => row && row.chapterHref === hit.chapterHref && row.chapterIndex === hit.chapterIndex && !used.has(row.rowid));
+    for (const row of window) used.add(row.rowid);
+    const segment = rowsToSegments(window, 100000)[0];
+    passages.push({ hit, text: segment?.text || hit.text, start: segment?.start ?? hit.start });
   }
-  if (!matches.length && scoped.length) {
-    const result = await searchBook(book, dataRoot, { query: queries, selectedText, intent: 'lookup', limit: 6 });
-    matches.push(...(result.matches || []));
+  return passages;
+}
+
+async function lookupEvidence(book, dataRoot, nodes, plan, question, selectedText) {
+  const query = [question, ...(plan.queries || [])].join(' ');
+  const keywords = searchKeywords(query);
+  const strictQuery = toFtsAllTermsQuery(keywords);
+  const matches = [];
+  for (const scope of await searchScopes(book, dataRoot, nodes, plan)) {
+    // Passages with every keyword rank first; any-keyword matches fill the rest.
+    const strict = strictQuery
+      ? await runSearch(book, dataRoot, scope, { query, selectedText, ftsQuery: strictQuery, lexicalFallback: false })
+      : [];
+    const loose = strict.length >= BUDGETS.lookupHits ? [] : await runSearch(book, dataRoot, scope, { query, selectedText });
+    matches.push(...strict, ...loose);
+  }
+  if (!matches.length && plan.nodeIds.length) {
+    matches.push(...await runSearch(book, dataRoot, {}, { query, selectedText }));
   }
   const seen = new Set();
-  return matches.filter((match) => {
+  const hits = matches.filter((match) => {
     const key = `${match.chapterHref}:${match.start}`;
     if (seen.has(key)) return false;
     seen.add(key);
     return true;
-  }).slice(0, 8).map((match) => contextItem(match, [match.chapterLabel, match.headings?.[0]].filter(Boolean).join(' › ')));
+  }).slice(0, BUDGETS.lookupHits);
+  const passages = await expandHits(book, dataRoot, hits);
+  const context = [];
+  let used = 0;
+  for (const passage of passages) {
+    if (used >= BUDGETS.lookupTotal) break;
+    const text = passage.text.slice(0, BUDGETS.lookupTotal - used);
+    used += text.length;
+    context.push(contextItem({ ...passage.hit, text, start: passage.start },
+      [passage.hit.chapterLabel, passage.hit.headings?.[0]].filter(Boolean).join(' › ')));
+  }
+  return context;
 }
 
 async function selectionEvidence(book, dataRoot, nodes, plan, selectedText) {
   const located = await locateTextInBook(book, dataRoot, selectedText, { preferNodeId: plan.position?.chapterId });
   if (!located) return null;
-  const { readRowsAround, rowsToSegments } = require('./ai-fts');
   const rows = await readRowsAround(book, dataRoot, [located.rowid], { before: 2, after: 2 });
   const segments = rowsToSegments(rows, 100000);
   const text = segments.map((segment) => segment.text).join('');
@@ -496,6 +563,7 @@ async function evaluatePlan({ book, dataRoot, question, selectedText = '', chapt
 module.exports = {
   BUDGETS,
   MAP_ROOT_ID,
+  searchKeywords,
   TYPE_LABELS,
   buildAnswerPayload,
   chapterAncestor,
