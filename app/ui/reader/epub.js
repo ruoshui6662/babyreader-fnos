@@ -755,7 +755,7 @@ function themeIconSvg(nextTheme) {
 
   return `
     <svg viewBox="0 0 24 24" data-icon="theme" aria-hidden="true" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-      <path d="M20.4 14.4A7.3 7.3 0 0 1 9.6 3.6a8.7 8.7 0 1 0 10.8 10.8Z"></path>
+      <path d="M20 14.6A8 8 0 1 1 9.4 4a6.6 6.6 0 0 0 10.6 10.6Z"></path>
     </svg>
   `;
 }

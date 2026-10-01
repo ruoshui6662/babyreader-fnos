@@ -5517,8 +5517,8 @@ test('AI index manager has an admin-only independent surface contract', async ()
 
   assert.match(html, /btnOpenAiIndexManager/);
   assert.match(html, /aiIndexManagerSheet/);
-  assert.match(html, /class="ai-icon-button ai-surface-close" id="btnCloseAiIndexManager"/);
-  assert.match(html, /class="ai-icon-button ai-surface-close" id="btnCloseAiModal"/);
+  assert.match(html, /class="ai-icon-button ai-surface-close[^"]*" id="btnCloseAiIndexManager"/);
+  assert.match(html, /class="ai-icon-button ai-surface-close[^"]*" id="btnCloseAiModal"/);
   assert.match(html, /ai-index-manager\.js/);
   assert.match(drawer, /'ai-index': \{ rootId: 'aiIndexManagerSheet'/);
   assert.match(api, /listAiIndexes/);

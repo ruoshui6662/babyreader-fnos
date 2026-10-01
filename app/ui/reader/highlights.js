@@ -23,45 +23,81 @@ function exportIconSvg() {
 }
 
 // P0: icon-only toolbar — no text labels
+// Reader icon family (2026-10, option 3): Apple SF-style metaphors on one
+// grid — 24px, 1.8 stroke, round caps — each shown with a short caption.
+function railLabel(text) {
+  return `<span class="rail-label" aria-hidden="true">${text}</span>`;
+}
+
+function tocIconSvg() {
+  return `
+    <svg viewBox="0 0 24 24" data-icon="toc" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="5" cy="7" r="1" fill="currentColor"></circle><circle cx="5" cy="12" r="1" fill="currentColor"></circle><circle cx="5" cy="17" r="1" fill="currentColor"></circle>
+      <path d="M9 7h11M9 12h11M9 17h11"></path>
+    </svg>
+  `;
+}
+
 function searchIconSvg() {
   return `
     <svg viewBox="0 0 24 24" data-icon="search" aria-hidden="true" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-      <circle cx="11" cy="11" r="8"></circle><path d="m21 21-4.35-4.35"></path>
+      <circle cx="10.5" cy="10.5" r="6.5"></circle><path d="m15.5 15.5 5 5"></path>
     </svg>
   `;
 }
 function bookmarkIconSvg() {
   return `
     <svg viewBox="0 0 24 24" data-icon="bookmark" aria-hidden="true" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-      <path d="M6 4.5A2.5 2.5 0 0 1 8.5 2h7A2.5 2.5 0 0 1 18 4.5V21l-6-4-6 4Z"></path>
+      <path d="M7 3.5h10a1 1 0 0 1 1 1V21l-6-4.2L6 21V4.5a1 1 0 0 1 1-1Z"></path>
     </svg>
   `;
 }
 function notesIconSvg() {
   return `
     <svg viewBox="0 0 24 24" data-icon="note" aria-hidden="true" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-      <path d="M6 3h8l4 4v14H6a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2Z"></path>
-      <path d="M14 3v5h5"></path>
-      <path d="M8 12h7M8 16h7"></path>
+      <path d="M11 4H6.5A2.5 2.5 0 0 0 4 6.5v11A2.5 2.5 0 0 0 6.5 20h11a2.5 2.5 0 0 0 2.5-2.5V13"></path>
+      <path d="M18.4 3.6a2 2 0 0 1 2.9 2.9L12.5 15.3 9 16l.7-3.5Z"></path>
     </svg>
   `;
 }
 function aiIconSvg() {
   return `
     <svg viewBox="0 0 24 24" data-icon="ai" aria-hidden="true" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-      <path d="m12 3 .9 3.1L16 7l-3.1.9L12 11l-.9-3.1L8 7l3.1-.9Z"></path>
-      <path d="m18 13 .55 1.95L20.5 15.5l-1.95.55L18 18l-.55-1.95-1.95-.55 1.95-.55Z"></path>
-      <path d="m5 14 .7 2.3L8 17l-2.3.7L5 20l-.7-2.3L2 17l2.3-.7Z"></path>
+      <path d="M11 3.5c.7 4 2.6 5.9 6.5 6.5-3.9.7-5.8 2.6-6.5 6.5-.7-3.9-2.6-5.8-6.5-6.5 3.9-.6 5.8-2.5 6.5-6.5Z"></path>
+      <path d="M18.5 14.5c.3 1.9 1.1 2.7 3 3-1.9.3-2.7 1.1-3 3-.3-1.9-1.1-2.7-3-3 1.9-.3 2.7-1.1 3-3Z"></path>
     </svg>
   `;
 }
 function settingsIconSvg() {
   return `
     <svg viewBox="0 0 24 24" data-icon="settings" aria-hidden="true" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-      <path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.18-.08a2 2 0 0 0-2 2v.44a2 2 0 0 0 2 2h.18a2 2 0 0 1 1.73 1l.25.43a2 2 0 0 1 0 2l-.08.18a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.18.08a2 2 0 0 0 2-2v-.44a2 2 0 0 0-2-2h-.18a2 2 0 0 1-1.73-1l-.25-.43a2 2 0 0 1 0-2l.08-.18a2 2 0 0 0-2-2z"></path>
-      <circle cx="12" cy="12" r="3"></circle>
+      <path d="m2.5 19 5.2-14h1.1L14 19M4.6 14h6.3"></path>
+      <circle cx="18.2" cy="16" r="2.8"></circle><path d="M21 13v6"></path>
     </svg>
   `;
+}
+
+// The phone toolbar shows the same icons above its captions (once).
+function decorateMobileToolbar() {
+  const icons = {
+    btnMobileBackToLibrary: `<svg viewBox="0 0 24 24" data-icon="library" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 4h3v16H5zM10 4h3v16h-3z"></path><path d="m15.4 5.3 2.9-.8 3.9 15-2.9.8z"></path></svg>`,
+    btnMobileToc: tocIconSvg(),
+    btnMobileBookmarks: bookmarkIconSvg(),
+    btnMobileSearch: searchIconSvg(),
+    btnMobileNotes: notesIconSvg(),
+    btnMobileHighlight: highlightIconSvg(),
+    btnMobileSettings: settingsIconSvg()
+  };
+  for (const [id, svg] of Object.entries(icons)) {
+    const button = document.getElementById(id);
+    if (!button || button.querySelector('svg')) continue;
+    const caption = document.createElement('span');
+    caption.className = 'rail-label';
+    caption.textContent = button.textContent.trim();
+    button.replaceChildren();
+    button.insertAdjacentHTML('afterbegin', svg);
+    button.appendChild(caption);
+  }
 }
 
 let _highlightPill = null;
@@ -139,7 +175,7 @@ function updateTopbarState() {
 
   if (btnToc) {
     btnToc.hidden = !hasToc;
-    btnToc.innerHTML = `<svg viewBox="0 0 24 24" data-icon="toc" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 6h14"></path><path d="M5 12h10"></path><path d="M5 18h14"></path></svg>`;
+    btnToc.innerHTML = tocIconSvg() + railLabel('目录');
     const tocLabel = typeof activeReaderPanel !== 'undefined' && activeReaderPanel === 'toc' ? '隐藏目录' : '显示目录';
     btnToc.setAttribute('aria-label', tocLabel);
     btnToc.setAttribute('title', tocLabel);
@@ -172,14 +208,14 @@ function updateTopbarState() {
 
   const searchAvailable = Boolean(state.currentBookId && state.currentPath);
   if (btnSearch) {
-    btnSearch.innerHTML = searchIconSvg();
+    btnSearch.innerHTML = searchIconSvg() + railLabel('搜索');
     btnSearch.disabled = !searchAvailable;
     btnSearch.dataset.readerStatus = searchAvailable ? 'enabled' : 'reserved';
     btnSearch.setAttribute('aria-label', searchAvailable ? '搜索本书' : '搜索，打开书籍后可用');
     btnSearch.setAttribute('title', searchAvailable ? '搜索本书' : '搜索，打开书籍后可用');
   }
   if (btnBookmarks) {
-    btnBookmarks.innerHTML = bookmarkIconSvg();
+    btnBookmarks.innerHTML = bookmarkIconSvg() + railLabel('书签');
     const bookmarkAvailable = (isEpub || isPdf) && Boolean(state.currentBookId);
     const bookmarkActive = bookmarkAvailable
       && typeof isCurrentBookmark === 'function'
@@ -195,7 +231,7 @@ function updateTopbarState() {
     const notesAvailable = isEpub || isPdf;
     btnNotes.hidden = !notesAvailable;
     btnNotes.disabled = !notesAvailable;
-    btnNotes.innerHTML = notesIconSvg();
+    btnNotes.innerHTML = notesIconSvg() + railLabel('笔记');
     btnNotes.setAttribute('aria-label', notesAvailable ? '打开标记与想法' : '标记与想法仅支持 EPUB 和 PDF');
     btnNotes.setAttribute('title', notesAvailable ? '打开标记与想法' : '标记与想法仅支持 EPUB 和 PDF');
   }
@@ -203,11 +239,12 @@ function updateTopbarState() {
     const aiAvailable = (isEpub || isPdf) && Boolean(state.currentBookId);
     btnAi.hidden = !aiAvailable;
     btnAi.disabled = !aiAvailable;
-    btnAi.innerHTML = aiIconSvg();
+    btnAi.innerHTML = aiIconSvg() + railLabel('AI');
     btnAi.setAttribute('aria-label', aiAvailable ? '打开 AI 阅读助手' : '打开书籍后可用');
     btnAi.setAttribute('title', aiAvailable ? '打开 AI 阅读助手' : '打开书籍后可用');
   }
-  if (btnSettings) btnSettings.innerHTML = settingsIconSvg();
+  if (btnSettings) btnSettings.innerHTML = settingsIconSvg() + railLabel('设置');
+  decorateMobileToolbar();
   if (themeBtn) {
     const isLightOrSepia = state.theme === 'light' || state.theme === 'sepia';
     themeBtn.innerHTML = themeIconSvg(isLightOrSepia ? 'dark' : 'light');

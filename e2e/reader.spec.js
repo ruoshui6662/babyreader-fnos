@@ -587,9 +587,10 @@ test('reader controls use grouped Apple-style icon geometry', async ({ page }) =
       paths: icon.querySelectorAll('path').length
     }))
   );
+  // Plain chevrons (2026-10): the old bar-and-chevron read as media skip.
   expect(chapterIcons).toEqual([
-    { name: 'chapter-previous', linecap: 'round', linejoin: 'round', paths: 2 },
-    { name: 'chapter-next', linecap: 'round', linejoin: 'round', paths: 2 }
+    { name: 'chapter-previous', linecap: 'round', linejoin: 'round', paths: 1 },
+    { name: 'chapter-next', linecap: 'round', linejoin: 'round', paths: 1 }
   ]);
 
   const toolbarIcons = await page.locator('#readerFloatingToolbar button svg').evaluateAll((icons) =>
@@ -606,6 +607,13 @@ test('reader controls use grouped Apple-style icon geometry', async ({ page }) =
   expect(toolbarIcons.every((icon) =>
     icon.linecap === 'round' && icon.linejoin === 'round' && icon.strokeWidth === '1.8'
   )).toBe(true);
+
+  // Option 3: every visible rail tool carries a caption; close buttons share one style.
+  const captions = await page.locator('#readerFloatingToolbar button').evaluateAll((buttons) => buttons
+    .filter((button) => !button.hidden && getComputedStyle(button).display !== 'none')
+    .map((button) => button.querySelector('.rail-label')?.textContent));
+  expect(captions).toEqual(['目录', '搜索', '书签', '笔记', 'AI', '设置']);
+  await expect(page.locator('button.ui-close')).toHaveCount(7);
 });
 
 test('double-page navigation places previous and next controls at the lower corners', async ({ page }) => {
