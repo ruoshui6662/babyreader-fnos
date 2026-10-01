@@ -7695,3 +7695,43 @@ html[data-reader-surface="mobile"] .mobile-reader-toolbar button svg {
   height: 22px;
   stroke: currentColor;
 }
+
+/* AI panel polish (2026-10): a left-aligned header, quiet text actions, one
+   close button, and a notice with a way forward when AI is not set up. */
+.ai-modal .ai-modal-header { padding: 16px 16px 12px 20px; }
+.ai-modal .ai-modal-heading { text-align: left; }
+.ai-modal .ai-modal-heading h2 { font-size: 17px; font-weight: 600; letter-spacing: -0.01em; }
+.ai-modal .ai-modal-heading p { margin-top: 2px; font-size: 12px; }
+.ai-modal .ai-modal-actions { align-items: center; gap: 2px; }
+.ai-modal .ai-modal-actions .ui-close { margin-left: 6px; }
+/* The header buttons' old 20px text size used to show the text "x" next to
+   the drawn one: close buttons never show their text. */
+button.ui-close,
+.ai-icon-button.ui-close:last-child {
+  font-size: 0 !important;
+  line-height: 0 !important;
+  width: 30px;
+  padding: 0;
+}
+.ai-status[data-tone="warning"] {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  color: var(--color-text);
+  background: color-mix(in srgb, var(--color-accent) 9%, transparent);
+  font-size: 13px;
+}
+.ai-status-action {
+  flex: 0 0 auto;
+  min-height: 30px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 999px;
+  color: var(--color-on-accent, #fff);
+  background: var(--color-accent);
+  font: 500 12px/1 var(--font-ui);
+  cursor: pointer;
+}

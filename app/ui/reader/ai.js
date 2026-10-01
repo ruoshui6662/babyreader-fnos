@@ -243,6 +243,15 @@ function setAiStatus(message, tone = '') {
   element.textContent = message;
   element.dataset.tone = tone;
   element.hidden = !['busy', 'warning', 'error'].includes(tone);
+  // "Not configured" gets a way forward instead of a dead-end sentence.
+  if (message === '尚未配置 AI 服务，请先填写 AI 设置。') {
+    const action = document.createElement('button');
+    action.type = 'button';
+    action.className = 'ai-status-action';
+    action.textContent = '去设置';
+    action.addEventListener('click', () => aiElement('btnAiSettings')?.click());
+    element.appendChild(action);
+  }
 }
 
 function pdfAiStatusFromMeta(meta, sourceCount) {
