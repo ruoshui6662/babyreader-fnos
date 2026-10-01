@@ -178,33 +178,18 @@ test('release enables library organization but gates new AI chapter summaries be
   assert.match(server, /allowEmptyContext: isAiChapterUnderstandingEnabled\(\)/);
 });
 
-test('fnOS app settings no longer carry a PDF switch: PDF reading is always on', () => {
+test('fnOS app settings carry no format or import switches: all formats are always on', () => {
   const steps = JSON.parse(read('wizard/config'));
-  const fields = steps.flatMap((step) => step.items || []).map((item) => item.field);
-  assert.equal(fields.includes('wizard_pdf_reader_enabled'), false);
-  assert.doesNotMatch(read('cmd/config_callback'), /pdf-feature-config|wizard_pdf_reader_enabled/);
+  const items = steps.flatMap((step) => step.items || []);
+  assert.deepEqual(items.filter((item) => item.type !== 'tips'), []);
+  assert.ok(items.some((item) => /PDF/.test(item.helpText) && /MOBI\/AZW3/.test(item.helpText)));
+  assert.doesNotMatch(read('cmd/config_callback'), /feature-config|wizard_(pdf_reader|mobi_reader|import)_enabled/);
 });
 
-test('fnOS app settings expose a MOBI acceptance switch that starts disabled', () => {
-  const steps = JSON.parse(read('wizard/config'));
-  const switchItem = steps.flatMap((step) => step.items || [])
-    .find((item) => item.field === 'wizard_mobi_reader_enabled');
-  assert.equal(switchItem.type, 'switch');
-  assert.equal(switchItem.initValue, 'false');
-});
-
-test('fnOS app settings expose an admin book-import switch that starts disabled', () => {
-  const steps = JSON.parse(read('wizard/config'));
-  const switchItem = steps.flatMap((step) => step.items || [])
-    .find((item) => item.field === 'wizard_import_enabled');
-  assert.equal(switchItem.type, 'switch');
-  assert.equal(switchItem.initValue, 'false');
-});
-
-test('configuration callback persists feature switches without restarting or touching service state', {
+test('configuration callback ignores legacy switch fields and leaves service state alone', {
   skip: !availableShell() ? 'POSIX shell is unavailable' : false
 }, (t) => {
-  const sandbox = fs.mkdtempSync(path.join(os.tmpdir(), 'babyreader-pdf-config-callback-'));
+  const sandbox = fs.mkdtempSync(path.join(os.tmpdir(), 'babyreader-config-callback-'));
   t.after(() => fs.rmSync(sandbox, { recursive: true, force: true }));
   const appDest = path.join(sandbox, 'target');
   const configRoot = path.join(sandbox, 'etc');
@@ -213,62 +198,35 @@ test('configuration callback persists feature switches without restarting or tou
   fs.mkdirSync(path.join(appDest, 'server'), { recursive: true });
   fs.mkdirSync(tempRoot);
   fs.cpSync(path.join(root, 'cmd', 'config_callback'), path.join(appDest, 'cmd', 'config_callback'));
-  fs.cpSync(path.join(root, 'cmd', 'main'), path.join(appDest, 'cmd', 'main'));
-  fs.cpSync(path.join(root, 'app', 'server', 'pdf-feature-config.js'), path.join(appDest, 'server', 'pdf-feature-config.js'));
-  fs.cpSync(path.join(root, 'app', 'server', 'mobi-feature-config.js'), path.join(appDest, 'server', 'mobi-feature-config.js'));
-  fs.cpSync(path.join(root, 'app', 'server', 'import-feature-config.js'), path.join(appDest, 'server', 'import-feature-config.js'));
   fs.cpSync(path.join(root, 'app', 'server', 'fnos-roots-config.js'), path.join(appDest, 'server', 'fnos-roots-config.js'));
   fs.cpSync(path.join(root, 'app', 'server', 'library-roots.js'), path.join(appDest, 'server', 'library-roots.js'));
-  fs.chmodSync(path.join(appDest, 'cmd', 'main'), 0o755);
   const socketMarker = path.join(appDest, 'app.sock');
   const pidMarker = path.join(tempRoot, 'babyreader-fnos.pid');
   fs.writeFileSync(socketMarker, 'existing socket marker');
   fs.writeFileSync(pidMarker, '999999');
-  const call = (value) => spawnSync(availableShell(), [path.join(appDest, 'cmd', 'config_callback')], {
+
+  // A settings form from an older version may still post the old switches.
+  const result = spawnSync(availableShell(), [path.join(appDest, 'cmd', 'config_callback')], {
     encoding: 'utf8',
     env: {
       ...process.env,
       TRIM_APPDEST: appDest,
       TRIM_PKGETC: configRoot,
       TRIM_PKGTMP: tempRoot,
-      ...(value === undefined ? {} : { wizard_mobi_reader_enabled: value })
+      wizard_pdf_reader_enabled: 'false',
+      wizard_mobi_reader_enabled: 'false',
+      wizard_import_enabled: 'false'
     },
     timeout: 10000
   });
-
-  const enabled = call('true');
-  assert.equal(enabled.status, 0, enabled.stderr);
-  const configFile = path.join(configRoot, 'mobi-feature.json');
-  assert.deepEqual(JSON.parse(fs.readFileSync(configFile, 'utf8')), { version: 1, enabled: true });
+  assert.equal(result.status, 0, result.stderr);
+  for (const name of ['pdf-feature.json', 'mobi-feature.json', 'import-feature.json']) {
+    assert.equal(fs.existsSync(path.join(configRoot, name)), false, name);
+  }
+  // It still snapshots the authorised folders, and never restarts the service.
+  assert.ok(fs.existsSync(path.join(configRoot, 'fnos-authorized-roots.json')));
   assert.equal(fs.readFileSync(socketMarker, 'utf8'), 'existing socket marker');
   assert.equal(fs.readFileSync(pidMarker, 'utf8'), '999999');
-
-  const before = fs.readFileSync(configFile, 'utf8');
-  assert.equal(call(undefined).status, 0);
-  assert.equal(fs.readFileSync(configFile, 'utf8'), before);
-  const rejected = call('invalid');
-  assert.notEqual(rejected.status, 0);
-  assert.equal(fs.readFileSync(configFile, 'utf8'), before);
-  assert.equal(fs.readFileSync(socketMarker, 'utf8'), 'existing socket marker');
-
-  // A PDF field from an older settings form is ignored: PDF has no switch.
-  const legacyPdf = spawnSync(availableShell(), [path.join(appDest, 'cmd', 'config_callback')], {
-    encoding: 'utf8',
-    env: { ...process.env, TRIM_APPDEST: appDest, TRIM_PKGETC: configRoot, TRIM_PKGTMP: tempRoot, wizard_pdf_reader_enabled: 'false' },
-    timeout: 10000
-  });
-  assert.equal(legacyPdf.status, 0, legacyPdf.stderr);
-  assert.equal(fs.existsSync(path.join(configRoot, 'pdf-feature.json')), false);
-  assert.equal(fs.readFileSync(configFile, 'utf8'), before);
-
-  const imports = spawnSync(availableShell(), [path.join(appDest, 'cmd', 'config_callback')], {
-    encoding: 'utf8',
-    env: { ...process.env, TRIM_APPDEST: appDest, TRIM_PKGETC: configRoot, TRIM_PKGTMP: tempRoot, wizard_import_enabled: 'true' },
-    timeout: 10000
-  });
-  assert.equal(imports.status, 0, imports.stderr);
-  assert.deepEqual(JSON.parse(fs.readFileSync(path.join(configRoot, 'import-feature.json'), 'utf8')), { version: 1, enabled: true });
-  assert.equal(fs.readFileSync(configFile, 'utf8'), before);
 });
 
 test('fnOS library authorization changes update the private snapshot without lifecycle restart', {

@@ -2,7 +2,6 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { test, expect } = require('@playwright/test');
 const { createMobiFixture } = require('../tests/fixtures/mobi-fixtures');
-const { setMobiReaderEnabled } = require('../app/server/mobi-feature-config');
 
 // MOBI plan Task 3: a generated MOBI6 book is scanned, opened through its
 // derived EPUB, navigated, searched and resumed in a real browser. The spec
@@ -24,14 +23,12 @@ test.describe.configure({ mode: 'serial' });
 
 test.beforeAll(async ({ request }) => {
   fs.writeFileSync(MOBI_FILE, createMobiFixture({ title: TITLE, author: 'Playwright' }));
-  setMobiReaderEnabled(path.join(RUNTIME, 'etc'), 'true');
   const library = await rescan(request);
   expect(library.books.some((book) => book.title === TITLE)).toBeTruthy();
 });
 
 test.afterAll(async ({ request }) => {
   fs.rmSync(MOBI_FILE, { force: true });
-  setMobiReaderEnabled(path.join(RUNTIME, 'etc'), 'false');
   await rescan(request);
 });
 

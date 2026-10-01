@@ -2,7 +2,6 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { test, expect } = require('@playwright/test');
 const { zipSync, strToU8 } = require('fflate');
-const { setBookImportEnabled } = require('../app/server/import-feature-config');
 
 // MOBI/import plan Task 5: admin import through the file picker and by drag
 // and drop in a real browser. The spec turns import on, and afterwards removes
@@ -29,13 +28,11 @@ const FIRST_BOOK = epubBytes('浏览器导入的书', '这是通过导入按钮�
 test.describe.configure({ mode: 'serial' });
 
 test.beforeAll(async ({ request }) => {
-  setBookImportEnabled(path.join(RUNTIME, 'etc'), 'true');
   expect((await request.post(`${APP_PATH}api/library/scan`)).ok()).toBeTruthy();
 });
 
 test.afterAll(async ({ request }) => {
   fs.rmSync(IMPORT_DIR, { recursive: true, force: true });
-  setBookImportEnabled(path.join(RUNTIME, 'etc'), 'false');
   await request.post(`${APP_PATH}api/library/scan`);
 });
 
