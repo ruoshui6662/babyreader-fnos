@@ -129,15 +129,28 @@ function createPdfAiProfileStore({ dataRoot } = {}) {
   async function getOrCreateProfile({ build, validateBeforeWrite = null, signal, ...input } = {}) {
     if (typeof build !== 'function') throw storeError('INVALID_BUILDER', 'Profile builder is required');
     if (signal?.aborted) throw storeError('AbortError', 'PDF profile build was cancelled');
-    const cached = await getProfile(input);
-    if (cached) return cached;
     const keys = buildPdfAiProfileCacheKey(input);
     const inFlightKey = `${keys.cacheKey}`;
-    let entry = inFlight.get(inFlightKey);
+    // An entry whose build was already cancelled must never gain new waiters:
+    // they would inherit an AbortError they did not ask for.
+    const liveEntry = () => {
+      const current = inFlight.get(inFlightKey);
+      return current && !current.controller.signal.aborted ? current : null;
+    };
+    // Join a live build synchronously, before any disk read: it will publish
+    // the profile, and joining in call order keeps waiter counts deterministic.
+    let entry = liveEntry();
+    if (!entry) {
+      const cached = await getProfile(input);
+      if (cached) return cached;
+      // Cancelled while reading the cache: leave the shared build alone.
+      if (signal?.aborted) throw storeError('AbortError', 'PDF profile build was cancelled');
+      entry = liveEntry();
+    }
     if (!entry) {
       const controller = new AbortController();
-      entry = { bookId: validBookId(input.bookId), controller, waiters: 0, promise: null };
-      entry.promise = Promise.resolve().then(async () => {
+      const created = { bookId: validBookId(input.bookId), controller, waiters: 0, promise: null };
+      created.promise = Promise.resolve().then(async () => {
         if (controller.signal.aborted) throw storeError('AbortError', 'PDF profile build was cancelled');
         const profile = await build(controller.signal);
         if (controller.signal.aborted) throw storeError('AbortError', 'PDF profile build was cancelled');
@@ -146,8 +159,12 @@ function createPdfAiProfileStore({ dataRoot } = {}) {
         }
         await putProfile({ ...input, profile });
         return profile;
-      }).finally(() => inFlight.delete(inFlightKey));
-      inFlight.set(inFlightKey, entry);
+      }).finally(() => {
+        // A cancelled build may settle after a fresh one took its key.
+        if (inFlight.get(inFlightKey) === created) inFlight.delete(inFlightKey);
+      });
+      inFlight.set(inFlightKey, created);
+      entry = created;
     }
     entry.waiters += 1;
     return new Promise((resolve, reject) => {

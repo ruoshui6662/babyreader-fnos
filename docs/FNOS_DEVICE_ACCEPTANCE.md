@@ -372,7 +372,7 @@ unset BABYREADER_GATEWAY_COOKIE
 /var/apps/babyreader-fnos/cmd/main status
 ```
 
-若 `status` 返回 3 但目标 socket 与健康接口正常，以 fnOS 监管状态及健康接口为准；不要在 SSH 中直接运行 `cmd/main restart`，应通过应用中心管理服务生命周期。
+自 v1.3.6 起，PID 文件缺失或指向其他进程时，`cmd/main` 会扫描进程表，查找参数为本包 `server/index.js` 的进程，找到后重新写入 PID 文件。因此由 fnOS 监管启动的服务也应返回 status=0。若仍出现 `status` 返回 3 但目标 socket 与健康接口正常，请记录 `ps -ef | grep "[s]erver/index.js"` 的输出以便排查，并以 fnOS 监管状态及健康接口为准；不要在 SSH 中直接运行 `cmd/main restart`，应通过应用中心管理服务生命周期。
 
 通过标准：优先检查运行时 status=0；如果 fnOS 外部监管模式下 `cmd/main status` 返回 3，但 `target/app.sock` 存在且 Unix Socket health 返回 200，则按“服务已运行、状态命令未接管 PID”的兼容情况通过；若 Socket 或 health 失败仍判定失败。停止时 status=3；`target/app.sock` 随服务创建/删除；进程指向 `target/server/index.js`；日志写入包变量目录。
 

@@ -13,6 +13,9 @@ LOG_FILE="$PKG_VAR/babyreader-fnos.log"
 SOCKET_FILE="$APP_DEST/app.sock"
 SERVER_FILE="$APP_DEST/server/index.js"
 NODEJS_DIR="/var/apps/nodejs_v22/target/bin"
+# Process table root; overridable only so tests can supply a fake one.
+PROC_ROOT="${BABYREADER_PROC_ROOT:-/proc}"
+SERVER_REAL=$(readlink -f "$SERVER_FILE" 2>/dev/null) || SERVER_REAL=$SERVER_FILE
 
 report_error() {
   MESSAGE=$1
@@ -46,12 +49,55 @@ read_pid() {
   return 0
 }
 
-is_running() {
-  read_pid || return 1
-  kill -0 "$PID" 2>/dev/null || return 1
+# True when process $1 runs this package's server: one of its arguments is
+# SERVER_FILE, either verbatim or through a different path to the same file
+# (fnOS may launch it via the resolved app-center directory).
+is_server_pid() {
+  CMDLINE_FILE="$PROC_ROOT/$1/cmdline"
+  [ -r "$CMDLINE_FILE" ] || return 1
+  tr '\000' '\n' < "$CMDLINE_FILE" 2>/dev/null | {
+    while IFS= read -r ARG; do
+      case "$ARG" in
+        */server/index.js) ;;
+        *) continue ;;
+      esac
+      [ "$ARG" = "$SERVER_FILE" ] && exit 0
+      [ "$(readlink -f "$ARG" 2>/dev/null)" = "$SERVER_REAL" ] && exit 0
+    done
+    exit 1
+  }
+}
 
-  if [ -r "/proc/$PID/cmdline" ]; then
-    tr '\000' '\n' < "/proc/$PID/cmdline" 2>/dev/null | grep -Fqx "$SERVER_FILE" || return 1
+# Finds the server by scanning the process table, for when the PID file is
+# missing or stale (fnOS may supervise the process or clear the temp dir).
+find_server_pid() {
+  for ENTRY in "$PROC_ROOT"/[0-9]*; do
+    CANDIDATE=${ENTRY##*/}
+    case "$CANDIDATE" in
+      ''|*[!0-9]*) continue ;;
+    esac
+    [ "$CANDIDATE" = "$$" ] && continue
+    if is_server_pid "$CANDIDATE"; then
+      PID=$CANDIDATE
+      return 0
+    fi
+  done
+  return 1
+}
+
+is_running() {
+  if read_pid && kill -0 "$PID" 2>/dev/null; then
+    if [ ! -r "$PROC_ROOT/$PID/cmdline" ] || is_server_pid "$PID"; then
+      return 0
+    fi
+  fi
+
+  # The PID file cannot vouch for the server; look for it directly so status
+  # does not report a running service as stopped and start does not launch a
+  # second copy over its socket. Re-adopt the PID for later stop/status calls.
+  find_server_pid || return 1
+  if mkdir -p "$PKG_TMP" 2>/dev/null && printf '%s\n' "$PID" > "$PID_FILE" 2>/dev/null; then
+    chmod 600 "$PID_FILE" 2>/dev/null || true
   fi
   return 0
 }
@@ -196,7 +242,8 @@ case "${1:-}" in
     status_service
     ;;
   *)
+    # fnOS lifecycle contract: 0 success/running, 1 failure, 3 not running.
     printf 'Usage: %s {start|stop|restart|status}\n' "$0" >&2
-    exit 2
+    exit 1
     ;;
 esac
