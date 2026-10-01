@@ -1,6 +1,6 @@
 # Working Change Log
 
-## MOBI/AZW3 与导入默认开启（未发布）2026-09-30
+## v1.3.8 2026-09-30 — MOBI/AZW3 与导入默认开启
 
 - 依据用户要求：与 PDF 一样，MOBI/AZW3 阅读和管理员导入改为始终开启，从应用设置中移除这两个开关。
 - `mobi-feature-config.js`、`import-feature-config.js` 与 PDF 的开关模块处理方式相同：忽略旧版本留下的 `*-feature.json`（以前每次保存设置都会写入 `{"enabled":false}`），只保留环境变量 `BABYREADER_MOBI_ENABLED` / `BABYREADER_IMPORT_ENABLED` 设为 `0/false/no/off` 时的运维紧急关闭。导入仍然只对管理员开放。
