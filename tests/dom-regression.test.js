@@ -586,7 +586,9 @@ test('library explains hidden and DRM-protected Kindle books and labels MOBI/AZW
     books: [text],
     features: { libraryOrganization: false, pdfReader: true, mobiReader: false, hiddenMobiCount: 3 }
   });
-  assert.match(window.document.querySelector('.library-view').textContent, /3 本 MOBI\/AZW3.*重新扫描/);
+  assert.match(window.document.querySelector('.library-view').textContent, /3 本 MOBI\/AZW3.*管理员已关闭 MOBI\/AZW3 阅读/);
+  // MOBI/AZW3 has no fnOS settings switch any more; never send people looking for one.
+  assert.doesNotMatch(window.document.querySelector('.library-view').textContent, /运行设置/);
   assert.doesNotMatch(window.document.querySelector('.library-view').textContent, /PDF 已扫描/);
 
   const mobi6 = { id: 'b'.repeat(64), title: '旧格式', type: 'mobi', sourceFormat: 'mobi6' };
@@ -597,7 +599,7 @@ test('library explains hidden and DRM-protected Kindle books and labels MOBI/AZW
   });
   const view = window.document.querySelector('.library-view');
   assert.match(view.textContent, /2 本 Kindle 书受 DRM 保护/);
-  assert.doesNotMatch(view.textContent, /启用后重新扫描/);
+  assert.doesNotMatch(view.textContent, /管理员已关闭 MOBI/);
   const labels = [...view.querySelectorAll('.library-grid .library-cover-format')].map((node) => node.textContent);
   assert.deepEqual(labels.sort(), ['AZW3', 'MOBI']);
   await window.happyDOM.close();

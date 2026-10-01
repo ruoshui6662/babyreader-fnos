@@ -235,8 +235,8 @@ function createBookImporter({
     const { name, extension, format } = sanitizeImportName(encodedName);
     if (!isFormatEnabled(format.type)) {
       throw importError('IMPORT_FORMAT_DISABLED', 409, format.type === 'pdf'
-        ? '请先在 fnOS 运行设置中启用 PDF 阅读。'
-        : '请先在 fnOS 运行设置中启用 MOBI/AZW3 阅读。');
+        ? '管理员已关闭 PDF 阅读，暂时无法导入 PDF。'
+        : '管理员已关闭 MOBI/AZW3 阅读，暂时无法导入 Kindle 书。');
     }
     const declared = Number(contentLength);
     if (contentLength === undefined || contentLength === null || contentLength === '' || !Number.isSafeInteger(declared) || declared < 0) {

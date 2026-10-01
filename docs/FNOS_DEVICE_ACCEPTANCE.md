@@ -273,6 +273,8 @@ unset BABYREADER_ENABLE_AI_CHAPTER_UNDERSTANDING
 
 ## 5.6 PDF 阅读与本地全文搜索验收
 
+> **v1.3.7 起 PDF、v1.3.8 起 MOBI/AZW3 与管理员导入都已始终开启，应用设置中不再有这些开关。** 下文中“打开开关”的步骤直接跳过；“开关关闭时”的检查改为在测试实例上设置对应的环境变量 `BABYREADER_PDF_ENABLED` / `BABYREADER_MOBI_ENABLED` / `BABYREADER_IMPORT_ENABLED` 为 `0`。升级后旧版本留下的 `*-feature.json` 会被忽略，书库应直接显示 PDF 和 MOBI/AZW3。
+
 PDF 功能默认关闭。管理员在 fnOS 应用中心 → BabyReader → 应用设置中打开“PDF 阅读与全文搜索（验收用）”，刷新 BabyReader，再执行“重新扫描”。配置即时生效，不需要在 SSH 中设置环境变量或手动重启服务。验收结束后在同一设置页关闭开关并刷新应用。不要修改已有书籍、索引或个人数据来制造测试条件。
 
 准备一份合成测试书：
@@ -316,6 +318,8 @@ unset BABYREADER_GATEWAY_COOKIE
 完成后在应用设置关闭 PDF 开关并刷新；确认 PDF 隐藏，原书库、进度、书签、标注、分类、AI 会话和索引未变化。合成文件可保留供后续验收；如果用户决定清理，只删除这一个精确文件。保留 x86_64 与 ARM64 两份验收记录。当前代码的 PDF 提取/索引资源上限仍是保守临时值，需结合设备冷/热解析时间和可观测进程 RSS 评估；没测到或超过任一上限都不能把该架构标记为通过。
 
 ## 5.7 MOBI/AZW3 阅读与书籍导入验收（v1.3.0）
+
+> **v1.3.7 起 PDF、v1.3.8 起 MOBI/AZW3 与管理员导入都已始终开启，应用设置中不再有这些开关。** 下文中“打开开关”的步骤直接跳过；“开关关闭时”的检查改为在测试实例上设置对应的环境变量 `BABYREADER_PDF_ENABLED` / `BABYREADER_MOBI_ENABLED` / `BABYREADER_IMPORT_ENABLED` 为 `0`。升级后旧版本留下的 `*-feature.json` 会被忽略，书库应直接显示 PDF 和 MOBI/AZW3。
 
 两个功能都默认关闭，彼此独立。管理员在 fnOS 应用中心 → BabyReader → 应用设置中打开：
 

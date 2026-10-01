@@ -16,7 +16,6 @@ const {
   createTruncatedMobiFixture
 } = require('./fixtures/mobi-fixtures');
 const { scanLibrary } = require('../app/server/library');
-const { setMobiReaderEnabled } = require('../app/server/mobi-feature-config');
 
 const SANDBOX = path.join(os.tmpdir(), `babyreader-mobi-library-${process.pid}`);
 const DATA_ROOT = path.join(SANDBOX, 'var');
@@ -123,6 +122,8 @@ test.describe('library API', () => {
     await fs.mkdir(CONFIG_ROOT, { recursive: true });
     await makeLibrary(LIBRARY_ROOT);
     await fs.writeFile(path.join(CONFIG_ROOT, 'settings.json'), JSON.stringify({ libraryRoots: [LIBRARY_ROOT] }));
+    // What older versions left behind after any app-settings save: ignored now.
+    await fs.writeFile(path.join(CONFIG_ROOT, 'mobi-feature.json'), '{"version":1,"enabled":false}');
     await loadConfiguration();
     server = http.createServer((request, response) => void handleRequest(request, response));
     await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
@@ -143,7 +144,8 @@ test.describe('library API', () => {
     return response.json();
   }
 
-  test('MOBI defaults off: hidden from library and organization, reported as a hidden count', async () => {
+  test('the MOBI kill switch hides Kindle books from library and organization, reported as a hidden count', async () => {
+    process.env.BABYREADER_MOBI_ENABLED = 'false';
     const library = await scan();
     assert.equal(library.features.mobiReader, false);
     assert.equal(library.features.hiddenMobiCount, 4);
@@ -153,8 +155,8 @@ test.describe('library API', () => {
     assert.equal(organization.books.length, 2);
   });
 
-  test('MOBI enabled after a rescan: listed as EPUB with its format, read and searched through the derived EPUB', async () => {
-    setMobiReaderEnabled(CONFIG_ROOT, 'true');
+  test('MOBI is on by default after a rescan: listed as EPUB with its format, read and searched through the derived EPUB', async () => {
+    delete process.env.BABYREADER_MOBI_ENABLED;
     const library = await scan();
     assert.equal(library.features.mobiReader, true);
     assert.equal(library.features.hiddenMobiCount, 0);
@@ -201,7 +203,7 @@ test.describe('library API', () => {
   });
 
   test('switching MOBI off again hides indexed Kindle books and closes their endpoints', async () => {
-    setMobiReaderEnabled(CONFIG_ROOT, 'false');
+    process.env.BABYREADER_MOBI_ENABLED = 'false';
     const library = await (await fetch(`${baseUrl}/api/library`, { headers: READER })).json();
     assert.equal(library.books.some((book) => book.type === 'mobi'), false);
     assert.equal(library.features.hiddenMobiCount, 2, 'indexed readable Kindle books (not DRM or broken ones) are counted as hidden');

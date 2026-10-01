@@ -156,7 +156,7 @@ function createLibraryHiddenPdfNotice(library) {
     lines.push(`另有 ${features.hiddenPdfCount} 本 PDF 已扫描；管理员已关闭 PDF 阅读（BABYREADER_PDF_ENABLED）。`);
   }
   if (features.mobiReader === false && count(features.hiddenMobiCount)) {
-    lines.push(`另有 ${features.hiddenMobiCount} 本 MOBI/AZW3；请在 fnOS 的运行设置中启用后重新扫描。`);
+    lines.push(`另有 ${features.hiddenMobiCount} 本 MOBI/AZW3 已扫描；管理员已关闭 MOBI/AZW3 阅读（BABYREADER_MOBI_ENABLED）。`);
   }
   if (count(features.drmProtectedMobiCount)) {
     lines.push(`${features.drmProtectedMobiCount} 本 Kindle 书受 DRM 保护，无法阅读。`);

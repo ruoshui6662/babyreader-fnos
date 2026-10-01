@@ -1,31 +1,10 @@
 [
   {
-    "stepTitle": "MOBI/AZW3 阅读验收",
+    "stepTitle": "阅读格式",
     "items": [
       {
-        "type": "switch",
-        "field": "wizard_mobi_reader_enabled",
-        "label": "启用 MOBI/AZW3 阅读（验收用）",
-        "initValue": "false"
-      },
-      {
         "type": "tips",
-        "helpText": "默认关闭。开启后请在书库中点“重新扫描”；受 DRM 保护的 Kindle 书无法阅读。"
-      }
-    ]
-  },
-  {
-    "stepTitle": "书籍导入",
-    "items": [
-      {
-        "type": "switch",
-        "field": "wizard_import_enabled",
-        "label": "允许管理员从浏览器导入书籍",
-        "initValue": "false"
-      },
-      {
-        "type": "tips",
-        "helpText": "默认关闭。导入的书保存在应用共享目录 babyreader-fnos/library/导入 中，书库所有用户可见。"
+        "helpText": "EPUB、PDF、MOBI/AZW3、Markdown 和 TXT 均已默认开启，无需设置；管理员可在书库中直接导入书籍。受 DRM 保护的 Kindle 书无法阅读。"
       }
     ]
   }

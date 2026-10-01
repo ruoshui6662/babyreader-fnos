@@ -58,8 +58,8 @@ fnOS 包: manifest · cmd/*（生命周期脚本）· config/{privilege,resource
 | 全书搜索 | 本地 FTS、续页、跨章节命中；搜索面板不关闭，可前后跳转命中 | 同一页重复短语的精确定位仍会退化成只定位到章节 |
 | AI 问书 | 多轮流式对话；章节和全书检索；摘要缓存；会话持久化；PDF 结构化理解与来源页码；索引管理器（紧凑界面、孤儿索引清理） | 没有做真实供应商和 NAS 验收 |
 | 书库 | 分类、整理模式批量归类、书卡直接拖拽和长按排序（有 revision 冲突回滚）、筛选、继续阅读卡片、首页 Apple HIG 改版 | 本地完成；触屏真机和视觉对照待做 |
-| MOBI/AZW3 阅读 | 服务端把 MOBI6/KF8 转成确定性的派生 EPUB（`mobi-format`/`mobi-convert`/`mobi-derived`，在 worker 中执行，有缓存），然后复用 EPUB 的全部能力：阅读、目录、划线、进度、搜索、AI；DRM 只检测、提示，不解密 | 本地完成（AZW3 已用真实书验证）。**默认关闭**，由 wizard 的 `wizard_mobi_reader_enabled` 开启，开启后需要重新扫描 |
-| 书籍导入 | 管理员可以通过按钮或拖放导入，文件写入 `babyreader-fnos/library/导入` 共享目录；按内容校验格式，按 SHA-256 去重，不覆盖已有文件；导入与扫描共用库锁；有进度队列；在分类页导入会自动归类 | 本地完成。**默认关闭**，由 wizard 的 `wizard_import_enabled` 开启；网关的请求体上限还没测 |
+| MOBI/AZW3 阅读 | 服务端把 MOBI6/KF8 转成确定性的派生 EPUB（`mobi-format`/`mobi-convert`/`mobi-derived`，在 worker 中执行，有缓存），然后复用 EPUB 的全部能力：阅读、目录、划线、进度、搜索、AI；DRM 只检测、提示，不解密 | 本地完成（AZW3 已用真实书验证）。**始终开启**（v1.3.8 起移除了设置开关） |
+| 书籍导入 | 管理员可以通过按钮或拖放导入，文件写入 `babyreader-fnos/library/导入` 共享目录；按内容校验格式，按 SHA-256 去重，不覆盖已有文件；导入与扫描共用库锁；有进度队列；在分类页导入会自动归类 | 本地完成。**对管理员始终开启**（v1.3.8 起移除了设置开关）；网关的请求体上限还没测 |
 | fnOS 集成 | 统一网关 Header 身份；授权目录 `TRIM_DATA_ACCESSIBLE_PATHS`/`TRIM_DATA_SHARE_PATHS`（realpath 校验、去重、父子目录裁剪）；包专用用户（非 root） | 本地完成，需真机验收 |
 
 ## 4. 配置开关（环境变量 / 向导）
@@ -67,8 +67,8 @@ fnOS 包: manifest · cmd/*（生命周期脚本）· config/{privilege,resource
 | 变量 | 作用 |
 | --- | --- |
 | `BABYREADER_PDF_ENABLED` | PDF 阅读与搜索始终开启；仅当设为 `0/false/no/off` 时作为运维紧急关闭开关。旧版本留下的 `pdf-feature.json` 会被忽略（`pdf-feature-config.js`） |
-| `BABYREADER_MOBI_ENABLED` / wizard `wizard_mobi_reader_enabled` | MOBI/AZW3 阅读，默认关闭（`mobi-feature-config.js`）；开启后需要在书库重新扫描 |
-| `BABYREADER_IMPORT_ENABLED` / wizard `wizard_import_enabled` | 管理员从浏览器导入书籍，默认关闭（`import-feature-config.js`） |
+| `BABYREADER_MOBI_ENABLED` | MOBI/AZW3 阅读始终开启；仅当设为 `0/false/no/off` 时作为运维紧急关闭开关（`mobi-feature-config.js`） |
+| `BABYREADER_IMPORT_ENABLED` | 管理员从浏览器导入书籍，始终开启（仍只限管理员）；仅当设为 `0/false/no/off` 时作为运维紧急关闭开关（`import-feature-config.js`） |
 | `BABYREADER_KF8_SAMPLE` | 可选：指向本地 AZW3 样本的绝对路径，用于真实书的转换回归测试（样本不进仓库） |
 | `BABYREADER_ENABLE_LIBRARY_ORGANIZATION=0` | 回退到扁平书库 |
 | `BABYREADER_ENABLE_AI_CHAPTER_UNDERSTANDING` | AI 章节/全书概述（灰度） |

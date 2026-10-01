@@ -1,5 +1,13 @@
 # Working Change Log
 
+## MOBI/AZW3 与导入默认开启（未发布）2026-09-30
+
+- 依据用户要求：与 PDF 一样，MOBI/AZW3 阅读和管理员导入改为始终开启，从应用设置中移除这两个开关。
+- `mobi-feature-config.js`、`import-feature-config.js` 与 PDF 的开关模块处理方式相同：忽略旧版本留下的 `*-feature.json`（以前每次保存设置都会写入 `{"enabled":false}`），只保留环境变量 `BABYREADER_MOBI_ENABLED` / `BABYREADER_IMPORT_ENABLED` 设为 `0/false/no/off` 时的运维紧急关闭。导入仍然只对管理员开放。
+- `config_callback` 只保留授权目录快照。设置页没有删除，改为一个只有说明文字的步骤“阅读格式”：`config_callback` 写入的授权目录快照优先于环境变量，如果删除设置页导致 fnOS 不再调用 `config_callback`，新授权的目录可能无法生效。只有说明文字的设置步骤能否被 fnOS 正常显示，需要在 NAS 上确认。
+- 紧急关闭时，书库和导入的提示改为“管理员已关闭 …”，不再让用户去设置里找开关。
+- 测试：新增 `tests/format-switches.test.js`；MOBI 书库和导入的关闭态测试改用环境变量驱动；E2E 去掉了开关切换；生命周期测试改为验证设置页没有开关、`config_callback` 忽略旧字段并仍写入授权目录快照。
+
 ## v1.3.7 2026-09-30 — PDF 阅读默认开启
 
 - 依据用户要求：书库提示“另有 6 本 PDF 已扫描；请在 fnOS 的运行设置中启用 PDF 阅读”，不希望再到设置里单独开启。

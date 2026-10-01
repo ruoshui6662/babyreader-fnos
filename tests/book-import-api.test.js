@@ -10,8 +10,6 @@ const os = require('node:os');
 const path = require('node:path');
 const test = require('node:test');
 const { zipSync, strToU8 } = require('fflate');
-const { setBookImportEnabled } = require('../app/server/import-feature-config');
-const { setMobiReaderEnabled } = require('../app/server/mobi-feature-config');
 const { createMobiFixture } = require('./fixtures/mobi-fixtures');
 
 const SANDBOX = path.join(os.tmpdir(), `babyreader-import-api-${process.pid}`);
@@ -75,6 +73,9 @@ test.before(async () => {
   await fs.mkdir(CONFIG_ROOT, { recursive: true });
   await fs.writeFile(path.join(LIBRARY_ROOT, 'existing.txt'), '已有的书');
   await fs.writeFile(path.join(CONFIG_ROOT, 'settings.json'), JSON.stringify({ libraryRoots: [LIBRARY_ROOT] }));
+  // What older versions left behind after any app-settings save: ignored now.
+  await fs.writeFile(path.join(CONFIG_ROOT, 'import-feature.json'), '{"version":1,"enabled":false}');
+  await fs.writeFile(path.join(CONFIG_ROOT, 'mobi-feature.json'), '{"version":1,"enabled":false}');
   await loadConfiguration();
   server = http.createServer((request, response) => void handleRequest(request, response));
   await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
@@ -90,15 +91,16 @@ test.after(async () => {
   await fs.rm(SANDBOX, { recursive: true, force: true });
 });
 
-test('import is off by default and not advertised', async () => {
-  const result = await upload(epubBytes('关闭时'), 'off.epub');
+test('the import kill switch refuses uploads and stops advertising import', async () => {
+  process.env.BABYREADER_IMPORT_ENABLED = 'false';
+  const result = await upload(epubBytes('关闭时'), 'off.epub', ADMIN);
   assert.equal(result.status, 404);
   assert.equal(result.body.code, 'IMPORT_DISABLED');
-  assert.equal((await library()).features.bookImport, false);
+  assert.equal((await library(ADMIN)).features.bookImport, false);
+  delete process.env.BABYREADER_IMPORT_ENABLED;
 });
 
-test('only administrators, from this origin and with the import header, may upload', async () => {
-  setBookImportEnabled(CONFIG_ROOT, 'true');
+test('import is on by default, but only administrators, from this origin and with the import header, may upload', async () => {
   assert.equal((await library(ADMIN)).features.bookImport, true);
   assert.equal((await library(READER)).features.bookImport, false);
   assert.equal((await upload(epubBytes('x'), 'x.epub', READER)).body.code, 'IMPORT_FORBIDDEN');
@@ -142,20 +144,20 @@ test('the same content is refused as a duplicate; a new book with the same name 
   assert.equal(renamed.body.name, '我的书 (2).epub');
 });
 
-test('MOBI imports follow the MOBI switch and are read through the derived EPUB', async () => {
+test('MOBI imports follow the MOBI kill switch and are read through the derived EPUB', async () => {
   const bytes = createMobiFixture({ title: '导入的 Kindle 书' });
+  process.env.BABYREADER_MOBI_ENABLED = 'false';
   const disabled = await upload(bytes, 'kindle.mobi');
   assert.equal(disabled.status, 409);
   assert.equal(disabled.body.code, 'IMPORT_FORMAT_DISABLED');
 
-  setMobiReaderEnabled(CONFIG_ROOT, 'true');
+  delete process.env.BABYREADER_MOBI_ENABLED;
   const imported = await upload(bytes, 'kindle.mobi');
   assert.equal(imported.status, 201);
   assert.equal(imported.body.book.type, 'epub');
   assert.equal(imported.body.book.format, 'mobi');
   const content = await fetch(`${baseUrl}/api/books/${imported.body.book.id}/content`, { headers: READER });
   assert.equal(content.headers.get('content-type'), 'application/epub+zip');
-  setMobiReaderEnabled(CONFIG_ROOT, 'false');
 });
 
 test('an import racing a full rescan is kept by both', async () => {
