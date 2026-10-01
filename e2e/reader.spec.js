@@ -1110,10 +1110,11 @@ test('selected text opens book-grounded AI panel and sends bounded retrieval con
   expect(sourceIndexStyle.fontSize).toBe('9px');
   expect(sourceIndexStyle.width).toBe(16);
   expect(sourceIndexStyle.height).toBe(16);
-  expect(askPayload).toEqual(expect.objectContaining({ question: '这一段的核心观点是什么？' }));
-  expect(Array.isArray(askPayload.context)).toBe(true);
-  expect(askPayload.context.length).toBeLessThanOrEqual(6);
-  expect(askPayload.context.reduce((total, item) => total + item.text.length, 0)).toBeLessThanOrEqual(7200);
+  // The server routes the question and reads the book; the browser sends no book text.
+  expect(askPayload).toEqual(expect.objectContaining({ mode: 'planned', question: '这一段的核心观点是什么？' }));
+  expect(askPayload.selectedText).toContain('E2E EPUB Chapter 1');
+  expect(askPayload).not.toHaveProperty('context');
+  expect(askPayload.chapter).toEqual(expect.objectContaining({ href: expect.any(String) }));
 });
 
 test('AI panel keeps a temporary multi-turn transcript and sends completed history', async ({ page }) => {

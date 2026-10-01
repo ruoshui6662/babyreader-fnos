@@ -235,10 +235,10 @@ test('EPUB index stores logical chapter structure without changing spine-index r
     .map((row) => ({ chapterIndex: Number(row.chapterIndex), chapterHref: String(row.chapterHref) }));
   db.close();
 
-  assert.equal(AI_FTS_SCHEMA_VERSION, 7);
-  assert.equal(metadata.schemaVersion, '7');
-  assert.equal(metadata.parserVersion, '2');
-  assert.equal(structureRow.parserVersion, '2');
+  assert.equal(AI_FTS_SCHEMA_VERSION, 8);
+  assert.equal(metadata.schemaVersion, '8');
+  assert.equal(metadata.parserVersion, '3');
+  assert.equal(structureRow.parserVersion, '3');
   assert.deepEqual(JSON.parse(structureRow.structureJson).chapters.map((chapter) => chapter.label), ['第一测试章', '第二测试章']);
   assert.deepEqual(rows, [{ chapterIndex: 0, chapterHref: 'OPS/content.xhtml' }]);
 });

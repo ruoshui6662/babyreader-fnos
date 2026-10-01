@@ -77,6 +77,7 @@ async function readAiEventStream(response, handlers = {}) {
     }
     lastEvent = { event: eventName, data: payload };
     if (eventName === 'meta') handlers.onMeta?.(payload);
+    else if (eventName === 'progress') handlers.onProgress?.(payload);
     else if (eventName === 'delta') handlers.onDelta?.(payload.delta || '');
     else if (eventName === 'done') { completed = true; handlers.onDone?.(payload); }
     else if (eventName === 'error') {

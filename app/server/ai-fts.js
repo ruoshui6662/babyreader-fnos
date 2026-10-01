@@ -7,6 +7,7 @@ const { safeUnzip } = require('./zip');
 const { normalizeBookText } = require('./ai-book-context');
 const { PDF_TEXT_LIMITS, PDF_TEXT_PARSER_VERSION, extractPdfText } = require('./pdf-text');
 const { AI_EPUB_PARSER_VERSION, parseEpubStructure, resolveLogicalChapter } = require('./ai-epub-structure');
+const { buildTextStructure } = require('./ai-text-structure');
 const { rankLexicalCandidates, fuseRankedMatches, assessRetrievalConfidence } = require('./ai-retrieval');
 const { createAiIndexManager } = require('./ai-index-manager');
 const {
@@ -18,7 +19,9 @@ const {
   createAiSummaryCache
 } = require('./ai-summary-cache');
 
-const AI_FTS_SCHEMA_VERSION = 7;
+const AI_FTS_SCHEMA_VERSION = 8;
+const TEXT_STRUCTURE_VERSION = 'text-structure-1';
+const NODE_SEGMENT_CHARS = 2400;
 const AI_FTS_CHUNK_SIZE = 900;
 const AI_FTS_CHUNK_OVERLAP = 120;
 const AI_FTS_MAX_RESULTS = 6;
@@ -106,13 +109,14 @@ async function readBookChapters(book, { signal } = {}) {
   }
   const bytes = await fs.readFile(book.path);
   if (book.type !== 'epub') {
+    const raw = bytes.toString('utf8');
     return { chapters: [{
       index: 0,
       href: '',
       label: book.title || '当前书本',
       headings: [],
-      text: normalizeBookText(bytes.toString('utf8'))
-    }], structure: null };
+      text: normalizeBookText(raw)
+    }], structure: null, textStructure: buildTextStructure(raw, { title: book.title }), parserVersion: TEXT_STRUCTURE_VERSION };
   }
 
   const files = safeUnzip(bytes);
@@ -159,6 +163,7 @@ function* buildPdfIndexChunks(pages) {
 function expectedParserVersion(book) {
   if (book?.type === 'epub') return String(AI_EPUB_PARSER_VERSION);
   if (book?.type === 'pdf') return PDF_TEXT_PARSER_VERSION;
+  if (book?.type === 'txt' || book?.type === 'markdown') return TEXT_STRUCTURE_VERSION;
   return 'none';
 }
 
@@ -338,6 +343,16 @@ function createSchema(db) {
       parserVersion TEXT NOT NULL,
       structureJson TEXT NOT NULL
     );
+    CREATE TABLE IF NOT EXISTS ai_nodes (
+      ord INTEGER PRIMARY KEY,
+      id TEXT NOT NULL UNIQUE,
+      parentId TEXT,
+      depth INTEGER NOT NULL,
+      label TEXT NOT NULL,
+      firstRow INTEGER,
+      lastRow INTEGER,
+      chars INTEGER NOT NULL
+    );
     CREATE TABLE IF NOT EXISTS ai_chapter_summary_cache (
       cacheKey TEXT PRIMARY KEY,
       cacheKind TEXT NOT NULL,
@@ -415,6 +430,56 @@ async function readIndexSummaryCache(filePath) {
   }
 }
 
+function chunkLength(chunk) {
+  return Array.from(String(chunk?.text || '')).length;
+}
+
+// Index chunks overlap so book search can match across a boundary. Reading a
+// whole chapter back must drop that overlap: chunks from the same source
+// document are contiguous in code points.
+function chunkOverlap(previous, next) {
+  if (!previous || !next || previous.chapterIndex !== next.chapterIndex || previous.chapterHref !== next.chapterHref) return 0;
+  const previousEnd = Number(previous.start) + chunkLength(previous);
+  const nextStart = Number(next.start);
+  if (!Number.isFinite(previousEnd) || !Number.isFinite(nextStart) || nextStart >= previousEnd || nextStart < Number(previous.start)) return 0;
+  return previousEnd - nextStart;
+}
+
+// Table-of-contents nodes with the contiguous range of index rows each one
+// covers (its own rows and its descendants').
+function writeNodes(db, nodes, rowLeaves) {
+  const list = (Array.isArray(nodes) ? nodes : []).filter((node) => node && node.id);
+  const known = new Map(list.map((node) => [node.id, node]));
+  const ranges = new Map();
+  for (const row of rowLeaves) {
+    let nodeId = row.leafId;
+    const seen = new Set();
+    while (nodeId && known.has(nodeId) && !seen.has(nodeId)) {
+      seen.add(nodeId);
+      const range = ranges.get(nodeId) || { firstRow: row.rowid, lastRow: row.rowid, chars: 0 };
+      range.firstRow = Math.min(range.firstRow, row.rowid);
+      range.lastRow = Math.max(range.lastRow, row.rowid);
+      range.chars += Math.max(0, row.uniqueChars);
+      ranges.set(nodeId, range);
+      nodeId = known.get(nodeId).parentId || '';
+    }
+  }
+  const insert = db.prepare('INSERT OR REPLACE INTO ai_nodes(ord, id, parentId, depth, label, firstRow, lastRow, chars) VALUES (?, ?, ?, ?, ?, ?, ?, ?)');
+  list.forEach((node, order) => {
+    const range = ranges.get(node.id);
+    insert.run(
+      order,
+      String(node.id).slice(0, 256),
+      node.parentId ? String(node.parentId).slice(0, 256) : null,
+      Math.max(0, Math.min(32, Number(node.depth) || 0)),
+      String(node.label || '').slice(0, 300),
+      range ? range.firstRow : null,
+      range ? range.lastRow : null,
+      range ? range.chars : 0
+    );
+  });
+}
+
 async function buildIndex(book, dataRoot, filePath, fingerprint, manager, { signal } = {}) {
   const directory = path.dirname(filePath);
   await fs.mkdir(directory, { recursive: true, mode: 0o700 });
@@ -423,7 +488,7 @@ async function buildIndex(book, dataRoot, filePath, fingerprint, manager, { sign
   let db;
   try {
     const priorSummaryCache = await readIndexSummaryCache(filePath);
-    const { chapters, structure, parserVersion, searchStatus } = await readBookChapters(book, { signal });
+    const { chapters, structure, textStructure, parserVersion, searchStatus } = await readBookChapters(book, { signal });
     db = openDatabase(temporaryPath);
     if (!db) return false;
     createSchema(db);
@@ -434,7 +499,7 @@ async function buildIndex(book, dataRoot, filePath, fingerprint, manager, { sign
       parserVersion: parserVersion || (structure ? String(AI_EPUB_PARSER_VERSION) : 'none'),
       ...(book.type === 'pdf' ? { pdfSearchStatus: searchStatus || 'ready' } : {})
     });
-    if (structure) {
+    if (structure && book.type === 'epub') {
       db.prepare('INSERT OR REPLACE INTO ai_epub_structure(id, parserVersion, structureJson) VALUES (1, ?, ?)')
         .run(String(AI_EPUB_PARSER_VERSION), JSON.stringify(structure));
     }
@@ -459,11 +524,14 @@ async function buildIndex(book, dataRoot, filePath, fingerprint, manager, { sign
           row.bookFingerprint, row.parserVersion, row.modelKey, row.summaryJson, row.createdAt
         );
       }
-      const chunks = structure
-        ? buildEpubIndexChunks(chapters, structure)
+      const nodeStructure = structure || (textStructure ? { chapters: textStructure.chapters, anchors: {} } : null);
+      const chunks = nodeStructure
+        ? buildEpubIndexChunks(chapters, nodeStructure)
         : book.type === 'pdf'
           ? buildPdfIndexChunks(chapters)
           : chapters.flatMap((chapter) => chunkChapter(chapter));
+      const rowLeaves = [];
+      let previousChunk = null;
       const pdfIndexStartedAt = book.type === 'pdf' ? Date.now() : 0;
       let pdfIndexRows = 0;
       for (const chunk of chunks) {
@@ -492,7 +560,14 @@ async function buildIndex(book, dataRoot, filePath, fingerprint, manager, { sign
           chunk.title,
           chunk.headings.join('\n')
         );
+        rowLeaves.push({
+          rowid: Number(inserted.lastInsertRowid),
+          leafId: chunk.logicalSectionId || chunk.logicalChapterId || '',
+          uniqueChars: chunkLength(chunk) - chunkOverlap(previousChunk, chunk)
+        });
+        previousChunk = chunk;
       }
+      if (nodeStructure) writeNodes(db, nodeStructure.chapters, rowLeaves);
       db.exec('COMMIT');
     } catch (error) {
       db.exec('ROLLBACK');
@@ -1254,6 +1329,174 @@ async function searchPdfEvidenceRowsByRanges(book, dataRoot, { query = '', range
   });
 }
 
+async function withIndexDb(book, dataRoot, read) {
+  const filePath = await ensureIndex(book, dataRoot);
+  if (!filePath) return null;
+  return getIndexManager(dataRoot).withReadLease(book.id, async () => {
+    let db;
+    try {
+      db = openDatabase(filePath, { readOnly: true });
+      return await read(db);
+    } finally {
+      db?.close();
+    }
+  });
+}
+
+// The book's table of contents as stored in the index: every node with its
+// depth, parent and size. Nodes with no text (e.g. an empty cover page) are
+// returned with chars = 0.
+async function readBookOutline(book, dataRoot) {
+  try {
+    const result = await withIndexDb(book, dataRoot, (db) => {
+      const meta = Object.fromEntries(db.prepare('SELECT key, value FROM ai_meta').all().map((row) => [row.key, row.value]));
+      const nodes = db.prepare('SELECT ord, id, parentId, depth, label, firstRow, lastRow, chars FROM ai_nodes ORDER BY ord').all()
+        .map((row) => ({
+          id: String(row.id),
+          parentId: row.parentId ? String(row.parentId) : null,
+          depth: Number(row.depth) || 0,
+          order: Number(row.ord),
+          label: String(row.label || ''),
+          firstRow: row.firstRow === null ? null : Number(row.firstRow),
+          lastRow: row.lastRow === null ? null : Number(row.lastRow),
+          chars: Number(row.chars) || 0
+        }));
+      const totalChars = db.prepare('SELECT COALESCE(SUM(LENGTH(bodyText)), 0) AS chars FROM ai_chunk_text').get().chars;
+      return { available: true, nodes, fingerprint: meta.fingerprint || '', parserVersion: meta.parserVersion || '', totalChars: Number(totalChars) || 0 };
+    });
+    return result || { available: false, nodes: [] };
+  } catch {
+    return { available: false, nodes: [] };
+  }
+}
+
+function rowToSource(row) {
+  return {
+    rowid: Number(row.rowid),
+    text: String(row.bodyText || ''),
+    headings: String(row.headingsText || '').split('\n').filter(Boolean),
+    chapterIndex: Number(row.chapterIndex),
+    chapterHref: String(row.chapterHref || ''),
+    chapterLabel: String(row.chapterLabel || ''),
+    logicalChapterId: String(row.logicalChapterId || ''),
+    logicalSectionId: String(row.logicalSectionId || ''),
+    start: Number(row.startOffset || 0)
+  };
+}
+
+const ROW_SELECT = `
+  SELECT ai_chunks.rowid AS rowid, ai_chunks.chapterIndex, ai_chunks.chapterHref, ai_chunks.chapterLabel,
+    ai_chunks.logicalChapterId, ai_chunks.logicalSectionId, ai_chunks.startOffset,
+    ai_chunk_text.bodyText, ai_chunk_text.headingsText
+  FROM ai_chunks INNER JOIN ai_chunk_text ON ai_chunk_text.rowid = ai_chunks.rowid`;
+
+// Joins consecutive index rows back into readable segments of about
+// `segmentChars`, dropping the overlap between rows.
+function rowsToSegments(rows, segmentChars = NODE_SEGMENT_CHARS) {
+  const segments = [];
+  let current = null;
+  let previous = null;
+  for (const row of rows) {
+    const overlap = chunkOverlap(previous, row);
+    const text = Array.from(row.text).slice(overlap).join('');
+    const contiguous = current && previous && previous.chapterIndex === row.chapterIndex && previous.chapterHref === row.chapterHref
+      && row.rowid === previous.rowid + 1;
+    if (!current || !contiguous || current.text.length + text.length > segmentChars) {
+      current = {
+        text: '',
+        chapterIndex: row.chapterIndex,
+        chapterHref: row.chapterHref,
+        chapterLabel: row.chapterLabel,
+        start: row.start + overlap,
+        headings: [],
+        firstRow: row.rowid,
+        lastRow: row.rowid
+      };
+      segments.push(current);
+    }
+    current.text += text;
+    current.lastRow = row.rowid;
+    for (const heading of row.headings) if (!current.headings.includes(heading)) current.headings.push(heading);
+    previous = row;
+  }
+  return segments.filter((segment) => segment.text.trim());
+}
+
+// A node's original text as readable segments. When the node is longer than
+// `maxChars`, segments are sampled evenly from beginning to end and
+// `truncated` is set.
+async function readNodeSegments(book, dataRoot, nodeId, { maxChars = 36000, segmentChars = NODE_SEGMENT_CHARS } = {}) {
+  if (typeof nodeId !== 'string' || !nodeId || nodeId.length > 256) return { available: false, segments: [] };
+  try {
+    const result = await withIndexDb(book, dataRoot, (db) => {
+      const node = db.prepare('SELECT id, label, firstRow, lastRow, chars FROM ai_nodes WHERE id = ?').get(nodeId);
+      if (!node || node.firstRow === null) return { available: Boolean(node), segments: [], chars: 0 };
+      const rows = db.prepare(`${ROW_SELECT} WHERE ai_chunks.rowid BETWEEN ? AND ? ORDER BY ai_chunks.rowid`)
+        .all(Number(node.firstRow), Number(node.lastRow)).map(rowToSource);
+      const segments = rowsToSegments(rows, segmentChars);
+      const chars = segments.reduce((sum, segment) => sum + segment.text.length, 0);
+      if (chars <= maxChars) return { available: true, label: String(node.label), chars, truncated: false, segments };
+      const keep = Math.max(1, Math.floor(maxChars / segmentChars));
+      const picked = Array.from({ length: keep }, (_, index) => segments[Math.round(index * (segments.length - 1) / Math.max(1, keep - 1))]);
+      return { available: true, label: String(node.label), chars, truncated: true, segments: [...new Set(picked)] };
+    });
+    return result || { available: false, segments: [] };
+  } catch {
+    return { available: false, segments: [] };
+  }
+}
+
+// Rows next to the given rows (same document), for expanding a search hit into
+// its surrounding passage.
+async function readRowsAround(book, dataRoot, rowids, { before = 1, after = 1 } = {}) {
+  const ids = [...new Set((Array.isArray(rowids) ? rowids : []).map(Number).filter(Number.isSafeInteger))].slice(0, 40);
+  if (!ids.length) return [];
+  try {
+    const result = await withIndexDb(book, dataRoot, (db) => {
+      const wanted = new Set();
+      for (const id of ids) for (let row = id - before; row <= id + after; row += 1) if (row > 0) wanted.add(row);
+      const list = [...wanted];
+      return db.prepare(`${ROW_SELECT} WHERE ai_chunks.rowid IN (${list.map(() => '?').join(',')}) ORDER BY ai_chunks.rowid`)
+        .all(...list).map(rowToSource);
+    });
+    return result || [];
+  } catch {
+    return [];
+  }
+}
+
+// Finds the deepest node containing a verbatim snippet of book text (the
+// visible paragraph or a selection). Returns the row too, so callers can read
+// the passage around it.
+async function locateTextInBook(book, dataRoot, snippet, { preferNodeId = null } = {}) {
+  const needle = normalizeBookText(snippet).slice(0, 120);
+  if (needle.length < 4) return null;
+  try {
+    return await withIndexDb(book, dataRoot, (db) => {
+      const probe = needle.slice(0, 60);
+      const rows = db.prepare(`${ROW_SELECT} WHERE instr(ai_chunk_text.bodyText, ?) > 0 ORDER BY ai_chunks.rowid LIMIT 20`).all(probe).map(rowToSource);
+      if (!rows.length) return null;
+      const nodes = db.prepare('SELECT id, parentId, depth, label, firstRow, lastRow FROM ai_nodes WHERE firstRow IS NOT NULL').all();
+      const nodeFor = (rowid) => nodes.filter((node) => rowid >= node.firstRow && rowid <= node.lastRow)
+        .sort((left, right) => (right.depth - left.depth) || ((left.lastRow - left.firstRow) - (right.lastRow - right.firstRow)))[0] || null;
+      const candidates = rows.map((row) => ({ row, node: nodeFor(row.rowid) }));
+      const preferred = preferNodeId
+        ? candidates.find((item) => item.node && (item.node.id === preferNodeId || item.node.parentId === preferNodeId))
+        : null;
+      const chosen = preferred || candidates[0];
+      return {
+        rowid: chosen.row.rowid,
+        row: chosen.row,
+        nodeId: chosen.node ? String(chosen.node.id) : null,
+        nodeLabel: chosen.node ? String(chosen.node.label) : '',
+        ambiguous: candidates.length > 1 && !preferred
+      };
+    });
+  } catch {
+    return null;
+  }
+}
+
 // Kept as a separate helper so tests and future migrations can inspect the
 // runtime capability without opening a user database.
 function isFtsAvailable() {
@@ -1285,6 +1528,12 @@ module.exports = {
   resolveBookPosition,
   readChapterEvidence,
   readBookNavigation,
+  readBookOutline,
+  readNodeSegments,
+  readRowsAround,
+  locateTextInBook,
+  rowsToSegments,
+  TEXT_STRUCTURE_VERSION,
   listCachedChapterSummaries,
   getOrCreateChapterSummary,
   getOrCreateChapterSummarySegment,

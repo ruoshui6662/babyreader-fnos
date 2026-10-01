@@ -41,6 +41,8 @@ const { parseBookSearchParams, searchBookText } = require('./book-search');
 const { parsePathList, resolveLibraryRoots } = require('./library-roots');
 const { readFnOSAuthorizedRoots, fnOSAuthorizationRevision } = require('./fnos-roots-config');
 const { createDirectAccess } = require('./direct-access');
+const { buildAnswerPayload, gatherEvidence, planQuestion, TYPE_LABELS } = require('./ai-answer-pipeline');
+const { addUsage } = require('./ai-transport');
 const {
   BOOK_ID_PATTERN,
   COLLECTION_ID_PATTERN,
@@ -51,6 +53,8 @@ const {
 } = require('./library-organization');
 const {
   normalizeAiConfig,
+  normalizeAiHistory,
+  sanitizeAiAnswerCitations,
   validateAiRequest,
   requestOpenAiAnswer,
   requestOpenAiChapterSummary,
@@ -777,6 +781,141 @@ async function handlePdfAiStream(request, response, user, bookId, body) {
     request.removeListener('aborted', onAbort);
     response.removeListener('close', onClose);
     if (response.headersSent && !response.writableEnded) response.end();
+  }
+}
+
+// Sources worth keeping with a saved answer: the ones the answer cites, at
+// most the conversation store's limit.
+function plannedPersistenceSources(context, answer) {
+  const cited = new Set([...String(answer || '').matchAll(/【(\d+)】/g)].map((match) => Number(match[1])));
+  return aiPersistenceSources(context)
+    .filter((source) => !cited.size || cited.has(source.citationIndex))
+    .slice(0, 12);
+}
+
+function plannedAiInput(body) {
+  if (!body || typeof body !== 'object') throw Object.assign(new Error('AI 请求格式无效'), { statusCode: 400 });
+  const question = String(body.question ?? '').trim();
+  const selectedText = String(body.selectedText ?? '').trim();
+  if (!question) throw Object.assign(new Error('问题不能为空'), { statusCode: 400 });
+  if (question.length > 4000) throw Object.assign(new Error('问题过长'), { statusCode: 400 });
+  if (selectedText.length > 4000) throw Object.assign(new Error('选中文本过长'), { statusCode: 400 });
+  let history;
+  try {
+    history = normalizeAiHistory(body.history);
+  } catch (error) {
+    throw Object.assign(error, { statusCode: 400 });
+  }
+  const chapter = body.chapter && typeof body.chapter === 'object' ? {
+    index: Number.isInteger(body.chapter.index) ? body.chapter.index : null,
+    href: String(body.chapter.href || '').slice(0, 500),
+    label: String(body.chapter.label || '').slice(0, 300),
+    position: {
+      href: String(body.chapter.position?.href || '').slice(0, 500),
+      anchor: String(body.chapter.position?.anchor || '').slice(0, 500),
+      text: String(body.chapter.position?.text || '').slice(0, 200)
+    }
+  } : null;
+  return {
+    question,
+    selectedText,
+    history,
+    chapter,
+    conversationId: body.conversationId ? String(body.conversationId) : ''
+  };
+}
+
+// 问书 with server-side routing and evidence. Events: progress → meta → delta… → done.
+async function handlePlannedAiStream(request, response, user, book, bookId, body) {
+  const input = plannedAiInput(body);
+  const savedConfig = await aiConfigStorage.get(user.uid);
+  const config = publicAiConfig(savedConfig, process.env);
+  if (!config.configured) return sendError(response, 503, 'AI 服务尚未配置');
+  if (input.conversationId) {
+    try {
+      await aiConversationStorage.getConversation(user.uid, bookId, input.conversationId);
+    } catch (error) {
+      return aiConversationError(response, error);
+    }
+  }
+  const abortController = new AbortController();
+  const onAbort = () => abortController.abort();
+  request.once('aborted', onAbort);
+  response.once('close', () => { if (!response.writableEnded) abortController.abort(); });
+  const signal = abortController.signal;
+  let usage = null;
+  const onUsage = (value) => { usage = addUsage(usage, value); };
+  const progress = (event) => sendSseEvent(response, 'progress', event);
+
+  sendSseHeaders(response);
+  try {
+    progress({ stage: 'routing', message: '正在理解问题…' });
+    const plan = await planQuestion({
+      book, dataRoot: DATA_ROOT, question: input.question, selectedText: input.selectedText,
+      chapter: input.chapter, savedConfig, env: process.env, signal, onUsage, onProgress: progress
+    });
+    if (signal.aborted) return;
+    progress({ stage: 'reading', message: '正在读取书中相关内容…' });
+    const evidence = await gatherEvidence({ book, dataRoot: DATA_ROOT, plan, question: input.question, selectedText: input.selectedText });
+    if (signal.aborted) return;
+    if (!evidence.context.length) {
+      sendSseEvent(response, 'error', { code: 'AI_NO_EVIDENCE', message: '没有在书中找到相关内容，请换一种问法。' });
+      return;
+    }
+    const planInfo = {
+      type: plan.type,
+      typeLabel: TYPE_LABELS[plan.type] || '',
+      scopeLabel: evidence.scopeLabel,
+      nodes: evidence.coverage?.nodes || [],
+      mode: evidence.coverage?.mode || '',
+      navigated: Boolean(plan.navigated)
+    };
+    const sources = aiSourcesFromContext(evidence.context);
+    sendSseEvent(response, 'meta', {
+      sources,
+      model: config.model,
+      plan: planInfo,
+      evidenceChars: evidence.context.reduce((sum, item) => sum + item.text.length, 0)
+    });
+    progress({ stage: 'answering', message: '正在生成回答…' });
+    const result = await requestOpenAiStream({
+      request: { rawPayload: buildAnswerPayload({ book, plan, evidence, question: input.question, selectedText: input.selectedText, history: input.history }) },
+      env: process.env,
+      savedConfig,
+      signal,
+      timeoutMs: 120000,
+      onEvent: async (event) => {
+        if (event?.type === 'response.output_text.delta' && typeof event.delta === 'string' && event.delta) {
+          sendSseEvent(response, 'delta', { delta: event.delta });
+        }
+      }
+    });
+    usage = addUsage(usage, result.usage);
+    const answer = sanitizeAiAnswerCitations(result.answer, evidence.context.length).answer;
+    const done = { answer, responseId: result.responseId, streamed: result.streamed, sources, plan: planInfo, ...(usage ? { usage } : {}) };
+    if (input.conversationId && !signal.aborted && !request.aborted) {
+      try {
+        await aiConversationStorage.appendCompletedTurn(user.uid, bookId, input.conversationId, {
+          question: input.question,
+          answer,
+          sources: plannedPersistenceSources(evidence.context, answer)
+        });
+        done.persisted = true;
+      } catch (error) {
+        done.persisted = false;
+        done.persistenceErrorCode = aiConversationPersistenceErrorCode(error);
+        recordError(error, { operation: 'ai-conversation-persist', bookId, code: done.persistenceErrorCode });
+      }
+    }
+    sendSseEvent(response, 'done', done);
+  } catch (error) {
+    if (error.code !== 'AI_ABORTED' && !signal.aborted && !response.destroyed) {
+      recordError(error, { operation: 'ai-planned-stream', bookId, code: error.code || null });
+      sendSseEvent(response, 'error', { code: error.code || 'AI_STREAM_FAILED', message: aiUserError(error) });
+    }
+  } finally {
+    request.removeListener('aborted', onAbort);
+    if (!response.writableEnded) response.end();
   }
 }
 
@@ -1772,6 +1911,7 @@ async function handleApi(request, response, pathname, searchParams = new URLSear
     const book = await findBook(aiStreamMatch[1]);
     if (book.type === 'pdf') return handlePdfAiStream(request, response, user, aiStreamMatch[1], await readJsonBody(request));
     const body = await readJsonBody(request);
+    if (body?.mode === 'planned') return handlePlannedAiStream(request, response, user, book, aiStreamMatch[1], body);
     const conversationId = body?.conversationId ? String(body.conversationId) : '';
     let input;
     try {

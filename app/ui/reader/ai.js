@@ -224,7 +224,8 @@ function currentAiChapter() {
     label: aiChapterLabel(index),
     position: {
       href,
-      anchor: locator?.href === href ? String(locator.anchor || '') : ''
+      anchor: locator?.href === href ? String(locator.anchor || '') : '',
+      text: String(locator?.textBefore || '').slice(0, 120)
     }
   };
 }
@@ -508,6 +509,15 @@ function renderAiConfidenceNotice(confidence, target = null) {
     : '';
   element.hidden = !guarded;
   element.dataset.tone = guarded ? 'warning' : '';
+}
+
+// “依据：第三章 制茶的手艺（全文）” — what the answer was based on.
+function renderAiScopeNote(plan, target = null) {
+  const element = target || ensureAiConfidenceNotice(_aiActiveAnswerElement?.closest?.('.ai-answer-card'));
+  if (!element || !plan?.scopeLabel) return;
+  element.textContent = `依据：${plan.scopeLabel}`;
+  element.hidden = false;
+  element.dataset.tone = 'info';
 }
 
 function resetAiConversation({ clearConversationId = false, clearConversationList = false } = {}) {
@@ -1565,28 +1575,13 @@ async function askAiQuestion() {
   renderAiAnswer('');
   renderAiSources([]);
   scrollAiConversationToBottom();
-  setAiStatus('正在思考并检索本书内容…', 'busy');
+  setAiStatus('正在思考…', 'busy');
   try {
     const chapter = currentAiChapter();
-    const retrieval = await retrieveAiMatches(question, _aiSelection?.text || '', chapter);
-    if (retrieval.retrievalStatus === 'insufficient_scope') {
-      throw new Error('无法准确定位当前章节，请先跳转到明确章节标题后再提问。');
-    }
-    const matches = retrieval.matches;
-    const locationIsUncertain = Boolean(retrieval.chapterResolution)
-      && (retrieval.chapterResolution.status !== 'resolved' || retrieval.chapterResolution.mappingQuality !== 'exact');
-    const confidence = locationIsUncertain
-      ? {
-        ...retrieval.confidence,
-        message: `${retrieval.confidence?.message || ''} 当前阅读位置${retrieval.chapterResolution?.status === 'resolved' ? '仅能推断' : '尚未能可靠映射'}到目录章节；章节范围问答将要求更明确的位置。`.trim()
-      }
-      : retrieval.confidence;
-    renderAiConfidenceNotice(confidence, assistant.notice);
-    if (retrieval.confidence?.level === 'low') {
-      setAiStatus(`正在思考并检索本书内容… ${retrieval.confidence.message}`, 'warning');
-    }
-    const isBookSummary = retrieval.intent === 'book_summary';
-    if (!matches.length && !isBookSummary) throw new Error('没有检索到足够的书本内容，请换一种问法。');
+    // The server routes the question and reads the book itself; the browser
+    // only says what was asked, what is selected and where the reader is.
+    const matches = [];
+    const confidence = null;
     const conversationId = await ensureAiConversation();
     _aiStreamController = new AbortController();
     let partialAnswer = '';
@@ -1605,17 +1600,21 @@ async function askAiQuestion() {
       });
     };
     const result = await browserHost.askAiStream(state.currentBookId, {
+      mode: 'planned',
       question,
       selectedText: _aiSelection?.text || '',
       chapter,
-      retrievalConfidence: confidence?.level || 'none',
-      context: matches.map(({ text, chapterIndex, chapterHref, chapterLabel }) => ({ text, chapterIndex, chapterHref, chapterLabel })),
       history: _aiConversation.slice(-12),
       ...(conversationId ? { conversationId } : {})
     }, {
+      onProgress: (progress) => {
+        if (requestId !== _aiRequestId || !progress?.message) return;
+        setAiStatus(String(progress.message), 'busy');
+      },
       onMeta: (meta) => {
         if (requestId !== _aiRequestId) return;
         streamSources = meta?.sources || matches;
+        if (meta?.plan?.scopeLabel) renderAiScopeNote(meta.plan, assistant.notice);
         if (meta?.scope === 'book' && meta?.coverage) summaryCoverage = meta.coverage;
         if (Number.isSafeInteger(meta?.estimatedInputTokens) && meta.estimatedInputTokens > 0) {
           const statusScope = meta?.scope === 'book' ? '代表性章节' : '本章';

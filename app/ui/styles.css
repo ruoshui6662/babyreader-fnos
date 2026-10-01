@@ -7918,3 +7918,10 @@ button.ui-close,
   font-size: 12px;
   line-height: 1.6;
 }
+
+/* AI 问书：回答依据的范围（全书导读 / 某章全文 / 选中段落…） */
+.ai-confidence-notice[data-tone="info"] {
+  color: var(--color-text-2);
+  background: var(--color-fill);
+  border-color: transparent;
+}
