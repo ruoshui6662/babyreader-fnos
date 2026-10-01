@@ -1,5 +1,5 @@
 appname=babyreader-fnos
-version=1.3.8
+version=1.4.0
 display_name=BabyReader
 desc=适用于飞牛 fnOS 的 EPUB、Markdown 和 TXT 阅读器，支持授权书库扫描、阅读进度与划线持久化。
 source=thirdparty
@@ -13,4 +13,4 @@ desktop_applaunchname=babyreader-fnos.main
 ctl_stop=true
 checkport=false
 disable_authorization_path=false
-changelog=MOBI/AZW3 阅读和管理员导入也默认开启，应用设置中不再需要打开任何开关；升级后在书库点“重新扫描”即可看到 Kindle 书。
+changelog=阅读体验全面升级：EPUB、MOBI、PDF 统一工具栏与进度显示，新增“返回原处”和选区搜索；随包提供思源宋体、霞鹜文楷、朱雀仿宋等可商用字体（默认思源宋体）；显示设置改为字号按钮、主题色块和字体卡片；全新图标；修复手机目录空白。
