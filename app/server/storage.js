@@ -268,7 +268,9 @@ class UserStorage {
           ? settings.pdfLayoutMode
           : allowedPdfLayoutModes.has(state.settings.pdfLayoutMode)
             ? state.settings.pdfLayoutMode : 'continuous',
-        tocOpen: settings.tocOpen !== false,
+        // Opt-in: opening a book shows the text, not the contents panel.
+        // Replaces tocOpen, which every save wrote as true.
+        tocAutoOpen: settings.tocAutoOpen === true,
         highlightColor: allowedHighlightColors.has(settings.highlightColor)
           ? settings.highlightColor
           : allowedHighlightColors.has(state.settings.highlightColor) ? state.settings.highlightColor : 'yellow',

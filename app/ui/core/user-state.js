@@ -22,7 +22,7 @@ function currentUserSettings() {
     pdfLayoutMode: ['continuous', 'single', 'double'].includes(state.pdfLayoutMode)
       ? state.pdfLayoutMode : 'continuous',
     continuousScroll: readingMode === 'scroll',
-    tocOpen: state.tocOpen,
+    tocAutoOpen: state.tocOpen,
     highlightColor: state.highlightColor,
     textIndent: state.textIndent,
     paragraphSpacing: state.paragraphSpacing,
@@ -66,7 +66,7 @@ function applyUserState(userState) {
     ? settings.pdfLayoutMode : 'continuous';
   state.continuousScroll = state.readingMode === 'scroll';
   state.effectiveReadingMode = state.readingMode;
-  state.tocOpen = settings.tocOpen !== false;
+  state.tocOpen = settings.tocAutoOpen === true;
   // P0 typography: clamped exactly like the server does, so a hand-edited
   // settings file can never push the layout out of range.
   state.textIndent = Number.isFinite(settings.textIndent)

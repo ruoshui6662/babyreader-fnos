@@ -1725,10 +1725,6 @@ body:not(.toc-open) .toc {
     padding-left: 0;
   }
 
-  html[data-reader-surface="mobile"] .toc {
-    display: none !important;
-  }
-
   html[data-reader-surface="mobile"] .reader .article {
     padding: 32px var(--reader-page-margin) calc(32px + env(safe-area-inset-bottom, 0px));
   }

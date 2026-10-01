@@ -949,6 +949,43 @@ test('default directory preference opens the generic TOC panel for a book with a
   await expect(page.locator('#tocList a[data-target]')).toHaveCount(3);
 });
 
+test('without the opt-in, opening a book shows the text instead of the contents panel', async ({ page }) => {
+  await page.goto(APP_PATH);
+  // A stored legacy tocOpen:true (every older save wrote it) must not count.
+  await page.evaluate(async () => {
+    const response = await fetch('/app/babyreader-fnos/api/settings', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ tocOpen: true, tocAutoOpen: false })
+    });
+    if (!response.ok) throw new Error(`Settings setup failed: ${response.status}`);
+  });
+  await page.reload({ waitUntil: 'load' });
+  await page.locator('.library-book').filter({ hasText: 'E2E EPUB' }).click();
+  await expect(page.locator('#article')).toContainText(/E2E EPUB Chapter \d/);
+  await page.waitForTimeout(300);
+  await expect(page.locator('#readerDrawer')).toBeHidden();
+  await expect(page.locator('#settingTocOpen')).not.toBeChecked();
+});
+
+test.describe('phone contents panel', () => {
+  test.use({ viewport: { width: 375, height: 812 }, isMobile: true, hasTouch: true, userAgent: 'Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Mobile Safari/537.36' });
+
+  test('lists every chapter, and tapping one jumps there and closes the sheet', async ({ page }) => {
+    await openEpubFixture(page);
+    await expect(page.locator('html')).toHaveAttribute('data-reader-surface', 'mobile');
+    await page.evaluate(() => openReaderPanel('toc'));
+    await expect(page.locator('#readerDrawer')).toBeVisible();
+    const tocLinks = page.locator('#tocList a[data-target]');
+    await expect(tocLinks).toHaveCount(3);
+    for (let index = 0; index < 3; index += 1) await expect(tocLinks.nth(index)).toBeVisible();
+
+    await tocLinks.nth(1).click();
+    await expect(page.locator('#readingProgress')).toContainText('2/3');
+    await expect(page.locator('#readerDrawer')).toBeHidden();
+  });
+});
+
 test('TOC panel uses the same rounded material surface as settings', async ({ page }) => {
   await openEpubFixture(page);
 

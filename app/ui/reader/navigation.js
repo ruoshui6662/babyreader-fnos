@@ -224,15 +224,26 @@ function setupTocNavigation() {
       e.preventDefault();
       e.stopPropagation();
       const target = tocLink.getAttribute('data-target');
+      // On phones the contents panel is a sheet over the page: close it once
+      // the jump lands so the chosen chapter is visible. Desktop keeps the
+      // side panel open for browsing.
+      const closeSheetOnPhone = () => {
+        if (typeof isMobileReaderSurface === 'function' && isMobileReaderSurface()) {
+          closeReaderPanel({ restoreFocus: false });
+        }
+      };
       if (state.contentType === 'pdf') {
         const match = /^pdf-page:(\d+)$/.exec(target || '');
         if (!match || !window.pdfReaderController?.goToPdfPage(Number(match[1]))) {
           showHighlightHint('无法定位到该 PDF 页面');
+        } else {
+          closeSheetOnPhone();
         }
         return;
       }
       navigateEpubTarget(target).then((navigated) => {
         if (!navigated) showHighlightHint(describeEpubNavigationFailure(target));
+        else closeSheetOnPhone();
       });
       return;
     }

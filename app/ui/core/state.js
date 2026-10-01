@@ -19,7 +19,7 @@ const state = {
   epubChapterLoading: false,
   epubDiagnostics: null,
   toc: [],
-  tocOpen: true,
+  tocOpen: false,
   epubBook: null,
   epubRendition: null,
   contentType: 'text', // 'text' | 'epub' | 'pdf'
