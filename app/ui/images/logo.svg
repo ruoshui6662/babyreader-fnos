@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" role="img" aria-label="BabyReader">
+  <title>BabyReader</title>
+  <!-- Cat ears rising from an open book (2026-10 brand). Source for every
+       icon size: npm run render:icons regenerates the PNGs. -->
+  <rect width="120" height="120" rx="27" fill="#F08A3C"/>
+  <path d="M27 46 34 22 48 44Z" fill="#FFF7EE"/>
+  <path d="M93 46 86 22 72 44Z" fill="#FFF7EE"/>
+  <path d="M60 94C48 86 33 86 22 90V46C33 41 48 42 60 51Z" fill="#FFF7EE"/>
+  <path d="M60 94C72 86 87 86 98 90V46C87 41 72 42 60 51Z" fill="#FFF7EE"/>
+  <circle cx="41" cy="66" r="4.5" fill="#3B2416"/>
+  <circle cx="79" cy="66" r="4.5" fill="#3B2416"/>
+</svg>

@@ -162,7 +162,10 @@
   --shadow-float: 0 6px 24px rgba(0,0,0,.16);
   --shadow-sheet: 0 -8px 40px rgba(0,0,0,.18);
 
-  /* --- Motion (Apple ease curves) --- */
+  /* --- Motion (Apple HIG: purposeful, brief, interruptible) ---
+     Only these three durations: fast for hover/press feedback, med for
+     panels, bars and sheets, slow for large surfaces. No motion on
+     page-turn buttons or other high-frequency controls. */
   --ease-out:    cubic-bezier(.22,1,.36,1);   /* Entrance */
   --ease-in-out: cubic-bezier(.42,0,.58,1);   /* State change */
   --dur-fast: 160ms;
@@ -424,7 +427,7 @@ body {
   padding: 4px 12px;
   border-radius: 20px;
   cursor: pointer;
-  transition: all 0.15s ease;
+  transition: color var(--dur-fast) var(--ease-out), background-color var(--dur-fast) var(--ease-out), border-color var(--dur-fast) var(--ease-out);
   outline: none;
 }
 
@@ -453,7 +456,7 @@ body {
   border-radius: var(--radius-control); /* HIG: 10px controls */
   color: var(--color-text-2); /* Secondary text */
   cursor: pointer;
-  transition: color 160ms ease, background-color 160ms ease;
+  transition: color var(--dur-fast) var(--ease-out), background-color var(--dur-fast) var(--ease-out);
 }
 
 /* P0: icon-only toolbar, slightly larger */
@@ -493,7 +496,7 @@ body {
   border-radius: var(--radius-control);
   color: var(--color-text-2);
   cursor: pointer;
-  transition: color 160ms ease, background-color 160ms ease;
+  transition: color var(--dur-fast) var(--ease-out), background-color var(--dur-fast) var(--ease-out);
 }
 
 .toc-toggle svg {
@@ -685,7 +688,7 @@ body.is-pdf-reader .pdf-control-group + .pdf-control-group::before {
   font-size: 13px;
   line-height: 1;
   cursor: pointer;
-  transition: color var(--dur-fast) ease, background-color var(--dur-fast) ease, transform var(--dur-fast) ease;
+  transition: color var(--dur-fast) var(--ease-out), background-color var(--dur-fast) var(--ease-out), transform var(--dur-fast) var(--ease-out);
 }
 
 .pdf-reader-controls button:not(:disabled):hover {
@@ -1233,7 +1236,7 @@ html[data-reader-surface="mobile"] .pdf-page-canvas { max-width: 100%; }
   color: var(--accent);
   text-decoration: none;
   border-bottom: 1px solid transparent;
-  transition: border-color 0.15s ease;
+  transition: border-color var(--dur-fast) var(--ease-out);
 }
 
 .article a:hover {
@@ -1708,7 +1711,7 @@ body:not(.toc-open) .toc {
    ============================================================ */
 .reader,
 .editor-container {
-  transition: opacity 0.15s ease;
+  transition: opacity var(--dur-fast) var(--ease-out);
 }
 
 /* ============================================================
@@ -1949,7 +1952,7 @@ body:not(.toc-open) .toc {
   cursor: pointer;
   opacity: 0;
   pointer-events: none;
-  transition: opacity 0.15s ease;
+  transition: opacity var(--dur-fast) var(--ease-out);
   user-select: none;
   -webkit-user-select: none;
   box-shadow: 0 2px 8px rgba(0,0,0,0.12);
@@ -2385,7 +2388,7 @@ body.is-library.theme-sepia .topbar {
   border: 1px solid transparent;
   border-radius: var(--radius-control, 10px);
   cursor: pointer;
-  transition: color 160ms ease, background-color 160ms ease;
+  transition: color var(--dur-fast) var(--ease-out), background-color var(--dur-fast) var(--ease-out);
 }
 
 .library-organization-card-delete svg {
@@ -2478,14 +2481,14 @@ body.is-library.theme-sepia .topbar {
   opacity: .72;
   transform: scale(1.02);
   box-shadow: var(--shadow-float);
-  transition: transform 120ms ease, opacity 120ms ease, box-shadow 120ms ease;
+  transition: transform var(--dur-fast) var(--ease-out), opacity var(--dur-fast) var(--ease-out), box-shadow var(--dur-fast) var(--ease-out);
 }
 
 .library-grid .library-reorder-item.is-library-dragging {
   opacity: .5;
   transform: none;
   box-shadow: none;
-  transition: opacity 180ms var(--ease-out);
+  transition: opacity var(--dur-fast) var(--ease-out);
 }
 
 .library-grid .library-reorder-item.is-library-drop-target {
@@ -3045,7 +3048,7 @@ body.is-library.theme-sepia .topbar {
   border-radius: 3px;
   background: var(--library-fill, var(--color-fill));
   box-shadow: var(--library-cover-shadow, 0 4px 12px rgba(0, 0, 0, .12));
-  transition: transform 220ms var(--ease-out), box-shadow 220ms var(--ease-out);
+  transition: transform var(--dur-med) var(--ease-out), box-shadow var(--dur-med) var(--ease-out);
 }
 
 .library-book:hover .library-book-cover {
@@ -3055,7 +3058,7 @@ body.is-library.theme-sepia .topbar {
 
 .library-book:active .library-book-cover {
   transform: scale(.975);
-  transition-duration: 90ms;
+  transition-duration: var(--dur-fast);
 }
 
 /* Every cover fills the same 1:1.45 frame (WeChat Reading style): artwork of
@@ -3389,7 +3392,7 @@ html[data-reader-surface="mobile"] .reader .article.is-library {
   height: 100%;
   border-radius: inherit;
   background: var(--library-accent, var(--color-accent));
-  transition: width 160ms linear;
+  transition: width var(--dur-fast) linear;
 }
 .library-import-action {
   min-height: 32px;
@@ -3582,7 +3585,7 @@ html[data-reader-surface="mobile"] .reader .article.is-library {
   line-height: 1.25;
   text-align: center;
   cursor: pointer;
-  transition: background-color .16s ease, border-color .16s ease, box-shadow .16s ease;
+  transition: background-color var(--dur-fast) var(--ease-out), border-color var(--dur-fast) var(--ease-out), box-shadow var(--dur-fast) var(--ease-out);
 }
 
 .custom-select-trigger::after {
@@ -3595,7 +3598,7 @@ html[data-reader-surface="mobile"] .reader .article.is-library {
   border-bottom: 1.5px solid var(--color-text-2);
   content: '';
   transform: translateY(-65%) rotate(45deg);
-  transition: transform .16s ease;
+  transition: transform var(--dur-fast) var(--ease-out);
 }
 
 .custom-select-trigger:hover {
@@ -4135,7 +4138,7 @@ body.paged-reading .epub-chapter:first-of-type {
 }
 
 html[data-reader-surface="mobile"] .reader-shell-nav {
-  transition: transform 180ms var(--ease-out), opacity 180ms var(--ease-out);
+  transition: transform var(--dur-fast) var(--ease-out), opacity var(--dur-fast) var(--ease-out);
 }
 
 html[data-reader-surface="mobile"] body.is-epub.mobile-topbar-hidden .reader-shell-nav {
@@ -4167,7 +4170,7 @@ html[data-reader-surface="mobile"] body.is-epub.mobile-topbar-hidden .reader-she
   font-size: 14px; /* HIG: Subhead size */
   cursor: pointer;
   -webkit-app-region: no-drag;
-  transition: color 160ms ease, background-color 160ms ease;
+  transition: color var(--dur-fast) var(--ease-out), background-color var(--dur-fast) var(--ease-out);
 }
 
 .reader-nav-button svg {
@@ -4313,7 +4316,7 @@ body.is-epub.continuous-scroll .scroll-chapter-footer:not([hidden]) {
   box-shadow: var(--shadow-float); /* HIG: elevated shadow */
   backdrop-filter: var(--material-blur);
   -webkit-backdrop-filter: var(--material-blur);
-  transition: all 240ms var(--ease-out); /* HIG: smooth transitions */
+  transition: opacity var(--dur-med) var(--ease-out), transform var(--dur-med) var(--ease-out), background-color var(--dur-med) var(--ease-out);
 }
 
 body.is-epub .reader-floating-toolbar {
@@ -4339,7 +4342,7 @@ body.is-epub .reader-floating-toolbar {
 }
 
 .reader-floating-toolbar button {
-  transition: color var(--dur-fast, 160ms) var(--ease-out, ease-out),
+  transition: color var(--dur-fast) var(--ease-out, ease-out),
     background-color var(--dur-fast, 160ms) var(--ease-out, ease-out),
     transform var(--dur-fast, 160ms) var(--ease-out, ease-out);
 }
@@ -6161,7 +6164,7 @@ body:not(.toc-open) .reader-drawer .toc {
 
 @media (max-width: 1200px) {
   html[data-reader-surface="mobile"] body.is-epub .reader {
-    transition: top 180ms var(--ease-out);
+    transition: top var(--dur-fast) var(--ease-out);
   }
 
   html[data-reader-surface="mobile"] body.is-epub.mobile-topbar-hidden .reader {
@@ -6264,7 +6267,7 @@ body:not(.toc-open) .reader-drawer .toc {
 body.immersive .topbar {
   opacity: 0;
   pointer-events: none;
-  transition: opacity 0.25s ease;
+  transition: opacity var(--dur-med) var(--ease-out);
 }
 
 body.immersive .reader .article {
@@ -7027,7 +7030,7 @@ body.is-epub .reader-floating-toolbar {
   border-radius: 14px;
   font: inherit;
   cursor: pointer;
-  transition: background-color .16s ease, border-color .16s ease, transform .16s ease;
+  transition: background-color var(--dur-fast) var(--ease-out), border-color var(--dur-fast) var(--ease-out), transform var(--dur-fast) var(--ease-out);
 }
 
 .reader-search-result:hover,
@@ -7190,7 +7193,7 @@ html:not([data-reader-surface="mobile"]) body.is-epub.continuous-scroll .reader 
   scroll-padding-top: var(--topbar-h);
 }
 html:not([data-reader-surface="mobile"]) body.is-epub .reader-shell-nav {
-  transition: transform 220ms var(--ease-out), opacity 220ms var(--ease-out);
+  transition: transform var(--dur-med) var(--ease-out), opacity var(--dur-med) var(--ease-out);
 }
 html:not([data-reader-surface="mobile"]) body.is-epub.continuous-scroll.reader-topbar-hidden .reader-shell-nav {
   transform: translateY(-100%);
@@ -7545,7 +7548,7 @@ html[data-reader-surface="mobile"] .reader-jump-back {
   margin-left: auto;
   content: '›';
   font-size: 18px;
-  transition: transform var(--dur-fast, 160ms) var(--ease-out, ease-out);
+  transition: transform var(--dur-fast) var(--ease-out, ease-out);
 }
 .settings-advanced[open] > summary::after { transform: rotate(90deg); }
 @media (prefers-reduced-motion: reduce) {
@@ -7559,4 +7562,67 @@ html[data-reader-surface="mobile"] .reader-jump-back {
 .settings-advanced > summary:focus-visible {
   outline: 2px solid var(--color-accent);
   outline-offset: 2px;
+}
+
+/* Brand mark (2026-10): the same cat-ears-and-book graphic as the app icon
+   and favicon, next to the name in the top bar. */
+.app-mark {
+  flex: 0 0 auto;
+  width: 22px;
+  height: 22px;
+  margin-right: 8px;
+  border-radius: 6px;
+}
+html[data-reader-surface="mobile"] body.is-epub .app-mark,
+html[data-reader-surface="mobile"] body.is-pdf-reader .app-mark {
+  display: none;
+}
+
+/* Reduced motion safety net (HIG: make motion optional). Specific rules
+   above already switch most motion off; this catches the rest. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: .01ms !important;
+    animation-iteration-count: 1 !important;
+    transition: none !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* Loading skeletons (2026-10 plan, phase 3): the shape of what is coming,
+   gently pulsing; still under "reduce motion". */
+.reader-startup-status.is-skeleton {
+  padding: 40px clamp(16px, 4vw, 56px);
+  background: transparent;
+}
+.skeleton { width: min(1280px, 100%); margin: 0 auto; }
+.skeleton-bar,
+.skeleton-cover {
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--color-text) 7%, transparent);
+  animation: skeleton-pulse 1.4s var(--ease-in-out) infinite alternate;
+}
+.skeleton-title { width: 120px; height: 34px; margin-bottom: 10px; }
+.skeleton-subtitle { width: 180px; height: 14px; margin-bottom: 32px; }
+.skeleton-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(128px, 1fr));
+  gap: 36px 32px;
+}
+.skeleton-cover { aspect-ratio: 1 / 1.45; border-radius: 3px; }
+.skeleton-page { max-width: 640px; padding: 24px 0; }
+.skeleton-heading { width: 46%; height: 30px; margin-bottom: 36px; }
+.skeleton-line { height: 14px; margin-bottom: 16px; }
+@keyframes skeleton-pulse {
+  from { opacity: .55; }
+  to { opacity: 1; }
+}
+@media (max-width: 679px) {
+  .skeleton-grid { grid-template-columns: repeat(auto-fill, minmax(88px, 1fr)); gap: 24px 16px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .skeleton-bar,
+  .skeleton-cover { animation: none; }
 }

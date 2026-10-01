@@ -12,6 +12,27 @@ function startReaderSession() {
   return readerStartupPending;
 }
 
+// Skeletons stand in for content while it loads (shape first, no spinner);
+// the wording stays for screen readers.
+function renderSkeleton(container, label, kind) {
+  container.replaceChildren();
+  container.classList.add('is-skeleton');
+  const text = document.createElement('span');
+  text.className = 'visually-hidden';
+  text.textContent = label;
+  const shape = document.createElement('div');
+  shape.className = `skeleton skeleton-${kind}`;
+  shape.setAttribute('aria-hidden', 'true');
+  if (kind === 'shelf') {
+    shape.innerHTML = '<div class="skeleton-bar skeleton-title"></div><div class="skeleton-bar skeleton-subtitle"></div>'
+      + `<div class="skeleton-grid">${'<div class="skeleton-cover"></div>'.repeat(8)}</div>`;
+  } else {
+    shape.innerHTML = '<div class="skeleton-bar skeleton-heading"></div>'
+      + ['96', '100', '92', '100', '88', '100', '97', '64'].map((width) => `<div class="skeleton-bar skeleton-line" style="width:${width}%"></div>`).join('');
+  }
+  container.append(text, shape);
+}
+
 async function loadReaderSession() {
   let status = document.getElementById('readerStartupStatus');
   if (!status) {
@@ -22,7 +43,7 @@ async function loadReaderSession() {
     document.getElementById('reader')?.prepend(status);
   }
   status.hidden = false;
-  status.textContent = '正在加载书库…';
+  renderSkeleton(status, '正在加载书库…', 'shelf');
   try {
     const [session, userState, library] = await Promise.all([
       window.browserHost.getSession(), window.browserHost.getUserState(), window.browserHost.getLibrary()
@@ -35,6 +56,7 @@ async function loadReaderSession() {
     await restoreReaderFromLocation(library);
     status.hidden = true;
   } catch (error) {
+    status.classList.remove('is-skeleton');
     status.textContent = error?.status === 401 || error?.status === 403
       ? '登录已失效或没有访问权限，请从 fnOS 重新登录并打开应用。'
       : '书库加载失败，请检查网络或应用运行状态后重试。';
@@ -196,7 +218,7 @@ window.appHost = {
       const epubShell = document.getElementById('epubShell');
       if (article) {
         article.style.display = '';
-        article.innerHTML = '<p style="color:var(--text-dim);padding:80px 40px;">正在打开 EPUB…</p>';
+        renderSkeleton(article, '正在打开 EPUB…', 'page');
       }
       if (epubShell) epubShell.style.display = 'none';
 

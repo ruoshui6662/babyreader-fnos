@@ -1,5 +1,26 @@
 # Working Change Log
 
+## 体验优化阶段 3：品牌、动效与加载状态（未发布）2026-10-01
+
+计划见 `docs/superpowers/plans/2026-10-01-commercial-grade-reading-ux.md` 阶段 3。
+
+**品牌**（用户在 3 个方案中选择 B“猫耳 + 书页”）：
+- 新标志为扁平矢量图形：橙色圆角方块上，一本打开的书，书页上方立起两只猫耳。源文件 `app/ui/images/logo.svg`，`npm run render:icons`（`scripts/render-icons.js`，使用已安装的 Playwright Chromium 渲染）生成所有尺寸。
+- **合规问题顺带修复**：fnOS 要求 `ICON.PNG` 为 64×64、`ICON_256.PNG` 为 256×256，且不超过 1024 KB。旧图标两个都是 1024×1024、1048 KB，尺寸不符且超出上限。新图标分别为 1.6 KB 和 6.5 KB。
+- 启动器图标按 fnOS 文档改为 `images/icon_{0}.png`（`icon_64.png`、`icon_256.png`），删除旧的 1 MB `assets/cat-logo.png`。
+- 网页增加 favicon（SVG 加 64px PNG）和 apple-touch-icon；顶栏 “BabyReader” 前加上同一标志（手机阅读时隐藏，节省空间）。
+- 结构检查新增 3 个必需文件；新增单元测试，按 fnOS 规格检查图标尺寸、格式和大小。
+
+**动效规范**（Apple 人机界面指南：有目的、简短、可打断、可关闭）：
+- 只保留 3 档时长变量：`--dur-fast` 160ms（悬停、按下反馈）、`--dur-med` 240ms（面板、顶栏、浮层）、`--dur-slow` 320ms（大面积变化）。原先硬编码的 22 处时长（0.15s、120ms、180ms、220ms、0.25s 等）全部换成变量，通用的 `ease` 统一为 `--ease-out`。
+- 去掉两处 `transition: all`（会连布局一起做动画），改为只列出实际需要的属性。
+- 新增全局“减少动态效果”兜底：系统开启该选项时，所有动画和过渡变为瞬时。
+- 新增 `tests/ui-motion.test.js`，防止硬编码时长和 `transition: all` 再次出现。
+
+**加载状态**：
+- 打开应用时，“正在加载书库…”文字换成书架骨架（标题条和书封占位，与真实书架网格相同）；打开 EPUB 时，“正在打开 EPUB…”换成正文骨架（标题和若干行）。骨架有轻微的明暗呼吸，“减少动态效果”下静止；原文字保留给读屏软件。加载失败时仍显示错误和“重试”。
+- 新增 `e2e/brand.spec.js`（favicon、启动器图标和顶栏标志都能正常加载）。
+
 ## 体验优化阶段 2：随包字体与显示设置（未发布）2026-10-01
 
 计划见 `docs/superpowers/plans/2026-10-01-commercial-grade-reading-ux.md` 阶段 2；字体授权见 `docs/fonts-licensing.md`。
