@@ -7,7 +7,7 @@
   <link rel="icon" type="image/svg+xml" href="images/logo.svg">
   <link rel="icon" type="image/png" sizes="64x64" href="images/icon_64.png">
   <link rel="apple-touch-icon" href="images/icon_256.png">
-  <link rel="stylesheet" href="styles.css?v=83">
+  <link rel="stylesheet" href="styles.css?v=84">
 </head>
 <body class="is-welcome">
   <!-- Reader Shell: low-distraction navigation with stable legacy IDs -->
@@ -24,11 +24,11 @@
          PDF shows its own page/zoom pill in the same place. -->
     <div class="reader-status" aria-label="阅读状态">
       <button class="reader-nav-button chapter-nav-btn" id="btnPreviousChapter" type="button" hidden data-reader-action="previousChapter" aria-label="上一章" title="上一章">
-        <svg viewBox="0 0 24 24" data-icon="chapter-previous" aria-hidden="true" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 5v14"></path><path d="m17 7-5 5 5 5"></path></svg>
+        <svg viewBox="0 0 24 24" data-icon="chapter-previous" aria-hidden="true" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m14 17-5-5 5-5"></path></svg>
       </button>
       <span class="reading-progress" id="readingProgress" hidden aria-live="polite"></span>
       <button class="reader-nav-button chapter-nav-btn" id="btnNextChapter" type="button" hidden data-reader-action="nextChapter" aria-label="下一章" title="下一章">
-        <svg viewBox="0 0 24 24" data-icon="chapter-next" aria-hidden="true" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M18 5v14"></path><path d="m7 7 5 5-5 5"></path></svg>
+        <svg viewBox="0 0 24 24" data-icon="chapter-next" aria-hidden="true" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m10 17 5-5-5-5"></path></svg>
       </button>
     </div>
     <div class="topbar-right">
@@ -55,7 +55,7 @@
   <aside class="reader-sheet reader-content-sheet reader-drawer" id="readerDrawer" hidden role="dialog" aria-label="阅读内容面板" aria-modal="true" aria-hidden="true">
     <div class="settings-header reader-drawer-header">
       <h2 id="readerDrawerTitle">阅读设置</h2>
-      <button type="button" id="btnCloseSettings" data-reader-action="closePanel" aria-label="关闭阅读面板">关闭</button>
+      <button type="button" class="ui-close" id="btnCloseSettings" data-reader-action="closePanel" aria-label="关闭阅读面板">关闭</button>
     </div>
     <div class="reader-drawer-tabs" role="tablist" aria-label="阅读内容切换">
       <button type="button" id="drawerTabToc" role="tab" data-reader-panel-target="toc" aria-controls="readerPanelToc" aria-selected="false" tabindex="-1">目录</button>
@@ -261,7 +261,7 @@
   <aside class="reader-sheet reader-search-sheet" id="readerSearchSheet" hidden role="dialog" aria-modal="true" aria-hidden="true" aria-labelledby="readerSearchTitle">
     <div class="settings-header reader-drawer-header">
       <h2 id="readerSearchTitle">搜索</h2>
-      <button type="button" data-reader-action="closePanel" aria-label="关闭搜索">关闭</button>
+      <button type="button" class="ui-close" data-reader-action="closePanel" aria-label="关闭搜索">关闭</button>
     </div>
     <div class="reader-search-content" id="readerSearchContent">
       <form class="reader-search-form" id="readerSearchForm" novalidate data-reader-search-state="idle">
@@ -292,7 +292,7 @@
   <aside class="reader-sheet ai-index-manager-sheet" id="aiIndexManagerSheet" hidden role="dialog" aria-modal="true" aria-hidden="true" aria-labelledby="aiIndexManagerTitle">
     <div class="settings-header reader-drawer-header">
       <h2 id="aiIndexManagerTitle">本地检索索引</h2>
-      <button type="button" class="ai-icon-button ai-surface-close" id="btnCloseAiIndexManager" data-reader-action="closePanel" aria-label="关闭本地检索索引" title="关闭">×</button>
+      <button type="button" class="ai-icon-button ai-surface-close ui-close" id="btnCloseAiIndexManager" data-reader-action="closePanel" aria-label="关闭本地检索索引" title="关闭">×</button>
     </div>
     <div class="ai-index-manager-content" id="aiIndexManagerContent">
       <div class="ai-index-manager-summary" id="aiIndexManagerSummary" aria-live="polite"></div>
@@ -316,7 +316,7 @@
         <button type="button" class="ai-icon-button ai-conversations-button" id="btnAiConversations" aria-label="会话列表" title="会话列表">会话</button>
         <button type="button" class="ai-icon-button ai-new-conversation" id="btnAiNewConversation" aria-label="新建对话" title="新建对话">新对话</button>
         <button type="button" class="ai-icon-button" id="btnAiSettings" aria-label="AI 设置" title="AI 设置">设置</button>
-        <button type="button" class="ai-icon-button ai-surface-close" id="btnCloseAiModal" aria-label="关闭 AI 问书" title="关闭">×</button>
+        <button type="button" class="ai-icon-button ai-surface-close ui-close" id="btnCloseAiModal" aria-label="关闭 AI 问书" title="关闭">×</button>
       </div>
     </header>
     <div class="ai-modal-body">
@@ -367,7 +367,7 @@
             </div>
             <div class="ai-conversations-header-actions">
               <button type="button" class="ai-secondary-button" id="btnRefreshAiConversations">重新加载</button>
-              <button type="button" class="ai-icon-button" id="btnCloseAiConversationsSheet" aria-label="关闭会话列表" title="关闭">×</button>
+              <button type="button" class="ai-icon-button ui-close" id="btnCloseAiConversationsSheet" aria-label="关闭会话列表" title="关闭">×</button>
             </div>
           </header>
           <div class="ai-config-sheet-content ai-conversations-content">
@@ -399,7 +399,7 @@
               <h3 id="aiConfigTitle">AI 服务</h3>
               <p>配置只保存在当前用户的服务端目录，API Key 不会回显。</p>
             </div>
-            <button type="button" class="ai-icon-button" id="btnCloseAiConfig" aria-label="关闭 AI 设置" title="关闭">×</button>
+            <button type="button" class="ai-icon-button ui-close" id="btnCloseAiConfig" aria-label="关闭 AI 设置" title="关闭">×</button>
           </header>
           <div class="ai-config-sheet-content">
             <label class="ai-config-field">
@@ -430,7 +430,7 @@
   <section class="highlight-editor" id="highlightEditor" hidden role="dialog" aria-modal="true" aria-labelledby="highlightEditorTitle">
     <div class="highlight-editor-header">
       <h2 id="highlightEditorTitle">写想法</h2>
-      <button type="button" id="btnCloseHighlightEditor" aria-label="关闭写想法">关闭</button>
+      <button type="button" class="ui-close" id="btnCloseHighlightEditor" aria-label="关闭写想法">关闭</button>
     </div>
     <blockquote class="highlight-editor-text" id="highlightEditorText"></blockquote>
     <label class="highlight-editor-field">
@@ -477,7 +477,7 @@
     <div class="scroll-chapter-frame" id="scrollChapterFrame">
       <div class="scroll-chapter-header" id="scrollChapterHeader" hidden>
         <button class="reader-nav-button scroll-chapter-btn" id="btnScrollPreviousChapter" type="button" hidden data-reader-action="previousChapter" aria-label="上一章" title="上一章">
-          <svg viewBox="0 0 24 24" data-icon="chapter-previous" aria-hidden="true" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 5v14"></path><path d="m17 7-5 5 5 5"></path></svg>
+          <svg viewBox="0 0 24 24" data-icon="chapter-previous" aria-hidden="true" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m14 17-5-5 5-5"></path></svg>
           <span>上一章</span>
         </button>
       </div>
@@ -496,7 +496,7 @@
       <div class="scroll-chapter-footer" id="scrollChapterFooter" hidden>
         <button class="reader-nav-button scroll-chapter-btn" id="btnScrollNextChapter" type="button" hidden data-reader-action="nextChapter" aria-label="下一章" title="下一章">
           <span>下一章</span>
-          <svg viewBox="0 0 24 24" data-icon="chapter-next" aria-hidden="true" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M18 5v14"></path><path d="m7 7 5 5-5 5"></path></svg>
+          <svg viewBox="0 0 24 24" data-icon="chapter-next" aria-hidden="true" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m10 17 5-5-5-5"></path></svg>
         </button>
       </div>
     </div>
@@ -558,10 +558,10 @@
   <script src="core/user-state.js?v=37"></script>
   <script src="reader/annotations.js?v=2"></script>
   <script src="reader/device-profile.js?v=32"></script>
-  <script src="reader/epub.js?v=30"></script>
+  <script src="reader/epub.js?v=31"></script>
   <script src="reader/document.js?v=28"></script>
   <script src="reader/editor.js?v=28"></script>
-  <script src="reader/highlights.js?v=36"></script>
+  <script src="reader/highlights.js?v=37"></script>
   <script src="reader/ai.js?v=2"></script>
   <script src="reader/ai-index-manager.js?v=1"></script>
   <script src="reader/selection-menu.js?v=5"></script>

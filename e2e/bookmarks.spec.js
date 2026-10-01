@@ -128,7 +128,8 @@ test.describe('EPUB bookmarks', () => {
     await expect(page.locator('body')).toHaveClass(/continuous-scroll/);
     await expect(page.locator('#btnBookmarks')).toBeEnabled();
     await expect(page.locator('#btnBookmarks')).toHaveCSS('width', '44px');
-    await expect(page.locator('#btnBookmarks')).toHaveCSS('height', '44px');
+    // Captioned rail buttons (2026-10, option 3) are 52px tall.
+    await expect(page.locator('#btnBookmarks')).toHaveCSS('height', '52px');
 
     await page.locator('#btnSettings').click();
     const save = waitForSettingsSave(page);
