@@ -431,13 +431,16 @@ test('PDF text selection keeps canvas glyph appearance and survives page virtual
     return {
       text: selection.toString(),
       color: getComputedStyle(span, '::selection').color,
-      backgroundOpacity: probeContext.getImageData(0, 0, 1, 1).data[3] / 255
+      backgroundOpacity: probeContext.getImageData(0, 0, 1, 1).data[3] / 255,
+      blendMode: getComputedStyle(textLayer).mixBlendMode
     };
   });
   expect(selected.text).toContain('第一页');
   expect(selected.color).toMatch(/rgba\([^)]*,\s*0\)/);
-  expect(selected.backgroundOpacity).toBeGreaterThan(0.15);
-  expect(selected.backgroundOpacity).toBeLessThan(0.4);
+  // Opaque tint multiplied onto the canvas: overlapping PDF.js spans cannot
+  // stack into darker blocks, and canvas glyphs still show through.
+  expect(selected.backgroundOpacity).toBe(1);
+  expect(selected.blendMode).toBe('multiply');
 
   await page.locator('#pdfPages').evaluate((host) => {
     host.scrollTop = host.scrollHeight;
