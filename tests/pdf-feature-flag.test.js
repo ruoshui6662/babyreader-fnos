@@ -7,7 +7,6 @@ const os = require('node:os');
 const path = require('node:path');
 const test = require('node:test');
 const { createPdfFixture } = require('./fixtures/pdf-fixtures');
-const { setPdfReaderEnabled } = require('../app/server/pdf-feature-config');
 
 const SANDBOX = path.join(os.tmpdir(), `babyreader-pdf-disabled-${process.pid}`);
 const DATA_ROOT = path.join(SANDBOX, 'var');
@@ -37,6 +36,8 @@ test.before(async () => {
   await fs.writeFile(PDF_PATH, createPdfFixture());
   await fs.writeFile(TEXT_PATH, 'Legacy readable text');
   await fs.writeFile(path.join(CONFIG_ROOT, 'settings.json'), JSON.stringify({ libraryRoots: [LIBRARY_ROOT] }));
+  // What older versions left behind after any app-settings save.
+  await fs.writeFile(path.join(CONFIG_ROOT, 'pdf-feature.json'), '{"version":1,"enabled":false}');
   await fs.writeFile(path.join(DATA_ROOT, 'index', 'library.json'), JSON.stringify({
     version: 2,
     generatedAt: new Date().toISOString(),
@@ -59,7 +60,21 @@ test.after(async () => {
   await fs.rm(SANDBOX, { recursive: true, force: true });
 });
 
-test('PDF feature defaults off, hides catalog entries, and denies direct content requests', async () => {
+function setPdfKillSwitch(disabled) {
+  if (disabled) process.env.BABYREADER_PDF_ENABLED = 'false';
+  else delete process.env.BABYREADER_PDF_ENABLED;
+}
+
+test('PDF reading is on by default, even with a stale disabled setting from the removed switch', async () => {
+  setPdfKillSwitch(false);
+  const library = await (await fetch(`${baseUrl}/api/library`, { headers: { 'x-trim-userid': 'reader' } })).json();
+  assert.equal(library.features.pdfReader, true);
+  assert.equal(library.features.hiddenPdfCount, 0);
+  assert.ok(library.books.some((book) => book.id === PDF_ID));
+});
+
+test('the kill switch hides catalog entries and denies direct content requests', async () => {
+  setPdfKillSwitch(true);
   const response = await fetch(`${baseUrl}/api/library`, { headers: { 'x-trim-userid': 'reader' } });
   assert.equal(response.status, 200);
   const library = await response.json();
@@ -83,9 +98,9 @@ test('PDF feature defaults off, hides catalog entries, and denies direct content
   assert.notEqual(content.headers.get('content-type'), 'application/pdf');
 });
 
-test('private switch changes PDF catalog, organization, content and search without a service restart', async () => {
+test('the kill switch changes PDF catalog, organization, content and search without a service restart', async () => {
   const headers = { 'x-trim-userid': 'reader' };
-  setPdfReaderEnabled(CONFIG_ROOT, 'true');
+  setPdfKillSwitch(false);
 
   const libraryResponse = await fetch(`${baseUrl}/api/library`, { headers });
   const library = await libraryResponse.json();
@@ -111,7 +126,7 @@ test('private switch changes PDF catalog, organization, content and search witho
   });
   assert.equal(withoutIdentity.status, 401);
 
-  setPdfReaderEnabled(CONFIG_ROOT, 'false');
+  setPdfKillSwitch(true);
   const disabledLibrary = await (await fetch(`${baseUrl}/api/library`, { headers })).json();
   assert.equal(disabledLibrary.features.pdfReader, false);
   assert.ok(!disabledLibrary.books.some((book) => book.id === PDF_ID));
@@ -135,7 +150,7 @@ test('private switch changes PDF catalog, organization, content and search witho
 
 test('disabling PDF only hides saved collection placement and restores it when re-enabled', async () => {
   const headers = { 'x-trim-userid': 'collection-reader', 'content-type': 'application/json' };
-  setPdfReaderEnabled(CONFIG_ROOT, 'true');
+  setPdfKillSwitch(false);
   const createdResponse = await fetch(`${baseUrl}/api/library/collections`, {
     method: 'POST', headers, body: JSON.stringify({ name: 'PDF 分类', revision: 0 })
   });
@@ -150,14 +165,14 @@ test('disabling PDF only hides saved collection placement and restores it when r
   const placed = await placedResponse.json();
   assert.deepEqual(placed.collectionOrders[collectionId], [PDF_ID]);
 
-  setPdfReaderEnabled(CONFIG_ROOT, 'false');
+  setPdfKillSwitch(true);
   const hidden = await (await fetch(`${baseUrl}/api/library/organization`, { headers })).json();
   assert.equal(hidden.revision, placed.revision);
   assert.deepEqual(hidden.collectionOrders[collectionId], []);
   assert.equal(hidden.bookAssignments[PDF_ID], undefined);
   assert.ok(!hidden.orphanedBookIds.includes(PDF_ID));
 
-  setPdfReaderEnabled(CONFIG_ROOT, 'true');
+  setPdfKillSwitch(false);
   const restored = await (await fetch(`${baseUrl}/api/library/organization`, { headers })).json();
   assert.equal(restored.revision, placed.revision);
   assert.deepEqual(restored.collectionOrders[collectionId], [PDF_ID]);

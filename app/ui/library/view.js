@@ -153,7 +153,7 @@ function createLibraryHiddenPdfNotice(library) {
   const count = (value) => (Number.isSafeInteger(value) && value > 0 ? value : 0);
   const lines = [];
   if (features.pdfReader === false && count(features.hiddenPdfCount)) {
-    lines.push(`另有 ${features.hiddenPdfCount} 本 PDF 已扫描；请在 fnOS 的运行设置中启用 PDF 阅读。`);
+    lines.push(`另有 ${features.hiddenPdfCount} 本 PDF 已扫描；管理员已关闭 PDF 阅读（BABYREADER_PDF_ENABLED）。`);
   }
   if (features.mobiReader === false && count(features.hiddenMobiCount)) {
     lines.push(`另有 ${features.hiddenMobiCount} 本 MOBI/AZW3；请在 fnOS 的运行设置中启用后重新扫描。`);

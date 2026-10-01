@@ -253,6 +253,8 @@ test('real pointer: changing the book filter cancels the active order preview', 
 test('real pointer: a book can cross a row boundary without opening it', async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 1000 });
   const cards = page.locator('.library-grid .library-reorder-item');
+  // count() does not wait: let the shelf render before measuring it.
+  await expect(cards.nth(6)).toBeVisible();
   expect(await cards.count()).toBeGreaterThanOrEqual(7);
   const firstId = await cards.first().getAttribute('data-reorder-id');
   const source = await cards.first().locator('.library-book-cover').boundingBox();

@@ -603,14 +603,16 @@ test('library explains hidden and DRM-protected Kindle books and labels MOBI/AZW
   await window.happyDOM.close();
 });
 
-test('library explains when indexed PDFs are hidden by the fnOS reader switch', async () => {
+test('library explains when indexed PDFs are hidden by the operator PDF kill switch', async () => {
   const { window, api } = await createReaderDom();
   const book = { id: 'a'.repeat(64), title: '已收录文本', type: 'txt' };
   api.renderLibrary({
     books: [book],
     features: { libraryOrganization: false, pdfReader: false, hiddenPdfCount: 2 }
   });
-  assert.match(window.document.querySelector('.library-view')?.textContent || '', /2 本 PDF.*fnOS.*运行设置/);
+  assert.match(window.document.querySelector('.library-view')?.textContent || '', /2 本 PDF.*管理员已关闭 PDF 阅读/);
+  // PDF has no fnOS settings switch any more; never send people looking for one.
+  assert.doesNotMatch(window.document.querySelector('.library-view')?.textContent || '', /PDF.*运行设置/);
 
   api.renderLibrary({
     books: [book],
@@ -624,10 +626,10 @@ test('library explains when indexed PDFs are hidden by the fnOS reader switch', 
       books: [book]
     }
   });
-  assert.match(window.document.querySelector('.library-view')?.textContent || '', /2 本 PDF.*fnOS.*运行设置/);
+  assert.match(window.document.querySelector('.library-view')?.textContent || '', /2 本 PDF.*管理员已关闭 PDF 阅读/);
 
   api.renderLibrary({ books: [book], features: { libraryOrganization: false, pdfReader: true, hiddenPdfCount: 0 } });
-  assert.doesNotMatch(window.document.querySelector('.library-view')?.textContent || '', /PDF.*运行设置/);
+  assert.doesNotMatch(window.document.querySelector('.library-view')?.textContent || '', /管理员已关闭 PDF 阅读/);
 });
 
 test('browser refresh restores the book selected in the reader URL', async () => {

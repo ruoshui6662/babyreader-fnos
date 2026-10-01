@@ -13,10 +13,6 @@ if [ ! -x "$NODE_BIN" ]; then
   }
 fi
 
-if [ "${wizard_pdf_reader_enabled+x}" = x ]; then
-  TRIM_PKGETC="$PKG_ETC" "$NODE_BIN" "$APP_DEST/server/pdf-feature-config.js" set "$wizard_pdf_reader_enabled"
-fi
-
 if [ "${wizard_mobi_reader_enabled+x}" = x ]; then
   TRIM_PKGETC="$PKG_ETC" "$NODE_BIN" "$APP_DEST/server/mobi-feature-config.js" set "$wizard_mobi_reader_enabled"
 fi
