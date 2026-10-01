@@ -423,3 +423,67 @@ test('POSIX fnOS lifecycle installs, starts, reports status, and stops cleanly',
   result = command('main', 'status');
   assert.equal(result.status, 3, `stopped status must return to 3\nstdout: ${result.stdout}\nstderr: ${result.stderr}`);
 });
+
+test('main finds a supervised server when the PID file is missing or stale, and fails unknown actions with 1', {
+  skip: !availableShell() ? 'POSIX shell is unavailable' : false
+}, (t) => {
+  // fnOS app settings restart the app and then ask `main status`. When the PID
+  // file could not vouch for a running server, status said 3 and start removed
+  // the live socket for a second copy; fnOS then reported 无法启用.
+  const sandbox = fs.mkdtempSync(path.join(os.tmpdir(), 'babyreader-main-pid-fallback-'));
+  t.after(() => fs.rmSync(sandbox, { recursive: true, force: true }));
+  const posix = (value) => value.replace(/\\/g, '/');
+  const appDest = path.join(sandbox, 'target');
+  const procRoot = path.join(sandbox, 'proc');
+  const tempRoot = path.join(sandbox, 'tmp');
+  fs.mkdirSync(path.join(appDest, 'server'), { recursive: true });
+  fs.mkdirSync(procRoot);
+  fs.mkdirSync(tempRoot);
+  fs.cpSync(path.join(root, 'cmd', 'main'), path.join(sandbox, 'main'));
+  const serverFile = posix(path.join(appDest, 'server', 'index.js'));
+  fs.writeFileSync(serverFile, '');
+  const pidFile = path.join(tempRoot, 'babyreader-fnos.pid');
+  const fakeProcess = (pid, ...args) => {
+    fs.mkdirSync(path.join(procRoot, String(pid)), { recursive: true });
+    fs.writeFileSync(path.join(procRoot, String(pid), 'cmdline'), `${args.join('\0')}\0`);
+  };
+  const main = (action) => spawnSync(availableShell(), [posix(path.join(sandbox, 'main')), action], {
+    encoding: 'utf8',
+    env: {
+      ...process.env,
+      TRIM_APPDEST: posix(appDest),
+      TRIM_PKGTMP: posix(tempRoot),
+      TRIM_PKGVAR: posix(path.join(sandbox, 'var')),
+      TRIM_PKGETC: posix(path.join(sandbox, 'etc')),
+      BABYREADER_PROC_ROOT: posix(procRoot)
+    },
+    timeout: 30000
+  });
+
+  // Another app's server never counts as ours.
+  fakeProcess(100, 'node', '/var/apps/other/target/server/index.js');
+  assert.equal(main('status').status, 3);
+  assert.equal(fs.existsSync(pidFile), false);
+
+  // A supervised server (no PID file; reached through a non-canonical path) is
+  // found and re-adopted. start must not launch a second copy: without the
+  // socket (Windows cannot create one here) it reports the running process.
+  fakeProcess(4242, 'node', serverFile.replace('/server/', '/./server/'));
+  const start = main('start');
+  assert.equal(start.status, 1);
+  assert.match(start.stderr, /进程正在运行/);
+  assert.equal(fs.readFileSync(pidFile, 'utf8').trim(), '4242');
+
+  // A stale PID file naming a dead process falls back to the process table.
+  fs.writeFileSync(pidFile, '999999\n');
+  assert.match(main('start').stderr, /进程正在运行/);
+  assert.equal(fs.readFileSync(pidFile, 'utf8').trim(), '4242');
+
+  // Once the server is gone, status reports stopped again.
+  fs.rmSync(path.join(procRoot, '4242'), { recursive: true });
+  fs.rmSync(pidFile);
+  assert.equal(main('status').status, 3);
+
+  // fnOS lifecycle contract: unsupported actions fail with 1, not 2.
+  assert.equal(main('reload').status, 1);
+});
