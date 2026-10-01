@@ -491,7 +491,16 @@ test('real pointer text selection survives scroll and can be repeated after zoom
 
   await page.evaluate(() => window.getSelection().removeAllRanges());
   await page.evaluate(() => window.pdfReaderController.goToPdfPage(0));
+  // Zoom first stretches the old text layer and only swaps in a re-rendered
+  // one later; text-layer-state stays 'ready' throughout. Wait for the new
+  // frame, or the drag can start on a layer that is about to be replaced.
+  // Scrolling to the end released page 1's frame; let it re-render first.
+  await expect(firstPage).toHaveAttribute('data-frame-id', /.+/);
+  await expect(firstPage).toHaveAttribute('aria-busy', 'false');
+  const frameBeforeZoom = await firstPage.getAttribute('data-frame-id');
   await page.locator('#pdfZoomIn').click();
+  await expect(firstPage).not.toHaveAttribute('data-frame-id', frameBeforeZoom);
+  await expect(firstPage).toHaveAttribute('aria-busy', 'false');
   await expect(firstPage).toHaveAttribute('data-text-layer-state', 'ready');
   const zoomedTarget = await textSpan.evaluate((span) => {
     const text = span.firstChild;
