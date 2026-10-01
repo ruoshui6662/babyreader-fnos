@@ -630,7 +630,7 @@ test('settings validation clamps font size and normalizes supported values', asy
   assert.equal(settings.highlightColor, 'yellow');
   assert.equal(settings.textIndent, 2);           // default preserved (unsupported not present)
   assert.equal(settings.paragraphSpacing, 1.1);   // default preserved
-  assert.equal(settings.fontFamily, 'sans');      // default preserved
+  assert.equal(settings.readerFont, 'source-serif'); // default: bundled 思源宋体
   assert.equal(settings.continuousScroll, true);
   // Only an explicit true opts in to opening the contents panel.
   assert.equal(settings.tocAutoOpen, false);
@@ -640,18 +640,18 @@ test('settings validation clamps font size and normalizes supported values', asy
   const typ = await storage.updateSettings('reader_1', {
     textIndent: 99,          // out-of-range → clamp to 4
     paragraphSpacing: 0.1,  // out-of-range → clamp to 0.4
-    fontFamily: 'comic-sans' // unknown → fall back to default 'sans'
+    readerFont: 'comic-sans' // unknown → keeps the current choice
   });
   assert.equal(typ.textIndent, 4);
   assert.equal(typ.paragraphSpacing, 0.4);
-  assert.equal(typ.fontFamily, 'sans');
+  assert.equal(typ.readerFont, 'source-serif');
 
   const valid = await storage.updateSettings('reader_1', {
-    textIndent: 2, paragraphSpacing: 1.5, fontFamily: 'source-serif', theme: 'sepia'
+    textIndent: 2, paragraphSpacing: 1.5, readerFont: 'wenkai', theme: 'sepia'
   });
   assert.equal(valid.textIndent, 2);
   assert.equal(valid.paragraphSpacing, 1.5);
-  assert.equal(valid.fontFamily, 'source-serif');
+  assert.equal(valid.readerFont, 'wenkai');
   assert.equal(valid.theme, 'sepia');
 });
 

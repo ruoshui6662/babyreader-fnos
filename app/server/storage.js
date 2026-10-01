@@ -237,7 +237,7 @@ class UserStorage {
       const allowedHighlightColors = new Set(['yellow', 'green', 'blue', 'pink']);
       // Body font stacks are keyed, not free-form: the client owns the actual
       // font-family strings, the server only accepts known keys.
-      const allowedFontFamilies = new Set(['sans', 'songti', 'source-serif']);
+      const allowedReaderFonts = new Set(['source-serif', 'wenkai', 'fangsong', 'sans', 'songti']);
       // 'single' is no longer a user-selectable mode: legacy values migrate to
       // 'double'. It survives only as the client's narrow-window fallback.
       const allowedReadingModes = new Set(['scroll', 'double']);
@@ -282,9 +282,11 @@ class UserStorage {
         paragraphSpacing: Number.isFinite(settings.paragraphSpacing)
           ? Math.max(0.4, Math.min(3, Math.round(settings.paragraphSpacing * 10) / 10))
           : Number.isFinite(state.settings.paragraphSpacing) ? state.settings.paragraphSpacing : 1.1,
-        fontFamily: allowedFontFamilies.has(settings.fontFamily)
-          ? settings.fontFamily
-          : allowedFontFamilies.has(state.settings.fontFamily) ? state.settings.fontFamily : 'sans',
+        // Replaces fontFamily, which every save wrote as 'sans' (the old
+        // default), so it could not tell a real choice apart.
+        readerFont: allowedReaderFonts.has(settings.readerFont)
+          ? settings.readerFont
+          : allowedReaderFonts.has(state.settings.readerFont) ? state.settings.readerFont : 'source-serif',
         updatedAt: new Date().toISOString()
       };
       state.settings = { ...state.settings, ...next };

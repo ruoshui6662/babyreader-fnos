@@ -11,7 +11,7 @@
 | manifest 版本 | 1.3.8（tag `v1.3.8`；之前 `v1.3.7`、`v1.3.6`、`v1.3.5`、`v1.3.4`、`v1.3.3`、`v1.3.2`、`v1.3.1`、`v1.3.0`、`v1.2.0`） |
 | 运行时 | fnOS 依赖应用 `nodejs_v22`（NAS 上的路径为 `/var/apps/nodejs_v22/target/bin/node`，SSH 的 PATH 里没有它） |
 | 上游基线 | 见 `UPSTREAM_BASELINES`（BabyReader `bf4a727`，fnnas-docs `a8a7050`） |
-| 运行依赖 | `fflate`、`sanitize-html`、`pdfjs-dist@6.3.289`（服务端解析文本）、`@lingo-reader/shared@0.4.6`；浏览器端 PDF.js 放在 `app/ui/vendor/pdfjs`；MOBI 解析器为 vendor 的 lingo-reader 0.4.6 修补版，放在 `app/server/vendor/lingo-mobi/`（修补说明见其中的 `PATCHES.md`） |
+| 运行依赖 | `fflate`、`sanitize-html`、`pdfjs-dist@6.3.289`（服务端解析文本）、`@lingo-reader/shared@0.4.6`；浏览器端 PDF.js 放在 `app/ui/vendor/pdfjs`；阅读字体（4 款 SIL OFL，默认思源宋体）放在 `app/ui/vendor/fonts`，来源与授权见 `docs/fonts-licensing.md`；MOBI 解析器为 vendor 的 lingo-reader 0.4.6 修补版，放在 `app/server/vendor/lingo-mobi/`（修补说明见其中的 `PATCHES.md`） |
 
 ## 2. 架构
 

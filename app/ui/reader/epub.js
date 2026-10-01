@@ -602,13 +602,15 @@ function highlightColor() {
 function getEpubThemeCss() {
   const fontSize = (zoomLevel / 100 * 18).toFixed(2) + 'px';
   const colors = themeColors();
-  return `
+  const fontImports = (typeof readerFontStylesheetUrls === 'function' ? readerFontStylesheetUrls(state.fontFamily) : [])
+    .map((href) => `@import url("${href}");`).join('\n');
+  return `${fontImports}
     html, body {
       background: ${colors.bg} !important;
       color: ${colors.text} !important;
     }
     body {
-      font-family: ${FONT_STACKS[state.fontFamily] || FONT_STACKS['sans']} !important;
+      font-family: ${FONT_STACKS[state.fontFamily] || FONT_STACKS[DEFAULT_READER_FONT]} !important;
       font-size: ${fontSize} !important;
       font-weight: 400 !important;
       line-height: ${state.lineHeight} !important;

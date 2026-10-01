@@ -745,7 +745,12 @@ test('settings drawer presents grouped controls and a selected segmented tab', a
   await expect(page.locator('#settingTocOpen')).toHaveCSS('height', '26px');
   await expect(page.locator('.settings-checkbox span')).toHaveText('默认展开目录');
 
-  for (const id of ['settingTheme', 'settingFontFamily', 'settingReadingMode', 'settingHighlightColor']) {
+  // Theme and font are swatches/cards now; the remaining dropdowns keep
+  // the shared select styling.
+  await expect(page.locator('[data-theme-choice]')).toHaveCount(3);
+  await expect(page.locator('[data-font-choice]')).toHaveCount(5);
+  await expect(page.locator('[data-layout-preset]')).toHaveCount(3);
+  for (const id of ['settingReadingMode', 'settingHighlightColor']) {
     await expect(page.locator(`#${id}`)).toHaveCSS('border-radius', '10px');
     await expect(page.locator(`#${id}`)).toHaveCSS('width', '136px');
     await expect(page.locator(`#${id}`)).toHaveCSS('text-align', 'center');
@@ -848,7 +853,8 @@ test('custom select choices keep the native value and change event contract', as
 
 test('custom select menus stay hidden until a trigger is activated', async ({ page }) => {
   await page.goto(APP_PATH);
-  await expect(page.locator('.custom-select-menu')).toHaveCount(6);
+  // Theme and font are swatches/cards (2026-10 phase 2), not custom selects.
+  await expect(page.locator('.custom-select-menu')).toHaveCount(4);
   await expect(page.locator('[data-custom-select-for="highlightEditorColor"]')).toHaveCount(0);
   await expect(page.locator('.custom-select-menu:not([hidden])')).toHaveCount(0);
 
@@ -862,13 +868,13 @@ test('custom select menus never stack and close after choosing an option', async
   await page.locator('#btnSettings').click();
 
   const visibleMenus = page.locator('.custom-select-menu:not([hidden])');
-  await page.locator('[data-custom-select-for="settingTheme"] .custom-select-trigger').click();
+  await page.locator('[data-custom-select-for="settingReadingMode"] .custom-select-trigger').click();
   await expect(visibleMenus).toHaveCount(1);
 
-  await page.locator('[data-custom-select-for="settingFontFamily"] .custom-select-trigger').click();
+  await page.locator('[data-custom-select-for="settingHighlightColor"] .custom-select-trigger').click();
   await expect(visibleMenus).toHaveCount(1);
 
-  await page.locator('#custom-options-settingFontFamily [role="option"][data-value="songti"]').click();
+  await page.locator('#custom-options-settingHighlightColor [role="option"][data-value="green"]').click();
   await expect(visibleMenus).toHaveCount(0);
 
   await page.locator('[data-custom-select-for="settingHighlightColor"] .custom-select-trigger').click();

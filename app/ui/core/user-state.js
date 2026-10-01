@@ -26,7 +26,7 @@ function currentUserSettings() {
     highlightColor: state.highlightColor,
     textIndent: state.textIndent,
     paragraphSpacing: state.paragraphSpacing,
-    fontFamily: state.fontFamily
+    readerFont: state.fontFamily
   };
 }
 
@@ -75,7 +75,7 @@ function applyUserState(userState) {
   state.paragraphSpacing = Number.isFinite(settings.paragraphSpacing)
     ? Math.max(0.4, Math.min(3, Math.round(settings.paragraphSpacing * 10) / 10))
     : 1.1;
-  state.fontFamily = FONT_STACKS[settings.fontFamily] ? settings.fontFamily : 'sans';
+  state.fontFamily = FONT_STACKS[settings.readerFont] ? settings.readerFont : DEFAULT_READER_FONT;
 
   applyTheme(state.theme, false);
   applyZoom();

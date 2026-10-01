@@ -103,7 +103,7 @@ async function resetReaderSettings(page) {
         highlightColor: 'yellow',
         textIndent: 2,
         paragraphSpacing: 1.1,
-        fontFamily: 'sans'
+        readerFont: 'sans'
       })
     });
     if (!response.ok) throw new Error(`Settings reset failed: ${response.status}`);
