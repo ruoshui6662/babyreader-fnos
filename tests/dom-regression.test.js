@@ -1035,7 +1035,7 @@ test('UX shelf search hides an unrelated recent book without changing its saved 
   await window.happyDOM.close();
 });
 
-test('UX recent reading uses a prominent cover card and completed scan feedback takes no layout space', async () => {
+test('UX recent reading uses a compact cover card and completed scan feedback takes no layout space', async () => {
   const { window, api } = await createReaderDom();
   const style = window.document.createElement('style');
   style.textContent = await fs.readFile(path.resolve(__dirname, '../app/ui/styles.css'), 'utf8');
@@ -1047,8 +1047,8 @@ test('UX recent reading uses a prominent cover card and completed scan feedback 
   api.renderLibrary({ books: [book], scan: { status: 'completed', discoveredCount: 1, reusedCount: 1 } });
   const card = window.document.querySelector('.library-recent-card');
   assert.equal(window.getComputedStyle(card).display, 'grid');
-  assert.equal(window.getComputedStyle(card.querySelector('.library-book-cover')).width, '72px');
-  assert.equal(window.getComputedStyle(card.querySelector('.library-book-cover')).height, '104px');
+  assert.equal(window.getComputedStyle(card.querySelector('.library-book-cover')).width, '48px');
+  assert.equal(window.getComputedStyle(card.querySelector('.library-book-cover')).height, '70px');
   assert.equal(window.getComputedStyle(window.document.querySelector('.library-scan-status')).display, 'none');
   await window.happyDOM.close();
 });
@@ -1077,9 +1077,9 @@ test('library home exposes stable extension regions without changing its existin
 test('library home styling fills rows with WeChat-Reading-sized covers at every breakpoint', async () => {
   const css = await fs.readFile(path.resolve(__dirname, '../app/ui/styles.css'), 'utf8');
   assert.ok(/\.library-view\s*\{[^}]*width:\s*min\(1280px,\s*100%\)/s.test(css), 'library width should match the approved max-width');
-  assert.ok(/^\.library-grid\s*\{[^}]*grid-template-columns:\s*repeat\(auto-fill,\s*minmax\(100px,\s*1fr\)\)/ms.test(css), 'desktop should fill rows with ~100px covers');
+  assert.ok(/^\.library-grid\s*\{[^}]*grid-template-columns:\s*repeat\(auto-fill,\s*minmax\(128px,\s*1fr\)\)/ms.test(css), 'desktop should fill rows with ~130px covers (eight on the 1280px shelf)');
   assert.ok(/^\.library-book-cover\s*\{[^}]*aspect-ratio:\s*1\s*\/\s*1\.45/ms.test(css), 'book covers should use the approved 1:1.45 frame');
-  assert.ok(/@media\s*\(max-width:\s*919px\)[\s\S]*?\.library-grid\s*\{\s*grid-template-columns:\s*repeat\(auto-fill,\s*minmax\(96px,/.test(css), 'tablet covers should stay ~96px');
+  assert.ok(/@media\s*\(max-width:\s*919px\)[\s\S]*?\.library-grid\s*\{\s*grid-template-columns:\s*repeat\(auto-fill,\s*minmax\(112px,/.test(css), 'tablet covers should stay ~112px');
   assert.ok(/@media\s*\(max-width:\s*679px\)[\s\S]*?\.library-grid\s*\{\s*grid-template-columns:\s*repeat\(auto-fill,\s*minmax\(88px,/.test(css), 'phones should fit three ~100px covers per row');
   assert.equal(/repeat\(2,\s*minmax\(0,\s*1fr\)\)/.test(css.match(/@media\s*\(max-width:\s*479px\)[^@]*/)?.[0] || ''), false, 'phones should no longer fall back to two oversized columns');
 });

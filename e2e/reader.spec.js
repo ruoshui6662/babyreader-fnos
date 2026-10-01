@@ -308,8 +308,8 @@ test('wide library fills rows with WeChat-Reading-sized covers under a large tit
   const columns = await page.locator('.library-grid').evaluate((grid) =>
     getComputedStyle(grid).gridTemplateColumns.trim().split(/\s+/).length
   );
-  // 1280px content / (100px covers + 28px gaps) = 10 per row.
-  expect(columns).toBe(10);
+  // 1280px shelf / (128px covers + 32px gaps) = 8 per row.
+  expect(columns).toBe(8);
 });
 
 test('wide library keeps left-aligned cover slots and typesets covers without artwork', async ({ page }) => {
@@ -319,8 +319,8 @@ test('wide library keeps left-aligned cover slots and typesets covers without ar
   await expect(page.locator('.library-grid')).toHaveCSS('justify-content', 'start');
   await expect(page.locator('.library-book').first()).toHaveCSS('box-shadow', 'none');
   const coverWidth = await page.locator('.library-grid .library-book-cover').first().evaluate((element) => element.getBoundingClientRect().width);
-  expect(coverWidth).toBeGreaterThanOrEqual(100);
-  expect(coverWidth).toBeLessThan(120);
+  expect(coverWidth).toBeGreaterThanOrEqual(128);
+  expect(coverWidth).toBeLessThan(150);
   const generated = page.locator('.library-book').filter({ hasText: 'E2E Markdown' }).locator('.library-book-cover.is-generated');
   await expect(generated.locator('.library-cover-title')).toHaveText('E2E Markdown');
   await expect(generated.locator('.library-cover-format')).toHaveText('Markdown');
