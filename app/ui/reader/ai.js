@@ -226,6 +226,11 @@ function visibleArticleText() {
 }
 
 function currentAiChapter() {
+  if (state.contentType === 'pdf') {
+    // The current page places “本页” and the section the reader is in.
+    const pageIndex = window.pdfReaderController?.getCurrentPageIndex?.();
+    return { index: Number.isInteger(pageIndex) ? pageIndex : null, href: '', label: '', position: { href: '', anchor: '', text: '' } };
+  }
   if (state.contentType === 'text') {
     return { index: null, href: '', label: '', position: { href: '', anchor: '', text: visibleArticleText() } };
   }
@@ -1540,9 +1545,6 @@ async function refreshAiStatus() {
 
 function configurePdfAiDisclosure() {
   const isPdf = state.contentType === 'pdf';
-  // PDF books have no 导读 yet.
-  const mapButton = aiElement('btnAiBookMap');
-  if (mapButton) mapButton.hidden = isPdf;
   const row = aiElement('aiPdfScopeRow');
   if (!row) return;
   row.hidden = !isPdf;
@@ -1800,8 +1802,8 @@ async function askPdfAiQuestion() {
   }
 }
 
+// Every format (EPUB, PDF, TXT/Markdown) asks through the server pipeline.
 async function askAiQuestion() {
-  if (state.contentType === 'pdf') return askPdfAiQuestion();
   if (_aiBusy || !state.currentBookId) return false;
   const questionElement = aiElement('aiQuestion');
   const question = String(questionElement?.value || '').trim();

@@ -1452,6 +1452,17 @@ function rowsToSegments(rows, segmentChars = NODE_SEGMENT_CHARS) {
   return segments.filter((segment) => segment.text.trim());
 }
 
+function segmentsForRange(db, firstRow, lastRow, maxChars, segmentChars) {
+  const rows = db.prepare(`${ROW_SELECT} WHERE ai_chunks.rowid BETWEEN ? AND ? ORDER BY ai_chunks.rowid`)
+    .all(Number(firstRow), Number(lastRow)).map(rowToSource);
+  const segments = rowsToSegments(rows, segmentChars);
+  const chars = segments.reduce((sum, segment) => sum + segment.text.length, 0);
+  if (chars <= maxChars) return { chars, truncated: false, segments };
+  const keep = Math.max(1, Math.floor(maxChars / segmentChars));
+  const picked = Array.from({ length: keep }, (_, index) => segments[Math.round(index * (segments.length - 1) / Math.max(1, keep - 1))]);
+  return { chars, truncated: true, segments: [...new Set(picked)] };
+}
+
 // A node's original text as readable segments. When the node is longer than
 // `maxChars`, segments are sampled evenly from beginning to end and
 // `truncated` is set.
@@ -1461,19 +1472,101 @@ async function readNodeSegments(book, dataRoot, nodeId, { maxChars = 36000, segm
     const result = await withIndexDb(book, dataRoot, (db) => {
       const node = db.prepare('SELECT id, label, firstRow, lastRow, chars FROM ai_nodes WHERE id = ?').get(nodeId);
       if (!node || node.firstRow === null) return { available: Boolean(node), segments: [], chars: 0 };
-      const rows = db.prepare(`${ROW_SELECT} WHERE ai_chunks.rowid BETWEEN ? AND ? ORDER BY ai_chunks.rowid`)
-        .all(Number(node.firstRow), Number(node.lastRow)).map(rowToSource);
-      const segments = rowsToSegments(rows, segmentChars);
-      const chars = segments.reduce((sum, segment) => sum + segment.text.length, 0);
-      if (chars <= maxChars) return { available: true, label: String(node.label), chars, truncated: false, segments };
-      const keep = Math.max(1, Math.floor(maxChars / segmentChars));
-      const picked = Array.from({ length: keep }, (_, index) => segments[Math.round(index * (segments.length - 1) / Math.max(1, keep - 1))]);
-      return { available: true, label: String(node.label), chars, truncated: true, segments: [...new Set(picked)] };
+      return { available: true, label: String(node.label), ...segmentsForRange(db, node.firstRow, node.lastRow, maxChars, segmentChars) };
     });
     return result || { available: false, segments: [] };
   } catch {
     return { available: false, segments: [] };
   }
+}
+
+// PDF pages (0-based, inclusive) as readable segments.
+async function readPageSegments(book, dataRoot, pageStart, pageEnd, { maxChars = 36000, segmentChars = NODE_SEGMENT_CHARS } = {}) {
+  try {
+    const result = await withIndexDb(book, dataRoot, (db) => {
+      const range = db.prepare('SELECT MIN(rowid) AS firstRow, MAX(rowid) AS lastRow FROM ai_chunks WHERE CAST(chapterIndex AS INTEGER) BETWEEN ? AND ?')
+        .get(pageStart, pageEnd);
+      if (!range || range.firstRow === null) return { available: true, segments: [], chars: 0 };
+      return { available: true, ...segmentsForRange(db, range.firstRow, range.lastRow, maxChars, segmentChars) };
+    });
+    return result || { available: false, segments: [] };
+  } catch {
+    return { available: false, segments: [] };
+  }
+}
+
+// The first index row of a PDF page (to place the reader's current page).
+async function firstRowOfPage(book, dataRoot, pageIndex) {
+  try {
+    return await withIndexDb(book, dataRoot, (db) => {
+      const row = db.prepare('SELECT MIN(rowid) AS rowid FROM ai_chunks WHERE CAST(chapterIndex AS INTEGER) = ?').get(pageIndex);
+      return row && row.rowid !== null ? Number(row.rowid) : null;
+    });
+  } catch {
+    return null;
+  }
+}
+
+// PDF books get their table of contents from bookmarks, detected headings or
+// page windows (computed elsewhere and passed in as `structure`). Written into
+// ai_nodes once, so PDFs share every outline-based feature.
+async function ensurePdfNodes(book, dataRoot, structure) {
+  if (book?.type !== 'pdf' || !Array.isArray(structure?.sections) || !structure.sections.length) return false;
+  const filePath = await ensureIndex(book, dataRoot);
+  if (!filePath) return false;
+  return getIndexManager(dataRoot).withReadLease(book.id, async () => {
+    let db;
+    try {
+      db = openDatabase(filePath);
+      if (db.prepare('SELECT COUNT(*) AS count FROM ai_nodes').get().count > 0) return true;
+      const pageCount = Number(structure.pageCount) || 0;
+      const sections = [...structure.sections].sort((left, right) => left.pageStart - right.pageStart);
+      const nodes = [];
+      const stack = [];
+      for (const [index, section] of sections.entries()) {
+        const level = Math.max(1, Number(section.level) || 1);
+        while (stack.length && stack[stack.length - 1].level >= level) stack.pop();
+        const node = {
+          id: `pdf-${index + 1}`,
+          label: String(section.title || `第 ${section.pageStart + 1} 页`).slice(0, 300),
+          depth: stack.length,
+          parentId: stack.length ? stack[stack.length - 1].id : null,
+          level,
+          pageStart: Number(section.pageStart) || 0
+        };
+        nodes.push(node);
+        stack.push(node);
+      }
+      // A section runs until the next section at its level or above.
+      for (const [index, node] of nodes.entries()) {
+        const next = nodes.slice(index + 1).find((candidate) => candidate.level <= node.level);
+        node.pageEnd = next ? Math.max(node.pageStart, next.pageStart - 1) : Math.max(node.pageStart, pageCount - 1);
+      }
+      const range = db.prepare(`
+        SELECT MIN(ai_chunks.rowid) AS firstRow, MAX(ai_chunks.rowid) AS lastRow, COALESCE(SUM(LENGTH(ai_chunk_text.bodyText)), 0) AS chars
+        FROM ai_chunks INNER JOIN ai_chunk_text ON ai_chunk_text.rowid = ai_chunks.rowid
+        WHERE CAST(ai_chunks.chapterIndex AS INTEGER) BETWEEN ? AND ?
+      `);
+      const insert = db.prepare('INSERT OR REPLACE INTO ai_nodes(ord, id, parentId, depth, label, firstRow, lastRow, chars) VALUES (?, ?, ?, ?, ?, ?, ?, ?)');
+      db.exec('BEGIN IMMEDIATE');
+      try {
+        for (const [order, node] of nodes.entries()) {
+          const rows = range.get(node.pageStart, node.pageEnd);
+          insert.run(order, node.id, node.parentId, node.depth, node.label,
+            rows.firstRow === null ? null : Number(rows.firstRow), rows.lastRow === null ? null : Number(rows.lastRow), Number(rows.chars) || 0);
+        }
+        db.exec('COMMIT');
+      } catch (error) {
+        db.exec('ROLLBACK');
+        throw error;
+      }
+      return true;
+    } catch {
+      return false;
+    } finally {
+      db?.close();
+    }
+  });
 }
 
 // Rows next to the given rows (same document), for expanding a search hit into
@@ -1575,6 +1668,9 @@ module.exports = {
   readNodeSegments,
   readRowsAround,
   readAllPassages,
+  readPageSegments,
+  firstRowOfPage,
+  ensurePdfNodes,
   locateTextInBook,
   rowsToSegments,
   TEXT_STRUCTURE_VERSION,

@@ -5710,7 +5710,7 @@ test('organize mode renames a book through a dialog and keeps controls on one ro
   await window.happyDOM.close();
 });
 
-test('the 导读 sheet shows the estimate, starts generation and is hidden for PDF', async () => {
+test('the 导读 sheet shows the estimate, starts generation and is available for PDF', async () => {
   const { window, api } = await createReaderDom();
   const bookId = '7'.repeat(64);
   const calls = [];
@@ -5765,6 +5765,7 @@ test('the 导读 sheet shows the estimate, starts generation and is hidden for P
   api.state.contentType = 'pdf';
   window.pdfReaderController = { getPageCount: () => 3 };
   await api.aiApi.openAiModal(null, window.document.body);
-  assert.equal(window.document.getElementById('btnAiBookMap').hidden, true);
+  // PDFs have a 导读 too (from bookmarks, headings or page groups).
+  assert.equal(window.document.getElementById('btnAiBookMap').hidden, false);
   await window.happyDOM.close();
 });

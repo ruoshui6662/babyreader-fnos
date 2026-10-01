@@ -22,6 +22,7 @@ const {
   readChapterEvidence,
   readBookNavigation,
   readAllPassages,
+  ensurePdfNodes,
   listCachedChapterSummaries,
   getOrCreateChapterSummary,
   getOrCreateChapterSummarySegment,
@@ -790,11 +791,29 @@ async function handlePdfAiStream(request, response, user, bookId, body) {
 
 // Sources worth keeping with a saved answer: the ones the answer cites, at
 // most the conversation store's limit.
-function plannedPersistenceSources(context, answer) {
+function plannedPersistenceSources(context, answer, book = null) {
   const cited = new Set([...String(answer || '').matchAll(/【(\d+)】/g)].map((match) => Number(match[1])));
+  // PDF sources remember the file they came from, so a changed PDF marks them stale.
+  const fingerprint = book?.type === 'pdf' && /^[a-f0-9]{64}$/.test(String(book.fingerprint || '')) ? book.fingerprint : null;
   return aiPersistenceSources(context)
     .filter((source) => !cited.size || cited.has(source.citationIndex))
-    .slice(0, 12);
+    .slice(0, 12)
+    .map((source) => (fingerprint ? { ...source, sourceFingerprint: fingerprint } : source));
+}
+
+// PDFs get a table of contents from bookmarks, detected headings or page
+// windows; computed once per file and written into the search index.
+async function ensurePdfOutline(book, { signal, onProgress } = {}) {
+  if (book?.type !== 'pdf') return;
+  const fingerprint = await currentPdfFingerprint(book);
+  const key = { bookId: book.id, sourceFingerprint: fingerprint, parserVersion: PDF_TEXT_PARSER_VERSION, structureVersion: PDF_AI_STRUCTURE_VERSION };
+  let structure = fingerprint ? await pdfAiProfileStore.getStructure(key) : null;
+  if (!structure) {
+    onProgress?.({ stage: 'structure', message: '正在分析 PDF 的目录结构（首次需要一点时间）…' });
+    structure = buildPdfStructure(await extractPdfStructureSignals(book, { signal }));
+    if (fingerprint) await pdfAiProfileStore.putStructure({ ...key, structure });
+  }
+  await ensurePdfNodes(book, DATA_ROOT, structure);
 }
 
 function plannedAiInput(body) {
@@ -861,6 +880,7 @@ async function bookMapSummaries(bookId) {
 // 问书 with server-side routing and evidence. Events: progress → meta → delta… → done.
 async function handlePlannedAiStream(request, response, user, book, bookId, body) {
   const input = plannedAiInput(body);
+  if (book.type === 'pdf' && !pdfReaderEnabled()) return sendError(response, 404, 'PDF 阅读尚未启用');
   const savedConfig = await aiConfigStorage.get(user.uid);
   const config = publicAiConfig(savedConfig, process.env);
   if (!config.configured) return sendError(response, 503, 'AI 服务尚未配置');
@@ -883,6 +903,7 @@ async function handlePlannedAiStream(request, response, user, book, bookId, body
   sendSseHeaders(response);
   try {
     progress({ stage: 'routing', message: '正在理解问题…' });
+    await ensurePdfOutline(book, { signal, onProgress: progress });
     const summaries = await bookMapSummaries(book.id);
     const plan = await planQuestion({
       book, dataRoot: DATA_ROOT, question: input.question, selectedText: input.selectedText,
@@ -902,7 +923,12 @@ async function handlePlannedAiStream(request, response, user, book, bookId, body
     });
     if (signal.aborted) return;
     if (!evidence.context.length) {
-      sendSseEvent(response, 'error', { code: 'AI_NO_EVIDENCE', message: '没有在书中找到相关内容，请换一种问法。' });
+      sendSseEvent(response, 'error', {
+        code: 'AI_NO_EVIDENCE',
+        message: book.type === 'pdf' && !plan.outline.totalChars
+          ? '这份 PDF 没有可提取的文字（可能是扫描版），暂时无法回答。'
+          : '没有在书中找到相关内容，请换一种问法。'
+      });
       return;
     }
     const planInfo = {
@@ -945,7 +971,7 @@ async function handlePlannedAiStream(request, response, user, book, bookId, body
         await aiConversationStorage.appendCompletedTurn(user.uid, bookId, input.conversationId, {
           question: input.question,
           answer,
-          sources: plannedPersistenceSources(evidence.context, answer)
+          sources: plannedPersistenceSources(evidence.context, answer, book)
         });
         done.persisted = true;
       } catch (error) {
@@ -1957,7 +1983,10 @@ async function handleApi(request, response, pathname, searchParams = new URLSear
   const aiMapMatch = pathname.match(new RegExp(`^${APP_PREFIX}/api/books/([a-f0-9]{64})/ai/map(/job)?$`));
   if (aiMapMatch) {
     const book = await findBook(aiMapMatch[1]);
-    if (book.type === 'pdf') return sendError(response, 409, 'PDF 暂不支持导读。');
+    if (book.type === 'pdf') {
+      if (!pdfReaderEnabled()) return sendError(response, 404, 'PDF 阅读尚未启用');
+      await ensurePdfOutline(book);
+    }
     const service = getBookMapService();
     const vectorSettings = embeddingSettings(await aiConfigStorage.get(user.uid), process.env);
     const mapStatus = async () => ({
@@ -1987,7 +2016,7 @@ async function handleApi(request, response, pathname, searchParams = new URLSear
   const aiVectorsMatch = pathname.match(new RegExp(`^${APP_PREFIX}/api/books/([a-f0-9]{64})/ai/vectors(/job)?$`));
   if (aiVectorsMatch) {
     const book = await findBook(aiVectorsMatch[1]);
-    if (book.type === 'pdf') return sendError(response, 409, 'PDF 暂不支持语义检索。');
+    if (book.type === 'pdf' && !pdfReaderEnabled()) return sendError(response, 404, 'PDF 阅读尚未启用');
     const settings = embeddingSettings(await aiConfigStorage.get(user.uid), process.env);
     if (!settings.configured) return sendError(response, 503, '尚未配置嵌入模型');
     const service = getEmbeddingService();
@@ -2009,9 +2038,9 @@ async function handleApi(request, response, pathname, searchParams = new URLSear
   const aiStreamMatch = pathname.match(new RegExp(`^${APP_PREFIX}/api/books/([a-f0-9]{64})/ai/ask/stream$`));
   if (request.method === 'POST' && aiStreamMatch) {
     const book = await findBook(aiStreamMatch[1]);
-    if (book.type === 'pdf') return handlePdfAiStream(request, response, user, aiStreamMatch[1], await readJsonBody(request));
     const body = await readJsonBody(request);
     if (body?.mode === 'planned') return handlePlannedAiStream(request, response, user, book, aiStreamMatch[1], body);
+    if (book.type === 'pdf') return handlePdfAiStream(request, response, user, aiStreamMatch[1], body);
     const conversationId = body?.conversationId ? String(body.conversationId) : '';
     let input;
     try {

@@ -5,8 +5,10 @@
 // selection and where the reader is; it no longer assembles book context.
 
 const {
+  firstRowOfPage,
   locateTextInBook,
   readBookOutline,
+  readPageSegments,
   readNodeSegments,
   readRowsAround,
   resolveBookPosition,
@@ -39,7 +41,8 @@ const TYPE_LABELS = {
   section_summary: '小节概述',
   lookup: '书中查找',
   explain_selection: '解释选中文字',
-  compare: '章节比较'
+  compare: '章节比较',
+  pages: '指定页面'
 };
 
 function nodeMap(nodes) {
@@ -71,7 +74,25 @@ function nodePath(nodes, nodeId) {
 // Where the reader is: the EPUB locator when it resolves, otherwise the
 // visible paragraph found in the book, otherwise a chapter title match.
 async function resolveReadingPosition(book, dataRoot, chapter, nodes) {
-  if (!chapter || !nodes.length) return null;
+  if (!chapter) return null;
+  // PDF: the reader's current page, and the deepest section containing it.
+  if (book.type === 'pdf') {
+    const pageIndex = Number.isSafeInteger(chapter.index) && chapter.index >= 0 ? chapter.index : null;
+    if (pageIndex === null) return null;
+    const row = await firstRowOfPage(book, dataRoot, pageIndex);
+    const node = row === null ? null : nodes
+      .filter((item) => item.firstRow !== null && row >= item.firstRow && row <= item.lastRow)
+      .sort((left, right) => right.depth - left.depth)[0];
+    if (!node) return { chapterId: null, sectionId: null, label: `第 ${pageIndex + 1} 页`, pageIndex };
+    const chapterNode = chapterAncestor(nodes, node.id);
+    return {
+      chapterId: chapterNode?.id || node.id,
+      sectionId: chapterNode && chapterNode.id !== node.id ? node.id : null,
+      label: nodePath(nodes, node.id),
+      pageIndex
+    };
+  }
+  if (!nodes.length) return null;
   const toPosition = (nodeId) => {
     const node = nodes.find((item) => item.id === nodeId);
     if (!node) return null;
@@ -140,7 +161,7 @@ async function planQuestion({
   const outline = await readBookOutline(book, dataRoot);
   const nodes = outline.available ? outline.nodes : [];
   const position = await resolveReadingPosition(book, dataRoot, chapter, nodes);
-  let route = routeQuestion({ question, selectedText, nodes, position });
+  let route = routeQuestion({ question, selectedText, nodes, position, paged: book.type === 'pdf' });
   let navigated = false;
   if (allowNavigator && savedConfig && route.confidence === 'low' && nodes.length) {
     onProgress?.({ stage: 'routing', message: '正在判断问题涉及的章节…' });
@@ -178,6 +199,7 @@ function contextItem(segment, label) {
 
 function segmentLabel(nodes, nodeId, segment) {
   const base = nodePath(nodes, nodeId);
+  if (String(nodeId).startsWith('pdf-') && Number.isInteger(segment.chapterIndex)) return `${base}（第${segment.chapterIndex + 1}页）`;
   const heading = segment.headings?.[0];
   return heading && !base.endsWith(heading) ? `${base} › ${heading}` : base;
 }
@@ -451,6 +473,18 @@ async function gatherEvidence({ book, dataRoot, plan, question, selectedText = '
     return {
       context: evidence.context,
       scopeLabel: `${nodePath(nodes, nodeId)}（较长，按开头、中间、结尾抽取原文）`,
+      coverage
+    };
+  }
+
+  if (plan.type === 'pages' && Array.isArray(plan.pages)) {
+    const [pageStart, pageEnd] = plan.pages;
+    const read = await readPageSegments(book, dataRoot, pageStart, pageEnd, { maxChars: BUDGETS.chapterFullText });
+    const pagesLabel = pageStart === pageEnd ? `第 ${pageStart + 1} 页` : `第 ${pageStart + 1}–${pageEnd + 1} 页`;
+    coverage.mode = read.truncated ? 'sampled' : 'full-text';
+    return {
+      context: (read.segments || []).map((segment) => contextItem(segment, `第${segment.chapterIndex + 1}页`)),
+      scopeLabel: `${pagesLabel}（${read.truncated ? '较长，抽取原文' : '全文'}）`,
       coverage
     };
   }

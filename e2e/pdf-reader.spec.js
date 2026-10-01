@@ -39,7 +39,9 @@ test('PDF AI panel searches the whole searchable paper by default and keeps trus
   await page.locator('#aiQuestion').fill('第二页说了什么？');
   await page.locator('#btnAiAsk').click();
   await expect(page.locator('.ai-source').last()).toContainText('第2页');
-  expect(submitted).toMatchObject({ scope: 'searchable_book' });
+  // PDFs ask through the server pipeline with the current page as position.
+  expect(submitted).toMatchObject({ mode: 'planned', question: '第二页说了什么？' });
+  expect(Number.isInteger(submitted.chapter?.index)).toBe(true);
   expect(submitted.context).toBeUndefined();
   await page.locator('.ai-source').last().click();
   await expect(page.locator('#pdfReaderSurface')).toHaveAttribute('data-current-page', '1');
@@ -90,7 +92,7 @@ test('PDF single-page text selection opens the AI panel in selection scope', asy
   expect(verified.matches[0].text).toContain('第一页');
   await page.locator('#aiQuestion').fill('这段讲了什么？');
   await page.locator('#btnAiAsk').click();
-  await expect.poll(() => submitted?.scope).toBe('selection');
+  await expect.poll(() => submitted?.mode).toBe('planned');
   expect(submitted.selectedText).toContain('第一页');
 });
 

@@ -13,6 +13,7 @@ const { parseNumeral } = require('./ai-text-structure');
 const NUMERAL = '[0-9０-９零〇一二两三四五六七八九十百千万]+';
 const SUMMARY_WORDS = /(?:讲了?什么|讲的是什么|说了?什么|写了?什么|主要内容|内容是什么|概述|总结|梳理|概括|归纳|核心观点|主要观点|观点是什么|主旨|大意|要点|结论|讲述|提到了?哪些|大概|简介|导读|脉络|结构)/;
 const BOOK_WORDS = /(?:这本书|本书|全书|整本书?|全本|全文|这部书|此书|这部作品|整部|每一?章|各章|作者想(?:通过|要)?表达|作者的(?:核心|主要)?(?:观点|思想))/;
+const EXPLICIT_COMPARE_WORDS = /(?:比较|对比|异同|区别|差异)/;
 const COMPARE_WORDS = /(?:比较|对比|异同|区别|差异|不同之处|有何不同|有什么不同|变化|前后)/;
 const CURRENT_CHAPTER = /(?:本章|这一?章|当前章节?|该章节?|此章|这章节)/;
 const CURRENT_SECTION = /(?:本节|这一?节|当前小?节|该节|此节|这一部分|这部分)/;
@@ -170,6 +171,28 @@ function titleReferences(question, nodes) {
   return found.map((node) => ({ node, kind: node.depth > chapterLevel(nodes).depth ? 'section' : 'chapter' }));
 }
 
+const MAX_PAGE_SPAN = 30;
+
+// “第12页”“第3到5页”“3-5页”“本页” → 0-based inclusive page range.
+function pageReference(question, position) {
+  const text = String(question);
+  const range = new RegExp(`第?\\s*(${NUMERAL})\\s*页?\\s*(?:到|至|-|–|—|~|～|－)\\s*第?\\s*(${NUMERAL})\\s*页`).exec(text);
+  if (range) {
+    const start = parseNumeral(range[1]);
+    const end = parseNumeral(range[2]);
+    if (start && end && end >= start) return [start - 1, Math.min(end, start + MAX_PAGE_SPAN - 1) - 1];
+  }
+  const single = new RegExp(`第\\s*(${NUMERAL})\\s*页`).exec(text);
+  if (single) {
+    const page = parseNumeral(single[1]);
+    if (page) return [page - 1, page - 1];
+  }
+  if (/(?:本页|这一?页|当前页|此页)/.test(text) && Number.isInteger(position?.pageIndex)) {
+    return [position.pageIndex, position.pageIndex];
+  }
+  return null;
+}
+
 function nodeById(nodes, id) {
   return nodes.find((node) => node.id === id) || null;
 }
@@ -182,11 +205,16 @@ function nodeById(nodes, id) {
  * @param {{chapterId?: string, sectionId?: string}} [input.position]
  * @returns {{type: string, scope: string, nodeIds: string[], confidence: 'high'|'low', reason: string}}
  */
-function routeQuestion({ question = '', selectedText = '', nodes = [], position = null } = {}) {
+function routeQuestion({ question = '', selectedText = '', nodes = [], position = null, paged = false } = {}) {
   const text = String(question || '').replace(/\s+/g, ' ').trim();
   const outline = Array.isArray(nodes) ? nodes : [];
   const hasSelection = String(selectedText || '').trim().length > 0;
   const summary = SUMMARY_WORDS.test(text);
+  // PDF: questions about pages read those pages.
+  if (paged) {
+    const pages = pageReference(text, position);
+    if (pages) return { type: 'pages', scope: 'pages', nodeIds: [], pages, confidence: 'high', reason: 'page-reference' };
+  }
   const explicit = explicitReferences(text, outline, position);
   const references = [...explicit];
   for (const reference of titleReferences(text, outline)) {
@@ -225,7 +253,9 @@ function routeQuestion({ question = '', selectedText = '', nodes = [], position 
   if (BOOK_WORDS.test(text) && (summary || /(?:表达|想说|讲什么|写什么|主题|结构|意义|价值|目的)/.test(text))) {
     return result('overview', 'book', [], 'high', 'whole-book');
   }
-  if (COMPARE_WORDS.test(text)) return result('compare', 'book', [], 'low', 'compare-without-references');
+  // Without named chapters, only explicit comparison words make it a comparison
+  // (“价格怎么变化” asks about a change, not two parts of the book).
+  if (EXPLICIT_COMPARE_WORDS.test(text)) return result('compare', 'book', [], 'low', 'compare-without-references');
   if (summary && hasSelection) return result('explain_selection', 'selection', [], 'high', 'selection-summary');
   if (summary) return result('overview', 'book', [], 'low', 'summary-without-scope');
   if (hasSelection) return result('explain_selection', 'selection', [], 'low', 'selection-question');
@@ -296,6 +326,7 @@ module.exports = {
   chapterLevel,
   usableNodes,
   normalizeLabel,
+  pageReference,
   parseNavigatorReply,
   routeQuestion
 };

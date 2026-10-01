@@ -81,7 +81,9 @@ test('unplaceable or unscoped summaries are low confidence (for the navigator)',
   assert.equal(routeQuestion({ question: '本章讲了什么', nodes: bookWithPreface }).confidence, 'low');
   const vague = routeQuestion({ question: '核心观点是什么', nodes: bookWithPreface });
   assert.equal(vague.confidence, 'low');
-  assert.equal(routeQuestion({ question: '前后有什么变化', nodes: bookWithPreface }).confidence, 'low');
+  assert.equal(routeQuestion({ question: '对比一下前后两部分', nodes: bookWithPreface }).confidence, 'low');
+  // A change asked about without naming parts of the book is a lookup.
+  assert.equal(routeQuestion({ question: '价格怎么变化', nodes: bookWithPreface }).type, 'lookup');
 });
 
 test('navigator payload lists numbered nodes and replies map back to node ids', () => {
