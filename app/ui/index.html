@@ -414,7 +414,34 @@
               <span>API Key</span>
               <input id="aiApiKey" type="password" autocomplete="new-password" placeholder="留空则保留已保存的 Key">
             </label>
-            <p class="ai-config-hint" id="aiConfigHint">支持 OpenAI 及兼容 Responses API 的服务。</p>
+            <label class="ai-config-field">
+              <span>接口协议</span>
+              <select id="aiApiFormat">
+                <option value="chat">Chat Completions（OpenAI 兼容，推荐）</option>
+                <option value="responses">Responses</option>
+              </select>
+            </label>
+            <label class="ai-config-field">
+              <span>导读与导航模型（可选）</span>
+              <input id="aiSummaryModel" type="text" autocomplete="off" placeholder="留空则使用上面的模型">
+            </label>
+            <details class="ai-config-advanced" id="aiEmbeddingSettings">
+              <summary>语义检索（可选）</summary>
+              <p class="ai-config-note">填写嵌入模型后启用，能更好地找到意思相近但用词不同的内容。服务 URL 和 Key 留空时沿用上面的配置。</p>
+              <label class="ai-config-field">
+                <span>嵌入模型</span>
+                <input id="aiEmbeddingModel" type="text" autocomplete="off" placeholder="留空则不启用语义检索">
+              </label>
+              <label class="ai-config-field">
+                <span>嵌入服务 URL</span>
+                <input id="aiEmbeddingBaseUrl" type="url" inputmode="url" autocomplete="off" placeholder="留空则与上面相同">
+              </label>
+              <label class="ai-config-field">
+                <span>嵌入 API Key</span>
+                <input id="aiEmbeddingApiKey" type="password" autocomplete="new-password" placeholder="留空则保留已保存的 Key，或沿用上面的 Key">
+              </label>
+            </details>
+            <p class="ai-config-hint" id="aiConfigHint">支持 OpenAI 协议（Chat Completions 或 Responses）的服务。</p>
             <button type="button" class="ai-index-manager-entry" id="btnOpenAiIndexManager" hidden>管理本地检索索引</button>
           </div>
           <footer class="ai-config-actions">

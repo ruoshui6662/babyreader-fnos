@@ -5281,7 +5281,8 @@ body.is-epub .reader-floating-toolbar {
 }
 
 .ai-question-field textarea,
-.ai-config-field input {
+.ai-config-field input,
+.ai-config-field select {
   box-sizing: border-box;
   width: 100%;
   padding: 11px 12px;
@@ -5300,7 +5301,8 @@ body.is-epub .reader-floating-toolbar {
 }
 
 .ai-question-field textarea:focus-visible,
-.ai-config-field input:focus-visible {
+.ai-config-field input:focus-visible,
+.ai-config-field select:focus-visible {
   outline: 2px solid var(--color-focus);
   outline-offset: 1px;
 }
@@ -7885,4 +7887,34 @@ button.ui-close,
 .library-rename-actions button:disabled {
   opacity: .55;
   cursor: default;
+}
+
+/* AI 设置：可选的语义检索分组 */
+.ai-config-advanced {
+  display: grid;
+  gap: 10px;
+  padding: 10px 12px;
+  border: 1px solid var(--color-separator);
+  border-radius: 12px;
+}
+.ai-config-advanced[open] {
+  padding-bottom: 12px;
+}
+.ai-config-advanced > summary {
+  cursor: pointer;
+  color: var(--color-text);
+  font-size: 13px;
+  font-weight: 600;
+}
+.ai-config-advanced[open] > summary {
+  margin-bottom: 8px;
+}
+.ai-config-advanced .ai-config-field + .ai-config-field {
+  margin-top: 8px;
+}
+.ai-config-note {
+  margin: 0 0 8px;
+  color: var(--color-text-2);
+  font-size: 12px;
+  line-height: 1.6;
 }

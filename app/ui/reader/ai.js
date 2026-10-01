@@ -1331,9 +1331,15 @@ async function loadAiConfig() {
     if (baseUrl) baseUrl.value = config.baseUrl || '';
     if (model) model.value = config.model || '';
     if (apiKey) apiKey.value = '';
+    if (aiElement('aiApiFormat')) aiElement('aiApiFormat').value = config.apiFormat === 'responses' ? 'responses' : 'chat';
+    if (aiElement('aiSummaryModel')) aiElement('aiSummaryModel').value = config.summaryModel || '';
+    if (aiElement('aiEmbeddingModel')) aiElement('aiEmbeddingModel').value = config.embeddingModel || '';
+    if (aiElement('aiEmbeddingBaseUrl')) aiElement('aiEmbeddingBaseUrl').value = config.embeddingBaseUrl || '';
+    if (aiElement('aiEmbeddingApiKey')) aiElement('aiEmbeddingApiKey').value = '';
+    if (aiElement('aiEmbeddingSettings') && config.embeddingModel) aiElement('aiEmbeddingSettings').open = true;
     setAiClearKeyPending(false);
     if (aiElement('btnClearAiKey')) aiElement('btnClearAiKey').disabled = !config.hasApiKey;
-    if (hint) hint.textContent = config.hasApiKey ? '当前已配置 API Key；留空保存可保留原 Key。' : '尚未配置 API Key。支持 OpenAI 及兼容 Responses API 的服务。';
+    if (hint) hint.textContent = config.hasApiKey ? '当前已配置 API Key；留空保存可保留原 Key。' : '尚未配置 API Key。支持 OpenAI 协议（Chat Completions 或 Responses）的服务。';
     return config;
   } catch (error) {
     if (hint) hint.textContent = error.message || 'AI 配置读取失败';
@@ -1376,13 +1382,25 @@ function showAiView(view) {
   return true;
 }
 
+function aiConfigFormValues() {
+  const value = (id) => String(aiElement(id)?.value || '').trim();
+  return {
+    baseUrl: value('aiBaseUrl'),
+    model: value('aiModel'),
+    apiKey: value('aiApiKey'),
+    apiFormat: value('aiApiFormat') || 'chat',
+    summaryModel: value('aiSummaryModel'),
+    embeddingModel: value('aiEmbeddingModel'),
+    embeddingBaseUrl: value('aiEmbeddingBaseUrl'),
+    embeddingApiKey: value('aiEmbeddingApiKey')
+  };
+}
+
 async function saveAiSettings() {
   const hint = aiElement('aiConfigHint');
   const save = aiElement('btnSaveAiSettings');
   const payload = {
-    baseUrl: String(aiElement('aiBaseUrl')?.value || '').trim(),
-    model: String(aiElement('aiModel')?.value || '').trim(),
-    apiKey: String(aiElement('aiApiKey')?.value || '').trim(),
+    ...aiConfigFormValues(),
     clearApiKey: _aiClearApiKey
   };
   if (save) save.disabled = true;
@@ -1390,6 +1408,7 @@ async function saveAiSettings() {
   try {
     const config = await browserHost.saveAiConfig(payload);
     if (aiElement('aiApiKey')) aiElement('aiApiKey').value = '';
+    if (aiElement('aiEmbeddingApiKey')) aiElement('aiEmbeddingApiKey').value = '';
     _aiClearApiKey = false;
     applyAiStatus(config);
     if (hint) hint.textContent = config.hasApiKey ? '配置已保存，API Key 已安全保存且不会回显。' : '配置已保存，尚未配置 API Key。';
@@ -1407,9 +1426,7 @@ async function testAiConnection() {
   const button = aiElement('btnTestAiConnection');
   const hint = aiElement('aiConfigHint');
   const payload = {
-    baseUrl: String(aiElement('aiBaseUrl')?.value || '').trim(),
-    model: String(aiElement('aiModel')?.value || '').trim(),
-    apiKey: String(aiElement('aiApiKey')?.value || '').trim(),
+    ...aiConfigFormValues(),
     clearApiKey: _aiClearApiKey
   };
   if (button) button.disabled = true;

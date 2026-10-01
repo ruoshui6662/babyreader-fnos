@@ -745,7 +745,8 @@ async function handlePdfAiStream(request, response, user, bookId, body) {
       const answer = verified ? result.answer : PDF_AI_UNVERIFIED_ANSWER;
       const done = { answer, responseId: result.responseId, streamed: result.streamed,
         citationIntegrity: verified, scope: prepared.input.scope,
-        sources: verified ? prepared.sources : [] };
+        sources: verified ? prepared.sources : [],
+        ...(result.usage ? { usage: result.usage } : {}) };
       if (verified && prepared.input.conversationId && !abortController.signal.aborted && !request.aborted) {
         try {
           await aiConversationStorage.appendCompletedTurn(user.uid, bookId, prepared.input.conversationId, {
@@ -1892,7 +1893,8 @@ async function handleApi(request, response, pathname, searchParams = new URLSear
         answer: result.answer,
         responseId: result.responseId,
         streamed: result.streamed ?? false,
-        sources: aiSourcesFromContext(input.context)
+        sources: aiSourcesFromContext(input.context),
+        ...(result.usage ? { usage: result.usage } : {})
       };
       if (chapterSummaryPlan) {
         done.summaryCacheHit = result.cacheHit;
