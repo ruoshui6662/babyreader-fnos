@@ -1,6 +1,6 @@
 # Working Change Log
 
-## AI 问书重构：准确、高效、低成本（未发布）2026-10-01
+## 枕书 v0.0.3 2026-10-01 — AI 问书重构：准确、高效、低成本
 
 方案与评测记录见 `docs/superpowers/plans/2026-10-01-ai-book-qa-accuracy.md`。用户决定：导读首次问到时生成并提供手动按钮、全 NAS 共享；做语义检索；只用 OpenAI 协议，模型由用户自己添加。
 

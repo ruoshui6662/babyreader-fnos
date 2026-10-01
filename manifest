@@ -1,5 +1,5 @@
 appname=zhenshu
-version=0.0.2
+version=0.0.3
 display_name=枕书
 desc=枕书：飞牛 fnOS 上的私人书房。阅读 EPUB、PDF、MOBI/AZW3、Markdown 和 TXT，支持划线笔记、全文搜索与 AI 问书，阅读进度多端同步。
 source=thirdparty
@@ -13,4 +13,4 @@ desktop_applaunchname=zhenshu.main
 ctl_stop=true
 checkport=false
 disable_authorization_path=false
-changelog=书籍可以重命名：在“整理”中点铅笔按钮修改书名或恢复原名，只对自己生效，不改动 NAS 上的文件；整理模式下分类选择框统一对齐到卡片底部；去掉书卡右上角的拖动手柄，直接拖动封面即可调整顺序（手机长按后拖动）。
+changelog=AI 问书全面升级：能准确回答全书和章节问题（识别第几章、第几册、第几页、本章、章名），整章原文直接交给模型；新增“本书导读”，AI 通读全书写出全书和各章导读，所有读者共享；选中文字提问会带上前后文；查找更准，可选语义检索；支持 OpenAI Chat Completions 接口，可单独设置便宜的导读模型；TXT、Markdown、PDF 也能使用 AI 问书。注意：各书首次提问需重建检索索引，会稍慢。
