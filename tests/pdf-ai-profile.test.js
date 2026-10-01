@@ -71,12 +71,29 @@ test('one cancelled cache waiter does not abort the shared build while another w
     return { findings: ['shared'] };
   };
   const first = store.getOrCreateProfile({ ...BASE, signal: firstController.signal, build });
+  // Wait for the shared build itself (the cache read before it is real disk
+  // I/O, so a fixed tick was a race); the second waiter then joins it
+  // synchronously, before the first one cancels.
+  while (!finishBuild) await new Promise((resolve) => setTimeout(resolve, 1));
   const second = store.getOrCreateProfile({ ...BASE, build });
-  await new Promise((resolve) => setTimeout(resolve, 0));
   firstController.abort();
   await assert.rejects(first, { name: 'AbortError' });
   finishBuild();
   assert.deepEqual(await second, { findings: ['shared'] });
+  assert.equal(buildCount, 1);
+});
+
+test('a waiter cancelled during its cache read neither starts nor dooms the shared build', async (t) => {
+  const { store } = await makeStore(t);
+  let buildCount = 0;
+  const build = async () => { buildCount += 1; return { findings: ['fresh'] }; };
+  const controller = new AbortController();
+  // Cancel while the first waiter is still reading the cache from disk.
+  const cancelled = store.getOrCreateProfile({ ...BASE, signal: controller.signal, build });
+  controller.abort();
+  await assert.rejects(cancelled, { name: 'AbortError' });
+  // A later caller is unaffected and gets a real build.
+  assert.deepEqual(await store.getOrCreateProfile({ ...BASE, build }), { findings: ['fresh'] });
   assert.equal(buildCount, 1);
 });
 
