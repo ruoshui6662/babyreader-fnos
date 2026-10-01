@@ -53,7 +53,7 @@ fnOS 包: manifest · cmd/*（生命周期脚本）· config/{privilege,resource
 | 领域 | 已实现（本地验证） | 状态 |
 | --- | --- | --- |
 | EPUB/MD/TXT 阅读 | 连续滚动和双页分页两种模式；微信读书风格的版式几何；排版设置（首行缩进、字体、段距、护眼背景）；章节窗口按需加载；资源生命周期 | 本地完成 |
-| PDF 阅读 | PDF.js 渲染；连续/单页/双页三种布局；缩放和适应宽度；渲染调度；文本层选区；页级进度和书签；目录；全文 FTS 搜索并精确定位到页 | 本地完成。**默认关闭**，在 wizard 里开启 `wizard_pdf_reader_enabled` |
+| PDF 阅读 | PDF.js 渲染；连续/单页/双页三种布局；缩放和适应宽度；渲染调度；文本层选区；页级进度和书签；目录；全文 FTS 搜索并精确定位到页 | 本地完成。**始终开启**（v1.3.7 起移除了设置开关） |
 | 标注与笔记 | EPUB/PDF 都支持划线、想法、颜色、笔记侧栏、按页/按章节排序；可导出笔记 | 本地完成，删除后撤销尚未设计 |
 | 全书搜索 | 本地 FTS、续页、跨章节命中；搜索面板不关闭，可前后跳转命中 | 同一页重复短语的精确定位仍会退化成只定位到章节 |
 | AI 问书 | 多轮流式对话；章节和全书检索；摘要缓存；会话持久化；PDF 结构化理解与来源页码；索引管理器（紧凑界面、孤儿索引清理） | 没有做真实供应商和 NAS 验收 |
@@ -66,7 +66,7 @@ fnOS 包: manifest · cmd/*（生命周期脚本）· config/{privilege,resource
 
 | 变量 | 作用 |
 | --- | --- |
-| `BABYREADER_PDF_ENABLED` / wizard `wizard_pdf_reader_enabled` | PDF 阅读与搜索，默认关闭（`pdf-feature-config.js`） |
+| `BABYREADER_PDF_ENABLED` | PDF 阅读与搜索始终开启；仅当设为 `0/false/no/off` 时作为运维紧急关闭开关。旧版本留下的 `pdf-feature.json` 会被忽略（`pdf-feature-config.js`） |
 | `BABYREADER_MOBI_ENABLED` / wizard `wizard_mobi_reader_enabled` | MOBI/AZW3 阅读，默认关闭（`mobi-feature-config.js`）；开启后需要在书库重新扫描 |
 | `BABYREADER_IMPORT_ENABLED` / wizard `wizard_import_enabled` | 管理员从浏览器导入书籍，默认关闭（`import-feature-config.js`） |
 | `BABYREADER_KF8_SAMPLE` | 可选：指向本地 AZW3 样本的绝对路径，用于真实书的转换回归测试（样本不进仓库） |

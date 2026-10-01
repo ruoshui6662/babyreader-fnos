@@ -178,12 +178,11 @@ test('release enables library organization but gates new AI chapter summaries be
   assert.match(server, /allowEmptyContext: isAiChapterUnderstandingEnabled\(\)/);
 });
 
-test('fnOS app settings expose a PDF acceptance switch that starts disabled', () => {
+test('fnOS app settings no longer carry a PDF switch: PDF reading is always on', () => {
   const steps = JSON.parse(read('wizard/config'));
-  const switchItem = steps.flatMap((step) => step.items || [])
-    .find((item) => item.field === 'wizard_pdf_reader_enabled');
-  assert.equal(switchItem.type, 'switch');
-  assert.equal(switchItem.initValue, 'false');
+  const fields = steps.flatMap((step) => step.items || []).map((item) => item.field);
+  assert.equal(fields.includes('wizard_pdf_reader_enabled'), false);
+  assert.doesNotMatch(read('cmd/config_callback'), /pdf-feature-config|wizard_pdf_reader_enabled/);
 });
 
 test('fnOS app settings expose a MOBI acceptance switch that starts disabled', () => {
@@ -202,7 +201,7 @@ test('fnOS app settings expose an admin book-import switch that starts disabled'
   assert.equal(switchItem.initValue, 'false');
 });
 
-test('PDF configuration callback persists the setting without restarting or touching service state', {
+test('configuration callback persists feature switches without restarting or touching service state', {
   skip: !availableShell() ? 'POSIX shell is unavailable' : false
 }, (t) => {
   const sandbox = fs.mkdtempSync(path.join(os.tmpdir(), 'babyreader-pdf-config-callback-'));
@@ -232,14 +231,14 @@ test('PDF configuration callback persists the setting without restarting or touc
       TRIM_APPDEST: appDest,
       TRIM_PKGETC: configRoot,
       TRIM_PKGTMP: tempRoot,
-      ...(value === undefined ? {} : { wizard_pdf_reader_enabled: value })
+      ...(value === undefined ? {} : { wizard_mobi_reader_enabled: value })
     },
     timeout: 10000
   });
 
   const enabled = call('true');
   assert.equal(enabled.status, 0, enabled.stderr);
-  const configFile = path.join(configRoot, 'pdf-feature.json');
+  const configFile = path.join(configRoot, 'mobi-feature.json');
   assert.deepEqual(JSON.parse(fs.readFileSync(configFile, 'utf8')), { version: 1, enabled: true });
   assert.equal(fs.readFileSync(socketMarker, 'utf8'), 'existing socket marker');
   assert.equal(fs.readFileSync(pidMarker, 'utf8'), '999999');
@@ -252,14 +251,14 @@ test('PDF configuration callback persists the setting without restarting or touc
   assert.equal(fs.readFileSync(configFile, 'utf8'), before);
   assert.equal(fs.readFileSync(socketMarker, 'utf8'), 'existing socket marker');
 
-  // The MOBI switch is independent: it writes its own file and leaves PDF alone.
-  const mobi = spawnSync(availableShell(), [path.join(appDest, 'cmd', 'config_callback')], {
+  // A PDF field from an older settings form is ignored: PDF has no switch.
+  const legacyPdf = spawnSync(availableShell(), [path.join(appDest, 'cmd', 'config_callback')], {
     encoding: 'utf8',
-    env: { ...process.env, TRIM_APPDEST: appDest, TRIM_PKGETC: configRoot, TRIM_PKGTMP: tempRoot, wizard_mobi_reader_enabled: 'true' },
+    env: { ...process.env, TRIM_APPDEST: appDest, TRIM_PKGETC: configRoot, TRIM_PKGTMP: tempRoot, wizard_pdf_reader_enabled: 'false' },
     timeout: 10000
   });
-  assert.equal(mobi.status, 0, mobi.stderr);
-  assert.deepEqual(JSON.parse(fs.readFileSync(path.join(configRoot, 'mobi-feature.json'), 'utf8')), { version: 1, enabled: true });
+  assert.equal(legacyPdf.status, 0, legacyPdf.stderr);
+  assert.equal(fs.existsSync(path.join(configRoot, 'pdf-feature.json')), false);
   assert.equal(fs.readFileSync(configFile, 'utf8'), before);
 
   const imports = spawnSync(availableShell(), [path.join(appDest, 'cmd', 'config_callback')], {
