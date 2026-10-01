@@ -16,7 +16,7 @@ const {
 const { readMobiMetadata, parseMobiStructure, MobiFormatError } = require('../app/server/mobi-format');
 
 async function writeTemp(t, name, bytes) {
-  const directory = await fs.mkdtemp(path.join(os.tmpdir(), 'babyreader-mobi-format-'));
+  const directory = await fs.mkdtemp(path.join(os.tmpdir(), 'zhenshu-mobi-format-'));
   t.after(() => fs.rm(directory, { recursive: true, force: true }));
   const file = path.join(directory, name);
   await fs.writeFile(file, bytes);

@@ -30,7 +30,7 @@ test('parsePathList preserves Chinese and space-containing fnOS paths', () => {
 });
 
 test('fnOS authorization snapshot applies additions and revocations without a process restart', async (t) => {
-  const configRoot = await temporaryDirectory(t, 'babyreader-fnos-roots-config-');
+  const configRoot = await temporaryDirectory(t, 'zhenshu-roots-config-');
   const oldRoot = path.join(configRoot, '旧书库');
   const newRoot = path.join(configRoot, '新 书库');
   assert.deepEqual(readFnOSAuthorizedRoots(configRoot, oldRoot), [oldRoot]);
@@ -58,7 +58,7 @@ test('collectRootCandidates preserves source order and source labels', () => {
 });
 
 test('resolveLibraryRoots authorizes readable directories and rejects files or missing paths', async (t) => {
-  const sandbox = await temporaryDirectory(t, 'babyreader-roots-');
+  const sandbox = await temporaryDirectory(t, 'zhenshu-roots-');
   const parent = path.join(sandbox, '中文 书库');
   const child = path.join(parent, '子目录');
   const regularFile = path.join(sandbox, 'not-a-directory.txt');

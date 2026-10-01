@@ -1,4 +1,4 @@
-/* BabyReader UI module: reader/annotations */
+/* 枕书 UI module: reader/annotations */
 
 'use strict';
 
@@ -172,7 +172,7 @@ function currentAnnotationAdapter(format = state.contentType) {
   if (format === 'epub') {
     return Object.freeze({
       format,
-      captureSelection: (selection) => window.__babyReaderSelectionMenuApi?.captureSelectionSession(selection) || null,
+      captureSelection: (selection) => window.__zhenshuSelectionMenuApi?.captureSelectionSession(selection) || null,
       create: (session, options) => createAnnotationFromSession(session, options),
       edit: (id) => openHighlightEditor(id),
       remove: (id) => deleteHighlightById(id),
@@ -202,7 +202,7 @@ function currentAnnotationAdapter(format = state.contentType) {
   });
 }
 
-window.__babyReaderAnnotationsApi = {
+window.__zhenshuAnnotationsApi = {
   annotationViewModel,
   currentAnnotationAdapter,
   pdfAnnotationCache,

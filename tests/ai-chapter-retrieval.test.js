@@ -141,7 +141,7 @@ test('summary confidence is downgraded for inferred locations, partial coverage,
 });
 
 test('chapter summary retrieval is hard-scoped and never falls back to another chapter', { skip: !isFtsAvailable() }, async (t) => {
-  const dataRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'babyreader-chapter-retrieval-'));
+  const dataRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'zhenshu-chapter-retrieval-'));
   t.after(() => fs.rm(dataRoot, { recursive: true, force: true }));
   const bookPath = path.join(dataRoot, 'scoped.epub');
   const firstText = Array.from({ length: 90 }, (_, index) => `第一章第${index}段 主张证据甲。`).join(' ');

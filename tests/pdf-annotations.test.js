@@ -19,7 +19,7 @@ const rendererPath = path.resolve(__dirname, '../app/ui/reader/pdf-annotations.j
 
 async function createGeometryHarness(markup, rectsByPage = {}) {
   const { Window } = await import('happy-dom');
-  const window = new Window({ url: 'http://localhost/app/babyreader-fnos/' });
+  const window = new Window({ url: 'http://localhost/app/zhenshu/' });
   window.document.write(markup);
   window.Range.prototype.getClientRects = function getClientRects() {
     let node = this.commonAncestorContainer;
@@ -203,7 +203,7 @@ test('normalized PDF quads round-trip through rotation and zoom without leaving 
 
 test('the PDF controller exposes geometry only for the currently rendered page and real page index', async () => {
   const { Window } = await import('happy-dom');
-  const window = new Window({ url: 'http://localhost/app/babyreader-fnos/' });
+  const window = new Window({ url: 'http://localhost/app/zhenshu/' });
   const html = await fs.readFile(path.resolve(__dirname, '../app/ui/index.html'), 'utf8');
   window.document.write(html.replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, ''));
   const [stateSource, schedulerSource, pdfSource] = await Promise.all([
@@ -258,7 +258,7 @@ test('the PDF controller exposes geometry only for the currently rendered page a
 
 test('PDF annotation overlays stay on their source page and reject stale page frames', async () => {
   const { Window } = await import('happy-dom');
-  const window = new Window({ url: 'http://localhost/app/babyreader-fnos/' });
+  const window = new Window({ url: 'http://localhost/app/zhenshu/' });
   window.document.write(`
     <div class="pdf-page" data-page-index="0"><canvas class="pdf-page-canvas"></canvas><div class="pdf-page-text-layer"></div></div>
     <div class="pdf-page" data-page-index="1"><canvas class="pdf-page-canvas"></canvas><div class="pdf-page-text-layer"></div></div>`);

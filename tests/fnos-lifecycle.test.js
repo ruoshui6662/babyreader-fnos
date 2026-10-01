@@ -63,11 +63,11 @@ test('acceptance reconciles supervisor status 3 with a healthy target socket', (
 test('acceptance tool exposes a server-side AI connection check without accepting an API key', () => {
   const source = read('scripts/fnos-device-acceptance.sh');
   assert.match(source, /ai-test/);
-  assert.match(source, /BABYREADER_GATEWAY_URL/);
-  assert.match(source, /BABYREADER_GATEWAY_COOKIE/);
+  assert.match(source, /ZHENSHU_GATEWAY_URL/);
+  assert.match(source, /ZHENSHU_GATEWAY_COOKIE/);
   assert.match(source, /api\/ai\/test-connection/);
   assert.match(source, /-X POST/);
-  assert.doesNotMatch(source, /BABYREADER_AI_KEY|OPENAI_API_KEY|--api-key/);
+  assert.doesNotMatch(source, /ZHENSHU_AI_KEY|OPENAI_API_KEY|--api-key/);
 });
 
 test('acceptance tool checks admin library root counts without dumping root paths', () => {
@@ -95,8 +95,8 @@ test('PDF acceptance checks the pinned local parser, browser assets, MIME/CSP, a
   assert.match(source, /PDF_UI=.*ui\/vendor\/pdfjs/);
   assert.match(source, /\$PDF_UI\/build\/pdf\.mjs/);
   assert.match(source, /\$PDF_UI\/build\/pdf\.worker\.mjs/);
-  assert.match(source, /BABYREADER_PDF_TEST_BOOK_ID/);
-  assert.match(source, /BabyReader PDF Acceptance Fixture/);
+  assert.match(source, /ZHENSHU_PDF_TEST_BOOK_ID/);
+  assert.match(source, /枕书 PDF Acceptance Fixture/);
   assert.match(source, /Range: bytes=0-0/);
   assert.match(source, /Range: bytes=0-/);
   assert.match(source, /Range: bytes=-1/);
@@ -149,9 +149,9 @@ test('main uses the Native FPK target layout and fnOS runtime directories', () =
   const source = read('cmd/main');
   assert.match(source, /SERVER_FILE="\$APP_DEST\/server\/index\.js"/);
   assert.doesNotMatch(source, /SERVER_FILE="\$APP_DEST\/app\/server\/index\.js"/);
-  assert.match(source, /BabyReader 服务文件不存在：\$SERVER_FILE/);
-  assert.match(source, /PID_FILE="\$PKG_TMP\/babyreader-fnos\.pid"/);
-  assert.match(source, /LOG_FILE="\$PKG_VAR\/babyreader-fnos\.log"/);
+  assert.match(source, /枕书 服务文件不存在：\$SERVER_FILE/);
+  assert.match(source, /PID_FILE="\$PKG_TMP\/zhenshu\.pid"/);
+  assert.match(source, /LOG_FILE="\$PKG_VAR\/zhenshu\.log"/);
   assert.match(source, /SOCKET_FILE="\$APP_DEST\/app\.sock"/);
   assert.match(source, /TRIM_APPDEST="\$APP_DEST"/);
   assert.match(source, /TRIM_PKGVAR="\$PKG_VAR"/);
@@ -170,11 +170,11 @@ test('main preserves fnOS authorized and shared path environment inherited from 
 
 test('release enables library organization but gates new AI chapter summaries behind an explicit opt-in', () => {
   const source = read('cmd/main');
-  assert.match(source, /BABYREADER_ENABLE_LIBRARY_ORGANIZATION="\$\{BABYREADER_ENABLE_LIBRARY_ORGANIZATION:-1\}"/);
-  assert.match(source, /BABYREADER_ENABLE_LIBRARY_ORGANIZATION="\$\{BABYREADER_ENABLE_LIBRARY_ORGANIZATION:-1\}"[\s\S]*NODE_ENV=production/);
-  assert.match(source, /BABYREADER_ENABLE_AI_CHAPTER_UNDERSTANDING="\$\{BABYREADER_ENABLE_AI_CHAPTER_UNDERSTANDING:-0\}"/);
+  assert.match(source, /ZHENSHU_ENABLE_LIBRARY_ORGANIZATION="\$\{ZHENSHU_ENABLE_LIBRARY_ORGANIZATION:-1\}"/);
+  assert.match(source, /ZHENSHU_ENABLE_LIBRARY_ORGANIZATION="\$\{ZHENSHU_ENABLE_LIBRARY_ORGANIZATION:-1\}"[\s\S]*NODE_ENV=production/);
+  assert.match(source, /ZHENSHU_ENABLE_AI_CHAPTER_UNDERSTANDING="\$\{ZHENSHU_ENABLE_AI_CHAPTER_UNDERSTANDING:-0\}"/);
   const server = read('app/server/index.js');
-  assert.match(server, /function isAiChapterUnderstandingEnabled\(\)[\s\S]*BABYREADER_ENABLE_AI_CHAPTER_UNDERSTANDING === '1'/);
+  assert.match(server, /function isAiChapterUnderstandingEnabled\(\)[\s\S]*ZHENSHU_ENABLE_AI_CHAPTER_UNDERSTANDING === '1'/);
   assert.match(server, /allowEmptyContext: isAiChapterUnderstandingEnabled\(\)/);
 });
 
@@ -189,7 +189,7 @@ test('fnOS app settings carry no format or import switches: all formats are alwa
 test('configuration callback ignores legacy switch fields and leaves service state alone', {
   skip: !availableShell() ? 'POSIX shell is unavailable' : false
 }, (t) => {
-  const sandbox = fs.mkdtempSync(path.join(os.tmpdir(), 'babyreader-config-callback-'));
+  const sandbox = fs.mkdtempSync(path.join(os.tmpdir(), 'zhenshu-config-callback-'));
   t.after(() => fs.rmSync(sandbox, { recursive: true, force: true }));
   const appDest = path.join(sandbox, 'target');
   const configRoot = path.join(sandbox, 'etc');
@@ -201,7 +201,7 @@ test('configuration callback ignores legacy switch fields and leaves service sta
   fs.cpSync(path.join(root, 'app', 'server', 'fnos-roots-config.js'), path.join(appDest, 'server', 'fnos-roots-config.js'));
   fs.cpSync(path.join(root, 'app', 'server', 'library-roots.js'), path.join(appDest, 'server', 'library-roots.js'));
   const socketMarker = path.join(appDest, 'app.sock');
-  const pidMarker = path.join(tempRoot, 'babyreader-fnos.pid');
+  const pidMarker = path.join(tempRoot, 'zhenshu.pid');
   fs.writeFileSync(socketMarker, 'existing socket marker');
   fs.writeFileSync(pidMarker, '999999');
 
@@ -232,7 +232,7 @@ test('configuration callback ignores legacy switch fields and leaves service sta
 test('fnOS library authorization changes update the private snapshot without lifecycle restart', {
   skip: !availableShell() ? 'POSIX shell is unavailable' : false
 }, (t) => {
-  const sandbox = fs.mkdtempSync(path.join(os.tmpdir(), 'babyreader-root-config-callback-'));
+  const sandbox = fs.mkdtempSync(path.join(os.tmpdir(), 'zhenshu-root-config-callback-'));
   t.after(() => fs.rmSync(sandbox, { recursive: true, force: true }));
   const appDest = path.join(sandbox, 'target');
   const configRoot = path.join(sandbox, 'etc');
@@ -245,8 +245,8 @@ test('fnOS library authorization changes update the private snapshot without lif
   fs.cpSync(path.join(root, 'app', 'server', 'library-roots.js'), path.join(appDest, 'server', 'library-roots.js'));
   fs.writeFileSync(path.join(appDest, 'cmd', 'main'), [
     '#!/bin/sh',
-    'if [ "$1" = status ]; then exit "${BABYREADER_TEST_SERVICE_STATUS:-0}"; fi',
-    'if [ "$1" = restart ]; then printf "restart\\n" >> "$BABYREADER_TEST_RESTART_LOG"; exit 0; fi',
+    'if [ "$1" = status ]; then exit "${ZHENSHU_TEST_SERVICE_STATUS:-0}"; fi',
+    'if [ "$1" = restart ]; then printf "restart\\n" >> "$ZHENSHU_TEST_RESTART_LOG"; exit 0; fi',
     'exit 2',
     ''
   ].join('\n'));
@@ -258,8 +258,8 @@ test('fnOS library authorization changes update the private snapshot without lif
     const env = {
       ...process.env,
       PATH: '/usr/bin:/bin:/c/Program Files/Git/usr/bin:/c/Program Files/nodejs',
-      BABYREADER_TEST_RESTART_LOG: restartLog,
-      BABYREADER_TEST_SERVICE_STATUS: serviceStatus,
+      ZHENSHU_TEST_RESTART_LOG: restartLog,
+      ZHENSHU_TEST_SERVICE_STATUS: serviceStatus,
       TRIM_APPDEST: appDest,
       TRIM_PKGETC: configRoot,
       TRIM_DATA_SHARE_PATHS: '/shared/library'
@@ -317,7 +317,7 @@ test('POSIX fnOS lifecycle installs, starts, reports status, and stops cleanly',
     return;
   }
 
-  const sandbox = fs.mkdtempSync(path.join(os.tmpdir(), 'babyreader-fnos-lifecycle-'));
+  const sandbox = fs.mkdtempSync(path.join(os.tmpdir(), 'zhenshu-lifecycle-'));
   const appDest = path.join(sandbox, 'target');
   const pkgEtc = path.join(sandbox, 'etc');
   const pkgVar = path.join(sandbox, 'var');
@@ -364,10 +364,10 @@ test('POSIX fnOS lifecycle installs, starts, reports status, and stops cleanly',
   assert.equal(result.status, 3, `stopped status must be 3\nstdout: ${result.stdout}\nstderr: ${result.stderr}`);
 
   result = command('main', 'start');
-  assert.equal(result.status, 0, `start failed\nstdout: ${result.stdout}\nstderr: ${result.stderr}\nlog: ${fs.existsSync(path.join(pkgVar, 'babyreader-fnos.log')) ? fs.readFileSync(path.join(pkgVar, 'babyreader-fnos.log'), 'utf8') : ''}`);
+  assert.equal(result.status, 0, `start failed\nstdout: ${result.stdout}\nstderr: ${result.stderr}\nlog: ${fs.existsSync(path.join(pkgVar, 'zhenshu.log')) ? fs.readFileSync(path.join(pkgVar, 'zhenshu.log'), 'utf8') : ''}`);
   assert.equal(fs.lstatSync(path.join(appDest, 'app.sock')).isSocket(), true);
-  assert.match(fs.readFileSync(path.join(pkgTmp, 'babyreader-fnos.pid'), 'utf8'), /^\d+\s*$/);
-  assert.equal(fs.existsSync(path.join(pkgVar, 'babyreader-fnos.log')), true);
+  assert.match(fs.readFileSync(path.join(pkgTmp, 'zhenshu.pid'), 'utf8'), /^\d+\s*$/);
+  assert.equal(fs.existsSync(path.join(pkgVar, 'zhenshu.log')), true);
 
   result = command('main', 'status');
   assert.equal(result.status, 0, `running status failed\nstdout: ${result.stdout}\nstderr: ${result.stderr}`);
@@ -375,7 +375,7 @@ test('POSIX fnOS lifecycle installs, starts, reports status, and stops cleanly',
   result = command('main', 'stop');
   assert.equal(result.status, 0, `stop failed\nstdout: ${result.stdout}\nstderr: ${result.stderr}`);
   assert.equal(fs.existsSync(path.join(appDest, 'app.sock')), false);
-  assert.equal(fs.existsSync(path.join(pkgTmp, 'babyreader-fnos.pid')), false);
+  assert.equal(fs.existsSync(path.join(pkgTmp, 'zhenshu.pid')), false);
 
   result = command('main', 'status');
   assert.equal(result.status, 3, `stopped status must return to 3\nstdout: ${result.stdout}\nstderr: ${result.stderr}`);
@@ -387,7 +387,7 @@ test('main finds a supervised server when the PID file is missing or stale, and 
   // fnOS app settings restart the app and then ask `main status`. When the PID
   // file could not vouch for a running server, status said 3 and start removed
   // the live socket for a second copy; fnOS then reported 无法启用.
-  const sandbox = fs.mkdtempSync(path.join(os.tmpdir(), 'babyreader-main-pid-fallback-'));
+  const sandbox = fs.mkdtempSync(path.join(os.tmpdir(), 'zhenshu-main-pid-fallback-'));
   t.after(() => fs.rmSync(sandbox, { recursive: true, force: true }));
   const posix = (value) => value.replace(/\\/g, '/');
   const appDest = path.join(sandbox, 'target');
@@ -399,7 +399,7 @@ test('main finds a supervised server when the PID file is missing or stale, and 
   fs.cpSync(path.join(root, 'cmd', 'main'), path.join(sandbox, 'main'));
   const serverFile = posix(path.join(appDest, 'server', 'index.js'));
   fs.writeFileSync(serverFile, '');
-  const pidFile = path.join(tempRoot, 'babyreader-fnos.pid');
+  const pidFile = path.join(tempRoot, 'zhenshu.pid');
   const fakeProcess = (pid, ...args) => {
     fs.mkdirSync(path.join(procRoot, String(pid)), { recursive: true });
     fs.writeFileSync(path.join(procRoot, String(pid), 'cmdline'), `${args.join('\0')}\0`);
@@ -412,7 +412,7 @@ test('main finds a supervised server when the PID file is missing or stale, and 
       TRIM_PKGTMP: posix(tempRoot),
       TRIM_PKGVAR: posix(path.join(sandbox, 'var')),
       TRIM_PKGETC: posix(path.join(sandbox, 'etc')),
-      BABYREADER_PROC_ROOT: posix(procRoot)
+      ZHENSHU_PROC_ROOT: posix(procRoot)
     },
     timeout: 30000
   });
@@ -462,6 +462,6 @@ test('package and launcher icons meet the fnOS spec: exact square sizes, PNG, at
     assert.equal(icon.height, size, relative);
     assert.ok(icon.size <= 1024 * 1024, `${relative} is over 1024 KB`);
   }
-  const entry = JSON.parse(read('app/ui/config'))['.url']['babyreader-fnos.main'];
+  const entry = JSON.parse(read('app/ui/config'))['.url']['zhenshu.main'];
   assert.equal(entry.icon, 'images/icon_{0}.png');
 });

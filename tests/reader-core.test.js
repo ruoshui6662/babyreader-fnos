@@ -72,7 +72,7 @@ test('fnOS authorization path lists preserve multiple roots, spaces, Chinese nam
 });
 
 test('recursive multi-root scan indexes epub, md, markdown, and txt files in Chinese directories', async (t) => {
-  const sandbox = await temporaryDirectory(t, 'babyreader-multi-root-');
+  const sandbox = await temporaryDirectory(t, 'zhenshu-multi-root-');
   const firstRoot = path.join(sandbox, 'vol1', '中文 书库');
   const secondRoot = path.join(sandbox, 'vol2', '另一书库');
   const nested = path.join(firstRoot, '子目录');
@@ -98,7 +98,7 @@ test('recursive multi-root scan indexes epub, md, markdown, and txt files in Chi
 });
 
 test('library scan derives opaque source folder descriptors without replacing the authorized path contract', async (t) => {
-  const sandbox = await temporaryDirectory(t, 'babyreader-source-folders-');
+  const sandbox = await temporaryDirectory(t, 'zhenshu-source-folders-');
   const libraryRoot = path.join(sandbox, '中文 书库');
   const nested = path.join(libraryRoot, '营养', '基础');
   await fs.mkdir(nested, { recursive: true });
@@ -115,7 +115,7 @@ test('library scan derives opaque source folder descriptors without replacing th
 });
 
 test('incremental scan reuses unchanged books and reindexes changed files with stable IDs', async (t) => {
-  const sandbox = await temporaryDirectory(t, 'babyreader-scan-');
+  const sandbox = await temporaryDirectory(t, 'zhenshu-scan-');
   const libraryRoot = path.join(sandbox, 'library');
   const coverDirectory = path.join(sandbox, 'covers');
   await fs.mkdir(libraryRoot, { recursive: true });
@@ -154,7 +154,7 @@ test('incremental scan reuses unchanged books and reindexes changed files with s
 });
 
 test('scan reports unavailable roots without discarding valid roots', async (t) => {
-  const sandbox = await temporaryDirectory(t, 'babyreader-root-errors-');
+  const sandbox = await temporaryDirectory(t, 'zhenshu-root-errors-');
   const libraryRoot = path.join(sandbox, 'library');
   await fs.mkdir(libraryRoot, { recursive: true });
   await fs.writeFile(path.join(libraryRoot, 'valid.txt'), 'readable', 'utf8');
@@ -170,7 +170,7 @@ test('scan reports unavailable roots without discarding valid roots', async (t) 
 });
 
 test('user settings, progress, and highlights remain isolated by fnOS user ID', async (t) => {
-  const dataRoot = await temporaryDirectory(t, 'babyreader-users-');
+  const dataRoot = await temporaryDirectory(t, 'zhenshu-users-');
   const storage = new UserStorage(dataRoot);
   await storage.initialize();
 
@@ -216,7 +216,7 @@ test('user settings, progress, and highlights remain isolated by fnOS user ID', 
 });
 
 test('bookmarks default to empty, add idempotently, and delete by ID', async (t) => {
-  const dataRoot = await temporaryDirectory(t, 'babyreader-bookmarks-');
+  const dataRoot = await temporaryDirectory(t, 'zhenshu-bookmarks-');
   const storage = new UserStorage(dataRoot);
   await storage.initialize();
   const locator = {
@@ -258,7 +258,7 @@ test('bookmarks default to empty, add idempotently, and delete by ID', async (t)
 });
 
 test('PDF page bookmarks use a strict locator, deduplicate per page, and remain user isolated', async (t) => {
-  const dataRoot = await temporaryDirectory(t, 'babyreader-pdf-bookmarks-');
+  const dataRoot = await temporaryDirectory(t, 'zhenshu-pdf-bookmarks-');
   const storage = new UserStorage(dataRoot);
   await storage.initialize();
   const locator = { version: 1, type: 'pdf', pageIndex: 17 };
@@ -293,7 +293,7 @@ test('PDF page bookmarks use a strict locator, deduplicate per page, and remain 
 });
 
 test('PDF annotations are UID scoped, idempotent by stable ID, and never replace EPUB highlights', async (t) => {
-  const dataRoot = await temporaryDirectory(t, 'babyreader-pdf-annotations-');
+  const dataRoot = await temporaryDirectory(t, 'zhenshu-pdf-annotations-');
   const storage = new UserStorage(dataRoot);
   await storage.initialize();
   const epubHighlight = {
@@ -335,7 +335,7 @@ test('PDF annotations are UID scoped, idempotent by stable ID, and never replace
 });
 
 test('PDF annotation storage rejects unsafe page geometry, oversized fields, and collection limits', async (t) => {
-  const dataRoot = await temporaryDirectory(t, 'babyreader-pdf-annotation-limits-');
+  const dataRoot = await temporaryDirectory(t, 'zhenshu-pdf-annotation-limits-');
   const storage = new UserStorage(dataRoot);
   await storage.initialize();
 
@@ -369,7 +369,7 @@ test('PDF annotation storage rejects unsafe page geometry, oversized fields, and
 });
 
 test('concurrent PDF annotation writes retain every stable ID and enforce the one-megabyte book budget', async (t) => {
-  const dataRoot = await temporaryDirectory(t, 'babyreader-pdf-annotation-concurrency-');
+  const dataRoot = await temporaryDirectory(t, 'zhenshu-pdf-annotation-concurrency-');
   const storage = new UserStorage(dataRoot);
   await storage.initialize();
 
@@ -410,7 +410,7 @@ test('concurrent PDF annotation writes retain every stable ID and enforce the on
 });
 
 test('interleaved same-user PDF CRUD keeps unrelated EPUB highlights and other users isolated', async (t) => {
-  const dataRoot = await temporaryDirectory(t, 'babyreader-pdf-interleaved-');
+  const dataRoot = await temporaryDirectory(t, 'zhenshu-pdf-interleaved-');
   const storage = new UserStorage(dataRoot);
   await storage.initialize();
   const first = pdfAnnotation('00000000-0000-4000-8000-000000000501');
@@ -439,7 +439,7 @@ test('interleaved same-user PDF CRUD keeps unrelated EPUB highlights and other u
 });
 
 test('failed atomic PDF annotation write leaves the previous JSON and recovered queue intact', async (t) => {
-  const dataRoot = await temporaryDirectory(t, 'babyreader-pdf-write-fail-');
+  const dataRoot = await temporaryDirectory(t, 'zhenshu-pdf-write-fail-');
   const storage = new UserStorage(dataRoot);
   await storage.initialize();
   const first = pdfAnnotation('00000000-0000-4000-8000-000000000511');
@@ -460,7 +460,7 @@ test('failed atomic PDF annotation write leaves the previous JSON and recovered 
 });
 
 test('corrupt stored PDF annotations fail closed without returning partially trusted records', async (t) => {
-  const dataRoot = await temporaryDirectory(t, 'babyreader-pdf-annotation-corrupt-');
+  const dataRoot = await temporaryDirectory(t, 'zhenshu-pdf-annotation-corrupt-');
   const storage = new UserStorage(dataRoot);
   await storage.initialize();
   await storage.mutateUserState('alice', async (state) => {
@@ -478,7 +478,7 @@ test('corrupt stored PDF annotations fail closed without returning partially tru
 });
 
 test('bookmarks validate locator fields, label size, and per-book limits', async (t) => {
-  const dataRoot = await temporaryDirectory(t, 'babyreader-bookmark-validation-');
+  const dataRoot = await temporaryDirectory(t, 'zhenshu-bookmark-validation-');
   const storage = new UserStorage(dataRoot);
   await storage.initialize();
 
@@ -532,7 +532,7 @@ test('bookmarks validate locator fields, label size, and per-book limits', async
 });
 
 test('bookmarks remain isolated by user and book while concurrent writes stay intact', async (t) => {
-  const dataRoot = await temporaryDirectory(t, 'babyreader-bookmark-isolation-');
+  const dataRoot = await temporaryDirectory(t, 'zhenshu-bookmark-isolation-');
   const storage = new UserStorage(dataRoot);
   await storage.initialize();
   const makeInput = (anchor) => ({
@@ -569,7 +569,7 @@ test('bookmarks remain isolated by user and book while concurrent writes stay in
 });
 
 test('annotation compatibility defaults old records and preserves new styles', async (t) => {
-  const dataRoot = await temporaryDirectory(t, 'babyreader-annotations-');
+  const dataRoot = await temporaryDirectory(t, 'zhenshu-annotations-');
   const storage = new UserStorage(dataRoot);
   await storage.initialize();
 
@@ -610,7 +610,7 @@ test('annotation compatibility defaults old records and preserves new styles', a
 });
 
 test('settings validation clamps font size and normalizes supported values', async (t) => {
-  const dataRoot = await temporaryDirectory(t, 'babyreader-settings-');
+  const dataRoot = await temporaryDirectory(t, 'zhenshu-settings-');
   const storage = new UserStorage(dataRoot);
   await storage.initialize();
 
@@ -656,7 +656,7 @@ test('settings validation clamps font size and normalizes supported values', asy
 });
 
 test('PDF layout settings are whitelisted and isolated per user without changing EPUB mode', async (t) => {
-  const dataRoot = await temporaryDirectory(t, 'babyreader-pdf-layout-settings-');
+  const dataRoot = await temporaryDirectory(t, 'zhenshu-pdf-layout-settings-');
   const storage = new UserStorage(dataRoot);
   await storage.initialize();
   const first = await storage.updateSettings('reader_a', { pdfLayoutMode: 'double', readingMode: 'scroll' });

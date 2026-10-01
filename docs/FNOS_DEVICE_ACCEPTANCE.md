@@ -1,4 +1,4 @@
-# BabyReader fnOS 真机验收矩阵
+# 枕书 fnOS 真机验收矩阵
 
 本文把“真机可用”拆成可重复采证的契约。任何正式版本进入 `main` 前，至少在一台 x86_64 和一台 ARM64 fnOS 设备上分别完成一次。
 
@@ -14,7 +14,7 @@
 验收脚本作为临时设备验收工具随当前候选 FPK 提供，安装后位于 `target/docs/fnos-device-acceptance.sh`。直接在设备上执行：
 
 ```sh
-sh /var/apps/babyreader-fnos/target/docs/fnos-device-acceptance.sh check | tee /tmp/acceptance-x86.txt
+sh /var/apps/zhenshu/target/docs/fnos-device-acceptance.sh check | tee /tmp/acceptance-x86.txt
 ```
 
 ARM 设备同样执行并保存为 `/tmp/acceptance-arm64.txt`。脚本自动检查 CPU 架构、Node.js 22、生命周期状态、`app.sock`、Unix Socket health、无 Gateway 身份时的 401、运行目录与授权书库 ACL。也可以从已写入 `PATH` 的源码 checkout 运行，但正式验收优先使用 FPK 内的副本。
@@ -25,8 +25,8 @@ ARM 设备同样执行并保存为 `/tmp/acceptance-arm64.txt`。脚本自动检
 
 Gateway 是宿主契约，必须从真实 fnOS 桌面入口进入，不能只用 Unix Socket 模拟。
 
-1. 从 fnOS 桌面打开 BabyReader。
-2. 浏览器 Network 中确认请求路径为 `/app/babyreader-fnos/api/session`。
+1. 从 fnOS 桌面打开 枕书。
+2. 浏览器 Network 中确认请求路径为 `/app/zhenshu/api/session`。
 3. 返回必须为 200，并包含当前登录用户对应的 `uid`、`username`、`isAdmin`。
 4. 普通用户与管理员分别验证一次。
 5. 切换两个 fnOS 用户，确认返回 UID 不同，并且阅读进度/划线互不可见。
@@ -35,8 +35,8 @@ Gateway 是宿主契约，必须从真实 fnOS 桌面入口进入，不能只用
 若要命令行采证，可在本机临时导出当前登录 Cookie 后运行：
 
 ```sh
-BABYREADER_GATEWAY_URL="https://你的-fnOS-地址" \
-BABYREADER_GATEWAY_COOKIE="实际登录 Cookie" \
+ZHENSHU_GATEWAY_URL="https://你的-fnOS-地址" \
+ZHENSHU_GATEWAY_COOKIE="实际登录 Cookie" \
 sh scripts/fnos-device-acceptance.sh check
 ```
 
@@ -47,9 +47,9 @@ Cookie 不得提交到 Git、报告、日志或 CI。
 AI 设置和问答的固定夹具测试不会访问真实供应商。配置真实 AI 服务后，从 fnOS Gateway 会话执行独立连接测试；该命令使用服务端已经保存的配置和 API Key，不在命令行、脚本参数或日志中接收/打印 API Key，也不携带书籍内容、选中文本或对话历史：
 
 ```sh
-BABYREADER_GATEWAY_URL="https://你的-fnOS-地址" \
-BABYREADER_GATEWAY_COOKIE="实际登录 Cookie" \
-sh /var/apps/babyreader-fnos/target/docs/fnos-device-acceptance.sh ai-test
+ZHENSHU_GATEWAY_URL="https://你的-fnOS-地址" \
+ZHENSHU_GATEWAY_COOKIE="实际登录 Cookie" \
+sh /var/apps/zhenshu/target/docs/fnos-device-acceptance.sh ai-test
 ```
 
 通过标准：
@@ -66,18 +66,18 @@ sh /var/apps/babyreader-fnos/target/docs/fnos-device-acceptance.sh ai-test
 以 root 在 NAS 上执行（共享目录写入检查需要 `runuser` 切换到包用户），并用管理员账号的登录 Cookie：
 
 ```sh
-BABYREADER_GATEWAY_URL="https://你的-fnOS-地址" \
-BABYREADER_GATEWAY_COOKIE="实际登录 Cookie" \
-sh /var/apps/babyreader-fnos/target/docs/fnos-device-acceptance.sh import-probe
+ZHENSHU_GATEWAY_URL="https://你的-fnOS-地址" \
+ZHENSHU_GATEWAY_COOKIE="实际登录 Cookie" \
+sh /var/apps/zhenshu/target/docs/fnos-device-acceptance.sh import-probe
 ```
 
 - 共享目录：以包用户身份创建并删除一个隐藏探测文件，并输出目录属主、权限和 ACL。
-- 网关请求体上限：依次发送 1/16/64/256 MiB 的无效 JSON（可用 `BABYREADER_PROBE_SIZES_MIB` 调整）到书库偏好接口。该接口解析失败即拒绝，不会写入任何数据。响应是应用的 JSON 错误，说明网关已转发；否则记录网关返回的状态码和响应片段。
+- 网关请求体上限：依次发送 1/16/64/256 MiB 的无效 JSON（可用 `ZHENSHU_PROBE_SIZES_MIB` 调整）到书库偏好接口。该接口解析失败即拒绝，不会写入任何数据。响应是应用的 JSON 错误，说明网关已转发；否则记录网关返回的状态码和响应片段。
 - 请把完整输出（先删掉 Cookie）回填到 `docs/superpowers/progress/2026-09-30-mobi-and-book-import-progress.md`。
 
 ## 3.2 PDF 结构化问书候选验收
 
-PDF 结构化检索目前由 `BABYREADER_ENABLE_PDF_AI_STRUCTURE` 控制，默认必须保持关闭。此项不是普通用户设置，不得通过生产 `settings.json` 或包内默认环境开启。
+PDF 结构化检索目前由 `ZHENSHU_ENABLE_PDF_AI_STRUCTURE` 控制，默认必须保持关闭。此项不是普通用户设置，不得通过生产 `settings.json` 或包内默认环境开启。
 
 仅在隔离测试包/测试实例上验收：
 
@@ -93,9 +93,9 @@ Windows 本地测试不验证 Unix `0700/0600` 权限；必须在 Debian 12/x86_
 
 ```sh
 set -eu
-APP_ROOT=/var/apps/babyreader-fnos/target
+APP_ROOT=/var/apps/zhenshu/target
 NODE_BIN=/var/apps/nodejs_v22/target/bin/node
-TASK_ROOT=$(mktemp -d /tmp/babyreader-pdf-ai-check.XXXXXX)
+TASK_ROOT=$(mktemp -d /tmp/zhenshu-pdf-ai-check.XXXXXX)
 cleanup() {
   rm -f -- "$TASK_ROOT/app/server" "$TASK_ROOT/tests/pdf-ai-context.test.js" \
     "$TASK_ROOT/tests/pdf-ai-profile.test.js" "$TASK_ROOT/tests/pdf-ai-retrieval.test.js" \
@@ -112,12 +112,12 @@ cp "$APP_ROOT/tests/pdf-ai-context.test.js" "$APP_ROOT/tests/pdf-ai-profile.test
   "$APP_ROOT/tests/pdf-ai-retrieval.test.js" "$APP_ROOT/tests/pdf-ai-api.test.js" "$TASK_ROOT/tests/"
 cp "$APP_ROOT/tests/fixtures/pdf-fixtures.js" "$APP_ROOT/tests/fixtures/pdf-ai-paper-cases.js" \
   "$TASK_ROOT/tests/fixtures/"
-BABYREADER_ENABLE_PDF_AI_STRUCTURE=0 "$NODE_BIN" --test --test-concurrency=1 \
+ZHENSHU_ENABLE_PDF_AI_STRUCTURE=0 "$NODE_BIN" --test --test-concurrency=1 \
   "$TASK_ROOT/tests/pdf-ai-context.test.js" "$TASK_ROOT/tests/pdf-ai-profile.test.js" \
   "$TASK_ROOT/tests/pdf-ai-retrieval.test.js" "$TASK_ROOT/tests/pdf-ai-api.test.js"
 ```
 
-此命令在隔离 API 测试进程中验证默认关闭、显式开启、首次画像、缓存复用、无文本与取消回退，并在 Linux 上运行缓存权限断言；它不会把运行中的 BabyReader 服务切到结构化路径。通过后仍须单独记录测试实例的资源用量与关闭回滚，才可讨论生产启用。
+此命令在隔离 API 测试进程中验证默认关闭、显式开启、首次画像、缓存复用、无文本与取消回退，并在 Linux 上运行缓存权限断言；它不会把运行中的 枕书 服务切到结构化路径。通过后仍须单独记录测试实例的资源用量与关闭回滚，才可讨论生产启用。
 
 ## 4. ACL 验收
 
@@ -127,7 +127,7 @@ BABYREADER_ENABLE_PDF_AI_STRUCTURE=0 "$NODE_BIN" --test --test-concurrency=1 \
 
 自定义书库目录必须通过 fnOS 应用权限授权，不要直接把未授权路径写入应用配置：
 
-1. 在 fnOS 应用中心打开 BabyReader 的“应用限制 → 访问权限”。
+1. 在 fnOS 应用中心打开 枕书 的“应用限制 → 访问权限”。
 2. 添加测试目录 A，并在目录中准备至少一个 EPUB、一个 TXT 和一个 Markdown 文件。
 3. 保存权限。配置回调会把 fnOS 当前授权目录列表原子写入应用私有配置；运行中的服务无需重启，停止的应用也不会因配置操作启动。
 4. 回到书库点击“重新扫描”，确认 A 中的书籍出现并可以打开。
@@ -146,7 +146,7 @@ BABYREADER_ENABLE_PDF_AI_STRUCTURE=0 "$NODE_BIN" --test --test-concurrency=1 \
 `check` 命令现在会自动验证 Node 22 的 `node:sqlite`、SQLite FTS5 能力，以及已有 AI 索引的表结构、临时文件和权限：
 
 ```sh
-sh /var/apps/babyreader-fnos/target/docs/fnos-device-acceptance.sh check | tee /tmp/acceptance-ai-fts.txt
+sh /var/apps/zhenshu/target/docs/fnos-device-acceptance.sh check | tee /tmp/acceptance-ai-fts.txt
 ```
 
 如果设备尚未对任何书籍提问，脚本会跳过索引文件检查，但仍会验证 FTS5 运行时。先在阅读器中打开《吃的营养科学观》并提问一次，再重新执行 `check`。通过标准：
@@ -204,15 +204,15 @@ sh /var/apps/babyreader-fnos/target/docs/fnos-device-acceptance.sh check | tee /
 
 ## 5.3 书库组织、分类与排序验收
 
-1.1.4 起，正式 FPK 启动时默认开启书库组织功能；仍可通过 `BABYREADER_ENABLE_LIBRARY_ORGANIZATION=0` 显式关闭。验收环境需确认 `/api/library` 返回 `features.libraryOrganization=true`，再执行以下 UI 场景。
+1.1.4 起，正式 FPK 启动时默认开启书库组织功能；仍可通过 `ZHENSHU_ENABLE_LIBRARY_ORGANIZATION=0` 显式关闭。验收环境需确认 `/api/library` 返回 `features.libraryOrganization=true`，再执行以下 UI 场景。
 
 服务端先执行只读 dry-run：
 
 ```sh
-curl -sS -H "Cookie: $BABYREADER_GATEWAY_COOKIE" \
+curl -sS -H "Cookie: $ZHENSHU_GATEWAY_COOKIE" \
   -H 'Content-Type: application/json' \
   -d '{"revision":0}' \
-  "$BABYREADER_GATEWAY_URL/app/babyreader-fnos/api/library/organization/reconcile"
+  "$ZHENSHU_GATEWAY_URL/app/zhenshu/api/library/organization/reconcile"
 ```
 
 只有用户确认 dry-run 返回的孤儿数量后，才允许使用当前 revision 加 `"confirm":true` 执行清理。扫描状态不是 `completed` 或存在 root error 时，接口必须返回 503 且组织文件不变。该操作只清理不可用的 bookId 引用，不删除分类、书籍文件、AI 索引、书签、标注、阅读进度或 AI 会话。
@@ -249,15 +249,15 @@ node scripts/benchmark-book-search.js
 新章节/全书概述策略默认关闭，旧 AI 问答路径保持可用。要在自有设备上试用时，只在当前管理员 shell 临时启用后重启服务：
 
 ```sh
-export BABYREADER_ENABLE_AI_CHAPTER_UNDERSTANDING=1
-/var/apps/babyreader-fnos/cmd/main restart
+export ZHENSHU_ENABLE_AI_CHAPTER_UNDERSTANDING=1
+/var/apps/zhenshu/cmd/main restart
 ```
 
 完成验收后恢复默认关闭并重启：
 
 ```sh
-unset BABYREADER_ENABLE_AI_CHAPTER_UNDERSTANDING
-/var/apps/babyreader-fnos/cmd/main restart
+unset ZHENSHU_ENABLE_AI_CHAPTER_UNDERSTANDING
+/var/apps/zhenshu/cmd/main restart
 ```
 
 使用已授权 EPUB 与已配置的 AI 供应商验证：
@@ -273,23 +273,23 @@ unset BABYREADER_ENABLE_AI_CHAPTER_UNDERSTANDING
 
 ## 5.6 PDF 阅读与本地全文搜索验收
 
-> **v1.3.7 起 PDF、v1.3.8 起 MOBI/AZW3 与管理员导入都已始终开启，应用设置中不再有这些开关。** 下文中“打开开关”的步骤直接跳过；“开关关闭时”的检查改为在测试实例上设置对应的环境变量 `BABYREADER_PDF_ENABLED` / `BABYREADER_MOBI_ENABLED` / `BABYREADER_IMPORT_ENABLED` 为 `0`。升级后旧版本留下的 `*-feature.json` 会被忽略，书库应直接显示 PDF 和 MOBI/AZW3。
+> **v1.3.7 起 PDF、v1.3.8 起 MOBI/AZW3 与管理员导入都已始终开启，应用设置中不再有这些开关。** 下文中“打开开关”的步骤直接跳过；“开关关闭时”的检查改为在测试实例上设置对应的环境变量 `ZHENSHU_PDF_ENABLED` / `ZHENSHU_MOBI_ENABLED` / `ZHENSHU_IMPORT_ENABLED` 为 `0`。升级后旧版本留下的 `*-feature.json` 会被忽略，书库应直接显示 PDF 和 MOBI/AZW3。
 
-PDF 功能默认关闭。管理员在 fnOS 应用中心 → BabyReader → 应用设置中打开“PDF 阅读与全文搜索（验收用）”，刷新 BabyReader，再执行“重新扫描”。配置即时生效，不需要在 SSH 中设置环境变量或手动重启服务。验收结束后在同一设置页关闭开关并刷新应用。不要修改已有书籍、索引或个人数据来制造测试条件。
+PDF 功能默认关闭。管理员在 fnOS 应用中心 → 枕书 → 应用设置中打开“PDF 阅读与全文搜索（验收用）”，刷新 枕书，再执行“重新扫描”。配置即时生效，不需要在 SSH 中设置环境变量或手动重启服务。验收结束后在同一设置页关闭开关并刷新应用。不要修改已有书籍、索引或个人数据来制造测试条件。
 
 准备一份合成测试书：
 
-1. 在已授权的书库目录中确认文件名恰为 `BabyReader PDF Acceptance Fixture.pdf` 的合成 PDF 已存在；已有该文件就不要重复创建，也不要覆盖其他书籍。若首次验收需要生成，使用 FPK 中的 fixture 生成器，并把 `PDF_OUT` 设置为该授权目录内**尚不存在**的精确文件名：
+1. 在已授权的书库目录中确认文件名恰为 `枕书 PDF Acceptance Fixture.pdf` 的合成 PDF 已存在；已有该文件就不要重复创建，也不要覆盖其他书籍。若首次验收需要生成，使用 FPK 中的 fixture 生成器，并把 `PDF_OUT` 设置为该授权目录内**尚不存在**的精确文件名：
 
 ```sh
-PDF_OUT="/已授权书库目录/BabyReader PDF Acceptance Fixture.pdf"
+PDF_OUT="/已授权书库目录/枕书 PDF Acceptance Fixture.pdf"
 /var/apps/nodejs_v22/target/bin/node - "$PDF_OUT" <<'NODE'
 const fs = require('node:fs');
-const { createPdfFixture } = require('/var/apps/babyreader-fnos/target/tests/fixtures/pdf-fixtures.js');
+const { createPdfFixture } = require('/var/apps/zhenshu/target/tests/fixtures/pdf-fixtures.js');
 const fd = fs.openSync(process.argv[2], 'wx', 0o644);
 try {
   fs.writeFileSync(fd, createPdfFixture({
-    pageTexts: ['BabyReaderAcceptanceToken — synthetic local PDF search fixture.']
+    pageTexts: ['枕书AcceptanceToken — synthetic local PDF search fixture.']
   }));
 } finally {
   fs.closeSync(fd);
@@ -302,16 +302,16 @@ NODE
 3. 在受信任的 NAS 管理员 shell 中运行检查；Cookie 只留在当前 shell，不复制到命令输出、验收文件或工单：
 
 ```sh
-read -rsp '当前登录 Cookie（不回显）: ' BABYREADER_GATEWAY_COOKIE
+read -rsp '当前登录 Cookie（不回显）: ' ZHENSHU_GATEWAY_COOKIE
 printf '\n'
-export BABYREADER_GATEWAY_COOKIE
-BABYREADER_GATEWAY_URL="https://你的-fnOS-地址" \
-sh /var/apps/babyreader-fnos/target/docs/fnos-device-acceptance.sh check \
+export ZHENSHU_GATEWAY_COOKIE
+ZHENSHU_GATEWAY_URL="https://你的-fnOS-地址" \
+sh /var/apps/zhenshu/target/docs/fnos-device-acceptance.sh check \
   | tee /tmp/acceptance-pdf-x86.txt
-unset BABYREADER_GATEWAY_COOKIE
+unset ZHENSHU_GATEWAY_COOKIE
 ```
 
-脚本通过书名自动找该合成测试书，也可设置 `BABYREADER_PDF_TEST_BOOK_ID` 指定其 64 位书籍 ID。它验证包内 PDF.js Node 解析器与浏览器主模块/Worker 都是 6.3.289、Apache-2.0 许可证文件存在、静态模块/Worker 返回 JavaScript MIME 和限于 same-origin 的 CSP；在授权 Gateway 下验证单字节 Range `206`、open-ended/suffix Range `206`、HEAD/普通小文件 GET、multipart Range `416`，并搜索唯一 token 以检查返回的是不含路径的页 locator。FTS5 及 SQLite 文件权限/临时文件仍由既有检查覆盖。
+脚本通过书名自动找该合成测试书，也可设置 `ZHENSHU_PDF_TEST_BOOK_ID` 指定其 64 位书籍 ID。它验证包内 PDF.js Node 解析器与浏览器主模块/Worker 都是 6.3.289、Apache-2.0 许可证文件存在、静态模块/Worker 返回 JavaScript MIME 和限于 same-origin 的 CSP；在授权 Gateway 下验证单字节 Range `206`、open-ended/suffix Range `206`、HEAD/普通小文件 GET、multipart Range `416`，并搜索唯一 token 以检查返回的是不含路径的页 locator。FTS5 及 SQLite 文件权限/临时文件仍由既有检查覆盖。
 
 脚本只有在 `/api/library` 报告 `features.pdfReader=true` 且 Gateway 会话有效时才执行在线 PDF 检查；缺少合成测试书时会输出 `SKIP`，该设备不能记作 PDF 验收通过。通过标准是所有适用 PDF 项均为 `PASS`，无 PDF `FAIL`，并在书架 UI 确认刷新/重新打开后阅读页恢复、点击搜索结果定位到正确页内文本、搜索面板仍保持打开。报告只记录匿名版本/架构/延迟/状态，不保存 Cookie、书名、路径、正文或查询 token。
 
@@ -319,12 +319,12 @@ unset BABYREADER_GATEWAY_COOKIE
 
 ## 5.7 MOBI/AZW3 阅读与书籍导入验收（v1.3.0）
 
-> **v1.3.7 起 PDF、v1.3.8 起 MOBI/AZW3 与管理员导入都已始终开启，应用设置中不再有这些开关。** 下文中“打开开关”的步骤直接跳过；“开关关闭时”的检查改为在测试实例上设置对应的环境变量 `BABYREADER_PDF_ENABLED` / `BABYREADER_MOBI_ENABLED` / `BABYREADER_IMPORT_ENABLED` 为 `0`。升级后旧版本留下的 `*-feature.json` 会被忽略，书库应直接显示 PDF 和 MOBI/AZW3。
+> **v1.3.7 起 PDF、v1.3.8 起 MOBI/AZW3 与管理员导入都已始终开启，应用设置中不再有这些开关。** 下文中“打开开关”的步骤直接跳过；“开关关闭时”的检查改为在测试实例上设置对应的环境变量 `ZHENSHU_PDF_ENABLED` / `ZHENSHU_MOBI_ENABLED` / `ZHENSHU_IMPORT_ENABLED` 为 `0`。升级后旧版本留下的 `*-feature.json` 会被忽略，书库应直接显示 PDF 和 MOBI/AZW3。
 
-两个功能都默认关闭，彼此独立。管理员在 fnOS 应用中心 → BabyReader → 应用设置中打开：
+两个功能都默认关闭，彼此独立。管理员在 fnOS 应用中心 → 枕书 → 应用设置中打开：
 
 - “启用 MOBI/AZW3 阅读（验收用）”：打开后**必须在书库点一次“重新扫描”**，Kindle 书才会出现（服务启动时不会自动扫描）。
-- “允许管理员从浏览器导入书籍”：导入的书保存在应用共享目录 `babyreader-fnos/library/导入` 中，所有用户都能看到。
+- “允许管理员从浏览器导入书籍”：导入的书保存在应用共享目录 `zhenshu/library/导入` 中，所有用户都能看到。
 
 验收只使用自己有权使用、没有 DRM 的书，或者公有领域的样本（例如 Project Gutenberg 的 Kindle 版本）。不要为了测试去修改已有的书、索引或个人数据。
 
@@ -345,7 +345,7 @@ unset BABYREADER_GATEWAY_COOKIE
 - 全文搜索能命中正文，点击结果能跳过去；
 - 配置了 AI 时，可以就书的内容提问。
 
-记录第一次打开的耗时。转换后的文件在 `/var/apps/babyreader-fnos/var/derived/` 下，文件权限应为 `600`。
+记录第一次打开的耗时。转换后的文件在 `/var/apps/zhenshu/var/derived/` 下，文件权限应为 `600`。
 
 **3. 资源**：选一本正文较大的书（例如一部长篇小说）第一次打开，同时观察服务进程的内存和耗时。转换在独立线程中进行，堆内存上限 256 MiB、超时 60 s。正文超过 32 MiB 的书会明确提示“过大”。把 x86_64 和 ARM64 上测到的数值记录下来，用来最终确定资源上限。
 
@@ -355,13 +355,13 @@ unset BABYREADER_GATEWAY_COOKIE
 - 分别用“导入”按钮和拖放导入 EPUB、PDF（需要先打开 PDF 开关）、TXT 和 MOBI（需要先打开 MOBI 开关）各一本。检查以下几项：
   - 进度条正常推进；
   - 书立即出现在书架上；
-  - 在 fnOS 文件管理器中，`babyreader-fnos/library/导入` 目录下能看到这个文件；
+  - 在 fnOS 文件管理器中，`zhenshu/library/导入` 目录下能看到这个文件；
   - 用另一个普通用户登录也能看到这本书。
 - 再次导入同一个文件，应提示“书库中已有这本书”，并提供“打开”。
 - 导入一个同名但内容不同的文件，应保存为“xxx (2)”。
 - 导入 `.exe`、改了扩展名的非书籍文件、带 DRM 的 AZW，都应该被拒绝，并给出明确原因。
 - 在某个分类页里导入，书应自动出现在这个分类中。
-- 上传过程中点“取消”，或者直接关闭网页，`导入` 目录里不应留下 `.babyreader-import-*.part` 临时文件。
+- 上传过程中点“取消”，或者直接关闭网页，`导入` 目录里不应留下 `.zhenshu-import-*.part` 临时文件。
 - 按第 0 步测得的网关上限，分别导入一个略小于和一个略大于上限的文件，记录两次的实际表现。
 
 **5. 升级与回退**：
@@ -373,7 +373,7 @@ unset BABYREADER_GATEWAY_COOKIE
 ## 6. Socket 与生命周期验收
 
 ```sh
-/var/apps/babyreader-fnos/cmd/main status
+/var/apps/zhenshu/cmd/main status
 ```
 
 自 v1.3.6 起，PID 文件缺失或指向其他进程时，`cmd/main` 会扫描进程表，查找参数为本包 `server/index.js` 的进程，找到后重新写入 PID 文件。因此由 fnOS 监管启动的服务也应返回 status=0。若仍出现 `status` 返回 3 但目标 socket 与健康接口正常，请记录 `ps -ef | grep "[s]erver/index.js"` 的输出以便排查，并以 fnOS 监管状态及健康接口为准；不要在 SSH 中直接运行 `cmd/main restart`，应通过应用中心管理服务生命周期。
@@ -385,15 +385,15 @@ unset BABYREADER_GATEWAY_COOKIE
 升级前用两个用户分别写入阅读进度和划线，然后：
 
 ```sh
-sh scripts/fnos-device-acceptance.sh snapshot /tmp/babyreader-before.txt
+sh scripts/fnos-device-acceptance.sh snapshot /tmp/zhenshu-before.txt
 ```
 
 通过应用中心升级 FPK，不要卸载重装。升级后、不继续阅读或修改状态时：
 
 ```sh
-sh scripts/fnos-device-acceptance.sh snapshot /tmp/babyreader-after.txt
+sh scripts/fnos-device-acceptance.sh snapshot /tmp/zhenshu-after.txt
 sh scripts/fnos-device-acceptance.sh compare \
-  /tmp/babyreader-before.txt /tmp/babyreader-after.txt
+  /tmp/zhenshu-before.txt /tmp/zhenshu-after.txt
 ```
 
 随后人工确认两个用户的进度和划线仍然存在。若未来包含显式状态迁移，快照允许变化，但必须有迁移说明和测试。

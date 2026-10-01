@@ -1,4 +1,4 @@
-/* BabyReader UI module: reader/pdf-render-scheduler */
+/* 枕书 UI module: reader/pdf-render-scheduler */
 
 'use strict';
 

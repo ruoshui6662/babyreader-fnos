@@ -1,4 +1,4 @@
-/* BabyReader UI module: reader/settings */
+/* 枕书 UI module: reader/settings */
 
 'use strict';
 

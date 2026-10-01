@@ -46,20 +46,20 @@
 
 新的本地可选回归有两条：
 
-1. 在 `BABYREADER_E2E_CPU_THROTTLE=12` 下，8 秒内必须出现唯一、稳定的 `.epub-chapter`：有可见非空文本，或有实际可见且已解码的媒体（`img.complete && naturalWidth > 0`，或有效 SVG/canvas）；状态不得匹配 `/^正在打开/`，分页 geometry/track 已就绪，`#article[aria-busy]` 已清除，并且可用下一页或下一章动作。
+1. 在 `ZHENSHU_E2E_CPU_THROTTLE=12` 下，8 秒内必须出现唯一、稳定的 `.epub-chapter`：有可见非空文本，或有实际可见且已解码的媒体（`img.complete && naturalWidth > 0`，或有效 SVG/canvas）；状态不得匹配 `/^正在打开/`，分页 geometry/track 已就绪，`#article[aria-busy]` 已清除，并且可用下一页或下一章动作。
 2. 在 4× CPU 降速下，从 `data-pagination-track` 读取 `groups=`，逐组进入当前章节的最后一页，点击下一页后要求 `data-source-path` 改变；改变后再次等待唯一、可见非空内容、非 loading 状态、分页 geometry/track 和非 busy 导航全部稳定，才读取 long task，且最大值不超过 1000 ms。
 
-2026-09-19 尝试使用指定路径 `C:\Users\admin\Desktop\吃的营养科学观.epub` 运行时，该文件不存在。首次运行的两个用例均在等待书库条目时达到 30 秒超时；根因检查 `Test-Path` 返回 `False`，且 Desktop/Downloads 中未找到匹配 EPUB。E2E 启动器现会在路径相对或文件缺失时立即失败，错误为 `BABYREADER_E2E_SAMPLE_EPUB does not exist: <path>`，不会把缺失夹具伪装为产品回归结果。
+2026-09-19 尝试使用指定路径 `C:\Users\admin\Desktop\吃的营养科学观.epub` 运行时，该文件不存在。首次运行的两个用例均在等待书库条目时达到 30 秒超时；根因检查 `Test-Path` 返回 `False`，且 Desktop/Downloads 中未找到匹配 EPUB。E2E 启动器现会在路径相对或文件缺失时立即失败，错误为 `ZHENSHU_E2E_SAMPLE_EPUB does not exist: <path>`，不会把缺失夹具伪装为产品回归结果。
 
 上述缺失路径是历史失败，不是当前状态。样本恢复后，旧的“仅文本”首章谓词还曾错误拒绝正确显示的 cover-only `titlepage.xhtml`；该失败也保留为历史 RED 证据。现行谓词验证解码后的可见媒体，因此不会把隐藏、透明、零尺寸或未完成解码的图片当作内容。
 
 恢复后的最终真实样本复验已完成：完整 12× 命令 **2 passed (20.7s)**，首章 `openedMs=4293`、最大 long task `530 ms`，章节边界最大 `498 ms`；完整 4× 命令 **2 passed (9.5s)**，首章 `openedMs=1261`，章节边界 `titlepage.xhtml → toc.xhtml`，最大 long task `524 ms`。两个边界测量都保持一个 mounted chapter，且均低于 1000 ms。复现命令仍为：
 
 ```powershell
-$env:BABYREADER_E2E_SAMPLE_EPUB = 'C:\Users\admin\Desktop\吃的营养科学观.epub'
-$env:BABYREADER_E2E_SAMPLE_TITLE = '吃的营养科学观'
-$env:BABYREADER_E2E_START_MODE = 'double'
-$env:BABYREADER_E2E_CPU_THROTTLE = '12'
+$env:ZHENSHU_E2E_SAMPLE_EPUB = 'C:\Users\admin\Desktop\吃的营养科学观.epub'
+$env:ZHENSHU_E2E_SAMPLE_TITLE = '吃的营养科学观'
+$env:ZHENSHU_E2E_START_MODE = 'double'
+$env:ZHENSHU_E2E_CPU_THROTTLE = '12'
 npx playwright test e2e/real-epub-investigation.spec.js --project=chromium --workers=1
 ```
 

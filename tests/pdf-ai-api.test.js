@@ -6,7 +6,7 @@ const http = require('node:http');
 const os = require('node:os');
 const path = require('node:path');
 const test = require('node:test');
-const root = path.join(os.tmpdir(), `babyreader-pdf-ai-api-${process.pid}`);
+const root = path.join(os.tmpdir(), `zhenshu-pdf-ai-api-${process.pid}`);
 const dataRoot = path.join(root, 'var');
 const configRoot = path.join(root, 'etc');
 const libraryRoot = path.join(root, 'library');
@@ -14,7 +14,7 @@ const bookId = 'c'.repeat(64);
 const bookPath = path.join(libraryRoot, 'synthetic.pdf');
 process.env.TRIM_PKGVAR = dataRoot;
 process.env.TRIM_PKGETC = configRoot;
-process.env.BABYREADER_PDF_ENABLED = '1';
+process.env.ZHENSHU_PDF_ENABLED = '1';
 process.env.NODE_ENV = 'development';
 process.env.OPENAI_API_KEY = 'pdf-ai-test-key';
 process.env.OPENAI_BASE_URL = 'https://93.184.216.34/v1';
@@ -25,7 +25,7 @@ const { createAiConversationStorage } = require('../app/server/ai-conversation-s
 const { handleRequest, loadConfiguration } = require('../app/server/index');
 let server;
 let baseUrl;
-const endpoint = (suffix) => `/app/babyreader-fnos/api/books/${bookId}/ai/${suffix}`;
+const endpoint = (suffix) => `/app/zhenshu/api/books/${bookId}/ai/${suffix}`;
 const headers = { 'content-type': 'application/json', 'x-trim-userid': 'pdf-ai-user', 'x-trim-username': 'pdf-ai-user' };
 
 async function post(suffix, body) {
@@ -102,9 +102,9 @@ test('PDF AI stream sends only bounded indexed text and valid page source', asyn
 
 test('PDF AI structure flag stays off and preserves the current provider payload by default', async () => {
   const originalFetch = global.fetch;
-  const originalFlag = process.env.BABYREADER_ENABLE_PDF_AI_STRUCTURE;
+  const originalFlag = process.env.ZHENSHU_ENABLE_PDF_AI_STRUCTURE;
   let outbound;
-  delete process.env.BABYREADER_ENABLE_PDF_AI_STRUCTURE;
+  delete process.env.ZHENSHU_ENABLE_PDF_AI_STRUCTURE;
   global.fetch = async (url, options) => {
     if (String(url).startsWith('https://93.184.216.34/')) {
       outbound = JSON.parse(options.body);
@@ -126,19 +126,19 @@ test('PDF AI structure flag stays off and preserves the current provider payload
     assert.match(JSON.stringify(outbound), /苹果研究资料|香蕉市场调查结论|葡萄种植技术/);
   } finally {
     global.fetch = originalFetch;
-    if (originalFlag === undefined) delete process.env.BABYREADER_ENABLE_PDF_AI_STRUCTURE;
-    else process.env.BABYREADER_ENABLE_PDF_AI_STRUCTURE = originalFlag;
+    if (originalFlag === undefined) delete process.env.ZHENSHU_ENABLE_PDF_AI_STRUCTURE;
+    else process.env.ZHENSHU_ENABLE_PDF_AI_STRUCTURE = originalFlag;
   }
 });
 
 test('opt-in structured PDF overview builds one evidence-backed profile then reuses the cache', async () => {
   const originalFetch = global.fetch;
-  const originalFlag = process.env.BABYREADER_ENABLE_PDF_AI_STRUCTURE;
+  const originalFlag = process.env.ZHENSHU_ENABLE_PDF_AI_STRUCTURE;
   const profilePages = ['摘要。研究问题是结构化阅读是否改善理解。', '研究方法。样本为合成大学生，使用对照实验。', '研究结果。主要发现为结构阅读组表现更好。'];
   let profileCalls = 0;
   let answerCalls = 0;
   let finalPayload;
-  process.env.BABYREADER_ENABLE_PDF_AI_STRUCTURE = '1';
+  process.env.ZHENSHU_ENABLE_PDF_AI_STRUCTURE = '1';
   await writeBook(createPdfFixture({ pageTexts: profilePages }));
   global.fetch = async (url, options) => {
     if (String(url).startsWith('https://93.184.216.34/')) {
@@ -180,8 +180,8 @@ test('opt-in structured PDF overview builds one evidence-backed profile then reu
     assert.equal(answerCalls, 2);
   } finally {
     global.fetch = originalFetch;
-    if (originalFlag === undefined) delete process.env.BABYREADER_ENABLE_PDF_AI_STRUCTURE;
-    else process.env.BABYREADER_ENABLE_PDF_AI_STRUCTURE = originalFlag;
+    if (originalFlag === undefined) delete process.env.ZHENSHU_ENABLE_PDF_AI_STRUCTURE;
+    else process.env.ZHENSHU_ENABLE_PDF_AI_STRUCTURE = originalFlag;
     await writeBook(createPdfFixture({ pageTexts: ['苹果研究资料', '香蕉市场调查结论', '葡萄种植技术'] }));
   }
 });
@@ -229,7 +229,7 @@ test('PDF AI persists every evidence citation for restored page navigation', asy
     const saved = await storage.getConversation('pdf-ai-user', bookId, conversation.id);
     assert.deepEqual(saved.messages[1].sources.map((source) => source.citationIndex), [1, 2, 3]);
     assert.deepEqual(saved.messages[1].sources.map((source) => source.chapterIndex), [0, 1, 2]);
-    const conversationUrl = `${baseUrl}/app/babyreader-fnos/api/books/${bookId}/ai/conversations/${conversation.id}`;
+    const conversationUrl = `${baseUrl}/app/zhenshu/api/books/${bookId}/ai/conversations/${conversation.id}`;
     const current = await (await originalFetch(conversationUrl, { headers })).json();
     assert.equal(current.messages[1].sources[0].stale, false);
     assert.equal('sourceFingerprint' in current.messages[1].sources[0], false);

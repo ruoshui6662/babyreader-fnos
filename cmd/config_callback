@@ -8,7 +8,7 @@ PKG_ETC="${TRIM_PKGETC:-$APP_DEST/etc}"
 NODE_BIN=/var/apps/nodejs_v22/target/bin/node
 if [ ! -x "$NODE_BIN" ]; then
   NODE_BIN=$(command -v node) || {
-    printf '%s\n' 'Node.js 22 is required to apply BabyReader configuration.' >&2
+    printf '%s\n' 'Node.js 22 is required to apply 枕书 configuration.' >&2
     exit 1
   }
 fi

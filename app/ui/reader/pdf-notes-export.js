@@ -1,4 +1,4 @@
-/* BabyReader UI module: reader/pdf-notes-export */
+/* 枕书 UI module: reader/pdf-notes-export */
 
 'use strict';
 

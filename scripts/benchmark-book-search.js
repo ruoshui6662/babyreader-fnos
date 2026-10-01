@@ -89,7 +89,7 @@ function countFtsCandidates(databasePath, query) {
 
 async function run() {
   if (!isFtsAvailable()) throw new Error('SQLite FTS5 is unavailable in this Node runtime');
-  const temporaryRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'babyreader-search-benchmark-'));
+  const temporaryRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'zhenshu-search-benchmark-'));
   let peakRssBytes = process.memoryUsage().rss;
   const rssSampler = setInterval(() => {
     peakRssBytes = Math.max(peakRssBytes, process.memoryUsage().rss);

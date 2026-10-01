@@ -1,4 +1,4 @@
-/* BabyReader UI module: shell/drawer */
+/* 枕书 UI module: shell/drawer */
 
 'use strict';
 

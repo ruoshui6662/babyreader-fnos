@@ -1,7 +1,7 @@
 {
-  "name": "babyreader-fnos",
+  "name": "zhenshu",
   "version": "1.4.1",
-  "description": "BabyReader EPUB, Markdown and TXT reader for fnOS",
+  "description": "枕书 EPUB, Markdown and TXT reader for fnOS",
   "main": "app/server/index.js",
   "directories": {
     "doc": "docs",

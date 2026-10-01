@@ -8,7 +8,7 @@ const path = require('node:path');
 const test = require('node:test');
 const { createCorruptPdfFixture, createPdfFixture } = require('./fixtures/pdf-fixtures');
 
-const SANDBOX = path.join(os.tmpdir(), `babyreader-search-api-${process.pid}`);
+const SANDBOX = path.join(os.tmpdir(), `zhenshu-search-api-${process.pid}`);
 const DATA_ROOT = path.join(SANDBOX, 'var');
 const CONFIG_ROOT = path.join(SANDBOX, 'etc');
 const LIBRARY_ROOT = path.join(SANDBOX, 'library');
@@ -30,7 +30,7 @@ process.env.TRIM_PKGETC = CONFIG_ROOT;
 process.env.TRIM_DATA_ACCESSIBLE_PATHS = '';
 process.env.TRIM_DATA_SHARE_PATHS = '';
 process.env.NODE_ENV = 'development';
-process.env.BABYREADER_PDF_ENABLED = 'true';
+process.env.ZHENSHU_PDF_ENABLED = 'true';
 
 const { parseBookSearchParams } = require('../app/server/book-search');
 const { writeFnOSAuthorizedRoots } = require('../app/server/fnos-roots-config');
@@ -130,14 +130,14 @@ test('library scan discovers an fnOS accessible root and exposes safe root count
   try {
     await loadConfiguration();
 
-    const scan = await request('/app/babyreader-fnos/api/library/scan', {
+    const scan = await request('/app/zhenshu/api/library/scan', {
       method: 'POST',
       headers: { 'x-trim-userid': 'admin', 'x-trim-isadmin': 'true' }
     });
     assert.equal(scan.status, 200);
     assert.ok(scan.body.books.some((book) => book.title === 'custom-book'));
 
-    const diagnostics = await request('/app/babyreader-fnos/api/diagnostics', {
+    const diagnostics = await request('/app/zhenshu/api/diagnostics', {
       headers: { 'x-trim-userid': 'admin', 'x-trim-isadmin': 'true' }
     });
     assert.equal(diagnostics.status, 200);
@@ -152,7 +152,7 @@ test('library scan discovers an fnOS accessible root and exposes safe root count
 
     process.env.TRIM_DATA_ACCESSIBLE_PATHS = '';
     await loadConfiguration();
-    const afterRevoke = await request('/app/babyreader-fnos/api/diagnostics', {
+    const afterRevoke = await request('/app/zhenshu/api/diagnostics', {
       headers: { 'x-trim-userid': 'admin', 'x-trim-isadmin': 'true' }
     });
     assert.equal(afterRevoke.status, 200);
@@ -172,7 +172,7 @@ test('library scan uses the first fnOS permission callback result without restar
   try {
     assert.equal(process.env.TRIM_DATA_ACCESSIBLE_PATHS, '');
     writeFnOSAuthorizedRoots(CONFIG_ROOT, CUSTOM_ROOT);
-    const added = await request('/app/babyreader-fnos/api/library/scan', {
+    const added = await request('/app/zhenshu/api/library/scan', {
       method: 'POST', headers: { 'x-trim-userid': 'admin', 'x-trim-isadmin': 'true' }
     });
     assert.equal(added.status, 200);
@@ -180,12 +180,12 @@ test('library scan uses the first fnOS permission callback result without restar
 
     const customBook = added.body.books.find((book) => book.title === 'custom-book');
     writeFnOSAuthorizedRoots(CONFIG_ROOT, '');
-    const staleContent = await fetch(`${baseUrl}/app/babyreader-fnos/api/books/${customBook.id}/content`, {
+    const staleContent = await fetch(`${baseUrl}/app/zhenshu/api/books/${customBook.id}/content`, {
       headers: { 'x-trim-userid': 'admin', 'x-trim-isadmin': 'true' }
     });
     assert.equal(staleContent.status, 404);
     await staleContent.arrayBuffer();
-    const revoked = await request('/app/babyreader-fnos/api/library/scan', {
+    const revoked = await request('/app/zhenshu/api/library/scan', {
       method: 'POST', headers: { 'x-trim-userid': 'admin', 'x-trim-isadmin': 'true' }
     });
     assert.equal(revoked.status, 200);
@@ -199,7 +199,7 @@ test('library scan uses the first fnOS permission callback result without restar
 
 test('search API returns bounded independent results for an authenticated book', async () => {
   const response = await request(
-    `/app/babyreader-fnos/api/books/${BOOK_ID}/search?q=${encodeURIComponent('蛋白质')}&limit=1`
+    `/app/zhenshu/api/books/${BOOK_ID}/search?q=${encodeURIComponent('蛋白质')}&limit=1`
   );
 
   assert.equal(response.status, 200);
@@ -215,7 +215,7 @@ test('search API returns bounded independent results for an authenticated book',
 
 test('search API reaches chapter scope without changing the AI route', async () => {
   const response = await request(
-    `/app/babyreader-fnos/api/books/${BOOK_ID}/search?q=${encodeURIComponent('蛋白质')}&scope=chapter&chapterIndex=0`
+    `/app/zhenshu/api/books/${BOOK_ID}/search?q=${encodeURIComponent('蛋白质')}&scope=chapter&chapterIndex=0`
   );
 
   assert.equal(response.status, 200);
@@ -225,13 +225,13 @@ test('search API reaches chapter scope without changing the AI route', async () 
 
 test('search API supports cursor continuation and rejects a cursor reused for another query', async () => {
   const first = await request(
-    `/app/babyreader-fnos/api/books/${BOOK_ID}/search?q=${encodeURIComponent('蛋白质')}&limit=1`
+    `/app/zhenshu/api/books/${BOOK_ID}/search?q=${encodeURIComponent('蛋白质')}&limit=1`
   );
   assert.equal(first.status, 200);
   assert.equal(first.body.hasMore, true);
 
   const next = await request(
-    `/app/babyreader-fnos/api/books/${BOOK_ID}/search?q=${encodeURIComponent('蛋白质')}&limit=1&cursor=${encodeURIComponent(first.body.nextCursor)}`
+    `/app/zhenshu/api/books/${BOOK_ID}/search?q=${encodeURIComponent('蛋白质')}&limit=1&cursor=${encodeURIComponent(first.body.nextCursor)}`
   );
   assert.equal(next.status, 200);
   assert.equal(next.body.results.length, 1);
@@ -241,7 +241,7 @@ test('search API supports cursor continuation and rejects a cursor reused for an
   process.env.NODE_ENV = 'production';
   try {
     const unauthenticatedContinuation = await request(
-      `/app/babyreader-fnos/api/books/${BOOK_ID}/search?q=${encodeURIComponent('蛋白质')}&limit=1&cursor=${encodeURIComponent(first.body.nextCursor)}`
+      `/app/zhenshu/api/books/${BOOK_ID}/search?q=${encodeURIComponent('蛋白质')}&limit=1&cursor=${encodeURIComponent(first.body.nextCursor)}`
     );
     assert.equal(unauthenticatedContinuation.status, 401);
   } finally {
@@ -249,17 +249,17 @@ test('search API supports cursor continuation and rejects a cursor reused for an
   }
 
   const mismatch = await request(
-    `/app/babyreader-fnos/api/books/${BOOK_ID}/search?q=wrong&limit=1&cursor=${encodeURIComponent(first.body.nextCursor)}`
+    `/app/zhenshu/api/books/${BOOK_ID}/search?q=wrong&limit=1&cursor=${encodeURIComponent(first.body.nextCursor)}`
   );
   assert.equal(mismatch.status, 400);
 });
 
 test('search API rejects missing or malformed parameters with 400', async () => {
-  const missingQuery = await request(`/app/babyreader-fnos/api/books/${BOOK_ID}/search`);
+  const missingQuery = await request(`/app/zhenshu/api/books/${BOOK_ID}/search`);
   assert.equal(missingQuery.status, 400);
 
   const malformed = await request(
-    `/app/babyreader-fnos/api/books/${BOOK_ID}/search?q=x&scope=other&limit=0`
+    `/app/zhenshu/api/books/${BOOK_ID}/search?q=x&scope=other&limit=0`
   );
   assert.equal(malformed.status, 400);
 });
@@ -268,7 +268,7 @@ test('search API rejects requests without fnOS identity', async () => {
   const previous = process.env.NODE_ENV;
   process.env.NODE_ENV = 'production';
   try {
-    const response = await request(`/app/babyreader-fnos/api/books/${BOOK_ID}/search?q=x`);
+    const response = await request(`/app/zhenshu/api/books/${BOOK_ID}/search?q=x`);
     assert.equal(response.status, 401);
   } finally {
     process.env.NODE_ENV = previous;
@@ -277,14 +277,14 @@ test('search API rejects requests without fnOS identity', async () => {
 
 test('search API resolves only known books', async () => {
   const response = await request(
-    `/app/babyreader-fnos/api/books/${UNKNOWN_BOOK_ID}/search?q=${encodeURIComponent('蛋白质')}`
+    `/app/zhenshu/api/books/${UNKNOWN_BOOK_ID}/search?q=${encodeURIComponent('蛋白质')}`
   );
   assert.equal(response.status, 404);
 });
 
 test('search API returns a controlled unavailable result when FTS cannot build', async () => {
   const response = await request(
-    `/app/babyreader-fnos/api/books/${BROKEN_BOOK_ID}/search?q=${encodeURIComponent('蛋白质')}`
+    `/app/zhenshu/api/books/${BROKEN_BOOK_ID}/search?q=${encodeURIComponent('蛋白质')}`
   );
 
   assert.equal(response.status, 200);
@@ -301,7 +301,7 @@ test('search API returns a controlled unavailable result when FTS cannot build',
 
 test('search API returns bounded PDF page locators without exposing source text or paths', async () => {
   const response = await request(
-    `/app/babyreader-fnos/api/books/${PDF_BOOK_ID}/search?q=${encodeURIComponent('精确搜索词')}&limit=1`
+    `/app/zhenshu/api/books/${PDF_BOOK_ID}/search?q=${encodeURIComponent('精确搜索词')}&limit=1`
   );
 
   assert.equal(response.status, 200);
@@ -318,7 +318,7 @@ test('search API returns bounded PDF page locators without exposing source text 
 
 test('search API identifies image-only PDFs and safely rejects malformed PDFs', async () => {
   const textless = await request(
-    `/app/babyreader-fnos/api/books/${TEXTLESS_PDF_BOOK_ID}/search?q=${encodeURIComponent('任意内容')}`
+    `/app/zhenshu/api/books/${TEXTLESS_PDF_BOOK_ID}/search?q=${encodeURIComponent('任意内容')}`
   );
   assert.deepEqual(textless.body, {
     available: false,
@@ -332,7 +332,7 @@ test('search API identifies image-only PDFs and safely rejects malformed PDFs', 
   });
 
   const malformed = await request(
-    `/app/babyreader-fnos/api/books/${BROKEN_PDF_BOOK_ID}/search?q=${encodeURIComponent('任意内容')}`
+    `/app/zhenshu/api/books/${BROKEN_PDF_BOOK_ID}/search?q=${encodeURIComponent('任意内容')}`
   );
   assert.equal(malformed.status, 200);
   assert.equal(malformed.body.available, false);

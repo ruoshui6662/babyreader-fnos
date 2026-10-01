@@ -12,7 +12,7 @@ const { MOBI_CONVERTER_VERSION } = require('../app/server/mobi-convert');
 const { createMobiFixture, createDrmMobiFixture } = require('./fixtures/mobi-fixtures');
 
 async function sandbox(t) {
-  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'babyreader-mobi-derived-'));
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'zhenshu-mobi-derived-'));
   t.after(() => fs.rm(root, { recursive: true, force: true }));
   return root;
 }

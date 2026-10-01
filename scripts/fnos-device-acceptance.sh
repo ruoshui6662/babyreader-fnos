@@ -2,7 +2,7 @@
 
 set -u
 
-APP_NAME="${BABYREADER_APP_NAME:-babyreader-fnos}"
+APP_NAME="${ZHENSHU_APP_NAME:-zhenshu}"
 PKG_ROOT="${TRIM_PKGROOT:-/var/apps/$APP_NAME}"
 APP_DEST="${TRIM_APPDEST:-/var/apps/$APP_NAME/target}"
 PKG_VAR="${TRIM_PKGVAR:-/var/apps/$APP_NAME/var}"
@@ -11,7 +11,7 @@ PKG_TMP="${TRIM_PKGTMP:-/var/apps/$APP_NAME/tmp}"
 SOCKET_FILE="$APP_DEST/app.sock"
 MAIN="${TRIM_MAIN:-$PKG_ROOT/cmd/main}"
 NODE_BIN="/var/apps/nodejs_v22/target/bin/node"
-PACKAGE_USER="${BABYREADER_PACKAGE_USER:-babyreader_fnos}"
+PACKAGE_USER="${ZHENSHU_PACKAGE_USER:-zhenshu}"
 FAILURES=0
 LIFECYCLE_STATUS_DEFERRED=0
 
@@ -62,7 +62,7 @@ check_runtime_root_list() {
     return 0
   fi
 
-  ROOTS_FILE="${TMPDIR:-/tmp}/babyreader-${LABEL}.$$"
+  ROOTS_FILE="${TMPDIR:-/tmp}/zhenshu-${LABEL}.$$"
   printf '%s\n' "$VALUE" | tr ':' '\n' | sed '/^[[:space:]]*$/d' > "$ROOTS_FILE"
   ROOT_COUNT="$(wc -l < "$ROOTS_FILE" | tr -d ' ')"
   info "${LABEL}_count=$ROOT_COUNT"
@@ -82,7 +82,7 @@ check_runtime_root_list() {
 }
 
 check_gateway_root_diagnostics() {
-  if [ -z "${BABYREADER_GATEWAY_URL:-}" ] || [ -z "${BABYREADER_GATEWAY_COOKIE:-}" ]; then
+  if [ -z "${ZHENSHU_GATEWAY_URL:-}" ] || [ -z "${ZHENSHU_GATEWAY_COOKIE:-}" ]; then
     skip "admin root diagnostics require an authenticated fnOS Gateway session"
     return 0
   fi
@@ -91,10 +91,10 @@ check_gateway_root_diagnostics() {
     return 0
   fi
 
-  DIAGNOSTICS_BODY="${TMPDIR:-/tmp}/babyreader-diagnostics.$$"
-  DIAGNOSTICS_CODE="$(curl -sS -H "Cookie: $BABYREADER_GATEWAY_COOKIE" \
+  DIAGNOSTICS_BODY="${TMPDIR:-/tmp}/zhenshu-diagnostics.$$"
+  DIAGNOSTICS_CODE="$(curl -sS -H "Cookie: $ZHENSHU_GATEWAY_COOKIE" \
     -o "$DIAGNOSTICS_BODY" -w '%{http_code}' \
-    "$BABYREADER_GATEWAY_URL/app/babyreader-fnos/api/diagnostics" 2>/dev/null || true)"
+    "$ZHENSHU_GATEWAY_URL/app/zhenshu/api/diagnostics" 2>/dev/null || true)"
   if [ "$DIAGNOSTICS_CODE" = "403" ]; then
     skip "authenticated fnOS session is not an administrator; root diagnostics skipped"
   elif [ "$DIAGNOSTICS_CODE" = "200" ]; then
@@ -154,8 +154,8 @@ compare_snapshots() {
     printf 'usage: %s compare <before> <after>\n' "$0" >&2
     exit 2
   fi
-  BEFORE_DATA="${TMPDIR:-/tmp}/babyreader-before-data.$$"
-  AFTER_DATA="${TMPDIR:-/tmp}/babyreader-after-data.$$"
+  BEFORE_DATA="${TMPDIR:-/tmp}/zhenshu-before-data.$$"
+  AFTER_DATA="${TMPDIR:-/tmp}/zhenshu-after-data.$$"
   grep -E '^(settings_sha256=|state=)' "$BEFORE" > "$BEFORE_DATA" || true
   grep -E '^(settings_sha256=|state=)' "$AFTER" > "$AFTER_DATA" || true
   if diff -u "$BEFORE_DATA" "$AFTER_DATA"; then
@@ -173,25 +173,25 @@ ai_test_connection() {
     printf 'RESULT | FAIL | count=%s\n' "$FAILURES" >&2
     return 1
   fi
-  if [ -z "${BABYREADER_GATEWAY_URL:-}" ]; then
-    fail "BABYREADER_GATEWAY_URL is required for ai-test"
+  if [ -z "${ZHENSHU_GATEWAY_URL:-}" ]; then
+    fail "ZHENSHU_GATEWAY_URL is required for ai-test"
     printf 'RESULT | FAIL | count=%s\n' "$FAILURES" >&2
     return 1
   fi
-  if [ -z "${BABYREADER_GATEWAY_COOKIE:-}" ]; then
-    fail "BABYREADER_GATEWAY_COOKIE is required for ai-test"
+  if [ -z "${ZHENSHU_GATEWAY_COOKIE:-}" ]; then
+    fail "ZHENSHU_GATEWAY_COOKIE is required for ai-test"
     printf 'RESULT | FAIL | count=%s\n' "$FAILURES" >&2
     return 1
   fi
 
-  AI_TEST_BODY="${TMPDIR:-/tmp}/babyreader-ai-test.$$"
+  AI_TEST_BODY="${TMPDIR:-/tmp}/zhenshu-ai-test.$$"
   AI_TEST_CODE="$(curl -sS -X POST \
-    -H "Cookie: $BABYREADER_GATEWAY_COOKIE" \
+    -H "Cookie: $ZHENSHU_GATEWAY_COOKIE" \
     -H 'Content-Type: application/json' \
     -d '{}' \
     -o "$AI_TEST_BODY" \
     -w '%{http_code}' \
-    "$BABYREADER_GATEWAY_URL/app/babyreader-fnos/api/ai/test-connection" 2>/dev/null || true)"
+    "$ZHENSHU_GATEWAY_URL/app/zhenshu/api/ai/test-connection" 2>/dev/null || true)"
   if [ "$AI_TEST_CODE" = "200" ]; then
     pass "authenticated fnOS AI provider connection test returned 200"
     info "ai_test_response_status=$AI_TEST_CODE"
@@ -212,17 +212,17 @@ check_library_organization_contract() {
     skip "curl unavailable; authenticated library-organization contract not checked"
     return 0
   fi
-  if [ -z "${BABYREADER_GATEWAY_URL:-}" ] || [ -z "${BABYREADER_GATEWAY_COOKIE:-}" ]; then
+  if [ -z "${ZHENSHU_GATEWAY_URL:-}" ] || [ -z "${ZHENSHU_GATEWAY_COOKIE:-}" ]; then
     skip "authenticated fnOS session required for library-organization contract"
     return 0
   fi
 
-  ORGANIZATION_BODY="${TMPDIR:-/tmp}/babyreader-library-organization.$$"
+  ORGANIZATION_BODY="${TMPDIR:-/tmp}/zhenshu-library-organization.$$"
   ORGANIZATION_CODE="$(curl -sS \
-    -H "Cookie: $BABYREADER_GATEWAY_COOKIE" \
+    -H "Cookie: $ZHENSHU_GATEWAY_COOKIE" \
     -o "$ORGANIZATION_BODY" \
     -w '%{http_code}' \
-    "$BABYREADER_GATEWAY_URL/app/babyreader-fnos/api/library/organization" 2>/dev/null || true)"
+    "$ZHENSHU_GATEWAY_URL/app/zhenshu/api/library/organization" 2>/dev/null || true)"
   if [ "$ORGANIZATION_CODE" != "200" ]; then
     fail "authenticated library-organization contract returned ${ORGANIZATION_CODE:-no response}"
     rm -f "$ORGANIZATION_BODY"
@@ -353,17 +353,17 @@ check_pdf_runtime_contract() {
 }
 
 check_pdf_gateway_contract() {
-  if ! command -v curl >/dev/null 2>&1 || [ -z "${BABYREADER_GATEWAY_URL:-}" ] \
-      || [ -z "${BABYREADER_GATEWAY_COOKIE:-}" ]; then
+  if ! command -v curl >/dev/null 2>&1 || [ -z "${ZHENSHU_GATEWAY_URL:-}" ] \
+      || [ -z "${ZHENSHU_GATEWAY_COOKIE:-}" ]; then
     skip "authenticated fnOS Gateway session required for PDF MIME/CSP/Range/search checks"
     return 0
   fi
 
-  PDF_GATEWAY="${BABYREADER_GATEWAY_URL%/}"
-  PDF_HEADERS="${TMPDIR:-/tmp}/babyreader-pdf-headers.$$"
-  PDF_BODY="${TMPDIR:-/tmp}/babyreader-pdf-body.$$"
-  PDF_LIBRARY_CODE="$(curl -sS -H "Cookie: $BABYREADER_GATEWAY_COOKIE" -o "$PDF_BODY" -w '%{http_code}' \
-    "$PDF_GATEWAY/app/babyreader-fnos/api/library" 2>/dev/null || true)"
+  PDF_GATEWAY="${ZHENSHU_GATEWAY_URL%/}"
+  PDF_HEADERS="${TMPDIR:-/tmp}/zhenshu-pdf-headers.$$"
+  PDF_BODY="${TMPDIR:-/tmp}/zhenshu-pdf-body.$$"
+  PDF_LIBRARY_CODE="$(curl -sS -H "Cookie: $ZHENSHU_GATEWAY_COOKIE" -o "$PDF_BODY" -w '%{http_code}' \
+    "$PDF_GATEWAY/app/zhenshu/api/library" 2>/dev/null || true)"
   if [ "$PDF_LIBRARY_CODE" != "200" ] || [ ! -x "$NODE_BIN" ]; then
     fail "authenticated PDF feature status could not be checked"
     rm -f "$PDF_HEADERS" "$PDF_BODY"
@@ -380,8 +380,8 @@ check_pdf_gateway_contract() {
   for asset in \
     "vendor/pdfjs/build/pdf.mjs" \
     "vendor/pdfjs/build/pdf.worker.mjs"; do
-    PDF_ASSET_CODE="$(curl -sS -H "Cookie: $BABYREADER_GATEWAY_COOKIE" -D "$PDF_HEADERS" -o /dev/null -w '%{http_code}' \
-      "$PDF_GATEWAY/app/babyreader-fnos/$asset" 2>/dev/null || true)"
+    PDF_ASSET_CODE="$(curl -sS -H "Cookie: $ZHENSHU_GATEWAY_COOKIE" -D "$PDF_HEADERS" -o /dev/null -w '%{http_code}' \
+      "$PDF_GATEWAY/app/zhenshu/$asset" 2>/dev/null || true)"
     if [ "$PDF_ASSET_CODE" = "200" ] \
         && grep -qi '^content-type: text/javascript' "$PDF_HEADERS" \
         && grep -qi "^content-security-policy:.*worker-src 'self' blob:" "$PDF_HEADERS" \
@@ -392,18 +392,18 @@ check_pdf_gateway_contract() {
     fi
   done
 
-  PDF_TEST_BOOK_ID="${BABYREADER_PDF_TEST_BOOK_ID:-}"
+  PDF_TEST_BOOK_ID="${ZHENSHU_PDF_TEST_BOOK_ID:-}"
   if [ -z "$PDF_TEST_BOOK_ID" ]; then
     PDF_TEST_BOOK_ID="$("$NODE_BIN" -e '
       try {
         const data = JSON.parse(require("node:fs").readFileSync(process.argv[1], "utf8"));
-        const book = (data.books || []).find((item) => item.type === "pdf" && item.title === "BabyReader PDF Acceptance Fixture");
+        const book = (data.books || []).find((item) => item.type === "pdf" && item.title === "枕书 PDF Acceptance Fixture");
         if (book && /^[a-f0-9]{64}$/.test(book.id || "")) process.stdout.write(book.id);
       } catch {}
     ' "$PDF_BODY" 2>/dev/null || true)"
   fi
   if [ "${#PDF_TEST_BOOK_ID}" -ne 64 ]; then
-    skip "dedicated BabyReader PDF Acceptance Fixture not found; synthetic PDF Range and FTS not checked"
+    skip "dedicated 枕书 PDF Acceptance Fixture not found; synthetic PDF Range and FTS not checked"
     rm -f "$PDF_HEADERS" "$PDF_BODY"
     return 0
   fi
@@ -415,8 +415,8 @@ check_pdf_gateway_contract() {
       ;;
   esac
 
-  PDF_CONTENT_URL="$PDF_GATEWAY/app/babyreader-fnos/api/books/$PDF_TEST_BOOK_ID/content"
-  PDF_RANGE_CODE="$(curl -sS -H "Cookie: $BABYREADER_GATEWAY_COOKIE" -H 'Range: bytes=0-0' \
+  PDF_CONTENT_URL="$PDF_GATEWAY/app/zhenshu/api/books/$PDF_TEST_BOOK_ID/content"
+  PDF_RANGE_CODE="$(curl -sS -H "Cookie: $ZHENSHU_GATEWAY_COOKIE" -H 'Range: bytes=0-0' \
     -D "$PDF_HEADERS" -o /dev/null -w '%{http_code}' "$PDF_CONTENT_URL" 2>/dev/null || true)"
   if [ "$PDF_RANGE_CODE" = "206" ] \
       && grep -qi '^content-type: application/pdf' "$PDF_HEADERS" \
@@ -426,7 +426,7 @@ check_pdf_gateway_contract() {
     fail "authorized synthetic PDF Range expected 206 with a single-byte Content-Range, got ${PDF_RANGE_CODE:-no response}"
   fi
 
-  PDF_OPEN_RANGE_CODE="$(curl -sS -H "Cookie: $BABYREADER_GATEWAY_COOKIE" -H 'Range: bytes=0-' \
+  PDF_OPEN_RANGE_CODE="$(curl -sS -H "Cookie: $ZHENSHU_GATEWAY_COOKIE" -H 'Range: bytes=0-' \
     -D "$PDF_HEADERS" -o /dev/null -w '%{http_code}' "$PDF_CONTENT_URL" 2>/dev/null || true)"
   if [ "$PDF_OPEN_RANGE_CODE" = "206" ] \
       && grep -qi '^content-range: bytes 0-[0-9][0-9]*/[0-9][0-9]*' "$PDF_HEADERS"; then
@@ -435,7 +435,7 @@ check_pdf_gateway_contract() {
     fail "authorized synthetic PDF open-ended Range expected 206"
   fi
 
-  PDF_SUFFIX_RANGE_CODE="$(curl -sS -H "Cookie: $BABYREADER_GATEWAY_COOKIE" -H 'Range: bytes=-1' \
+  PDF_SUFFIX_RANGE_CODE="$(curl -sS -H "Cookie: $ZHENSHU_GATEWAY_COOKIE" -H 'Range: bytes=-1' \
     -D "$PDF_HEADERS" -o /dev/null -w '%{http_code}' "$PDF_CONTENT_URL" 2>/dev/null || true)"
   if [ "$PDF_SUFFIX_RANGE_CODE" = "206" ] \
       && grep -qi '^content-range: bytes [0-9][0-9]*-[0-9][0-9]*/[0-9][0-9]*' "$PDF_HEADERS"; then
@@ -444,7 +444,7 @@ check_pdf_gateway_contract() {
     fail "authorized synthetic PDF suffix Range expected 206"
   fi
 
-  PDF_HEAD_CODE="$(curl -sS -I -H "Cookie: $BABYREADER_GATEWAY_COOKIE" -o /dev/null -w '%{http_code}' \
+  PDF_HEAD_CODE="$(curl -sS -I -H "Cookie: $ZHENSHU_GATEWAY_COOKIE" -o /dev/null -w '%{http_code}' \
     "$PDF_CONTENT_URL" 2>/dev/null || true)"
   if [ "$PDF_HEAD_CODE" = "200" ]; then
     pass "authorized synthetic PDF HEAD returned 200"
@@ -452,7 +452,7 @@ check_pdf_gateway_contract() {
     fail "authorized synthetic PDF HEAD expected 200, got ${PDF_HEAD_CODE:-no response}"
   fi
 
-  PDF_FULL_CODE="$(curl -sS -H "Cookie: $BABYREADER_GATEWAY_COOKIE" -o "$PDF_BODY" -w '%{http_code}' \
+  PDF_FULL_CODE="$(curl -sS -H "Cookie: $ZHENSHU_GATEWAY_COOKIE" -o "$PDF_BODY" -w '%{http_code}' \
     "$PDF_CONTENT_URL" 2>/dev/null || true)"
   if [ "$PDF_FULL_CODE" = "200" ] && [ "$(wc -c < "$PDF_BODY" | tr -d ' ')" -le 1048576 ] \
       && head -c 1024 "$PDF_BODY" | grep -aq '%PDF-'; then
@@ -461,7 +461,7 @@ check_pdf_gateway_contract() {
     fail "authorized synthetic PDF full GET failed or exceeded 1 MiB"
   fi
 
-  PDF_MULTIRANGE_CODE="$(curl -sS -H "Cookie: $BABYREADER_GATEWAY_COOKIE" -H 'Range: bytes=0-0,2-2' \
+  PDF_MULTIRANGE_CODE="$(curl -sS -H "Cookie: $ZHENSHU_GATEWAY_COOKIE" -H 'Range: bytes=0-0,2-2' \
     -o /dev/null -w '%{http_code}' "$PDF_CONTENT_URL" 2>/dev/null || true)"
   if [ "$PDF_MULTIRANGE_CODE" = "416" ]; then
     pass "multipart PDF Range is rejected with 416"
@@ -469,13 +469,13 @@ check_pdf_gateway_contract() {
     fail "multipart PDF Range expected 416, got ${PDF_MULTIRANGE_CODE:-no response}"
   fi
 
-  PDF_SEARCH_CODE="$(curl -sS -H "Cookie: $BABYREADER_GATEWAY_COOKIE" -o "$PDF_BODY" -w '%{http_code}' \
-    "$PDF_GATEWAY/app/babyreader-fnos/api/books/$PDF_TEST_BOOK_ID/search?q=BabyReaderAcceptanceToken" 2>/dev/null || true)"
+  PDF_SEARCH_CODE="$(curl -sS -H "Cookie: $ZHENSHU_GATEWAY_COOKIE" -o "$PDF_BODY" -w '%{http_code}' \
+    "$PDF_GATEWAY/app/zhenshu/api/books/$PDF_TEST_BOOK_ID/search?q=枕书AcceptanceToken" 2>/dev/null || true)"
   if [ "$PDF_SEARCH_CODE" = "200" ] && "$NODE_BIN" - "$PDF_BODY" <<'NODE'
 const fs = require('node:fs');
 try {
   const body = JSON.parse(fs.readFileSync(process.argv[2], 'utf8'));
-  const result = (body.results || []).find((item) => item.matchText === 'BabyReaderAcceptanceToken');
+  const result = (body.results || []).find((item) => item.matchText === '枕书AcceptanceToken');
   if (!body.available || !result || result.locator?.type !== 'pdf'
       || !Number.isSafeInteger(result.locator.pageIndex) || result.locator.pageIndex < 0
       || !Number.isSafeInteger(result.locator.textOffset) || result.locator.textOffset < 0
@@ -542,9 +542,9 @@ check_device() {
   fi
 
   if command -v curl >/dev/null 2>&1 && [ -S "$SOCKET_FILE" ]; then
-    HEALTH_BODY="${TMPDIR:-/tmp}/babyreader-health.$$"
+    HEALTH_BODY="${TMPDIR:-/tmp}/zhenshu-health.$$"
     HEALTH_CODE="$(curl -sS --unix-socket "$SOCKET_FILE" -o "$HEALTH_BODY" -w '%{http_code}' \
-      "http://localhost/app/babyreader-fnos/api/health" 2>/dev/null || true)"
+      "http://localhost/app/zhenshu/api/health" 2>/dev/null || true)"
     if [ "$HEALTH_CODE" = "200" ]; then
       pass "direct Unix-socket health endpoint returned 200"
       info "health=$(cat "$HEALTH_BODY" 2>/dev/null || true)"
@@ -557,7 +557,7 @@ check_device() {
     rm -f "$HEALTH_BODY"
 
     SESSION_CODE="$(curl -sS --unix-socket "$SOCKET_FILE" -o /dev/null -w '%{http_code}' \
-      "http://localhost/app/babyreader-fnos/api/session" 2>/dev/null || true)"
+      "http://localhost/app/zhenshu/api/session" 2>/dev/null || true)"
     if [ "$SESSION_CODE" = "401" ]; then
       pass "direct session request without gateway identity is rejected with 401"
     else
@@ -576,7 +576,7 @@ check_device() {
   done
 
   if [ -f "$PKG_ETC/settings.json" ] && [ -x "$NODE_BIN" ]; then
-    ROOTS_FILE="${TMPDIR:-/tmp}/babyreader-roots.$$"
+    ROOTS_FILE="${TMPDIR:-/tmp}/zhenshu-roots.$$"
     "$NODE_BIN" -e '
       const fs=require("fs");
       const p=process.argv[1];
@@ -608,11 +608,11 @@ check_device() {
   check_runtime_root_list "TRIM_DATA_ACCESSIBLE_PATHS" "${TRIM_DATA_ACCESSIBLE_PATHS:-}"
   check_runtime_root_list "TRIM_DATA_SHARE_PATHS" "${TRIM_DATA_SHARE_PATHS:-}"
 
-  if [ -n "${BABYREADER_GATEWAY_URL:-}" ]; then
-    if [ -n "${BABYREADER_GATEWAY_COOKIE:-}" ]; then
-      GATEWAY_BODY="${TMPDIR:-/tmp}/babyreader-session.$$"
-      GATEWAY_CODE="$(curl -sS -H "Cookie: $BABYREADER_GATEWAY_COOKIE" -o "$GATEWAY_BODY" -w '%{http_code}' \
-        "$BABYREADER_GATEWAY_URL/app/babyreader-fnos/api/session" 2>/dev/null || true)"
+  if [ -n "${ZHENSHU_GATEWAY_URL:-}" ]; then
+    if [ -n "${ZHENSHU_GATEWAY_COOKIE:-}" ]; then
+      GATEWAY_BODY="${TMPDIR:-/tmp}/zhenshu-session.$$"
+      GATEWAY_CODE="$(curl -sS -H "Cookie: $ZHENSHU_GATEWAY_COOKIE" -o "$GATEWAY_BODY" -w '%{http_code}' \
+        "$ZHENSHU_GATEWAY_URL/app/zhenshu/api/session" 2>/dev/null || true)"
       if [ "$GATEWAY_CODE" = "200" ]; then
         pass "authenticated fnOS Gateway session endpoint returned 200"
         info "gateway_session=$(cat "$GATEWAY_BODY" 2>/dev/null || true)"
@@ -622,7 +622,7 @@ check_device() {
       rm -f "$GATEWAY_BODY"
       check_gateway_root_diagnostics
     else
-      skip "BABYREADER_GATEWAY_URL supplied without BABYREADER_GATEWAY_COOKIE"
+      skip "ZHENSHU_GATEWAY_URL supplied without ZHENSHU_GATEWAY_COOKIE"
     fi
   else
     skip "Gateway identity injection requires an authenticated fnOS session"
@@ -647,7 +647,7 @@ check_device() {
 import_probe() {
   SHARE_LINK="$PKG_ROOT/share"
   SHARE_DIR=""
-  for candidate in $(printf '%s' "${TRIM_DATA_SHARE_PATHS:-}" | tr ':' ' ') "$SHARE_LINK/babyreader-fnos/library" "$SHARE_LINK/library"; do
+  for candidate in $(printf '%s' "${TRIM_DATA_SHARE_PATHS:-}" | tr ':' ' ') "$SHARE_LINK/zhenshu/library" "$SHARE_LINK/library"; do
     if [ -d "$candidate" ]; then SHARE_DIR="$candidate"; break; fi
   done
   if [ -z "$SHARE_DIR" ]; then
@@ -656,7 +656,7 @@ import_probe() {
     info "share_dir=$SHARE_DIR"
     info "share_dir_real=$(readlink -f "$SHARE_DIR" 2>/dev/null || printf unknown)"
     info "share_dir_stat=$(stat -c '%U:%G %a' "$(readlink -f "$SHARE_DIR" 2>/dev/null || printf '%s' "$SHARE_DIR")" 2>/dev/null || printf unknown)"
-    PROBE_FILE="$SHARE_DIR/.babyreader-import-probe.$$"
+    PROBE_FILE="$SHARE_DIR/.zhenshu-import-probe.$$"
     if command -v runuser >/dev/null 2>&1; then
       if runuser -u "$PACKAGE_USER" -- sh -c "umask 027 && : > '$PROBE_FILE' && rm -f '$PROBE_FILE'"; then
         pass "package user can create and remove files in the share directory"
@@ -672,19 +672,19 @@ import_probe() {
     fi
   fi
 
-  if ! command -v curl >/dev/null 2>&1 || [ -z "${BABYREADER_GATEWAY_URL:-}" ] \
-      || [ -z "${BABYREADER_GATEWAY_COOKIE:-}" ]; then
-    skip "Gateway upload probe needs curl, BABYREADER_GATEWAY_URL and BABYREADER_GATEWAY_COOKIE"
+  if ! command -v curl >/dev/null 2>&1 || [ -z "${ZHENSHU_GATEWAY_URL:-}" ] \
+      || [ -z "${ZHENSHU_GATEWAY_COOKIE:-}" ]; then
+    skip "Gateway upload probe needs curl, ZHENSHU_GATEWAY_URL and ZHENSHU_GATEWAY_COOKIE"
   else
-    PROBE_URL="${BABYREADER_GATEWAY_URL%/}/app/babyreader-fnos/api/library/organization/preferences"
-    PROBE_BODY="${TMPDIR:-/tmp}/babyreader-upload-probe.$$"
-    PROBE_RESPONSE="${TMPDIR:-/tmp}/babyreader-upload-response.$$"
-    for size_mib in ${BABYREADER_PROBE_SIZES_MIB:-1 16 64 256}; do
+    PROBE_URL="${ZHENSHU_GATEWAY_URL%/}/app/zhenshu/api/library/organization/preferences"
+    PROBE_BODY="${TMPDIR:-/tmp}/zhenshu-upload-probe.$$"
+    PROBE_RESPONSE="${TMPDIR:-/tmp}/zhenshu-upload-response.$$"
+    for size_mib in ${ZHENSHU_PROBE_SIZES_MIB:-1 16 64 256}; do
       if ! dd if=/dev/zero of="$PROBE_BODY" bs=1048576 count="$size_mib" 2>/dev/null; then
         fail "could not create ${size_mib} MiB probe body"
         continue
       fi
-      PROBE_RESULT="$(curl -sS -X PUT -H "Cookie: $BABYREADER_GATEWAY_COOKIE" \
+      PROBE_RESULT="$(curl -sS -X PUT -H "Cookie: $ZHENSHU_GATEWAY_COOKIE" \
         -H 'Content-Type: application/json' --data-binary "@$PROBE_BODY" \
         -o "$PROBE_RESPONSE" -w '%{http_code} %{content_type} %{time_total}' \
         --max-time 600 "$PROBE_URL" 2>/dev/null || printf 'error - -')"

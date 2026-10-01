@@ -23,7 +23,7 @@ const COLLECTION_ID = '11111111-1111-4111-8111-111111111111';
 const SECOND_COLLECTION_ID = '22222222-2222-4222-8222-222222222222';
 
 async function temporaryDirectory(t) {
-  const directory = await fs.mkdtemp(path.join(os.tmpdir(), 'babyreader-library-org-'));
+  const directory = await fs.mkdtemp(path.join(os.tmpdir(), 'zhenshu-library-org-'));
   t.after(() => fs.rm(directory, { recursive: true, force: true }));
   return directory;
 }

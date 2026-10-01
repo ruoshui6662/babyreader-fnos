@@ -8,13 +8,13 @@ APP_DEST="${TRIM_APPDEST:-$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)}"
 PKG_VAR="${TRIM_PKGVAR:-$APP_DEST/var}"
 PKG_ETC="${TRIM_PKGETC:-$APP_DEST/etc}"
 PKG_TMP="${TRIM_PKGTMP:-$APP_DEST/tmp}"
-PID_FILE="$PKG_TMP/babyreader-fnos.pid"
-LOG_FILE="$PKG_VAR/babyreader-fnos.log"
+PID_FILE="$PKG_TMP/zhenshu.pid"
+LOG_FILE="$PKG_VAR/zhenshu.log"
 SOCKET_FILE="$APP_DEST/app.sock"
 SERVER_FILE="$APP_DEST/server/index.js"
 NODEJS_DIR="/var/apps/nodejs_v22/target/bin"
 # Process table root; overridable only so tests can supply a fake one.
-PROC_ROOT="${BABYREADER_PROC_ROOT:-/proc}"
+PROC_ROOT="${ZHENSHU_PROC_ROOT:-/proc}"
 SERVER_REAL=$(readlink -f "$SERVER_FILE" 2>/dev/null) || SERVER_REAL=$SERVER_FILE
 
 report_error() {
@@ -109,7 +109,7 @@ remove_stale_state() {
 start_service() {
   if is_running; then
     [ -S "$SOCKET_FILE" ] && return 0
-    report_error "BabyReader 进程正在运行，但 Unix Socket 不存在：$SOCKET_FILE"
+    report_error "枕书 进程正在运行，但 Unix Socket 不存在：$SOCKET_FILE"
     return 1
   fi
 
@@ -121,18 +121,18 @@ start_service() {
   }
 
   if [ ! -f "$SERVER_FILE" ]; then
-    report_error "BabyReader 服务文件不存在：$SERVER_FILE"
+    report_error "枕书 服务文件不存在：$SERVER_FILE"
     return 1
   fi
 
   mkdir -p "$PKG_VAR" "$PKG_ETC" "$PKG_TMP" || {
-    report_error "无法创建 BabyReader 运行目录。"
+    report_error "无法创建 枕书 运行目录。"
     return 1
   }
   chmod 700 "$PKG_VAR" "$PKG_ETC" "$PKG_TMP" 2>/dev/null || true
 
   : >> "$LOG_FILE" || {
-    report_error "无法写入 BabyReader 日志：$LOG_FILE"
+    report_error "无法写入 枕书 日志：$LOG_FILE"
     return 1
   }
 
@@ -142,16 +142,16 @@ start_service() {
   TRIM_PKGTMP="$PKG_TMP" \
   TRIM_DATA_ACCESSIBLE_PATHS="${TRIM_DATA_ACCESSIBLE_PATHS:-}" \
   TRIM_DATA_SHARE_PATHS="${TRIM_DATA_SHARE_PATHS:-}" \
-  BABYREADER_SOCKET="$SOCKET_FILE" \
-  BABYREADER_ENABLE_LIBRARY_ORGANIZATION="${BABYREADER_ENABLE_LIBRARY_ORGANIZATION:-1}" \
-  BABYREADER_ENABLE_AI_CHAPTER_UNDERSTANDING="${BABYREADER_ENABLE_AI_CHAPTER_UNDERSTANDING:-0}" \
+  ZHENSHU_SOCKET="$SOCKET_FILE" \
+  ZHENSHU_ENABLE_LIBRARY_ORGANIZATION="${ZHENSHU_ENABLE_LIBRARY_ORGANIZATION:-1}" \
+  ZHENSHU_ENABLE_AI_CHAPTER_UNDERSTANDING="${ZHENSHU_ENABLE_AI_CHAPTER_UNDERSTANDING:-0}" \
   NODE_ENV=production \
     nohup "$NODE_BIN" "$SERVER_FILE" >> "$LOG_FILE" 2>&1 </dev/null &
 
   PID=$!
   case "$PID" in
     ''|*[!0-9]*)
-      report_error "BabyReader 启动后未获得有效 PID。"
+      report_error "枕书 启动后未获得有效 PID。"
       remove_stale_state
       return 1
       ;;
@@ -159,7 +159,7 @@ start_service() {
 
   if ! printf '%s\n' "$PID" > "$PID_FILE"; then
     kill "$PID" 2>/dev/null || true
-    report_error "无法写入 BabyReader PID 文件：$PID_FILE"
+    report_error "无法写入 枕书 PID 文件：$PID_FILE"
     remove_stale_state
     return 1
   fi
@@ -170,7 +170,7 @@ start_service() {
     if ! kill -0 "$PID" 2>/dev/null; then
       wait "$PID" 2>/dev/null || true
       remove_stale_state
-      report_error "BabyReader 服务启动失败，请检查日志：$LOG_FILE"
+      report_error "枕书 服务启动失败，请检查日志：$LOG_FILE"
       return 1
     fi
     if [ -S "$SOCKET_FILE" ]; then
@@ -188,7 +188,7 @@ start_service() {
   done
   kill -9 "$PID" 2>/dev/null || true
   remove_stale_state
-  report_error "BabyReader Unix Socket 未在预期时间内创建：$SOCKET_FILE"
+  report_error "枕书 Unix Socket 未在预期时间内创建：$SOCKET_FILE"
   return 1
 }
 
@@ -200,7 +200,7 @@ stop_service() {
 
   STOP_PID=$PID
   if ! kill "$STOP_PID" 2>/dev/null; then
-    report_error "无法停止 BabyReader 进程：$STOP_PID"
+    report_error "无法停止 枕书 进程：$STOP_PID"
     return 1
   fi
 
@@ -212,7 +212,7 @@ stop_service() {
 
   if kill -0 "$STOP_PID" 2>/dev/null; then
     kill -9 "$STOP_PID" 2>/dev/null || {
-      report_error "无法强制停止 BabyReader 进程：$STOP_PID"
+      report_error "无法强制停止 枕书 进程：$STOP_PID"
       return 1
     }
   fi

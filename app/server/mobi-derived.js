@@ -140,7 +140,7 @@ function createMobiDerivedStore({ dataRoot, limits: overrides = {}, workerPath =
   async function convert(book, target) {
     stats.conversions += 1;
     const source = await readSource(book);
-    const epub = await runWorker(source, `urn:babyreader:book:${book.id}`);
+    const epub = await runWorker(source, `urn:zhenshu:book:${book.id}`);
     await fs.mkdir(directory, { recursive: true, mode: 0o700 });
     await writeAtomically(target, epub);
     await removeOtherVersions(book, path.basename(target));

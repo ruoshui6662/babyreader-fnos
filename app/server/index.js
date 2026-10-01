@@ -56,24 +56,24 @@ const {
   testOpenAiConnection
 } = require('./ai-service');
 
-const APP_PREFIX = '/app/babyreader-fnos';
+const APP_PREFIX = '/app/zhenshu';
 const APP_ROOT = path.resolve(__dirname, '..');
 const UI_ROOT = path.join(APP_ROOT, 'ui');
 const DATA_ROOT = path.resolve(process.env.TRIM_PKGVAR || path.join(APP_ROOT, '..', '.runtime', 'var'));
 const CONFIG_ROOT = path.resolve(process.env.TRIM_PKGETC || path.join(APP_ROOT, '..', '.runtime', 'etc'));
-const SOCKET_PATH = process.env.BABYREADER_SOCKET || path.resolve(process.env.TRIM_APPDEST || path.join(APP_ROOT, '..'), 'app.sock');
+const SOCKET_PATH = process.env.ZHENSHU_SOCKET || path.resolve(process.env.TRIM_APPDEST || path.join(APP_ROOT, '..'), 'app.sock');
 const MAX_JSON_BYTES = 2 * 1024 * 1024;
 // Provisional per-response ceiling; Task 0 device benchmarks may lower it.
 const MAX_PDF_RANGE_BYTES = 8 * 1024 * 1024;
 const PDF_AI_UNVERIFIED_ANSWER = '依据不足：回答未能提供可验证的 PDF 页引用，请缩小页码范围或换一种问法重试。';
 const LIBRARY_ORGANIZATION_ENABLED = ['1', 'true', 'yes', 'on'].includes(
-  String(process.env.BABYREADER_ENABLE_LIBRARY_ORGANIZATION || '').trim().toLowerCase()
+  String(process.env.ZHENSHU_ENABLE_LIBRARY_ORGANIZATION || '').trim().toLowerCase()
 );
 function pdfReaderEnabled() {
-  return getPdfReaderEnabled(CONFIG_ROOT, process.env.BABYREADER_PDF_ENABLED);
+  return getPdfReaderEnabled(CONFIG_ROOT, process.env.ZHENSHU_PDF_ENABLED);
 }
 function mobiReaderEnabled() {
-  return getMobiReaderEnabled(CONFIG_ROOT, process.env.BABYREADER_MOBI_ENABLED);
+  return getMobiReaderEnabled(CONFIG_ROOT, process.env.ZHENSHU_MOBI_ENABLED);
 }
 
 // Format switches hide whole book types from every catalog response.
@@ -176,7 +176,7 @@ function withLibraryLock(fn) {
 }
 
 function bookImportEnabled() {
-  return getBookImportEnabled(CONFIG_ROOT, process.env.BABYREADER_IMPORT_ENABLED);
+  return getBookImportEnabled(CONFIG_ROOT, process.env.ZHENSHU_IMPORT_ENABLED);
 }
 
 function authorizedRootFor(realPath) {
@@ -185,7 +185,7 @@ function authorizedRootFor(realPath) {
     .sort((left, right) => right.length - left.length)[0] || null;
 }
 
-// Imports go to <babyreader-fnos/library share>/导入, never to a user's own
+// Imports go to <zhenshu/library share>/导入, never to a user's own
 // authorized folders. The share is itself an authorized library root.
 async function resolveImportDirectory() {
   await refreshAuthorizationIfChanged();
@@ -197,7 +197,7 @@ async function resolveImportDirectory() {
       // Missing shares are reported by root diagnostics.
     }
   }
-  const share = shares.find((root) => /babyreader-fnos[\\/]library$/i.test(root)) || shares[0];
+  const share = shares.find((root) => /zhenshu[\\/]library$/i.test(root)) || shares[0];
   if (!share || !authorizedRootFor(share)) {
     throw Object.assign(new Error('Import share unavailable'), { code: 'IMPORT_NO_TARGET' });
   }
@@ -277,13 +277,13 @@ async function handleBookImport(request, response, user) {
   // A custom header forces a CORS preflight, which this server never grants,
   // so cross-site pages cannot submit uploads with the user's session.
   const fetchSite = request.headers['sec-fetch-site'];
-  if (request.headers['x-babyreader-request'] !== 'import' || (fetchSite && !['same-origin', 'none'].includes(fetchSite))) {
+  if (request.headers['x-zhenshu-request'] !== 'import' || (fetchSite && !['same-origin', 'none'].includes(fetchSite))) {
     return sendImportError(request, response, new ImportError('IMPORT_BAD_REQUEST', 403, '导入请求来源无效。'));
   }
   try {
     const result = await bookImporter.importStream(request, {
       userId: user.uid,
-      encodedName: request.headers['x-babyreader-filename'],
+      encodedName: request.headers['x-zhenshu-filename'],
       contentLength: request.headers['content-length']
     });
     return sendJson(response, 201, { book: publicBook(result.book), name: result.name });
@@ -794,7 +794,7 @@ async function resolveAiInputChapter(book, input) {
 }
 
 function isAiChapterUnderstandingEnabled() {
-  return process.env.BABYREADER_ENABLE_AI_CHAPTER_UNDERSTANDING === '1';
+  return process.env.ZHENSHU_ENABLE_AI_CHAPTER_UNDERSTANDING === '1';
 }
 
 function effectiveAiIntent(question, selectedText = '') {
@@ -867,8 +867,8 @@ function gatewayUser(request) {
   let isAdmin = request.headers['x-trim-isadmin'] === 'true';
 
   if (!uid && process.env.NODE_ENV === 'development') {
-    uid = process.env.BABYREADER_DEV_UID || 'development';
-    username = process.env.BABYREADER_DEV_USERNAME || 'development';
+    uid = process.env.ZHENSHU_DEV_UID || 'development';
+    username = process.env.ZHENSHU_DEV_USERNAME || 'development';
     isAdmin = true;
   }
   if (!uid) throw Object.assign(new Error('Missing authenticated fnOS user context'), { statusCode: 401 });
@@ -2140,12 +2140,12 @@ async function handleRequest(request, response) {
 async function start() {
   await storage.initialize();
   await loadConfiguration();
-  if (process.platform !== 'win32' && !process.env.BABYREADER_DEV_PORT) await fs.rm(SOCKET_PATH, { force: true });
+  if (process.platform !== 'win32' && !process.env.ZHENSHU_DEV_PORT) await fs.rm(SOCKET_PATH, { force: true });
 
   const server = http.createServer((request, response) => void handleRequest(request, response));
   let shuttingDown = false;
   const removeSocket = async () => {
-    if (!process.env.BABYREADER_DEV_PORT && process.platform !== 'win32') {
+    if (!process.env.ZHENSHU_DEV_PORT && process.platform !== 'win32') {
       await fs.rm(SOCKET_PATH, { force: true }).catch(() => {});
     }
   };
@@ -2167,13 +2167,13 @@ async function start() {
   process.on('SIGINT', shutdown);
   server.on('close', () => void removeSocket());
 
-  if (process.env.BABYREADER_DEV_PORT) {
-    const port = Number(process.env.BABYREADER_DEV_PORT);
-    server.listen(port, '127.0.0.1', () => console.log(`BabyReader fnOS development server: http://127.0.0.1:${port}${APP_PREFIX}/`));
+  if (process.env.ZHENSHU_DEV_PORT) {
+    const port = Number(process.env.ZHENSHU_DEV_PORT);
+    server.listen(port, '127.0.0.1', () => console.log(`枕书 fnOS development server: http://127.0.0.1:${port}${APP_PREFIX}/`));
   } else {
     server.listen(SOCKET_PATH, async () => {
       await fs.chmod(SOCKET_PATH, 0o660).catch(() => {});
-      console.log(`BabyReader fnOS listening on ${SOCKET_PATH}`);
+      console.log(`枕书 fnOS listening on ${SOCKET_PATH}`);
     });
   }
 }

@@ -8,7 +8,7 @@ const test = require('node:test');
 const { getPdfReaderEnabled } = require('../app/server/pdf-feature-config');
 
 function temporaryConfigRoot(t) {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'babyreader-pdf-feature-'));
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'zhenshu-pdf-feature-'));
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));
   return root;
 }
@@ -28,7 +28,7 @@ test('a stale disabled setting from the removed fnOS switch is ignored', (t) => 
   assert.equal(getPdfReaderEnabled(root, undefined), true);
 });
 
-test('BABYREADER_PDF_ENABLED stays an operator kill switch', (t) => {
+test('ZHENSHU_PDF_ENABLED stays an operator kill switch', (t) => {
   const root = temporaryConfigRoot(t);
   for (const value of ['0', 'false', 'FALSE', ' no ', 'off']) {
     assert.equal(getPdfReaderEnabled(root, value), false, value);

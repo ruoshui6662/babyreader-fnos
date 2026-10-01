@@ -134,7 +134,7 @@ test('missing ambiguous location and forged or mismatched href never guess a cha
 });
 
 test('server resolves only the current book structure and rejects a client-forged chapter path', { skip: !isFtsAvailable() }, async (t) => {
-  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'babyreader-ai-chapter-scope-'));
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'zhenshu-ai-chapter-scope-'));
   t.after(() => fs.rm(root, { recursive: true, force: true }));
   const bookPath = path.join(root, 'book.epub');
   const bookFiles = filesForChapters({

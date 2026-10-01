@@ -3,7 +3,7 @@
 
 All four fonts are SIL OFL 1.1 without Reserved Font Names, so subsetting and
 converting them to woff2 under their original family names is permitted, and
-they may be redistributed with BabyReader (including commercially). Each
+they may be redistributed with 枕书 (including commercially). Each
 family keeps its license file next to its files.
 
 Sources (staged with npm/curl into STAGING; nothing is fetched here):

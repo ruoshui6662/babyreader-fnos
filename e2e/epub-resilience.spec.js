@@ -3,7 +3,7 @@
 const { test, expect } = require('@playwright/test');
 
 test('oversized EPUB resources do not block the first page in double-page mode', async ({ page }) => {
-  await page.goto('/app/babyreader-fnos/');
+  await page.goto('/app/zhenshu/');
   await expect(page.locator('.library-view h1')).toHaveText('书库');
 
   await page.locator('.library-book').filter({ hasText: 'E2E Stress EPUB' }).click();
@@ -36,7 +36,7 @@ test('reused EPUB images survive many chapter references and are revoked when th
       return revoke(url);
     };
   });
-  await page.goto('/app/babyreader-fnos/');
+  await page.goto('/app/zhenshu/');
   await expect(page.locator('.library-view h1')).toHaveText('书库');
   await page.locator('.library-book').filter({ hasText: 'E2E Repeated Image EPUB' }).click();
 

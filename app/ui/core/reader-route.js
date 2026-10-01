@@ -1,4 +1,4 @@
-/* BabyReader UI module: core/reader-route */
+/* 枕书 UI module: core/reader-route */
 
 'use strict';
 

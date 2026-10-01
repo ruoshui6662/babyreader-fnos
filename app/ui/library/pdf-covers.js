@@ -1,7 +1,7 @@
 /* PDF covers are derived lazily in the browser; scanning never renders PDF pages. */
 'use strict';
 
-const PDF_COVER_ASSET_ROOT = '/app/babyreader-fnos/vendor/pdfjs/';
+const PDF_COVER_ASSET_ROOT = '/app/zhenshu/vendor/pdfjs/';
 const PDF_COVER_EDGE_LIMIT = 384;
 const PDF_COVER_PIXEL_LIMIT = 160000;
 const PDF_COVER_CACHE_LIMIT = 32;
@@ -27,7 +27,7 @@ async function renderPdfLibraryCover(book) {
   const pdfjs = await pdfCoverApiPromise;
   pdfjs.GlobalWorkerOptions.workerSrc = `${PDF_COVER_ASSET_ROOT}build/pdf.worker.mjs`;
   const loadingTask = pdfjs.getDocument({
-    url: `/app/babyreader-fnos/api/books/${encodeURIComponent(book.id)}/content`,
+    url: `/app/zhenshu/api/books/${encodeURIComponent(book.id)}/content`,
     rangeChunkSize: 64 * 1024,
     disableAutoFetch: true,
     disableStream: true,

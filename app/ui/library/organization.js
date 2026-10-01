@@ -1,4 +1,4 @@
-/* BabyReader UI module: library/organization */
+/* 枕书 UI module: library/organization */
 
 'use strict';
 

@@ -1,4 +1,4 @@
-/* BabyReader UI module: reader/notes-panel */
+/* 枕书 UI module: reader/notes-panel */
 
 'use strict';
 
@@ -439,7 +439,7 @@ function setupNotesPanel() {
   renderNotesPanel();
 }
 
-window.__babyReaderNotesPanelApi = {
+window.__zhenshuNotesPanelApi = {
   renderNotesPanel,
   setNotesPanelFilter,
   setNotesPanelSort,

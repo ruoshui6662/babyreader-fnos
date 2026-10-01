@@ -11,7 +11,7 @@ const {
 const BOOK_ID = 'a'.repeat(64);
 
 test('reader book URL survives a browser refresh and clears when returning to the library', () => {
-  const start = new URL('http://localhost/app/babyreader-fnos/');
+  const start = new URL('http://localhost/app/zhenshu/');
   const readerUrl = setReaderBookId(BOOK_ID, start);
 
   assert.equal(getReaderBookId(readerUrl), BOOK_ID);
@@ -19,11 +19,11 @@ test('reader book URL survives a browser refresh and clears when returning to th
 
   const libraryUrl = clearReaderBookId(readerUrl);
   assert.equal(getReaderBookId(libraryUrl), null);
-  assert.equal(libraryUrl.pathname, '/app/babyreader-fnos/');
+  assert.equal(libraryUrl.pathname, '/app/zhenshu/');
 });
 
 test('reader book URL rejects malformed or unsafe book IDs', () => {
-  const start = new URL('http://localhost/app/babyreader-fnos/?book=not-a-book');
+  const start = new URL('http://localhost/app/zhenshu/?book=not-a-book');
   assert.equal(getReaderBookId(start), null);
   assert.throws(() => setReaderBookId('../escape', start), /Invalid reader book ID/);
 });

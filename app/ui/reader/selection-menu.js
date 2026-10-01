@@ -1,4 +1,4 @@
-/* BabyReader UI module: reader/selection-menu */
+/* 枕书 UI module: reader/selection-menu */
 
 'use strict';
 
@@ -378,7 +378,7 @@ function setupSelectionMenu() {
 
 // Kept as a narrow test/integration seam; the application uses the functions
 // directly through the browser global lexical scope.
-window.__babyReaderSelectionMenuApi = {
+window.__zhenshuSelectionMenuApi = {
   captureSelectionSession,
   openSelectionMenu,
   setupSelectionMenu,

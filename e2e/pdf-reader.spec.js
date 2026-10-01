@@ -4,7 +4,7 @@ const { test, expect } = require('@playwright/test');
 const fs = require('node:fs/promises');
 const { waitForBookmarkRequest, waitForProgressSave } = require('./helpers/reader');
 
-const APP_PATH = '/app/babyreader-fnos/';
+const APP_PATH = '/app/zhenshu/';
 
 test('PDF AI panel searches the whole searchable paper by default and keeps trusted citation navigation', async ({ page }) => {
   await page.setViewportSize({ width: 430, height: 850 });
@@ -103,7 +103,7 @@ test('restored PDF AI citation marked stale cannot navigate to a changed page', 
   await expect(page.locator('#pdfReaderSurface')).toHaveAttribute('data-current-page', '2');
   await page.evaluate(() => {
     document.getElementById('aiInitialAnswerCard').hidden = false;
-    window.__babyReaderAiApi.renderAiSources([
+    window.__zhenshuAiApi.renderAiSources([
       { citationIndex: 1, chapterIndex: 0, chapterLabel: '第1页', stale: true }
     ], document.getElementById('aiSources'), '旧回答【1】');
   });

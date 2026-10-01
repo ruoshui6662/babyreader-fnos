@@ -1,6 +1,8 @@
-# BabyReader for fnOS
+# 枕书
 
-BabyReader 的飞牛 fnOS FPK 改造工程。保留原项目的 Web 阅读界面，使用 Node.js 后端和 fnOS 统一网关提供书库扫描、内容读取、阅读进度及划线持久化能力。
+枕书是运行在飞牛 fnOS 上的私人书房：阅读 EPUB、PDF、MOBI/AZW3、Markdown 和 TXT，支持划线与笔记、全文搜索、AI 问书，并在多台设备间同步阅读进度。
+
+本项目最初基于 macOS 阅读器 [BabyReader](https://github.com/KingJing1/babyreader)（作者 一龙小包子，MIT 许可）改造而来，现已大幅重写为面向 fnOS 的 Web 应用，详见下方“致谢”。
 
 > 项目全貌、进度与待办见 [docs/PROJECT_STATUS.md](docs/PROJECT_STATUS.md)；分支、提交与发布约定见 [CONTRIBUTING.md](CONTRIBUTING.md)。
 
@@ -8,7 +10,7 @@ BabyReader 的飞牛 fnOS FPK 改造工程。保留原项目的 Web 阅读界面
 
 固定版本记录在 `UPSTREAM_BASELINES`：
 
-- BabyReader: `bf4a7271c89cde034485e237e5bfa80d933edfb4`
+- BabyReader（原项目）: `bf4a7271c89cde034485e237e5bfa80d933edfb4`
 - fnnas-docs: `a8a70503b5b3413f0a00f4b6db6cd62066639508`
 
 ## 功能
@@ -28,7 +30,7 @@ BabyReader 的飞牛 fnOS FPK 改造工程。保留原项目的 Web 阅读界面
 开发、CI 与 fnOS 运行统一使用 Node.js 22。
 
 ```bash
-cd D:/AI编程/reader/babyreader-fnos
+cd D:/AI编程/reader/zhenshu
 npm ci
 ```
 
@@ -43,18 +45,18 @@ printf '%s\n' '{"libraryRoots":["D:/Books"]}' > .runtime/etc/settings.json
 
 ```bash
 NODE_ENV=development \
-BABYREADER_DEV_PORT=8099 \
-BABYREADER_DEV_UID=development \
+ZHENSHU_DEV_PORT=8099 \
+ZHENSHU_DEV_UID=development \
 node app/server/index.js
 ```
 
 浏览器访问：
 
 ```text
-http://127.0.0.1:8099/app/babyreader-fnos/
+http://127.0.0.1:8099/app/zhenshu/
 ```
 
-开发模式仅在缺少 fnOS 网关 Header 时使用 `BABYREADER_DEV_UID`。生产模式必须从统一网关读取 `X-Trim-Userid`、`X-Trim-Username` 和 `X-Trim-Isadmin`，不能信任客户端提交的用户 ID。
+开发模式仅在缺少 fnOS 网关 Header 时使用 `ZHENSHU_DEV_UID`。生产模式必须从统一网关读取 `X-Trim-Userid`、`X-Trim-Username` 和 `X-Trim-Isadmin`，不能信任客户端提交的用户 ID。
 
 ## 书库目录配置
 
@@ -99,7 +101,7 @@ npm run test:e2e
 统一网关入口为：
 
 ```text
-/app/babyreader-fnos
+/app/zhenshu
 ```
 
 服务监听：
@@ -129,7 +131,7 @@ fnpack --help
 然后运行：
 
 ```bash
-cd D:/AI编程/reader/babyreader-fnos
+cd D:/AI编程/reader/zhenshu
 npm test
 npm run check
 npm run build:fpk
@@ -163,7 +165,7 @@ dist-v1.2.0/build-provenance.json
 
 - FPK 安装、升级、卸载和数据保留行为
 - `cmd/main` 的启动、停止、重启及状态退出码
-- `/var/apps/babyreader-fnos/target/app.sock` 的权限和统一网关转发
+- `/var/apps/zhenshu/target/app.sock` 的权限和统一网关转发
 - 网关用户 Header 的真实名称、大小写和值格式
 - fnOS 授权目录如何同步到 `${TRIM_PKGETC}/settings.json`
 - 包用户对授权目录及 `data-share` 目录的 ACL 访问
@@ -171,3 +173,18 @@ dist-v1.2.0/build-provenance.json
 - 大型及异常 EPUB 在真实 NAS 内存限制下的表现
 - x86 和 ARM 设备上的 Node.js 运行时兼容性
 - fnOS 桌面 url 入口下的 CSP、下载和 EPUB 渲染行为
+
+## 致谢
+
+枕书站在这些开源项目的肩膀上：
+
+- [BabyReader](https://github.com/KingJing1/babyreader)（一龙小包子，MIT）：本项目的起点，最初的阅读界面与交互思路来自这里。
+- [PDF.js](https://github.com/mozilla/pdf.js)（Mozilla，Apache-2.0）：PDF 渲染与文本解析。
+- [lingo-reader](https://github.com/hhk-png/lingo-reader)（MIT）：MOBI/AZW3 解析（已修补，见 `app/server/vendor/lingo-mobi/PATCHES.md`）。
+- 随包字体：思源宋体（Noto Serif SC）、霞鹜文楷、朱雀仿宋、Literata，均为 SIL OFL 1.1，详见 `docs/fonts-licensing.md`。
+- [飞牛 fnOS 开发文档](https://github.com/ckcoding/fnnas-docs)。
+
+## 许可
+
+MIT，见 [LICENSE](LICENSE)。按 MIT 要求，原项目 BabyReader 的版权声明保留在其中。
+

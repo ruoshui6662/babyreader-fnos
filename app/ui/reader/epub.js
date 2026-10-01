@@ -1,4 +1,4 @@
-/* BabyReader UI module: reader/epub */
+/* 枕书 UI module: reader/epub */
 
 'use strict';
 
@@ -699,10 +699,10 @@ function applyThemeToEpubFrames() {
     try {
       const doc = iframe.contentDocument;
       if (!doc) return;
-      let style = doc.getElementById('babyreader-epub-theme');
+      let style = doc.getElementById('zhenshu-epub-theme');
       if (!style) {
         style = doc.createElement('style');
-        style.id = 'babyreader-epub-theme';
+        style.id = 'zhenshu-epub-theme';
         (doc.head || doc.documentElement || doc.body)?.appendChild(style);
       }
       style.textContent = getEpubThemeCss();
@@ -735,8 +735,8 @@ function bindCurrentEpubContents() {
 
 function applyEpubTheme() {
   if (!state.epubRendition) return;
-  state.epubRendition.themes.register('babyreader', getEpubThemeCss());
-  state.epubRendition.themes.select('babyreader');
+  state.epubRendition.themes.register('zhenshu', getEpubThemeCss());
+  state.epubRendition.themes.select('zhenshu');
   requestAnimationFrame(applyThemeToEpubFrames);
 }
 
@@ -776,7 +776,7 @@ function applyTheme(theme, persist = true) {
   }
 
   if (persist) {
-    localStorage.setItem('babyreader-theme', state.theme);
+    localStorage.setItem('zhenshu-theme', state.theme);
   }
 
   applyEpubTheme();

@@ -7,7 +7,7 @@
 const { test, expect } = require('@playwright/test');
 const { resetEpubFixtureState, resetReaderSettings, selectArticleText } = require('./helpers/reader');
 
-const APP_PATH = '/app/babyreader-fnos/';
+const APP_PATH = '/app/zhenshu/';
 // Compared by ID: labels change with state (e.g. a bookmarked page).
 const RAIL = ['btnToc', 'btnSearch', 'btnBookmarks', 'btnNotes', 'btnAi', 'btnSettings'];
 
@@ -20,7 +20,7 @@ test.beforeEach(async ({ page }) => {
   // lands asynchronously once its outline (or page list) is ready. These
   // tests drive the panel themselves.
   await page.evaluate(async () => {
-    const response = await fetch('/app/babyreader-fnos/api/settings', {
+    const response = await fetch('/app/zhenshu/api/settings', {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ tocAutoOpen: false })
@@ -72,7 +72,7 @@ test('a PDF without an outline lists its pages as contents and jumps to them', a
 
 test('the top bar shows one whole-book position and pages left sit on the paper', async ({ page }) => {
   await page.evaluate(async () => {
-    const response = await fetch('/app/babyreader-fnos/api/settings', {
+    const response = await fetch('/app/zhenshu/api/settings', {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ readingMode: 'double', continuousScroll: false })
@@ -94,7 +94,7 @@ test('the top bar shows one whole-book position and pages left sit on the paper'
 
 test('返回原处 brings the reader back after a contents jump', async ({ page }) => {
   await page.evaluate(async () => {
-    const response = await fetch('/app/babyreader-fnos/api/settings', {
+    const response = await fetch('/app/zhenshu/api/settings', {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ readingMode: 'double', continuousScroll: false })

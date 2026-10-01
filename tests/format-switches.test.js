@@ -15,7 +15,7 @@ const switches = [
 
 for (const [name, isEnabled, fileName] of switches) {
   test(`${name} is on by default and ignores a stale disabled setting`, (t) => {
-    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'babyreader-format-switch-'));
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'zhenshu-format-switch-'));
     t.after(() => fs.rmSync(root, { recursive: true, force: true }));
     assert.equal(isEnabled(root, undefined), true);
     assert.equal(isEnabled(root, ''), true);

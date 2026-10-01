@@ -1,4 +1,4 @@
-/* BabyReader UI module: reader/lifecycle */
+/* 枕书 UI module: reader/lifecycle */
 
 'use strict';
 

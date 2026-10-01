@@ -3,7 +3,7 @@
 const { test, expect } = require('@playwright/test');
 const { resetEpubFixtureState, resetReaderSettings } = require('./helpers/reader');
 
-const APP_PATH = '/app/babyreader-fnos/';
+const APP_PATH = '/app/zhenshu/';
 
 async function openFixtureBook(page) {
   await page.goto(APP_PATH);
@@ -44,32 +44,32 @@ test('loads split UI modules in Chromium and opens a real library book', async (
   );
 
   for (const modulePath of [
-    '/app/babyreader-fnos/core/state.js',
-    '/app/babyreader-fnos/core/utils.js',
-    '/app/babyreader-fnos/core/api.js',
-    '/app/babyreader-fnos/core/user-state.js',
-    '/app/babyreader-fnos/reader/annotations.js',
-    '/app/babyreader-fnos/reader/device-profile.js',
-    '/app/babyreader-fnos/reader/epub.js',
-    '/app/babyreader-fnos/reader/document.js',
-    '/app/babyreader-fnos/reader/editor.js',
-    '/app/babyreader-fnos/reader/highlights.js',
-    '/app/babyreader-fnos/reader/selection-menu.js',
-    '/app/babyreader-fnos/reader/notes-panel.js',
-    '/app/babyreader-fnos/reader/ai.js',
-    '/app/babyreader-fnos/reader/actions.js',
-    '/app/babyreader-fnos/reader/progress.js',
-    '/app/babyreader-fnos/reader/bookmarks.js',
-    '/app/babyreader-fnos/reader/pagination.js',
-    '/app/babyreader-fnos/reader/settings.js',
-    '/app/babyreader-fnos/reader/navigation.js',
-    '/app/babyreader-fnos/reader/pdf-annotation-geometry.js',
-    '/app/babyreader-fnos/reader/pdf-annotations.js',
-    '/app/babyreader-fnos/reader/lifecycle.js',
-    '/app/babyreader-fnos/reader/search.js',
-    '/app/babyreader-fnos/shell/drawer.js',
-    '/app/babyreader-fnos/library/view.js',
-    '/app/babyreader-fnos/app.js'
+    '/app/zhenshu/core/state.js',
+    '/app/zhenshu/core/utils.js',
+    '/app/zhenshu/core/api.js',
+    '/app/zhenshu/core/user-state.js',
+    '/app/zhenshu/reader/annotations.js',
+    '/app/zhenshu/reader/device-profile.js',
+    '/app/zhenshu/reader/epub.js',
+    '/app/zhenshu/reader/document.js',
+    '/app/zhenshu/reader/editor.js',
+    '/app/zhenshu/reader/highlights.js',
+    '/app/zhenshu/reader/selection-menu.js',
+    '/app/zhenshu/reader/notes-panel.js',
+    '/app/zhenshu/reader/ai.js',
+    '/app/zhenshu/reader/actions.js',
+    '/app/zhenshu/reader/progress.js',
+    '/app/zhenshu/reader/bookmarks.js',
+    '/app/zhenshu/reader/pagination.js',
+    '/app/zhenshu/reader/settings.js',
+    '/app/zhenshu/reader/navigation.js',
+    '/app/zhenshu/reader/pdf-annotation-geometry.js',
+    '/app/zhenshu/reader/pdf-annotations.js',
+    '/app/zhenshu/reader/lifecycle.js',
+    '/app/zhenshu/reader/search.js',
+    '/app/zhenshu/shell/drawer.js',
+    '/app/zhenshu/library/view.js',
+    '/app/zhenshu/app.js'
   ]) {
     expect(loadedScripts).toContain(modulePath);
   }
@@ -342,7 +342,7 @@ test('library card metadata stays compact and still opens a selected book', asyn
 
 test('switching EPUB to continuous scroll mounts chapter HTML instead of object text', async ({ page }) => {
   await page.evaluate(async () => {
-    const response = await fetch('/app/babyreader-fnos/api/settings', {
+    const response = await fetch('/app/zhenshu/api/settings', {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ readingMode: 'double', continuousScroll: false })
@@ -367,7 +367,7 @@ test('switching EPUB to continuous scroll mounts chapter HTML instead of object 
 test('desktop continuous scroll runs text under the frosted top bar and hides it while reading forward', async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.evaluate(async () => {
-    const response = await fetch('/app/babyreader-fnos/api/settings', {
+    const response = await fetch('/app/zhenshu/api/settings', {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ readingMode: 'scroll', continuousScroll: true })
@@ -971,7 +971,7 @@ test('without the opt-in, opening a book shows the text instead of the contents 
   await page.goto(APP_PATH);
   // A stored legacy tocOpen:true (every older save wrote it) must not count.
   await page.evaluate(async () => {
-    const response = await fetch('/app/babyreader-fnos/api/settings', {
+    const response = await fetch('/app/zhenshu/api/settings', {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ tocOpen: true, tocAutoOpen: false })
@@ -1059,14 +1059,14 @@ test('reader shell has unique IDs, feature availability, and restores Drawer foc
 test('selected text opens book-grounded AI panel and sends bounded retrieval context', async ({ page }) => {
   await openEpubFixture(page);
   let askPayload = null;
-  await page.route('**/app/babyreader-fnos/api/ai/status', async (route) => {
+  await page.route('**/app/zhenshu/api/ai/status', async (route) => {
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
       body: JSON.stringify({ configured: true, provider: 'openai-compatible', model: 'test-model', retrieval: 'local-lexical-rag' })
     });
   });
-  await page.route('**/app/babyreader-fnos/api/books/*/ai/ask/stream', async (route) => {
+  await page.route('**/app/zhenshu/api/books/*/ai/ask/stream', async (route) => {
     askPayload = route.request().postDataJSON();
     await route.fulfill({
       status: 200,
@@ -1122,7 +1122,7 @@ test('AI panel keeps a temporary multi-turn transcript and sends completed histo
     await page.locator('#btnCloseSettings').click();
     await expect(page.locator('#readerDrawer')).toBeHidden();
   }
-  await page.route('**/app/babyreader-fnos/api/ai/status', async (route) => {
+  await page.route('**/app/zhenshu/api/ai/status', async (route) => {
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
@@ -1130,7 +1130,7 @@ test('AI panel keeps a temporary multi-turn transcript and sends completed histo
     });
   });
   const payloads = [];
-  await page.route('**/app/babyreader-fnos/api/books/*/ai/ask/stream', async (route) => {
+  await page.route('**/app/zhenshu/api/books/*/ai/ask/stream', async (route) => {
     payloads.push(route.request().postDataJSON());
     const answer = payloads.length === 1 ? '第一轮回答' : '第二轮回答';
     await route.fulfill({
@@ -1168,14 +1168,14 @@ test('AI conversation sheet lists summaries and keeps clear/delete actions scope
     { id: 'conversation-1', title: '当前会话', messageCount: 2, updatedAt: '2026-09-21T00:00:01.000Z' },
     { id: 'conversation-2', title: '待删除会话', messageCount: 2, updatedAt: '2026-09-20T00:00:01.000Z' }
   ];
-  await page.route('**/app/babyreader-fnos/api/ai/status', async (route) => {
+  await page.route('**/app/zhenshu/api/ai/status', async (route) => {
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
       body: JSON.stringify({ configured: true, provider: 'openai-compatible', model: 'test-model' })
     });
   });
-  await page.route(/\/app\/babyreader-fnos\/api\/books\/[^/]+\/ai\/conversations(?:\/.*)?$/, async (route) => {
+  await page.route(/\/app\/zhenshu\/api\/books\/[^/]+\/ai\/conversations(?:\/.*)?$/, async (route) => {
     const request = route.request();
     const url = new URL(request.url());
     const parts = url.pathname.split('/');
@@ -1275,7 +1275,7 @@ test('AI streaming exposes a stop state and cancels the active request', async (
     await page.locator('#btnCloseSettings').click();
     await expect(page.locator('#readerDrawer')).toBeHidden();
   }
-  await page.route('**/app/babyreader-fnos/api/ai/status', async (route) => {
+  await page.route('**/app/zhenshu/api/ai/status', async (route) => {
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
@@ -1284,7 +1284,7 @@ test('AI streaming exposes a stop state and cancels the active request', async (
   });
   let releaseStream;
   const streamGate = new Promise((resolve) => { releaseStream = resolve; });
-  await page.route('**/app/babyreader-fnos/api/books/*/ai/ask/stream', async (route) => {
+  await page.route('**/app/zhenshu/api/books/*/ai/ask/stream', async (route) => {
     await streamGate;
     await route.fulfill({
       status: 200,
@@ -1317,7 +1317,7 @@ test('direct AI opening hides the selection hint and fills common questions into
     await page.locator('#btnCloseSettings').click();
     await expect(page.locator('#readerDrawer')).toBeHidden();
   }
-  await page.route('**/app/babyreader-fnos/api/ai/status', async (route) => {
+  await page.route('**/app/zhenshu/api/ai/status', async (route) => {
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
@@ -1347,7 +1347,7 @@ test('direct AI opening hides the selection hint and fills common questions into
 
 test('AI panel follows dark, light, and sepia application themes', async ({ page }) => {
   await openEpubFixture(page);
-  await page.route('**/app/babyreader-fnos/api/ai/status', async (route) => {
+  await page.route('**/app/zhenshu/api/ai/status', async (route) => {
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
@@ -1402,14 +1402,14 @@ test('AI composer sends on Enter, keeps Shift+Enter for newline, and uses an SVG
   let askCount = 0;
   let releaseAsk;
   const askGate = new Promise((resolve) => { releaseAsk = resolve; });
-  await page.route('**/app/babyreader-fnos/api/ai/status', async (route) => {
+  await page.route('**/app/zhenshu/api/ai/status', async (route) => {
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
       body: JSON.stringify({ configured: true, provider: 'openai-compatible', model: 'test-model', retrieval: 'local-lexical-rag' })
     });
   });
-  await page.route('**/app/babyreader-fnos/api/books/*/ai/ask/stream', async (route) => {
+  await page.route('**/app/zhenshu/api/books/*/ai/ask/stream', async (route) => {
     askCount += 1;
     await askGate;
     await route.fulfill({
@@ -1468,14 +1468,14 @@ test('AI modal keeps configuration separate and saves endpoint/model without ret
     await page.locator('#btnCloseSettings').click();
     await expect(page.locator('#readerDrawer')).toBeHidden();
   }
-  await page.route('**/app/babyreader-fnos/api/ai/status', async (route) => {
+  await page.route('**/app/zhenshu/api/ai/status', async (route) => {
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
       body: JSON.stringify({ configured: false, provider: 'openai-compatible', model: null, baseUrl: 'https://api.openai.com/v1', hasApiKey: false, retrieval: 'local-lexical-rag' })
     });
   });
-  await page.route('**/app/babyreader-fnos/api/ai/config', async (route) => {
+  await page.route('**/app/zhenshu/api/ai/config', async (route) => {
     if (route.request().method() === 'GET') {
       await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ configured: false, provider: 'openai-compatible', model: 'gpt-5.5', baseUrl: 'https://api.openai.com/v1', hasApiKey: false, retrieval: 'local-lexical-rag' }) });
       return;
@@ -1484,7 +1484,7 @@ test('AI modal keeps configuration separate and saves endpoint/model without ret
     expect(payload.apiKey).toBe('test-secret');
     await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ configured: true, provider: 'openai-compatible', model: payload.model, baseUrl: payload.baseUrl, hasApiKey: true, retrieval: 'local-lexical-rag' }) });
   });
-  await page.route('**/app/babyreader-fnos/api/ai/test-connection', async (route) => {
+  await page.route('**/app/zhenshu/api/ai/test-connection', async (route) => {
     const payload = route.request().postDataJSON();
     expect(payload.apiKey).toBe('test-secret');
     expect(payload).not.toHaveProperty('context');
@@ -1517,14 +1517,14 @@ test('AI key clear uses a unified secondary button and only persists after savin
     await page.locator('#btnCloseSettings').click();
     await expect(page.locator('#readerDrawer')).toBeHidden();
   }
-  await page.route('**/app/babyreader-fnos/api/ai/status', async (route) => {
+  await page.route('**/app/zhenshu/api/ai/status', async (route) => {
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
       body: JSON.stringify({ configured: true, provider: 'openai-compatible', model: 'reader-model', baseUrl: 'https://api.example/v1', hasApiKey: true, retrieval: 'local-lexical-rag' })
     });
   });
-  await page.route('**/app/babyreader-fnos/api/ai/config', async (route) => {
+  await page.route('**/app/zhenshu/api/ai/config', async (route) => {
     if (route.request().method() === 'GET') {
       await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ configured: true, provider: 'openai-compatible', model: 'reader-model', baseUrl: 'https://api.example/v1', hasApiKey: true, retrieval: 'local-lexical-rag' }) });
       return;

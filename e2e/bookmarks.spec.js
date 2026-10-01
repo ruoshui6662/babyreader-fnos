@@ -10,7 +10,7 @@ const {
   waitForSettingsSave
 } = require('./helpers/reader');
 
-const APP_PATH = '/app/babyreader-fnos/';
+const APP_PATH = '/app/zhenshu/';
 
 async function closeDefaultDrawer(page) {
   if (await page.locator('#readerDrawer').isVisible()) {

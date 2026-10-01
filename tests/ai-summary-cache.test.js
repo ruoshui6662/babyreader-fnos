@@ -81,7 +81,7 @@ test('failed, cancelled, or empty summary builds are never written and can be re
 test('SQLite cache partitions users and invalidates on fingerprint changes; index deletion removes its summaries', {
   skip: !isFtsAvailable()
 }, async (t) => {
-  const dataRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'babyreader-summary-cache-'));
+  const dataRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'zhenshu-summary-cache-'));
   t.after(() => fs.rm(dataRoot, { recursive: true, force: true }));
   const bookPath = path.join(dataRoot, 'cache-book.txt');
   await fs.writeFile(bookPath, '章节摘要缓存生命周期测试内容。', 'utf8');

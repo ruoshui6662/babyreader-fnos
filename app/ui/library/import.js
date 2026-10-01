@@ -1,4 +1,4 @@
-/* BabyReader UI module: library/import (admin book import, MOBI/import plan Task 5) */
+/* 枕书 UI module: library/import (admin book import, MOBI/import plan Task 5) */
 
 'use strict';
 

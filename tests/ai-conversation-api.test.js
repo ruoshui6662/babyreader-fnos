@@ -7,7 +7,7 @@ const os = require('node:os');
 const path = require('node:path');
 const test = require('node:test');
 
-const SANDBOX = path.join(os.tmpdir(), 'babyreader-ai-conversation-api-' + process.pid);
+const SANDBOX = path.join(os.tmpdir(), 'zhenshu-ai-conversation-api-' + process.pid);
 const DATA_ROOT = path.join(SANDBOX, 'var');
 const CONFIG_ROOT = path.join(SANDBOX, 'etc');
 const LIBRARY_ROOT = path.join(SANDBOX, 'library');
@@ -119,7 +119,7 @@ function userHeaders(uid) {
   return { 'x-trim-userid': uid, 'x-trim-username': uid };
 }
 
-const conversationPath = (bookId) => `/app/babyreader-fnos/api/books/${bookId}/ai/conversations`;
+const conversationPath = (bookId) => `/app/zhenshu/api/books/${bookId}/ai/conversations`;
 
 test.before(async () => {
   await fs.rm(SANDBOX, { recursive: true, force: true });
@@ -261,7 +261,7 @@ test('completed stream answers persist one user turn and one assistant turn befo
   const created = await jsonRequest(conversationPath(BOOK_ID), {}, { headers });
   const conversationId = created.body.id;
   const storage = createAiConversationStorage({ dataRoot: DATA_ROOT });
-  const streamPath = `/app/babyreader-fnos/api/books/${BOOK_ID}/ai/ask/stream`;
+  const streamPath = `/app/zhenshu/api/books/${BOOK_ID}/ai/ask/stream`;
   const successful = await withUpstreamFetch(
     async () => streamResponse([
       'data: {"type":"response.output_text.delta","delta":"完整"}\n\n',
@@ -287,7 +287,7 @@ test('completed stream answers persist one user turn and one assistant turn befo
 
 test('legacy stream requests without conversationId keep the existing response contract', async () => {
   const headers = userHeaders('legacy-stream-user');
-  const streamPath = `/app/babyreader-fnos/api/books/${BOOK_ID}/ai/ask/stream`;
+  const streamPath = `/app/zhenshu/api/books/${BOOK_ID}/ai/ask/stream`;
   const response = await withUpstreamFetch(
     async () => streamResponse([
       'data: {"type":"response.output_text.delta","delta":"旧请求回答"}\n\n',
@@ -305,10 +305,10 @@ test('legacy stream requests without conversationId keep the existing response c
 
 test('EPUB stream baseline provider payload contains no PDF structure fields', async () => {
   const headers = userHeaders('epub-isolation-baseline');
-  const streamPath = `/app/babyreader-fnos/api/books/${BOOK_ID}/ai/ask/stream`;
+  const streamPath = `/app/zhenshu/api/books/${BOOK_ID}/ai/ask/stream`;
   let outbound;
-  const originalFlag = process.env.BABYREADER_ENABLE_PDF_AI_STRUCTURE;
-  delete process.env.BABYREADER_ENABLE_PDF_AI_STRUCTURE;
+  const originalFlag = process.env.ZHENSHU_ENABLE_PDF_AI_STRUCTURE;
+  delete process.env.ZHENSHU_ENABLE_PDF_AI_STRUCTURE;
   try {
     const response = await withUpstreamFetch(
       async (_url, options) => {
@@ -324,32 +324,32 @@ test('EPUB stream baseline provider payload contains no PDF structure fields', a
     assert.ok(outbound);
     assert.doesNotMatch(JSON.stringify(outbound), /paperProfile|retrievalMode|structureCoverage/);
   } finally {
-    if (originalFlag === undefined) delete process.env.BABYREADER_ENABLE_PDF_AI_STRUCTURE;
-    else process.env.BABYREADER_ENABLE_PDF_AI_STRUCTURE = originalFlag;
+    if (originalFlag === undefined) delete process.env.ZHENSHU_ENABLE_PDF_AI_STRUCTURE;
+    else process.env.ZHENSHU_ENABLE_PDF_AI_STRUCTURE = originalFlag;
   }
 });
 
 test('chapter-summary strategy is opt-in and empty context is accepted only behind that flag', async () => {
   const headers = userHeaders('summary-flag-user');
-  const streamPath = `/app/babyreader-fnos/api/books/${BOOK_ID}/ai/ask/stream`;
-  const original = process.env.BABYREADER_ENABLE_AI_CHAPTER_UNDERSTANDING;
+  const streamPath = `/app/zhenshu/api/books/${BOOK_ID}/ai/ask/stream`;
+  const original = process.env.ZHENSHU_ENABLE_AI_CHAPTER_UNDERSTANDING;
   try {
-    delete process.env.BABYREADER_ENABLE_AI_CHAPTER_UNDERSTANDING;
+    delete process.env.ZHENSHU_ENABLE_AI_CHAPTER_UNDERSTANDING;
     const disabled = await streamRequest(streamPath, streamBody(null, {
       question: '总结这本书的主要观点', context: []
     }), { headers });
     assert.equal(disabled.status, 400);
     assert.match(JSON.parse(disabled.text).error, /书本上下文无效|缺少书本上下文/);
 
-    process.env.BABYREADER_ENABLE_AI_CHAPTER_UNDERSTANDING = '1';
+    process.env.ZHENSHU_ENABLE_AI_CHAPTER_UNDERSTANDING = '1';
     const enabled = await streamRequest(streamPath, streamBody(null, {
       question: '总结这本书的主要观点', context: []
     }), { headers });
     assert.equal(enabled.status, 409);
     assert.match(JSON.parse(enabled.text).error, /目录/);
   } finally {
-    if (original === undefined) delete process.env.BABYREADER_ENABLE_AI_CHAPTER_UNDERSTANDING;
-    else process.env.BABYREADER_ENABLE_AI_CHAPTER_UNDERSTANDING = original;
+    if (original === undefined) delete process.env.ZHENSHU_ENABLE_AI_CHAPTER_UNDERSTANDING;
+    else process.env.ZHENSHU_ENABLE_AI_CHAPTER_UNDERSTANDING = original;
   }
 });
 
@@ -387,7 +387,7 @@ test('stream abort, upstream error, and empty answer do not persist assistant me
     const response = await withUpstreamFetch(
       item.handler,
       () => streamRequest(
-        `/app/babyreader-fnos/api/books/${BOOK_ID}/ai/ask/stream`,
+        `/app/zhenshu/api/books/${BOOK_ID}/ai/ask/stream`,
         streamBody(created.body.id),
         { headers }
       )
@@ -410,7 +410,7 @@ test('invalid book context is rejected before upstream access and persistence', 
       return streamResponse([]);
     },
     () => streamRequest(
-      `/app/babyreader-fnos/api/books/${BOOK_ID}/ai/ask/stream`,
+      `/app/zhenshu/api/books/${BOOK_ID}/ai/ask/stream`,
       streamBody(created.body.id, {
         context: [{
           text: '不属于这本书的伪造内容',
@@ -439,7 +439,7 @@ test('persistence failure does not hide the completed answer and exposes only a 
       'data: {"type":"response.completed","response":{"id":"response-not-saved"}}\n\n'
     ]),
     () => streamRequest(
-      `/app/babyreader-fnos/api/books/${BOOK_ID}/ai/ask/stream`,
+      `/app/zhenshu/api/books/${BOOK_ID}/ai/ask/stream`,
       streamBody(created.body.id),
       { headers }
     )

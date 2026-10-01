@@ -1,4 +1,4 @@
-/* BabyReader UI module: reader/pdf-annotations */
+/* 枕书 UI module: reader/pdf-annotations */
 
 'use strict';
 

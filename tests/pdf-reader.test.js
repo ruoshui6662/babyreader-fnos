@@ -7,7 +7,7 @@ const test = require('node:test');
 
 async function createControllerHarness({ getDocument, onOutline, onPageChange, setupWindow } = {}) {
   const { Window } = await import('happy-dom');
-  const window = new Window({ url: 'http://localhost/app/babyreader-fnos/' });
+  const window = new Window({ url: 'http://localhost/app/zhenshu/' });
   window.HTMLCanvasElement.prototype.getContext = () => ({});
   setupWindow?.(window);
   const html = await fs.readFile(path.resolve(__dirname, '../app/ui/index.html'), 'utf8');
@@ -934,7 +934,7 @@ test('PDF page changes emit book and document generation for stale-save rejectio
 
 test('PDF API open passes the authorized same-origin URL without buffering the whole response', async () => {
   const { Window } = await import('happy-dom');
-  const window = new Window({ url: 'http://localhost/app/babyreader-fnos/' });
+  const window = new Window({ url: 'http://localhost/app/zhenshu/' });
   window.eval([
     await fs.readFile(path.resolve(__dirname, '../app/ui/core/state.js'), 'utf8'),
     await fs.readFile(path.resolve(__dirname, '../app/ui/core/api.js'), 'utf8')
@@ -953,7 +953,7 @@ test('PDF API open passes the authorized same-origin URL without buffering the w
 
   assert.equal(calls.length, 1);
   assert.equal(calls[0].type, 'pdf');
-  assert.equal(calls[0].contentUrl, '/app/babyreader-fnos/api/books/' + 'd'.repeat(64) + '/content');
+  assert.equal(calls[0].contentUrl, '/app/zhenshu/api/books/' + 'd'.repeat(64) + '/content');
   assert.equal(calls[0].content, undefined);
   assert.equal(calls[0].data, undefined);
 });

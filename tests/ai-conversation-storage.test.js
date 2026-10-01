@@ -13,7 +13,7 @@ const OTHER_BOOK_ID = 'b'.repeat(64);
 const USER_ID = 'reader_1';
 
 async function temporaryDirectory(t) {
-  const directory = await fs.mkdtemp(path.join(os.tmpdir(), 'babyreader-ai-conversations-'));
+  const directory = await fs.mkdtemp(path.join(os.tmpdir(), 'zhenshu-ai-conversations-'));
   t.after(() => fs.rm(directory, { recursive: true, force: true }));
   return directory;
 }

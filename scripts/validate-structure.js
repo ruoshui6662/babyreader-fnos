@@ -146,13 +146,13 @@ for (const rawLine of readText('manifest').split('\n')) {
 }
 
 const expectedManifest = {
-  appname: 'babyreader-fnos',
+  appname: 'zhenshu',
   source: 'thirdparty',
   platform: 'all',
   install_dep_apps: 'nodejs_v22',
   os_min_version: '1.1.3100',
   desktop_uidir: 'ui',
-  desktop_applaunchname: 'babyreader-fnos.main',
+  desktop_applaunchname: 'zhenshu.main',
   ctl_stop: 'true',
   checkport: 'false',
   disable_authorization_path: 'false'
@@ -217,7 +217,7 @@ if (!mainSource.includes('SERVER_FILE="$APP_DEST/server/index.js"')) {
 if (mainSource.includes('SERVER_FILE="$APP_DEST/app/server/index.js"')) {
   errors.push('cmd/main must not prepend app/ because app.tgz is extracted directly into TRIM_APPDEST');
 }
-if (!mainSource.includes('BabyReader 服务文件不存在：$SERVER_FILE')) {
+if (!mainSource.includes('枕书 服务文件不存在：$SERVER_FILE')) {
   errors.push('cmd/main missing-path error must include the actual SERVER_FILE path');
 }
 for (const token of [
@@ -243,25 +243,25 @@ for (const token of [
 const uiConfig = readJson('app/ui/config');
 const privilege = readJson('config/privilege');
 const resource = readJson('config/resource');
-const entry = uiConfig?.['.url']?.['babyreader-fnos.main'];
+const entry = uiConfig?.['.url']?.['zhenshu.main'];
 
-if (!entry) errors.push('Missing babyreader-fnos.main UI entry');
+if (!entry) errors.push('Missing zhenshu.main UI entry');
 if (!['iframe', 'url'].includes(entry?.type)) errors.push('UI entry type must be iframe or url');
 if (entry?.protocol !== '') errors.push('Unified gateway protocol must be empty');
-if (entry?.gatewayPrefix !== '/app/babyreader-fnos') errors.push('Unexpected gatewayPrefix');
+if (entry?.gatewayPrefix !== '/app/zhenshu') errors.push('Unexpected gatewayPrefix');
 if (entry?.gatewaySocket !== 'app.sock') errors.push('Unexpected gatewaySocket');
-if (entry?.url !== '/app/babyreader-fnos/') errors.push('Unexpected gateway URL');
+if (entry?.url !== '/app/zhenshu/') errors.push('Unexpected gateway URL');
 if (entry?.allUsers !== true) errors.push('UI entry must enable allUsers');
 
 if (privilege?.defaults?.['run-as'] !== 'package') {
   errors.push('Application must run as a package user');
 }
-if (privilege?.username !== 'babyreader_fnos' || privilege?.groupname !== 'babyreader_fnos') {
-  errors.push('Package username and groupname must be babyreader_fnos');
+if (privilege?.username !== 'zhenshu' || privilege?.groupname !== 'zhenshu') {
+  errors.push('Package username and groupname must be zhenshu');
 }
 const shares = resource?.['data-share']?.shares;
-if (!Array.isArray(shares) || !shares.some((share) => share?.name === 'babyreader-fnos/library')) {
-  errors.push('config/resource must declare babyreader-fnos/library');
+if (!Array.isArray(shares) || !shares.some((share) => share?.name === 'zhenshu/library')) {
+  errors.push('config/resource must declare zhenshu/library');
 }
 
 for (const name of ['install', 'upgrade', 'uninstall', 'config']) {

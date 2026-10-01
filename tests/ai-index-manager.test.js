@@ -20,7 +20,7 @@ const ORPHAN_ID = 'b'.repeat(64);
 const MISSING_ID = 'c'.repeat(64);
 
 async function temporaryDirectory(t) {
-  const directory = await fs.mkdtemp(path.join(os.tmpdir(), 'babyreader-ai-index-manager-'));
+  const directory = await fs.mkdtemp(path.join(os.tmpdir(), 'zhenshu-ai-index-manager-'));
   t.after(() => fs.rm(directory, { recursive: true, force: true }));
   return directory;
 }

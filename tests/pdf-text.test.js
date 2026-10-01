@@ -8,7 +8,7 @@ const test = require('node:test');
 const { createCorruptPdfFixture, createPdfFixture } = require('./fixtures/pdf-fixtures');
 
 async function fixtureFile(t, name, bytes) {
-  const directory = await fs.mkdtemp(path.join(os.tmpdir(), 'babyreader-pdf-text-'));
+  const directory = await fs.mkdtemp(path.join(os.tmpdir(), 'zhenshu-pdf-text-'));
   t.after(() => fs.rm(directory, { recursive: true, force: true }));
   const filePath = path.join(directory, name);
   await fs.writeFile(filePath, bytes);

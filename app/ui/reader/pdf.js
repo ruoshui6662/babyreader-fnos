@@ -1,8 +1,8 @@
-/* BabyReader UI module: reader/pdf */
+/* 枕书 UI module: reader/pdf */
 
 'use strict';
 
-const PDFJS_ASSET_ROOT = '/app/babyreader-fnos/vendor/pdfjs/';
+const PDFJS_ASSET_ROOT = '/app/zhenshu/vendor/pdfjs/';
 const MAX_PDF_PAGE_COUNT = 10000;
 const MAX_CANVAS_PIXELS = 16000000;
 const MAX_CANVAS_EDGE = 8192;

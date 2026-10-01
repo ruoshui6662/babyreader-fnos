@@ -17,7 +17,7 @@ const {
 } = require('./fixtures/mobi-fixtures');
 const { scanLibrary } = require('../app/server/library');
 
-const SANDBOX = path.join(os.tmpdir(), `babyreader-mobi-library-${process.pid}`);
+const SANDBOX = path.join(os.tmpdir(), `zhenshu-mobi-library-${process.pid}`);
 const DATA_ROOT = path.join(SANDBOX, 'var');
 const CONFIG_ROOT = path.join(SANDBOX, 'etc');
 const LIBRARY_ROOT = path.join(SANDBOX, 'library');
@@ -27,8 +27,8 @@ process.env.TRIM_PKGETC = CONFIG_ROOT;
 process.env.TRIM_DATA_ACCESSIBLE_PATHS = '';
 process.env.TRIM_DATA_SHARE_PATHS = '';
 process.env.NODE_ENV = 'production';
-process.env.BABYREADER_ENABLE_LIBRARY_ORGANIZATION = '1';
-delete process.env.BABYREADER_MOBI_ENABLED;
+process.env.ZHENSHU_ENABLE_LIBRARY_ORGANIZATION = '1';
+delete process.env.ZHENSHU_MOBI_ENABLED;
 const { handleRequest, loadConfiguration } = require('../app/server/index');
 let server;
 let baseUrl;
@@ -48,7 +48,7 @@ async function makeLibrary(root, { mobi = true } = {}) {
 }
 
 async function temporaryDirectory(t) {
-  const directory = await fs.mkdtemp(path.join(os.tmpdir(), 'babyreader-mobi-scan-'));
+  const directory = await fs.mkdtemp(path.join(os.tmpdir(), 'zhenshu-mobi-scan-'));
   t.after(() => fs.rm(directory, { recursive: true, force: true }));
   return directory;
 }
@@ -127,7 +127,7 @@ test.describe('library API', () => {
     await loadConfiguration();
     server = http.createServer((request, response) => void handleRequest(request, response));
     await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
-    baseUrl = `http://127.0.0.1:${server.address().port}/app/babyreader-fnos`;
+    baseUrl = `http://127.0.0.1:${server.address().port}/app/zhenshu`;
   });
 
   test.after(async () => {
@@ -145,7 +145,7 @@ test.describe('library API', () => {
   }
 
   test('the MOBI kill switch hides Kindle books from library and organization, reported as a hidden count', async () => {
-    process.env.BABYREADER_MOBI_ENABLED = 'false';
+    process.env.ZHENSHU_MOBI_ENABLED = 'false';
     const library = await scan();
     assert.equal(library.features.mobiReader, false);
     assert.equal(library.features.hiddenMobiCount, 4);
@@ -156,7 +156,7 @@ test.describe('library API', () => {
   });
 
   test('MOBI is on by default after a rescan: listed as EPUB with its format, read and searched through the derived EPUB', async () => {
-    delete process.env.BABYREADER_MOBI_ENABLED;
+    delete process.env.ZHENSHU_MOBI_ENABLED;
     const library = await scan();
     assert.equal(library.features.mobiReader, true);
     assert.equal(library.features.hiddenMobiCount, 0);
@@ -203,7 +203,7 @@ test.describe('library API', () => {
   });
 
   test('switching MOBI off again hides indexed Kindle books and closes their endpoints', async () => {
-    process.env.BABYREADER_MOBI_ENABLED = 'false';
+    process.env.ZHENSHU_MOBI_ENABLED = 'false';
     const library = await (await fetch(`${baseUrl}/api/library`, { headers: READER })).json();
     assert.equal(library.books.some((book) => book.type === 'mobi'), false);
     assert.equal(library.features.hiddenMobiCount, 2, 'indexed readable Kindle books (not DRM or broken ones) are counted as hidden');

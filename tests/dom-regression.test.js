@@ -7,7 +7,7 @@ const test = require('node:test');
 
 async function createReaderDom() {
   const { Window } = await import('happy-dom');
-  const window = new Window({ url: 'http://localhost/app/babyreader-fnos/' });
+  const window = new Window({ url: 'http://localhost/app/zhenshu/' });
   const html = await fs.readFile(path.resolve(__dirname, '../app/ui/index.html'), 'utf8');
   const sourceFiles = [
     '../app/ui/core/state.js',
@@ -49,21 +49,21 @@ async function createReaderDom() {
   let source = (await Promise.all(
     sourceFiles.map((relative) => fs.readFile(path.resolve(__dirname, relative), 'utf8'))
   )).join('\n');
-  source += '\nwindow.__babyReaderPaginationApi = { updatePaginationControls };';
-  source += '\nwindow.__babyReaderChapterApi = { renderEpubChapter, navigateToEpubChapter, isEpubChapterLoading, updateReadingProgress, restoreTextScroll, navigateEpubTarget, setupTocNavigation };\nwindow.__babyReaderDeviceApi = { getReaderDeviceProfile, setMobileChromeOpen, setupReaderNavigation };';
-  source += '\nwindow.__babyReaderTypographyApi = { TYPOGRAPHY_SLIDER_CONFIG, nearestTypographyPreset, formatTypographySliderValue, setupTypographySlider, setupSettingsPanel, syncSettingsPanel, resetTypographySettings };';
-  source += '\nwindow.__babyReaderUserStateApi = { applyUserState, persistUserSettings, flushUserSettings, currentUserSettings };';
-  source += '\nwindow.__babyReaderActionsApi = { formatHighlightsMd, exportHighlights, handleKeyboardShortcut };';
-  source += '\nwindow.__babyReaderEditorApi = { openThoughtComposer, closeHighlightEditor };';
-  source += '\nwindow.__babyReaderEpubApi = { parseNavToc, parseNcxToc, destroyEpub };';
-  source += '\nwindow.__babyReaderPdfApi = { createPdfReaderController, pdfReaderController };';
+  source += '\nwindow.__zhenshuPaginationApi = { updatePaginationControls };';
+  source += '\nwindow.__zhenshuChapterApi = { renderEpubChapter, navigateToEpubChapter, isEpubChapterLoading, updateReadingProgress, restoreTextScroll, navigateEpubTarget, setupTocNavigation };\nwindow.__zhenshuDeviceApi = { getReaderDeviceProfile, setMobileChromeOpen, setupReaderNavigation };';
+  source += '\nwindow.__zhenshuTypographyApi = { TYPOGRAPHY_SLIDER_CONFIG, nearestTypographyPreset, formatTypographySliderValue, setupTypographySlider, setupSettingsPanel, syncSettingsPanel, resetTypographySettings };';
+  source += '\nwindow.__zhenshuUserStateApi = { applyUserState, persistUserSettings, flushUserSettings, currentUserSettings };';
+  source += '\nwindow.__zhenshuActionsApi = { formatHighlightsMd, exportHighlights, handleKeyboardShortcut };';
+  source += '\nwindow.__zhenshuEditorApi = { openThoughtComposer, closeHighlightEditor };';
+  source += '\nwindow.__zhenshuEpubApi = { parseNavToc, parseNcxToc, destroyEpub };';
+  source += '\nwindow.__zhenshuPdfApi = { createPdfReaderController, pdfReaderController };';
   source += '\nwindow.__pdfProgressTestHooks = { savePdfProgress, flushPdfProgressSave, saveTextScroll };';
-  source += '\nwindow.__babyReaderBookmarkApi = { getCurrentBookmarkLocator, isCurrentBookmark, toggleCurrentBookmark, jumpToBookmark, renderBookmarkButtonState, renderBookmarkList, deleteBookmarkFromList, refreshBookmarks };';
-  source += '\nwindow.__babyReaderSearchApi = { updateTopbarState, setupReaderSearch };';
-  source += '\nwindow.__babyReaderAiApi.pdfAiScopeInput = pdfAiScopeInput;';
-  source += '\nwindow.__babyReaderRouteApi = { restoreReaderFromLocation };';
-  source += '\nwindow.__babyReaderLibraryApi = { renderLibrary };';
-  source += '\nwindow.__babyReaderImportApi = { enqueueLibraryImports, libraryImportQueue };';
+  source += '\nwindow.__zhenshuBookmarkApi = { getCurrentBookmarkLocator, isCurrentBookmark, toggleCurrentBookmark, jumpToBookmark, renderBookmarkButtonState, renderBookmarkList, deleteBookmarkFromList, refreshBookmarks };';
+  source += '\nwindow.__zhenshuSearchApi = { updateTopbarState, setupReaderSearch };';
+  source += '\nwindow.__zhenshuAiApi.pdfAiScopeInput = pdfAiScopeInput;';
+  source += '\nwindow.__zhenshuRouteApi = { restoreReaderFromLocation };';
+  source += '\nwindow.__zhenshuLibraryApi = { renderLibrary };';
+  source += '\nwindow.__zhenshuImportApi = { enqueueLibraryImports, libraryImportQueue };';
   source += '\nwindow.__uxApi = { showHighlightHint, setupHighlightEditor, setupCustomSelect, syncCustomSelectValue, renderReaderSearchResults, ensureSelectionMenu, startReaderSession: typeof startReaderSession === "function" ? startReaderSession : null };';
 
   window.document.write(html.replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, ''));
@@ -89,61 +89,61 @@ async function createReaderDom() {
   window.JSZip = {};
   window.confirm = () => true;
 
-  window.eval(`${source}\nwindow.__babyReaderTest = {\n    state,\n    serializeDomRange,\n    rangeFromHighlight,\n    loadHighlights,\n    openHighlightEditor,\n    deleteActiveHighlight,\n    saveActiveHighlightEdits,\n    currentUserSettings,\n    applyZoom,\n    getEpubThemeCss,\n    debounce,\n    navigateChapter,\n    navigatePageGroup,\n    pageGroupForPage,\n    clampPageGroup,\n    pageLeftForGroup,\n    setPageGroup,\n    snapPaginationToNearestGroup,\n    pageNumberForElement,\n    navigateToSemanticTarget,\n    resolveEffectiveReadingMode,\n    createPaginationGeometry,\n    measurePagination,\n    setReadingMode,\n    currentReadingLocator,\n    restoreReadingLocator,\n    readerActions,\n    readerPanels,\n    openReaderPanel,\n    closeReaderPanel,\n    setupReaderActionMapping,\n    renderLibrary,\n    renderToc,\n    returnToLibrary\n  };`);
+  window.eval(`${source}\nwindow.__zhenshuTest = {\n    state,\n    serializeDomRange,\n    rangeFromHighlight,\n    loadHighlights,\n    openHighlightEditor,\n    deleteActiveHighlight,\n    saveActiveHighlightEdits,\n    currentUserSettings,\n    applyZoom,\n    getEpubThemeCss,\n    debounce,\n    navigateChapter,\n    navigatePageGroup,\n    pageGroupForPage,\n    clampPageGroup,\n    pageLeftForGroup,\n    setPageGroup,\n    snapPaginationToNearestGroup,\n    pageNumberForElement,\n    navigateToSemanticTarget,\n    resolveEffectiveReadingMode,\n    createPaginationGeometry,\n    measurePagination,\n    setReadingMode,\n    currentReadingLocator,\n    restoreReadingLocator,\n    readerActions,\n    readerPanels,\n    openReaderPanel,\n    closeReaderPanel,\n    setupReaderActionMapping,\n    renderLibrary,\n    renderToc,\n    returnToLibrary\n  };`);
 
-  window.__babyReaderTest.savePdfProgress = window.__pdfProgressTestHooks.savePdfProgress;
-  window.__babyReaderTest.flushPdfProgressSave = window.__pdfProgressTestHooks.flushPdfProgressSave;
-  window.__babyReaderTest.saveTextScroll = window.__pdfProgressTestHooks.saveTextScroll;
+  window.__zhenshuTest.savePdfProgress = window.__pdfProgressTestHooks.savePdfProgress;
+  window.__zhenshuTest.flushPdfProgressSave = window.__pdfProgressTestHooks.flushPdfProgressSave;
+  window.__zhenshuTest.saveTextScroll = window.__pdfProgressTestHooks.saveTextScroll;
   delete window.__pdfProgressTestHooks;
-  window.__babyReaderTest.updatePaginationControls = window.__babyReaderPaginationApi.updatePaginationControls;
-  window.__babyReaderTest.updateTopbarState = window.__babyReaderSearchApi.updateTopbarState;
-  window.__babyReaderTest.renderLibrary = window.__babyReaderLibraryApi.renderLibrary;
-  window.__babyReaderTest.restoreReaderFromLocation = window.__babyReaderRouteApi.restoreReaderFromLocation;
-  window.__babyReaderTest.setupReaderSearch = window.__babyReaderSearchApi.setupReaderSearch;
-  window.__babyReaderTest.readerSurfaceController = window.readerSurfaceController;
-  window.__babyReaderTest.readerSearchContract = window.readerSearchContract;
-  window.__babyReaderTest.buildReaderSearchUrl = window.buildReaderSearchUrl;
-  window.__babyReaderTest.navigateToSearchResult = window.readerSearchApi.navigateToSearchResult;
-  window.__babyReaderTest.formatHighlightsMd = window.__babyReaderActionsApi.formatHighlightsMd;
-  window.__babyReaderTest.exportHighlights = window.__babyReaderActionsApi.exportHighlights;
-  window.__babyReaderTest.handleKeyboardShortcut = window.__babyReaderActionsApi.handleKeyboardShortcut;
-  window.__babyReaderTest.openThoughtComposer = window.__babyReaderEditorApi.openThoughtComposer;
-  window.__babyReaderTest.closeHighlightEditor = window.__babyReaderEditorApi.closeHighlightEditor;
-  window.__babyReaderTest.typographyApi = window.__babyReaderTypographyApi;
-  window.__babyReaderTest.parseNavToc = window.__babyReaderEpubApi.parseNavToc;
-  window.__babyReaderTest.parseNcxToc = window.__babyReaderEpubApi.parseNcxToc;
-  window.__babyReaderTest.destroyEpub = window.__babyReaderEpubApi.destroyEpub;
-  window.__babyReaderTest.pdfApi = window.__babyReaderPdfApi;
-  window.__babyReaderTest.aiApi = window.__babyReaderAiApi;
-  window.__babyReaderTest.renderEpubChapter = window.__babyReaderChapterApi.renderEpubChapter;
-  window.__babyReaderTest.navigateToEpubChapter = window.__babyReaderChapterApi.navigateToEpubChapter;
-  window.__babyReaderTest.isEpubChapterLoading = window.__babyReaderChapterApi.isEpubChapterLoading;
-  window.__babyReaderTest.updateReadingProgress = window.__babyReaderChapterApi.updateReadingProgress;
-  window.__babyReaderTest.restoreTextScroll = window.__babyReaderChapterApi.restoreTextScroll;
-  window.__babyReaderTest.navigateEpubTarget = window.__babyReaderChapterApi.navigateEpubTarget;
-  window.__babyReaderTest.setupTocNavigation = window.__babyReaderChapterApi.setupTocNavigation;
-  window.__babyReaderTest.applyUserState = window.__babyReaderUserStateApi.applyUserState;
-  window.__babyReaderTest.userStateApi = window.__babyReaderUserStateApi;
-  window.__babyReaderTest.getReaderDeviceProfile = window.__babyReaderDeviceApi.getReaderDeviceProfile;
-  window.__babyReaderTest.setMobileChromeOpen = window.__babyReaderDeviceApi.setMobileChromeOpen;
-  window.__babyReaderTest.setupReaderNavigation = window.__babyReaderDeviceApi.setupReaderNavigation;
-  window.__babyReaderTest.captureSelectionSession = window.__babyReaderSelectionMenuApi.captureSelectionSession;
-  window.__babyReaderTest.openSelectionMenu = window.__babyReaderSelectionMenuApi.openSelectionMenu;
-  window.__babyReaderTest.setupSelectionMenu = window.__babyReaderSelectionMenuApi.setupSelectionMenu;
-  window.__babyReaderTest.showSelectionMenuForCurrentSelection = window.__babyReaderSelectionMenuApi.showSelectionMenuForCurrentSelection;
-  window.__babyReaderTest.closeSelectionMenu = window.__babyReaderSelectionMenuApi.closeSelectionMenu;
-  window.__babyReaderTest.renderNotesPanel = window.__babyReaderNotesPanelApi.renderNotesPanel;
-  window.__babyReaderTest.setupNotesPanel = window.__babyReaderNotesPanelApi.setupNotesPanel;
-  window.__babyReaderTest.navigateToAnnotation = window.__babyReaderNotesPanelApi.navigateToAnnotation;
-  window.__babyReaderTest.getCurrentBookmarkLocator = window.__babyReaderBookmarkApi.getCurrentBookmarkLocator;
-  window.__babyReaderTest.isCurrentBookmark = window.__babyReaderBookmarkApi.isCurrentBookmark;
-  window.__babyReaderTest.toggleCurrentBookmark = window.__babyReaderBookmarkApi.toggleCurrentBookmark;
-  window.__babyReaderTest.jumpToBookmark = window.__babyReaderBookmarkApi.jumpToBookmark;
-  window.__babyReaderTest.renderBookmarkButtonState = window.__babyReaderBookmarkApi.renderBookmarkButtonState;
-  window.__babyReaderTest.renderBookmarkList = window.__babyReaderBookmarkApi.renderBookmarkList;
-  window.__babyReaderTest.deleteBookmarkFromList = window.__babyReaderBookmarkApi.deleteBookmarkFromList;
-  window.__babyReaderTest.refreshBookmarks = window.__babyReaderBookmarkApi.refreshBookmarks;
-  return { window, api: window.__babyReaderTest };
+  window.__zhenshuTest.updatePaginationControls = window.__zhenshuPaginationApi.updatePaginationControls;
+  window.__zhenshuTest.updateTopbarState = window.__zhenshuSearchApi.updateTopbarState;
+  window.__zhenshuTest.renderLibrary = window.__zhenshuLibraryApi.renderLibrary;
+  window.__zhenshuTest.restoreReaderFromLocation = window.__zhenshuRouteApi.restoreReaderFromLocation;
+  window.__zhenshuTest.setupReaderSearch = window.__zhenshuSearchApi.setupReaderSearch;
+  window.__zhenshuTest.readerSurfaceController = window.readerSurfaceController;
+  window.__zhenshuTest.readerSearchContract = window.readerSearchContract;
+  window.__zhenshuTest.buildReaderSearchUrl = window.buildReaderSearchUrl;
+  window.__zhenshuTest.navigateToSearchResult = window.readerSearchApi.navigateToSearchResult;
+  window.__zhenshuTest.formatHighlightsMd = window.__zhenshuActionsApi.formatHighlightsMd;
+  window.__zhenshuTest.exportHighlights = window.__zhenshuActionsApi.exportHighlights;
+  window.__zhenshuTest.handleKeyboardShortcut = window.__zhenshuActionsApi.handleKeyboardShortcut;
+  window.__zhenshuTest.openThoughtComposer = window.__zhenshuEditorApi.openThoughtComposer;
+  window.__zhenshuTest.closeHighlightEditor = window.__zhenshuEditorApi.closeHighlightEditor;
+  window.__zhenshuTest.typographyApi = window.__zhenshuTypographyApi;
+  window.__zhenshuTest.parseNavToc = window.__zhenshuEpubApi.parseNavToc;
+  window.__zhenshuTest.parseNcxToc = window.__zhenshuEpubApi.parseNcxToc;
+  window.__zhenshuTest.destroyEpub = window.__zhenshuEpubApi.destroyEpub;
+  window.__zhenshuTest.pdfApi = window.__zhenshuPdfApi;
+  window.__zhenshuTest.aiApi = window.__zhenshuAiApi;
+  window.__zhenshuTest.renderEpubChapter = window.__zhenshuChapterApi.renderEpubChapter;
+  window.__zhenshuTest.navigateToEpubChapter = window.__zhenshuChapterApi.navigateToEpubChapter;
+  window.__zhenshuTest.isEpubChapterLoading = window.__zhenshuChapterApi.isEpubChapterLoading;
+  window.__zhenshuTest.updateReadingProgress = window.__zhenshuChapterApi.updateReadingProgress;
+  window.__zhenshuTest.restoreTextScroll = window.__zhenshuChapterApi.restoreTextScroll;
+  window.__zhenshuTest.navigateEpubTarget = window.__zhenshuChapterApi.navigateEpubTarget;
+  window.__zhenshuTest.setupTocNavigation = window.__zhenshuChapterApi.setupTocNavigation;
+  window.__zhenshuTest.applyUserState = window.__zhenshuUserStateApi.applyUserState;
+  window.__zhenshuTest.userStateApi = window.__zhenshuUserStateApi;
+  window.__zhenshuTest.getReaderDeviceProfile = window.__zhenshuDeviceApi.getReaderDeviceProfile;
+  window.__zhenshuTest.setMobileChromeOpen = window.__zhenshuDeviceApi.setMobileChromeOpen;
+  window.__zhenshuTest.setupReaderNavigation = window.__zhenshuDeviceApi.setupReaderNavigation;
+  window.__zhenshuTest.captureSelectionSession = window.__zhenshuSelectionMenuApi.captureSelectionSession;
+  window.__zhenshuTest.openSelectionMenu = window.__zhenshuSelectionMenuApi.openSelectionMenu;
+  window.__zhenshuTest.setupSelectionMenu = window.__zhenshuSelectionMenuApi.setupSelectionMenu;
+  window.__zhenshuTest.showSelectionMenuForCurrentSelection = window.__zhenshuSelectionMenuApi.showSelectionMenuForCurrentSelection;
+  window.__zhenshuTest.closeSelectionMenu = window.__zhenshuSelectionMenuApi.closeSelectionMenu;
+  window.__zhenshuTest.renderNotesPanel = window.__zhenshuNotesPanelApi.renderNotesPanel;
+  window.__zhenshuTest.setupNotesPanel = window.__zhenshuNotesPanelApi.setupNotesPanel;
+  window.__zhenshuTest.navigateToAnnotation = window.__zhenshuNotesPanelApi.navigateToAnnotation;
+  window.__zhenshuTest.getCurrentBookmarkLocator = window.__zhenshuBookmarkApi.getCurrentBookmarkLocator;
+  window.__zhenshuTest.isCurrentBookmark = window.__zhenshuBookmarkApi.isCurrentBookmark;
+  window.__zhenshuTest.toggleCurrentBookmark = window.__zhenshuBookmarkApi.toggleCurrentBookmark;
+  window.__zhenshuTest.jumpToBookmark = window.__zhenshuBookmarkApi.jumpToBookmark;
+  window.__zhenshuTest.renderBookmarkButtonState = window.__zhenshuBookmarkApi.renderBookmarkButtonState;
+  window.__zhenshuTest.renderBookmarkList = window.__zhenshuBookmarkApi.renderBookmarkList;
+  window.__zhenshuTest.deleteBookmarkFromList = window.__zhenshuBookmarkApi.deleteBookmarkFromList;
+  window.__zhenshuTest.refreshBookmarks = window.__zhenshuBookmarkApi.refreshBookmarks;
+  return { window, api: window.__zhenshuTest };
 }
 
 test('UX return failure preserves PDF renderer and search; concurrent returns share one transition', async () => {
@@ -507,7 +507,7 @@ test('UX search is nonmodal and does not trap keyboard focus', async () => {
 
 test('library rescan shows safe progress and outcome feedback', async () => {
   const { window } = await createReaderDom();
-  const renderLibrary = window.__babyReaderTest.renderLibrary;
+  const renderLibrary = window.__zhenshuTest.renderLibrary;
   const book = { id: 'a'.repeat(64), title: '授权目录中的书', type: 'txt' };
   let resolveScan;
   window.browserHost.scanLibrary = () => new Promise((resolve) => {
@@ -536,7 +536,7 @@ test('library rescan shows safe progress and outcome feedback', async () => {
   assert.doesNotMatch(article.textContent, /root|path|\/var\/|[A-Z]:\\/i);
 
   window.browserHost.scanLibrary = async () => {
-    throw new Error('/var/apps/babyreader-fnos/custom-library permission denied');
+    throw new Error('/var/apps/zhenshu/custom-library permission denied');
   };
   renderLibrary({ books: [book] });
   const failedButton = article.querySelector('.library-scan-button');
@@ -3173,7 +3173,7 @@ test('PDF export fetches the current book instead of cached notes and downloads 
   window.URL.revokeObjectURL = () => {};
   window.HTMLAnchorElement.prototype.click = function click() { filename = this.download; };
   await api.exportHighlights();
-  assert.equal(requestedUrl, `/app/babyreader-fnos/api/books/${bookId}/pdf-annotations`);
+  assert.equal(requestedUrl, `/app/zhenshu/api/books/${bookId}/pdf-annotations`);
   assert.equal(filename, '示例.md');
   const markdown = await blob.text();
   assert.match(markdown, /第 3 页/);
@@ -4795,7 +4795,7 @@ test('PDF annotation API methods update the current book cache only after server
   assert.deepEqual(Array.from(listed.annotations, (item) => item.id), [saved.id]);
   const created = await window.browserHost.createPdfAnnotation({ version: 1, type: 'pdf', id: saved.id }, bookId);
   assert.equal(created.annotation.id, saved.id);
-  assert.equal(requests[0].url, `/app/babyreader-fnos/api/books/${bookId}/pdf-annotations`);
+  assert.equal(requests[0].url, `/app/zhenshu/api/books/${bookId}/pdf-annotations`);
   assert.equal(requests[1].options.method, 'POST');
   assert.deepEqual(JSON.parse(JSON.stringify(api.state.userState.books[bookId].highlights)), [{ id: 'epub-keep' }]);
   assert.deepEqual(Array.from(api.state.userState.books[bookId].pdfAnnotations, (item) => item.id), [saved.id]);
@@ -4839,12 +4839,12 @@ test('PDF annotations restore a renderer session before the first page frame and
     setAnnotations: (session) => { sessions.push(session); return true; }
   };
 
-  assert.equal(window.__babyReaderAnnotationsApi.setPdfAnnotationRendererRecords(bookId, [record]), true);
+  assert.equal(window.__zhenshuAnnotationsApi.setPdfAnnotationRendererRecords(bookId, [record]), true);
   assert.equal(sessions.length, 1);
   assert.equal(sessions[0].generation, 9);
   assert.equal(sessions[0].annotations[0].id, 'restored');
   generation = 10;
-  assert.equal(window.__babyReaderAnnotationsApi.setPdfAnnotationRendererRecords(bookId, [record], 9), false);
+  assert.equal(window.__zhenshuAnnotationsApi.setPdfAnnotationRendererRecords(bookId, [record], 9), false);
   assert.equal(sessions.length, 1, 'late responses from the previous PDF generation must not install a session');
 });
 
@@ -5584,7 +5584,7 @@ test('the import button appears only for admins with import enabled, in the agre
 
 test('the import queue prechecks files, uploads one at a time and reports each outcome', async () => {
   const { window, api } = await createReaderDom();
-  const { enqueueLibraryImports, libraryImportQueue } = window.__babyReaderImportApi;
+  const { enqueueLibraryImports, libraryImportQueue } = window.__zhenshuImportApi;
   const book = { id: 'a'.repeat(64), title: '已有', type: 'txt' };
   api.renderLibrary({ books: [book], features: { libraryOrganization: false, bookImport: true } });
 

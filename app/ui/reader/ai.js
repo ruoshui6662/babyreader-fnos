@@ -1,4 +1,4 @@
-/* BabyReader UI module: reader/ai */
+/* 枕书 UI module: reader/ai */
 
 'use strict';
 
@@ -1834,7 +1834,7 @@ function setupAiPanel() {
   });
 }
 
-window.__babyReaderAiApi = {
+window.__zhenshuAiApi = {
   currentAiChapter,
   buildBookSearchIndex,
   chunkChapterText,

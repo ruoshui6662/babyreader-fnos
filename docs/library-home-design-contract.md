@@ -1,6 +1,6 @@
 # 书库首页视觉与扩展契约
 
-本文记录书库首页的设计约束，以及后续功能接入时不得破坏的边界。最初依据 `babyreader_apple_hig_demo_v6_stability_rule.html`；2026-09-30 按 Apple Human Interface Guidelines 完成第二轮改版（见文末“2026-09-30 HIG 改版”）。它只适用于书库页，不授权重排 EPUB/PDF 阅读器或改变服务端 API。
+本文记录书库首页的设计约束，以及后续功能接入时不得破坏的边界。最初依据 `zhenshu_apple_hig_demo_v6_stability_rule.html`；2026-09-30 按 Apple Human Interface Guidelines 完成第二轮改版（见文末“2026-09-30 HIG 改版”）。它只适用于书库页，不授权重排 EPUB/PDF 阅读器或改变服务端 API。
 
 ## 目标与实现范围
 

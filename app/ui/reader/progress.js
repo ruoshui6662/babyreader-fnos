@@ -1,4 +1,4 @@
-/* BabyReader UI module: reader/progress */
+/* 枕书 UI module: reader/progress */
 
 'use strict';
 
