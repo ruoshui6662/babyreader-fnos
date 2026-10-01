@@ -1300,11 +1300,14 @@ function applyAiStatus(status) {
   const question = aiElement('aiQuestion');
   const send = aiElement('btnAiAsk');
   const configured = Boolean(status?.configured);
-  setAiStatus(configured ? `已连接 · ${status.model || 'OpenAI'}` : '尚未配置 AI 服务，请先填写 AI 设置。', configured ? 'ready' : 'warning');
+  // Mark the send button first: setAiStatus turns a 'ready' message into the
+  // "not configured" warning while the button still says configured=false,
+  // which kept that warning up right after a successful save.
   if (send) {
     send.dataset.configured = configured ? 'true' : 'false';
     if (!_aiBusy) send.disabled = !configured;
   }
+  setAiStatus(configured ? `已连接 · ${status.model || 'OpenAI'}` : '尚未配置 AI 服务，请先填写 AI 设置。', configured ? 'ready' : 'warning');
   if (question) question.disabled = !configured;
   return configured;
 }

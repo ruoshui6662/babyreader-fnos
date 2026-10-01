@@ -4,7 +4,10 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>BabyReader</title>
-  <link rel="stylesheet" href="styles.css?v=72">
+  <link rel="icon" type="image/svg+xml" href="images/logo.svg">
+  <link rel="icon" type="image/png" sizes="64x64" href="images/icon_64.png">
+  <link rel="apple-touch-icon" href="images/icon_256.png">
+  <link rel="stylesheet" href="styles.css?v=83">
 </head>
 <body class="is-welcome">
   <!-- Reader Shell: low-distraction navigation with stable legacy IDs -->
@@ -13,20 +16,22 @@
       <button class="reader-nav-button" id="btnBackToLibrary" type="button" hidden data-reader-action="backToLibrary" aria-label="返回书架" title="返回书架">
         <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"></path></svg>
       </button>
+      <img class="app-mark" src="images/logo.svg" alt="" width="22" height="22">
       <span class="app-name">BabyReader</span>
       <span class="file-name" id="fileName"></span>
     </div>
+    <!-- One position pill for every format: ‹ chapter · % › (EPUB/MOBI);
+         PDF shows its own page/zoom pill in the same place. -->
     <div class="reader-status" aria-label="阅读状态">
-      <span class="pagination-status" id="paginationStatus" hidden aria-live="polite"></span>
-      <span class="reading-progress" id="readingProgress" hidden aria-live="polite"></span>
-    </div>
-    <div class="topbar-right">
       <button class="reader-nav-button chapter-nav-btn" id="btnPreviousChapter" type="button" hidden data-reader-action="previousChapter" aria-label="上一章" title="上一章">
         <svg viewBox="0 0 24 24" data-icon="chapter-previous" aria-hidden="true" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 5v14"></path><path d="m17 7-5 5 5 5"></path></svg>
       </button>
+      <span class="reading-progress" id="readingProgress" hidden aria-live="polite"></span>
       <button class="reader-nav-button chapter-nav-btn" id="btnNextChapter" type="button" hidden data-reader-action="nextChapter" aria-label="下一章" title="下一章">
         <svg viewBox="0 0 24 24" data-icon="chapter-next" aria-hidden="true" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M18 5v14"></path><path d="m7 7 5 5-5 5"></path></svg>
       </button>
+    </div>
+    <div class="topbar-right">
       <button class="reader-nav-button library-theme-toggle" id="btnLibraryTheme" type="button" data-reader-action="toggleTheme" aria-label="切换浅色模式" title="切换浅色模式"></button>
     </div>
   </header>
@@ -70,20 +75,42 @@
       <section class="settings-group" data-settings-group="appearance">
         <h3 class="settings-group-title">外观</h3>
         <div class="settings-group-card">
-          <label class="settings-field">
+          <!-- Most-used first (Apple Books): size, then theme swatches, then
+               fonts previewed in their own face. The native selects stay as
+               the source of truth (and for keyboard/automation), unseen. -->
+          <div class="settings-size-stepper" data-pdf-inapplicable>
+            <button type="button" id="btnFontSmaller" class="settings-size-button" aria-label="减小字号"><span aria-hidden="true">A</span></button>
+            <output id="settingFontSizeLabel" class="settings-size-value" aria-live="polite">18px</output>
+            <button type="button" id="btnFontLarger" class="settings-size-button is-large" aria-label="增大字号"><span aria-hidden="true">A</span></button>
+          </div>
+          <div class="settings-theme-swatches" role="group" aria-label="背景">
+            <button type="button" data-theme-choice="light" aria-pressed="false"><span class="settings-swatch" aria-hidden="true"></span>浅色</button>
+            <button type="button" data-theme-choice="sepia" aria-pressed="false"><span class="settings-swatch" aria-hidden="true"></span>护眼</button>
+            <button type="button" data-theme-choice="dark" aria-pressed="false"><span class="settings-swatch" aria-hidden="true"></span>深色</button>
+          </div>
+          <div class="settings-font-cards" role="group" aria-label="正文字体" data-pdf-inapplicable>
+            <button type="button" data-font-choice="source-serif" aria-pressed="false"><span class="settings-font-sample" aria-hidden="true">Aa 永</span><span class="settings-font-name">思源宋体</span></button>
+            <button type="button" data-font-choice="wenkai" aria-pressed="false"><span class="settings-font-sample" aria-hidden="true">Aa 永</span><span class="settings-font-name">霞鹜文楷</span></button>
+            <button type="button" data-font-choice="fangsong" aria-pressed="false"><span class="settings-font-sample" aria-hidden="true">Aa 永</span><span class="settings-font-name">朱雀仿宋</span></button>
+            <button type="button" data-font-choice="sans" aria-pressed="false"><span class="settings-font-sample" aria-hidden="true">Aa 永</span><span class="settings-font-name">系统黑体</span></button>
+            <button type="button" data-font-choice="songti" aria-pressed="false"><span class="settings-font-sample" aria-hidden="true">Aa 永</span><span class="settings-font-name">系统宋体</span></button>
+          </div>
+          <label class="settings-field settings-native-select">
             <span>背景</span>
-            <select id="settingTheme">
+            <select id="settingTheme" tabindex="-1">
               <option value="dark">深色</option>
               <option value="light">浅色</option>
               <option value="sepia">护眼米黄</option>
             </select>
           </label>
-          <label class="settings-field" data-pdf-inapplicable>
+          <label class="settings-field settings-native-select" data-pdf-inapplicable>
             <span>正文字体</span>
-            <select id="settingFontFamily">
-              <option value="sans">系统黑体</option>
-              <option value="songti">宋体</option>
+            <select id="settingFontFamily" tabindex="-1">
               <option value="source-serif">思源宋体</option>
+              <option value="wenkai">霞鹜文楷</option>
+              <option value="fangsong">朱雀仿宋</option>
+              <option value="sans">系统黑体</option>
+              <option value="songti">系统宋体</option>
             </select>
           </label>
         </div>
@@ -135,6 +162,13 @@
           <button type="button" class="settings-group-reset" id="btnResetTypography">恢复默认</button>
         </div>
         <div class="settings-group-card">
+          <div class="settings-layout-presets" role="group" aria-label="排版预设">
+            <button type="button" data-layout-preset="compact" aria-pressed="false">紧凑</button>
+            <button type="button" data-layout-preset="standard" aria-pressed="false">标准</button>
+            <button type="button" data-layout-preset="loose" aria-pressed="false">宽松</button>
+          </div>
+          <details class="settings-advanced" id="settingsTypographyAdvanced">
+            <summary>自定义</summary>
           <label class="settings-field settings-range-field">
             <span class="settings-field-label">首行缩进</span>
             <span class="settings-range-track">
@@ -180,6 +214,7 @@
               <output id="settingPageMarginValue" class="settings-range-tooltip" hidden aria-live="polite">40px</output>
             </span>
           </label>
+          </details>
         </div>
       </section>
       <p class="settings-user" id="settingsUser"></p>
@@ -471,6 +506,7 @@
     <button class="reader-nav-button page-nav-btn reader-page-nav-btn" id="btnNextPage" type="button" hidden data-reader-action="nextPage" aria-label="下一页" title="下一页">
       <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"></path></svg>
     </button>
+    <span class="pagination-status" id="paginationStatus" hidden aria-live="polite"></span>
     <section class="pdf-reader-surface" id="pdfReaderSurface" hidden aria-label="PDF 阅读器">
       <div class="pdf-reader-controls" role="toolbar" aria-label="PDF 阅读控制">
         <div class="pdf-control-group" aria-label="翻页">
@@ -515,40 +551,41 @@
   <script src="lib/jszip.min.js"></script>
   <script src="lib/epub.min.js"></script>
   <script src="lib/marked.min.js"></script>
-  <script src="core/state.js?v=33"></script>
+  <script src="core/state.js?v=35"></script>
   <script src="core/utils.js?v=28"></script>
   <script src="core/api.js?v=30"></script>
   <script src="core/reader-route.js?v=1"></script>
-  <script src="core/user-state.js?v=35"></script>
+  <script src="core/user-state.js?v=37"></script>
   <script src="reader/annotations.js?v=2"></script>
   <script src="reader/device-profile.js?v=32"></script>
-  <script src="reader/epub.js?v=29"></script>
+  <script src="reader/epub.js?v=30"></script>
   <script src="reader/document.js?v=28"></script>
   <script src="reader/editor.js?v=28"></script>
   <script src="reader/highlights.js?v=36"></script>
-  <script src="reader/ai.js?v=1"></script>
+  <script src="reader/ai.js?v=2"></script>
   <script src="reader/ai-index-manager.js?v=1"></script>
-  <script src="reader/selection-menu.js?v=4"></script>
+  <script src="reader/selection-menu.js?v=5"></script>
   <script src="reader/pdf-notes-export.js?v=1"></script>
   <script src="reader/actions.js?v=28"></script>
-  <script src="reader/notes-panel.js?v=3"></script>
-  <script src="reader/progress.js?v=34"></script>
-  <script src="reader/bookmarks.js?v=2"></script>
-  <script src="reader/pagination.js?v=35"></script>
-  <script src="reader/settings.js?v=30"></script>
-  <script src="reader/navigation.js?v=28"></script>
+  <script src="reader/notes-panel.js?v=4"></script>
+  <script src="reader/progress.js?v=35"></script>
+  <script src="reader/bookmarks.js?v=3"></script>
+  <script src="reader/pagination.js?v=36"></script>
+  <script src="reader/settings.js?v=32"></script>
+  <script src="reader/jump-back.js?v=1"></script>
+  <script src="reader/navigation.js?v=30"></script>
   <script src="reader/pdf-annotation-geometry.js?v=1"></script>
   <script src="reader/pdf-annotations.js?v=1"></script>
   <script src="reader/pdf-render-scheduler.js?v=1"></script>
-  <script src="reader/pdf.js?v=12"></script>
+  <script src="reader/pdf.js?v=14"></script>
   <script src="reader/lifecycle.js?v=32"></script>
-  <script src="reader/search.js?v=3"></script>
+  <script src="reader/search.js?v=4"></script>
   <script src="shell/drawer.js?v=32"></script>
   <script src="library/reorder.js?v=1"></script>
   <script src="library/pdf-covers.js?v=1"></script>
   <script src="library/import.js?v=1"></script>
   <script src="library/organization.js?v=12"></script>
   <script src="library/view.js?v=36"></script>
-  <script src="app.js?v=35"></script>
+  <script src="app.js?v=38"></script>
 </body>
 </html>

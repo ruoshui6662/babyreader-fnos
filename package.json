@@ -9,6 +9,7 @@
   },
   "scripts": {
     "dev": "node app/server/index.js",
+    "render:icons": "node scripts/render-icons.js",
     "test": "node --test tests/*.test.js",
     "test:core": "node --test tests/dom-regression.test.js tests/reader-core.test.js tests/security.test.js tests/structure-validation.test.js",
     "test:lifecycle": "node --test tests/fnos-lifecycle.test.js",

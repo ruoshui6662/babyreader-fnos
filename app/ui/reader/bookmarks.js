@@ -250,7 +250,7 @@ function renderBookmarkList() {
 
     jump.addEventListener('click', async () => {
       try {
-        const restored = await jumpToBookmark(bookmark);
+        const restored = await (typeof withJumpBack === 'function' ? withJumpBack : (jump) => jump())(() => jumpToBookmark(bookmark));
         if (restored && typeof closeReaderPanel === 'function') closeReaderPanel();
       } catch (error) {
         showBookmarkError(error);

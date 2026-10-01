@@ -125,11 +125,30 @@ function applyZoom() {
   });
 }
 
+// Links the bundled stylesheets of the chosen reading font, once each. Faces
+// are unicode-range slices, so only the characters on screen are fetched.
+function readerFontStylesheetUrls(fontFamily) {
+  return (FONT_STYLESHEETS[fontFamily] || []).map((folder) =>
+    new URL(`vendor/fonts/${folder}/font.css?v=1`, document.baseURI).href);
+}
+
+function ensureReaderFontStylesheets(fontFamily) {
+  for (const href of readerFontStylesheetUrls(fontFamily)) {
+    if (document.querySelector(`link[data-reader-font][href="${href}"]`)) continue;
+    const link = document.createElement('link');
+    link.rel = 'stylesheet';
+    link.href = href;
+    link.dataset.readerFont = '';
+    document.head.appendChild(link);
+  }
+}
+
 /* P0 typography: text indent, paragraph spacing, font family */
 function applyTypography() {
   document.documentElement.style.setProperty('--reader-text-indent', `${state.textIndent}em`);
   document.documentElement.style.setProperty('--reader-para-spacing', `${state.paragraphSpacing}em`);
-  const stack = FONT_STACKS[state.fontFamily] || FONT_STACKS['sans'];
+  const stack = FONT_STACKS[state.fontFamily] || FONT_STACKS[DEFAULT_READER_FONT];
+  ensureReaderFontStylesheets(state.fontFamily);
   document.documentElement.style.setProperty('--reader-font-family', stack);
   // Update EPUB inner frames as well
   applyEpubTheme();
@@ -346,8 +365,93 @@ function setupCustomSelect(select) {
 }
 
 function setupCustomSelects() {
-  document.querySelectorAll('#readerPanelSettings select, #notesSort')
+  // Theme and font are chosen with swatches and font cards; their native
+  // selects stay unseen as the source of truth.
+  [...document.querySelectorAll('#readerPanelSettings select, #notesSort')]
+    .filter((select) => !select.closest('.settings-native-select'))
     .forEach(setupCustomSelect);
+}
+
+// Layout presets (WeChat Reading / Apple Books keep spacing to a few choices;
+// the sliders stay under 自定义). 标准 is the reset defaults.
+const LAYOUT_PRESETS = Object.freeze({
+  compact: Object.freeze({ lineHeight: 1.6, paragraphSpacing: 0.5, pageMargin: 24 }),
+  standard: Object.freeze({ lineHeight: 1.9, paragraphSpacing: 1.1, pageMargin: 40 }),
+  loose: Object.freeze({ lineHeight: 2.2, paragraphSpacing: 1.5, pageMargin: 64 })
+});
+
+function activeLayoutPreset() {
+  return Object.keys(LAYOUT_PRESETS).find((name) => {
+    const preset = LAYOUT_PRESETS[name];
+    return Math.abs(state.lineHeight - preset.lineHeight) < 0.001
+      && Math.abs(state.paragraphSpacing - preset.paragraphSpacing) < 0.001
+      && state.pageMargin === preset.pageMargin;
+  }) || null;
+}
+
+function applyLayoutPreset(name) {
+  const preset = LAYOUT_PRESETS[name];
+  if (!preset) return false;
+  state.lineHeight = preset.lineHeight;
+  state.paragraphSpacing = preset.paragraphSpacing;
+  state.pageMargin = preset.pageMargin;
+  applyZoom();
+  applyTypography();
+  syncSettingsPanel();
+  persistUserSettings();
+  return true;
+}
+
+// A− / A+ walk the same size stops as the slider.
+function stepFontSize(direction) {
+  const stops = TYPOGRAPHY_SLIDER_CONFIG.fontSize.presets;
+  const next = direction > 0
+    ? stops.find((stop) => stop > zoomLevel)
+    : [...stops].reverse().find((stop) => stop < zoomLevel);
+  if (next === undefined) return false;
+  zoomLevel = next;
+  applyZoom();
+  syncSettingsPanel();
+  persistUserSettings();
+  return true;
+}
+
+function chooseFromNativeSelect(select, value) {
+  if (!select || select.value === value) return;
+  select.value = value;
+  select.dispatchEvent(new Event('change', { bubbles: true }));
+}
+
+let _fontPreviewsLoaded = false;
+function syncVisualSettingsControls() {
+  const panel = document.getElementById('readerPanelSettings');
+  if (!panel) return;
+  if (!_fontPreviewsLoaded) {
+    // Each card previews its own face; only the "Aa 永" glyph slices load.
+    _fontPreviewsLoaded = true;
+    for (const name of Object.keys(FONT_STYLESHEETS)) ensureReaderFontStylesheets(name);
+    panel.querySelectorAll('[data-font-choice]').forEach((button) => {
+      const sample = button.querySelector('.settings-font-sample');
+      if (sample) sample.style.fontFamily = FONT_STACKS[button.dataset.fontChoice] || '';
+    });
+  }
+  panel.querySelectorAll('[data-theme-choice]').forEach((button) => {
+    button.setAttribute('aria-pressed', String(button.dataset.themeChoice === state.theme));
+  });
+  panel.querySelectorAll('[data-font-choice]').forEach((button) => {
+    button.setAttribute('aria-pressed', String(button.dataset.fontChoice === state.fontFamily));
+  });
+  const preset = activeLayoutPreset();
+  panel.querySelectorAll('[data-layout-preset]').forEach((button) => {
+    button.setAttribute('aria-pressed', String(button.dataset.layoutPreset === preset));
+  });
+  const stops = TYPOGRAPHY_SLIDER_CONFIG.fontSize.presets;
+  const label = document.getElementById('settingFontSizeLabel');
+  if (label) label.textContent = TYPOGRAPHY_SLIDER_CONFIG.fontSize.format(zoomLevel);
+  const smaller = document.getElementById('btnFontSmaller');
+  const larger = document.getElementById('btnFontLarger');
+  if (smaller) smaller.disabled = !stops.some((stop) => stop < zoomLevel);
+  if (larger) larger.disabled = !stops.some((stop) => stop > zoomLevel);
 }
 
 function syncSettingsPanel() {
@@ -375,6 +479,7 @@ function syncSettingsPanel() {
   const settingsUser = document.getElementById('settingsUser');
 
   if (theme) theme.value = state.theme;
+  syncVisualSettingsControls();
   if (fontSize) {
     fontSize.value = String(zoomLevel);
     syncTypographySliderAccessibility('fontSize', zoomLevel);
@@ -529,7 +634,7 @@ function setupSettingsPanel() {
   });
   // P0 typography controls
   fontFamily?.addEventListener('change', () => {
-    state.fontFamily = FONT_STACKS[fontFamily.value] ? fontFamily.value : 'sans';
+    state.fontFamily = FONT_STACKS[fontFamily.value] ? fontFamily.value : DEFAULT_READER_FONT;
     applyTypography();
     syncSettingsPanel();
     persistUserSettings();
@@ -543,6 +648,18 @@ function setupSettingsPanel() {
     applyTypography();
   });
   resetTypography?.addEventListener('click', resetTypographySettings);
+  document.getElementById('btnFontSmaller')?.addEventListener('click', () => stepFontSize(-1));
+  document.getElementById('btnFontLarger')?.addEventListener('click', () => stepFontSize(1));
+  const settingsPanel = document.getElementById('readerPanelSettings');
+  settingsPanel?.addEventListener('click', (event) => {
+    const themeChoice = event.target.closest?.('[data-theme-choice]');
+    if (themeChoice) return chooseFromNativeSelect(theme, themeChoice.dataset.themeChoice);
+    const fontChoice = event.target.closest?.('[data-font-choice]');
+    if (fontChoice) return chooseFromNativeSelect(fontFamily, fontChoice.dataset.fontChoice);
+    const preset = event.target.closest?.('[data-layout-preset]');
+    if (preset) applyLayoutPreset(preset.dataset.layoutPreset);
+    return undefined;
+  });
 
   syncSettingsPanel();
   applyContinuousScroll();

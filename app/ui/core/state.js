@@ -19,7 +19,7 @@ const state = {
   epubChapterLoading: false,
   epubDiagnostics: null,
   toc: [],
-  tocOpen: true,
+  tocOpen: false,
   epubBook: null,
   epubRendition: null,
   contentType: 'text', // 'text' | 'epub' | 'pdf'
@@ -50,7 +50,7 @@ const state = {
   // theme is the background mode ('dark' | 'light' | 'sepia').
   textIndent: 2,
   paragraphSpacing: 1.1,
-  fontFamily: 'sans',          // 'sans' | 'songti' | 'source-serif'
+  fontFamily: 'source-serif',  // see FONT_STACKS; persisted as settings.readerFont
   currentChapterIndex: 0,
   chapterPaths: [],
   library: null
@@ -61,8 +61,23 @@ const API_PREFIX = '/app/babyreader-fnos/api';
 
 // Body-font choices. Every stack ends in a generic family so a missing CJK
 // serif degrades to the platform's own 宋体-class face instead of a blank.
+// Bundled fonts (app/ui/vendor/fonts, all SIL OFL 1.1) look the same on every
+// device; the two system stacks only name fonts already on the reader's
+// device, so nothing is redistributed for them. Literata leads the serif
+// stacks for Latin text; it has no CJK glyphs, so Chinese falls through.
 const FONT_STACKS = Object.freeze({
+  'source-serif': '"Literata", "Noto Serif SC", "Source Han Serif SC", "Songti SC", "SimSun", serif',
+  'wenkai': '"LXGW WenKai", "Literata", "KaiTi", "STKaiti", serif',
+  'fangsong': '"Literata", "Zhuque Fangsong", "FangSong", "STFangsong", serif',
   'sans': '-apple-system, "PingFang SC", "Helvetica Neue", "Noto Sans SC", "Microsoft YaHei", sans-serif',
-  'songti': '"SimSun", "STSong", "Songti SC", "宋体", serif',
-  'source-serif': '"Noto Serif SC", "Source Han Serif SC", "Source Han Serif CN", "思源宋体", "SimSun", "Songti SC", serif'
+  'songti': '"SimSun", "STSong", "Songti SC", "宋体", serif'
+});
+const DEFAULT_READER_FONT = 'source-serif';
+// Stylesheets each reading font needs (vendor/fonts/<folder>/font.css).
+const FONT_STYLESHEETS = Object.freeze({
+  'source-serif': ['literata', 'noto-serif-sc'],
+  'wenkai': ['lxgw-wenkai', 'literata'],
+  'fangsong': ['literata', 'zhuque-fangsong'],
+  'sans': [],
+  'songti': []
 });

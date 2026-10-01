@@ -364,9 +364,12 @@ function updatePaginationControls() {
       return;
     }
     status.hidden = !paged || state.contentType !== 'epub';
-    status.textContent = paged
-      ? `${state.pageNumber}-${Math.min(state.pageCount, state.pageNumber + pageStep() - 1)} / ${state.pageCount}`
-      : '';
+    const lastVisible = Math.min(state.pageCount, state.pageNumber + pageStep() - 1);
+    const pagesLeft = Math.max(0, state.pageCount - lastVisible);
+    const scope = state.epubArchive ? '本章' : '';
+    status.textContent = !paged
+      ? ''
+      : pagesLeft > 0 ? `${scope}还剩 ${pagesLeft} 页` : `${scope}最后一页`;
   }
 }
 

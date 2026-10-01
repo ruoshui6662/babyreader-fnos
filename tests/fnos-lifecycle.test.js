@@ -444,3 +444,24 @@ test('main finds a supervised server when the PID file is missing or stale, and 
   // fnOS lifecycle contract: unsupported actions fail with 1, not 2.
   assert.equal(main('reload').status, 1);
 });
+
+test('package and launcher icons meet the fnOS spec: exact square sizes, PNG, at most 1024 KB', () => {
+  const png = (relative) => {
+    const bytes = fs.readFileSync(path.join(root, relative));
+    assert.equal(bytes.subarray(1, 4).toString('latin1'), 'PNG', relative);
+    return { width: bytes.readUInt32BE(16), height: bytes.readUInt32BE(20), size: bytes.length };
+  };
+  for (const [relative, size] of [
+    ['ICON.PNG', 64],
+    ['ICON_256.PNG', 256],
+    ['app/ui/images/icon_64.png', 64],
+    ['app/ui/images/icon_256.png', 256]
+  ]) {
+    const icon = png(relative);
+    assert.equal(icon.width, size, relative);
+    assert.equal(icon.height, size, relative);
+    assert.ok(icon.size <= 1024 * 1024, `${relative} is over 1024 KB`);
+  }
+  const entry = JSON.parse(read('app/ui/config'))['.url']['babyreader-fnos.main'];
+  assert.equal(entry.icon, 'images/icon_{0}.png');
+});

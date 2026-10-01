@@ -178,7 +178,7 @@ test('user settings, progress, and highlights remain isolated by fnOS user ID', 
     theme: 'light',
     fontSize: 140,
     continuousScroll: false,
-    tocOpen: false
+    tocAutoOpen: false
   });
   await storage.updateProgress('alice', BOOK_ID, {
     locator: '{"scrollTop":240}',
@@ -197,7 +197,7 @@ test('user settings, progress, and highlights remain isolated by fnOS user ID', 
     theme: 'dark',
     fontSize: 90,
     continuousScroll: true,
-    tocOpen: true
+    tocAutoOpen: true
   });
 
   const alice = await storage.getState('alice');
@@ -621,7 +621,7 @@ test('settings validation clamps font size and normalizes supported values', asy
     pageMargin: 999,
     highlightColor: 'unsupported',
     continuousScroll: 0,
-    tocOpen: 0
+    tocAutoOpen: 1
   });
   assert.equal(settings.theme, 'dark');
   assert.equal(settings.fontSize, 200);
@@ -630,27 +630,28 @@ test('settings validation clamps font size and normalizes supported values', asy
   assert.equal(settings.highlightColor, 'yellow');
   assert.equal(settings.textIndent, 2);           // default preserved (unsupported not present)
   assert.equal(settings.paragraphSpacing, 1.1);   // default preserved
-  assert.equal(settings.fontFamily, 'sans');      // default preserved
+  assert.equal(settings.readerFont, 'source-serif'); // default: bundled 思源宋体
   assert.equal(settings.continuousScroll, true);
-  assert.equal(settings.tocOpen, true);
+  // Only an explicit true opts in to opening the contents panel.
+  assert.equal(settings.tocAutoOpen, false);
   assert.throws(() => storage.userDirectory('../escape'), /Invalid fnOS user ID/);
 
   // P0: typography clamp and normalisation (same ranges as the client)
   const typ = await storage.updateSettings('reader_1', {
     textIndent: 99,          // out-of-range → clamp to 4
     paragraphSpacing: 0.1,  // out-of-range → clamp to 0.4
-    fontFamily: 'comic-sans' // unknown → fall back to default 'sans'
+    readerFont: 'comic-sans' // unknown → keeps the current choice
   });
   assert.equal(typ.textIndent, 4);
   assert.equal(typ.paragraphSpacing, 0.4);
-  assert.equal(typ.fontFamily, 'sans');
+  assert.equal(typ.readerFont, 'source-serif');
 
   const valid = await storage.updateSettings('reader_1', {
-    textIndent: 2, paragraphSpacing: 1.5, fontFamily: 'source-serif', theme: 'sepia'
+    textIndent: 2, paragraphSpacing: 1.5, readerFont: 'wenkai', theme: 'sepia'
   });
   assert.equal(valid.textIndent, 2);
   assert.equal(valid.paragraphSpacing, 1.5);
-  assert.equal(valid.fontFamily, 'source-serif');
+  assert.equal(valid.readerFont, 'wenkai');
   assert.equal(valid.theme, 'sepia');
 });
 

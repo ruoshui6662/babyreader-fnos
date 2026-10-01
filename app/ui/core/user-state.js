@@ -22,11 +22,11 @@ function currentUserSettings() {
     pdfLayoutMode: ['continuous', 'single', 'double'].includes(state.pdfLayoutMode)
       ? state.pdfLayoutMode : 'continuous',
     continuousScroll: readingMode === 'scroll',
-    tocOpen: state.tocOpen,
+    tocAutoOpen: state.tocOpen,
     highlightColor: state.highlightColor,
     textIndent: state.textIndent,
     paragraphSpacing: state.paragraphSpacing,
-    fontFamily: state.fontFamily
+    readerFont: state.fontFamily
   };
 }
 
@@ -66,7 +66,7 @@ function applyUserState(userState) {
     ? settings.pdfLayoutMode : 'continuous';
   state.continuousScroll = state.readingMode === 'scroll';
   state.effectiveReadingMode = state.readingMode;
-  state.tocOpen = settings.tocOpen !== false;
+  state.tocOpen = settings.tocAutoOpen === true;
   // P0 typography: clamped exactly like the server does, so a hand-edited
   // settings file can never push the layout out of range.
   state.textIndent = Number.isFinite(settings.textIndent)
@@ -75,7 +75,7 @@ function applyUserState(userState) {
   state.paragraphSpacing = Number.isFinite(settings.paragraphSpacing)
     ? Math.max(0.4, Math.min(3, Math.round(settings.paragraphSpacing * 10) / 10))
     : 1.1;
-  state.fontFamily = FONT_STACKS[settings.fontFamily] ? settings.fontFamily : 'sans';
+  state.fontFamily = FONT_STACKS[settings.readerFont] ? settings.readerFont : DEFAULT_READER_FONT;
 
   applyTheme(state.theme, false);
   applyZoom();

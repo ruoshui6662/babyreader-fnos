@@ -74,11 +74,13 @@ test('loads split UI modules in Chromium and opens a real library book', async (
     expect(loadedScripts).toContain(modulePath);
   }
 
-  await expect(page.locator('script[src*="reader/settings.js?v=30"]')).toHaveCount(1);
-  await expect(page.locator('script[src*="reader/highlights.js?v=36"]')).toHaveCount(1);
-  await expect(page.locator('script[src*="reader/ai.js?v=1"]')).toHaveCount(1);
-  await expect(page.locator('script[src*="reader/search.js?v=3"]')).toHaveCount(1);
-  await expect(page.locator('script[src*="shell/drawer.js?v=32"]')).toHaveCount(1);
+  // Each module carries a cache-busting version (bumped whenever it changes),
+  // so a NAS browser never keeps serving a stale copy after an upgrade.
+  for (const module of ['reader/settings.js', 'reader/highlights.js', 'reader/ai.js', 'reader/search.js', 'shell/drawer.js']) {
+    const src = await page.locator(`script[src*="${module}?v="]`).getAttribute('src');
+    expect(src.startsWith(`${module}?v=`)).toBe(true);
+    expect(src).toMatch(/\?v=\d+$/);
+  }
 
   expect(pageErrors).toEqual([]);
 });
@@ -469,9 +471,9 @@ test('continuous scroll chapter boundary renders dedicated previous and next con
   await expect(page.locator('#btnScrollPreviousChapter')).toBeHidden();
   await expect(page.locator('#scrollChapterFooter')).toBeVisible();
   await expect(page.locator('#btnScrollNextChapter')).toBeVisible();
-  await expect(page.locator('.topbar-right .chapter-nav-btn')).toHaveCount(2);
-  await expect(page.locator('.topbar-right .chapter-nav-btn').first()).toBeHidden();
-  await expect(page.locator('.topbar-right .chapter-nav-btn').last()).toBeHidden();
+  await expect(page.locator('.reader-status .chapter-nav-btn')).toHaveCount(2);
+  await expect(page.locator('.reader-status .chapter-nav-btn').first()).toBeHidden();
+  await expect(page.locator('.reader-status .chapter-nav-btn').last()).toBeHidden();
 
   await expect(page.locator('#article .epub-chapter')).toHaveCount(1);
   await expect(page.locator('#article .epub-chapter')).toHaveAttribute('data-source-path', /chapter1\.xhtml/);
@@ -561,10 +563,12 @@ test('reader navigation and floating toolbar controls keep 44px icon targets', a
     'btnNextPage',
     'btnNextChapter',
     'btnToc',
-    'btnHighlight',
-    'btnExportHighlights',
-    'btnTheme',
-    'btnSettings'
+    'btnSearch',
+    'btnBookmarks',
+    'btnNotes',
+    'btnAi',
+    'btnSettings',
+    'btnLibraryTheme'
   ]) {
     await expect(page.locator(`#${id}`)).toHaveCSS('width', '44px');
   }
@@ -741,7 +745,12 @@ test('settings drawer presents grouped controls and a selected segmented tab', a
   await expect(page.locator('#settingTocOpen')).toHaveCSS('height', '26px');
   await expect(page.locator('.settings-checkbox span')).toHaveText('默认展开目录');
 
-  for (const id of ['settingTheme', 'settingFontFamily', 'settingReadingMode', 'settingHighlightColor']) {
+  // Theme and font are swatches/cards now; the remaining dropdowns keep
+  // the shared select styling.
+  await expect(page.locator('[data-theme-choice]')).toHaveCount(3);
+  await expect(page.locator('[data-font-choice]')).toHaveCount(5);
+  await expect(page.locator('[data-layout-preset]')).toHaveCount(3);
+  for (const id of ['settingReadingMode', 'settingHighlightColor']) {
     await expect(page.locator(`#${id}`)).toHaveCSS('border-radius', '10px');
     await expect(page.locator(`#${id}`)).toHaveCSS('width', '136px');
     await expect(page.locator(`#${id}`)).toHaveCSS('text-align', 'center');
@@ -844,7 +853,8 @@ test('custom select choices keep the native value and change event contract', as
 
 test('custom select menus stay hidden until a trigger is activated', async ({ page }) => {
   await page.goto(APP_PATH);
-  await expect(page.locator('.custom-select-menu')).toHaveCount(6);
+  // Theme and font are swatches/cards (2026-10 phase 2), not custom selects.
+  await expect(page.locator('.custom-select-menu')).toHaveCount(4);
   await expect(page.locator('[data-custom-select-for="highlightEditorColor"]')).toHaveCount(0);
   await expect(page.locator('.custom-select-menu:not([hidden])')).toHaveCount(0);
 
@@ -858,13 +868,13 @@ test('custom select menus never stack and close after choosing an option', async
   await page.locator('#btnSettings').click();
 
   const visibleMenus = page.locator('.custom-select-menu:not([hidden])');
-  await page.locator('[data-custom-select-for="settingTheme"] .custom-select-trigger').click();
+  await page.locator('[data-custom-select-for="settingReadingMode"] .custom-select-trigger').click();
   await expect(visibleMenus).toHaveCount(1);
 
-  await page.locator('[data-custom-select-for="settingFontFamily"] .custom-select-trigger').click();
+  await page.locator('[data-custom-select-for="settingHighlightColor"] .custom-select-trigger').click();
   await expect(visibleMenus).toHaveCount(1);
 
-  await page.locator('#custom-options-settingFontFamily [role="option"][data-value="songti"]').click();
+  await page.locator('#custom-options-settingHighlightColor [role="option"][data-value="green"]').click();
   await expect(visibleMenus).toHaveCount(0);
 
   await page.locator('[data-custom-select-for="settingHighlightColor"] .custom-select-trigger').click();
@@ -947,6 +957,43 @@ test('default directory preference opens the generic TOC panel for a book with a
   await expect(page.locator('#readerPanelToc')).toBeVisible();
   await expect(page.locator('#readerPanelSettings')).toBeHidden();
   await expect(page.locator('#tocList a[data-target]')).toHaveCount(3);
+});
+
+test('without the opt-in, opening a book shows the text instead of the contents panel', async ({ page }) => {
+  await page.goto(APP_PATH);
+  // A stored legacy tocOpen:true (every older save wrote it) must not count.
+  await page.evaluate(async () => {
+    const response = await fetch('/app/babyreader-fnos/api/settings', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ tocOpen: true, tocAutoOpen: false })
+    });
+    if (!response.ok) throw new Error(`Settings setup failed: ${response.status}`);
+  });
+  await page.reload({ waitUntil: 'load' });
+  await page.locator('.library-book').filter({ hasText: 'E2E EPUB' }).click();
+  await expect(page.locator('#article')).toContainText(/E2E EPUB Chapter \d/);
+  await page.waitForTimeout(300);
+  await expect(page.locator('#readerDrawer')).toBeHidden();
+  await expect(page.locator('#settingTocOpen')).not.toBeChecked();
+});
+
+test.describe('phone contents panel', () => {
+  test.use({ viewport: { width: 375, height: 812 }, isMobile: true, hasTouch: true, userAgent: 'Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Mobile Safari/537.36' });
+
+  test('lists every chapter, and tapping one jumps there and closes the sheet', async ({ page }) => {
+    await openEpubFixture(page);
+    await expect(page.locator('html')).toHaveAttribute('data-reader-surface', 'mobile');
+    await page.evaluate(() => openReaderPanel('toc'));
+    await expect(page.locator('#readerDrawer')).toBeVisible();
+    const tocLinks = page.locator('#tocList a[data-target]');
+    await expect(tocLinks).toHaveCount(3);
+    for (let index = 0; index < 3; index += 1) await expect(tocLinks.nth(index)).toBeVisible();
+
+    await tocLinks.nth(1).click();
+    await expect(page.locator('#readingProgress')).toContainText('2/3');
+    await expect(page.locator('#readerDrawer')).toBeHidden();
+  });
 });
 
 test('TOC panel uses the same rounded material surface as settings', async ({ page }) => {
@@ -1549,7 +1596,11 @@ test('AI desktop panel floats left of the toolbar and remains open until manuall
 
   await page.mouse.click(40, 400);
   await expect(page.locator('#aiModal')).toBeVisible();
+  // Escape is a deliberate close: one press closes the top layer
+  // (2026-09-28 interaction plan, UX06). Reopen for the coexistence checks.
   await page.keyboard.press('Escape');
+  await expect(page.locator('#aiModal')).toBeHidden();
+  await page.locator('#btnAi').click();
   await expect(page.locator('#aiModal')).toBeVisible();
 
   await page.locator('#btnSettings').click();

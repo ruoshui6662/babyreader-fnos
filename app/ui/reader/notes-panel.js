@@ -257,7 +257,11 @@ async function navigateToPdfAnnotation(annotation) {
   return true;
 }
 
-async function navigateToAnnotation(annotationId) {
+function navigateToAnnotation(annotationId) {
+  return (typeof withJumpBack === 'function' ? withJumpBack : (jump) => jump())(() => navigateToAnnotationDirect(annotationId));
+}
+
+async function navigateToAnnotationDirect(annotationId) {
   const annotation = notesAnnotationById(annotationId);
   if (!annotation) return false;
   return currentAnnotationAdapter(state.contentType).navigate(annotation);

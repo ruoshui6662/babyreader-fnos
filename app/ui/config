@@ -2,7 +2,7 @@
   ".url": {
     "babyreader-fnos.main": {
       "title": "BabyReader",
-      "icon": "assets/cat-logo.png",
+      "icon": "images/icon_{0}.png",
       "type": "url",
       "protocol": "",
       "gatewayPrefix": "/app/babyreader-fnos",

@@ -162,7 +162,10 @@
   --shadow-float: 0 6px 24px rgba(0,0,0,.16);
   --shadow-sheet: 0 -8px 40px rgba(0,0,0,.18);
 
-  /* --- Motion (Apple ease curves) --- */
+  /* --- Motion (Apple HIG: purposeful, brief, interruptible) ---
+     Only these three durations: fast for hover/press feedback, med for
+     panels, bars and sheets, slow for large surfaces. No motion on
+     page-turn buttons or other high-frequency controls. */
   --ease-out:    cubic-bezier(.22,1,.36,1);   /* Entrance */
   --ease-in-out: cubic-bezier(.42,0,.58,1);   /* State change */
   --dur-fast: 160ms;
@@ -424,7 +427,7 @@ body {
   padding: 4px 12px;
   border-radius: 20px;
   cursor: pointer;
-  transition: all 0.15s ease;
+  transition: color var(--dur-fast) var(--ease-out), background-color var(--dur-fast) var(--ease-out), border-color var(--dur-fast) var(--ease-out);
   outline: none;
 }
 
@@ -453,7 +456,7 @@ body {
   border-radius: var(--radius-control); /* HIG: 10px controls */
   color: var(--color-text-2); /* Secondary text */
   cursor: pointer;
-  transition: color 160ms ease, background-color 160ms ease;
+  transition: color var(--dur-fast) var(--ease-out), background-color var(--dur-fast) var(--ease-out);
 }
 
 /* P0: icon-only toolbar, slightly larger */
@@ -493,7 +496,7 @@ body {
   border-radius: var(--radius-control);
   color: var(--color-text-2);
   cursor: pointer;
-  transition: color 160ms ease, background-color 160ms ease;
+  transition: color var(--dur-fast) var(--ease-out), background-color var(--dur-fast) var(--ease-out);
 }
 
 .toc-toggle svg {
@@ -543,10 +546,6 @@ body.is-welcome .app-name {
   height: auto;
   overflow-y: auto;
   overflow-x: hidden;
-}
-
-body.has-toc.toc-open .reader {
-  padding-left: 260px;
 }
 
 body.is-pdf-reader .scroll-chapter-frame,
@@ -689,7 +688,7 @@ body.is-pdf-reader .pdf-control-group + .pdf-control-group::before {
   font-size: 13px;
   line-height: 1;
   cursor: pointer;
-  transition: color var(--dur-fast) ease, background-color var(--dur-fast) ease, transform var(--dur-fast) ease;
+  transition: color var(--dur-fast) var(--ease-out), background-color var(--dur-fast) var(--ease-out), transform var(--dur-fast) var(--ease-out);
 }
 
 .pdf-reader-controls button:not(:disabled):hover {
@@ -1237,7 +1236,7 @@ html[data-reader-surface="mobile"] .pdf-page-canvas { max-width: 100%; }
   color: var(--accent);
   text-decoration: none;
   border-bottom: 1px solid transparent;
-  transition: border-color 0.15s ease;
+  transition: border-color var(--dur-fast) var(--ease-out);
 }
 
 .article a:hover {
@@ -1712,7 +1711,7 @@ body:not(.toc-open) .toc {
    ============================================================ */
 .reader,
 .editor-container {
-  transition: opacity 0.15s ease;
+  transition: opacity var(--dur-fast) var(--ease-out);
 }
 
 /* ============================================================
@@ -1721,14 +1720,6 @@ body:not(.toc-open) .toc {
 /* Mobile surface rules are data-attribute scoped, so the media range also
    covers iPad landscape without changing narrow desktop windows. */
 @media (max-width: 1200px) {
-  html[data-reader-surface="mobile"] body.has-toc.toc-open .reader {
-    padding-left: 0;
-  }
-
-  html[data-reader-surface="mobile"] .toc {
-    display: none !important;
-  }
-
   html[data-reader-surface="mobile"] .reader .article {
     padding: 32px var(--reader-page-margin) calc(32px + env(safe-area-inset-bottom, 0px));
   }
@@ -1961,7 +1952,7 @@ body:not(.toc-open) .toc {
   cursor: pointer;
   opacity: 0;
   pointer-events: none;
-  transition: opacity 0.15s ease;
+  transition: opacity var(--dur-fast) var(--ease-out);
   user-select: none;
   -webkit-user-select: none;
   box-shadow: 0 2px 8px rgba(0,0,0,0.12);
@@ -2086,8 +2077,9 @@ body.is-library.theme-sepia .topbar {
 
 /* Appearance toggle is only offered on the shelf; readers keep theirs in the
    floating toolbar. */
-.library-theme-toggle { display: none; }
-body.is-library .library-theme-toggle { display: inline-flex; }
+/* The theme toggle lives in the top bar on every page (it left the reader's
+   rail in the 2026-10 shell unification). */
+.library-theme-toggle { display: inline-flex; }
 
 .library-view {
   width: min(1280px, 100%);
@@ -2396,7 +2388,7 @@ body.is-library .library-theme-toggle { display: inline-flex; }
   border: 1px solid transparent;
   border-radius: var(--radius-control, 10px);
   cursor: pointer;
-  transition: color 160ms ease, background-color 160ms ease;
+  transition: color var(--dur-fast) var(--ease-out), background-color var(--dur-fast) var(--ease-out);
 }
 
 .library-organization-card-delete svg {
@@ -2489,14 +2481,14 @@ body.is-library .library-theme-toggle { display: inline-flex; }
   opacity: .72;
   transform: scale(1.02);
   box-shadow: var(--shadow-float);
-  transition: transform 120ms ease, opacity 120ms ease, box-shadow 120ms ease;
+  transition: transform var(--dur-fast) var(--ease-out), opacity var(--dur-fast) var(--ease-out), box-shadow var(--dur-fast) var(--ease-out);
 }
 
 .library-grid .library-reorder-item.is-library-dragging {
   opacity: .5;
   transform: none;
   box-shadow: none;
-  transition: opacity 180ms var(--ease-out);
+  transition: opacity var(--dur-fast) var(--ease-out);
 }
 
 .library-grid .library-reorder-item.is-library-drop-target {
@@ -3056,7 +3048,7 @@ body.is-library .library-theme-toggle { display: inline-flex; }
   border-radius: 3px;
   background: var(--library-fill, var(--color-fill));
   box-shadow: var(--library-cover-shadow, 0 4px 12px rgba(0, 0, 0, .12));
-  transition: transform 220ms var(--ease-out), box-shadow 220ms var(--ease-out);
+  transition: transform var(--dur-med) var(--ease-out), box-shadow var(--dur-med) var(--ease-out);
 }
 
 .library-book:hover .library-book-cover {
@@ -3066,7 +3058,7 @@ body.is-library .library-theme-toggle { display: inline-flex; }
 
 .library-book:active .library-book-cover {
   transform: scale(.975);
-  transition-duration: 90ms;
+  transition-duration: var(--dur-fast);
 }
 
 /* Every cover fills the same 1:1.45 frame (WeChat Reading style): artwork of
@@ -3400,7 +3392,7 @@ html[data-reader-surface="mobile"] .reader .article.is-library {
   height: 100%;
   border-radius: inherit;
   background: var(--library-accent, var(--color-accent));
-  transition: width 160ms linear;
+  transition: width var(--dur-fast) linear;
 }
 .library-import-action {
   min-height: 32px;
@@ -3593,7 +3585,7 @@ html[data-reader-surface="mobile"] .reader .article.is-library {
   line-height: 1.25;
   text-align: center;
   cursor: pointer;
-  transition: background-color .16s ease, border-color .16s ease, box-shadow .16s ease;
+  transition: background-color var(--dur-fast) var(--ease-out), border-color var(--dur-fast) var(--ease-out), box-shadow var(--dur-fast) var(--ease-out);
 }
 
 .custom-select-trigger::after {
@@ -3606,7 +3598,7 @@ html[data-reader-surface="mobile"] .reader .article.is-library {
   border-bottom: 1.5px solid var(--color-text-2);
   content: '';
   transform: translateY(-65%) rotate(45deg);
-  transition: transform .16s ease;
+  transition: transform var(--dur-fast) var(--ease-out);
 }
 
 .custom-select-trigger:hover {
@@ -4146,7 +4138,7 @@ body.paged-reading .epub-chapter:first-of-type {
 }
 
 html[data-reader-surface="mobile"] .reader-shell-nav {
-  transition: transform 180ms var(--ease-out), opacity 180ms var(--ease-out);
+  transition: transform var(--dur-fast) var(--ease-out), opacity var(--dur-fast) var(--ease-out);
 }
 
 html[data-reader-surface="mobile"] body.is-epub.mobile-topbar-hidden .reader-shell-nav {
@@ -4178,7 +4170,7 @@ html[data-reader-surface="mobile"] body.is-epub.mobile-topbar-hidden .reader-she
   font-size: 14px; /* HIG: Subhead size */
   cursor: pointer;
   -webkit-app-region: no-drag;
-  transition: color 160ms ease, background-color 160ms ease;
+  transition: color var(--dur-fast) var(--ease-out), background-color var(--dur-fast) var(--ease-out);
 }
 
 .reader-nav-button svg {
@@ -4324,7 +4316,7 @@ body.is-epub.continuous-scroll .scroll-chapter-footer:not([hidden]) {
   box-shadow: var(--shadow-float); /* HIG: elevated shadow */
   backdrop-filter: var(--material-blur);
   -webkit-backdrop-filter: var(--material-blur);
-  transition: all 240ms var(--ease-out); /* HIG: smooth transitions */
+  transition: opacity var(--dur-med) var(--ease-out), transform var(--dur-med) var(--ease-out), background-color var(--dur-med) var(--ease-out);
 }
 
 body.is-epub .reader-floating-toolbar {
@@ -4350,7 +4342,7 @@ body.is-epub .reader-floating-toolbar {
 }
 
 .reader-floating-toolbar button {
-  transition: color var(--dur-fast, 160ms) var(--ease-out, ease-out),
+  transition: color var(--dur-fast) var(--ease-out, ease-out),
     background-color var(--dur-fast, 160ms) var(--ease-out, ease-out),
     transform var(--dur-fast, 160ms) var(--ease-out, ease-out);
 }
@@ -5573,12 +5565,15 @@ body.ai-modal-open .reader::-webkit-scrollbar {
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-focus) 16%, transparent);
 }
 
+/* The question box has a fixed two-row height, so the send button is centred
+   on it rather than pinned to the bottom edge (which sat ~9px low). */
 .ai-question-actions {
   position: absolute;
-  bottom: 8px;
+  top: 50%;
   right: 8px;
   display: block;
   margin: 0;
+  transform: translateY(-50%);
 }
 
 .ai-question-hint {
@@ -6152,10 +6147,6 @@ body:not(.toc-open) .reader-drawer .toc {
   display: block !important;
 }
 
-body.has-toc.toc-open .reader {
-  padding-left: clamp(16px, 4vw, 72px);
-}
-
 @media (max-width: 1050px) {
   .reader-status {
     position: static;
@@ -6173,7 +6164,7 @@ body.has-toc.toc-open .reader {
 
 @media (max-width: 1200px) {
   html[data-reader-surface="mobile"] body.is-epub .reader {
-    transition: top 180ms var(--ease-out);
+    transition: top var(--dur-fast) var(--ease-out);
   }
 
   html[data-reader-surface="mobile"] body.is-epub.mobile-topbar-hidden .reader {
@@ -6276,7 +6267,7 @@ body.has-toc.toc-open .reader {
 body.immersive .topbar {
   opacity: 0;
   pointer-events: none;
-  transition: opacity 0.25s ease;
+  transition: opacity var(--dur-med) var(--ease-out);
 }
 
 body.immersive .reader .article {
@@ -7039,7 +7030,7 @@ body.is-epub .reader-floating-toolbar {
   border-radius: 14px;
   font: inherit;
   cursor: pointer;
-  transition: background-color .16s ease, border-color .16s ease, transform .16s ease;
+  transition: background-color var(--dur-fast) var(--ease-out), border-color var(--dur-fast) var(--ease-out), transform var(--dur-fast) var(--ease-out);
 }
 
 .reader-search-result:hover,
@@ -7202,7 +7193,7 @@ html:not([data-reader-surface="mobile"]) body.is-epub.continuous-scroll .reader 
   scroll-padding-top: var(--topbar-h);
 }
 html:not([data-reader-surface="mobile"]) body.is-epub .reader-shell-nav {
-  transition: transform 220ms var(--ease-out), opacity 220ms var(--ease-out);
+  transition: transform var(--dur-med) var(--ease-out), opacity var(--dur-med) var(--ease-out);
 }
 html:not([data-reader-surface="mobile"]) body.is-epub.continuous-scroll.reader-topbar-hidden .reader-shell-nav {
   transform: translateY(-100%);
@@ -7312,4 +7303,326 @@ html:not([data-reader-surface="mobile"]) .reader-floating-toolbar button:disable
     color: var(--color-text);
     background: color-mix(in srgb, var(--color-text) 9%, transparent);
   }
+}
+
+/* ============================================================
+   Unified reader shell (2026-10 plan, phase 1)
+   ============================================================ */
+
+/* Rail: 目录 · 搜索 · 书签 · 笔记 · AI · 设置 for every format. Highlighting
+   lives in the selection menu, export in the notes panel and the theme in
+   the top bar; their legacy buttons stay in the DOM (stable IDs) but leave
+   the rail. */
+.reader-floating-toolbar #btnHighlight,
+.reader-floating-toolbar #btnExportHighlights,
+.reader-floating-toolbar #btnTheme {
+  display: none;
+}
+
+/* Top bar centre: one quiet position pill, ‹ 第 2/3 章 · 34% ›. */
+body.is-epub .reader-status {
+  gap: 2px;
+  padding: 2px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--color-text) 5%, transparent);
+  pointer-events: auto;
+}
+/* 44px wide keeps the HIG minimum target while the pill stays 32px tall. */
+body.is-epub .reader-status .chapter-nav-btn {
+  width: 44px;
+  min-width: 44px;
+  height: 32px;
+  min-height: 32px;
+  border: 0;
+  border-radius: 999px;
+  color: var(--color-text-3);
+}
+body.is-epub .reader-status .chapter-nav-btn:not(:disabled):hover,
+body.is-epub .reader-status .chapter-nav-btn:focus-visible {
+  color: var(--color-text);
+  background: color-mix(in srgb, var(--color-text) 8%, transparent);
+}
+body.is-epub .reader-status .chapter-nav-btn:disabled { opacity: .35; }
+body.is-epub .reader-status .reading-progress {
+  min-width: 0;
+  padding: 0 8px;
+  color: var(--color-text-2);
+  font: 500 12px/32px var(--font-ui);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* Pages left sits on the paper between the page-turn pills, like a printed
+   folio, instead of competing with the chapter progress in the top bar. */
+.reader > .pagination-status:not([hidden]) {
+  position: absolute;
+  left: var(--reader-inset-left, 0px);
+  right: var(--reader-inset-right, 0px);
+  bottom: calc(var(--reader-band-bottom, 24px) + env(safe-area-inset-bottom, 0px) + 16px);
+  z-index: 2;
+  min-width: 0;
+  color: var(--color-text-3);
+  font: 12px/32px var(--font-ui);
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+  pointer-events: none;
+}
+html[data-reader-surface="mobile"] .reader > .pagination-status {
+  display: none;
+}
+
+/* "返回原处" after a contents/search/note/bookmark jump (Apple Books). */
+.reader-jump-back {
+  position: fixed;
+  top: calc(var(--topbar-h) + 12px);
+  left: max(16px, calc(var(--reader-inset-left, 0px) + 16px));
+  z-index: 95;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 34px;
+  padding: 0 14px 0 10px;
+  border: 0;
+  border-radius: 999px;
+  color: var(--color-text);
+  background: var(--reader-chrome, var(--color-elevated));
+  box-shadow: var(--reader-chrome-shadow, 0 2px 10px rgba(0, 0, 0, .12));
+  font: 500 13px/1 var(--font-ui);
+  cursor: pointer;
+}
+.reader-jump-back[hidden] { display: none; }
+.reader-jump-back svg { width: 16px; height: 16px; }
+.reader-jump-back:hover,
+.reader-jump-back:focus-visible {
+  background: color-mix(in srgb, var(--color-text) 6%, var(--reader-chrome, var(--color-elevated)));
+}
+body.reader-topbar-hidden .reader-jump-back { top: 12px; }
+html[data-reader-surface="mobile"] .reader-jump-back {
+  top: calc(var(--topbar-h) + env(safe-area-inset-top, 0px) + 8px);
+  left: 12px;
+}
+
+/* ============================================================
+   Display settings, visual controls (2026-10 plan, phase 2)
+   ============================================================ */
+
+/* The native theme/font selects remain the source of truth but are unseen;
+   1px (not display:none) keeps them reachable for automation. */
+.settings-native-select {
+  position: absolute !important;
+  width: 1px !important;
+  height: 1px !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  overflow: hidden !important;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.settings-size-stepper {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  gap: 8px;
+  padding: 14px 16px 6px;
+}
+.settings-size-button {
+  height: 40px;
+  border: 0;
+  border-radius: 12px;
+  color: var(--color-text);
+  background: var(--color-fill, color-mix(in srgb, var(--color-text) 6%, transparent));
+  font: 500 15px/1 var(--font-serif);
+  cursor: pointer;
+}
+.settings-size-button.is-large { font-size: 22px; }
+.settings-size-button:disabled { opacity: .35; cursor: default; }
+.settings-size-button:not(:disabled):hover {
+  background: color-mix(in srgb, var(--color-text) 10%, transparent);
+}
+.settings-size-value {
+  min-width: 52px;
+  color: var(--color-text-2);
+  font: 500 13px/1 var(--font-ui);
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+}
+
+.settings-theme-swatches {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  padding: 6px 16px 6px;
+}
+.settings-theme-swatches button,
+.settings-layout-presets button {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  min-height: 44px;
+  padding: 8px 4px;
+  border: 0;
+  border-radius: 12px;
+  color: var(--color-text-2);
+  background: transparent;
+  font: 500 12px/1.2 var(--font-ui);
+  cursor: pointer;
+}
+.settings-swatch {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, .12);
+}
+[data-theme-choice="light"] .settings-swatch { background: #FFFFFF; }
+[data-theme-choice="sepia"] .settings-swatch { background: #F6F0E1; }
+[data-theme-choice="dark"] .settings-swatch { background: #1C1C1E; box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .18); }
+.settings-theme-swatches button[aria-pressed="true"] { color: var(--color-text); }
+.settings-theme-swatches button[aria-pressed="true"] .settings-swatch {
+  box-shadow: 0 0 0 2px var(--color-surface, var(--color-bg)), 0 0 0 4px var(--color-accent);
+}
+
+.settings-font-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(84px, 1fr));
+  gap: 8px;
+  padding: 6px 16px 16px;
+}
+.settings-font-cards button {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  min-height: 64px;
+  padding: 10px 6px 8px;
+  border: 0;
+  border-radius: 12px;
+  color: var(--color-text);
+  background: var(--color-fill, color-mix(in srgb, var(--color-text) 6%, transparent));
+  cursor: pointer;
+}
+.settings-font-sample { font-size: 22px; line-height: 1.1; }
+.settings-font-name { color: var(--color-text-2); font: 500 11px/1.2 var(--font-ui); }
+.settings-font-cards button[aria-pressed="true"] {
+  background: color-mix(in srgb, var(--color-accent) 12%, transparent);
+  box-shadow: inset 0 0 0 1.5px var(--color-accent);
+}
+.settings-font-cards button[aria-pressed="true"] .settings-font-name { color: var(--color-accent); }
+
+.settings-layout-presets {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 4px;
+  margin: 14px 16px 6px;
+  padding: 4px;
+  border-radius: 12px;
+  background: var(--color-fill, color-mix(in srgb, var(--color-text) 6%, transparent));
+}
+.settings-layout-presets button {
+  min-height: 36px;
+  padding: 0;
+  justify-content: center;
+  border-radius: 9px;
+  font-size: 13px;
+}
+.settings-layout-presets button[aria-pressed="true"] {
+  color: var(--color-text);
+  background: var(--color-surface, var(--color-bg));
+  box-shadow: 0 1px 3px rgba(0, 0, 0, .12);
+}
+
+.settings-advanced { margin-top: 4px; }
+.settings-advanced > summary {
+  display: flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 0 16px;
+  color: var(--color-text-2);
+  font: 500 13px/1 var(--font-ui);
+  cursor: pointer;
+  list-style: none;
+}
+.settings-advanced > summary::-webkit-details-marker { display: none; }
+.settings-advanced > summary::after {
+  margin-left: auto;
+  content: '›';
+  font-size: 18px;
+  transition: transform var(--dur-fast) var(--ease-out, ease-out);
+}
+.settings-advanced[open] > summary::after { transform: rotate(90deg); }
+@media (prefers-reduced-motion: reduce) {
+  .settings-advanced > summary::after { transition: none; }
+}
+
+.settings-theme-swatches button:focus-visible,
+.settings-font-cards button:focus-visible,
+.settings-layout-presets button:focus-visible,
+.settings-size-button:focus-visible,
+.settings-advanced > summary:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+}
+
+/* Brand mark (2026-10): the same cat-ears-and-book graphic as the app icon
+   and favicon, next to the name in the top bar. */
+.app-mark {
+  flex: 0 0 auto;
+  width: 22px;
+  height: 22px;
+  margin-right: 8px;
+  border-radius: 6px;
+}
+html[data-reader-surface="mobile"] body.is-epub .app-mark,
+html[data-reader-surface="mobile"] body.is-pdf-reader .app-mark {
+  display: none;
+}
+
+/* Reduced motion safety net (HIG: make motion optional). Specific rules
+   above already switch most motion off; this catches the rest. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: .01ms !important;
+    animation-iteration-count: 1 !important;
+    transition: none !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* Loading skeletons (2026-10 plan, phase 3): the shape of what is coming,
+   gently pulsing; still under "reduce motion". */
+.reader-startup-status.is-skeleton {
+  padding: 40px clamp(16px, 4vw, 56px);
+  background: transparent;
+}
+.skeleton { width: min(1280px, 100%); margin: 0 auto; }
+.skeleton-bar,
+.skeleton-cover {
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--color-text) 7%, transparent);
+  animation: skeleton-pulse 1.4s var(--ease-in-out) infinite alternate;
+}
+.skeleton-title { width: 120px; height: 34px; margin-bottom: 10px; }
+.skeleton-subtitle { width: 180px; height: 14px; margin-bottom: 32px; }
+.skeleton-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(128px, 1fr));
+  gap: 36px 32px;
+}
+.skeleton-cover { aspect-ratio: 1 / 1.45; border-radius: 3px; }
+.skeleton-page { max-width: 640px; padding: 24px 0; }
+.skeleton-heading { width: 46%; height: 30px; margin-bottom: 36px; }
+.skeleton-line { height: 14px; margin-bottom: 16px; }
+@keyframes skeleton-pulse {
+  from { opacity: .55; }
+  to { opacity: 1; }
+}
+@media (max-width: 679px) {
+  .skeleton-grid { grid-template-columns: repeat(auto-fill, minmax(88px, 1fr)); gap: 24px 16px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .skeleton-bar,
+  .skeleton-cover { animation: none; }
 }

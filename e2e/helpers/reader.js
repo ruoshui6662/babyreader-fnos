@@ -99,11 +99,11 @@ async function resetReaderSettings(page) {
         pageMargin: 40,
         readingMode: 'scroll',
         continuousScroll: true,
-        tocOpen: true,
+        tocAutoOpen: true,
         highlightColor: 'yellow',
         textIndent: 2,
         paragraphSpacing: 1.1,
-        fontFamily: 'sans'
+        readerFont: 'sans'
       })
     });
     if (!response.ok) throw new Error(`Settings reset failed: ${response.status}`);

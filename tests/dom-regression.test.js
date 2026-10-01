@@ -31,6 +31,7 @@ async function createReaderDom() {
     '../app/ui/reader/bookmarks.js',
     '../app/ui/reader/pagination.js',
     '../app/ui/reader/settings.js',
+    '../app/ui/reader/jump-back.js',
     '../app/ui/reader/navigation.js',
     '../app/ui/reader/pdf-annotation-geometry.js',
     '../app/ui/reader/pdf-annotations.js',
@@ -2956,7 +2957,7 @@ test('notes panel contract exposes whole-book filters and safe list rendering', 
   assert.match(notesSource, /textContent/);
 });
 
-test('selection session opens a bounded six-action menu and rejects outside selections', async () => {
+test('selection session opens a bounded seven-action menu and rejects outside selections', async () => {
   const { window, api } = await createReaderDom();
   const article = window.document.getElementById('article');
   const chapter = window.document.createElement('section');
@@ -2980,7 +2981,8 @@ test('selection session opens a bounded six-action menu and rejects outside sele
   const menu = window.document.getElementById('selectionMenu');
   assert.ok(menu);
   assert.equal(menu.hidden, false);
-  assert.equal(menu.querySelectorAll('[data-selection-action]').length, 6);
+  assert.equal(menu.querySelectorAll('[data-selection-action]').length, 7);
+  assert.ok(menu.querySelector('[data-selection-action="search"]'), 'selection can be searched in the book');
   assert.ok(Number.parseFloat(menu.style.left) >= 8);
   assert.ok(Number.parseFloat(menu.style.top) >= 8);
 

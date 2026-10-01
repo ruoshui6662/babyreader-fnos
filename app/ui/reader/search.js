@@ -378,7 +378,11 @@ function setReaderSearchMoreError(message) {
   }
 }
 
-async function navigateToSearchResult(result) {
+function navigateToSearchResult(result) {
+  return (typeof withJumpBack === 'function' ? withJumpBack : (jump) => jump())(() => navigateToSearchResultDirect(result));
+}
+
+async function navigateToSearchResultDirect(result) {
   const locator = result?.locator || {};
   if (!state.currentBookId) return false;
   const bookId = state.currentBookId;
