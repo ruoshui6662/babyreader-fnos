@@ -14,13 +14,15 @@ const { getMobiReaderEnabled } = require('./mobi-feature-config');
 const { createMobiDerivedStore } = require('./mobi-derived');
 const { getBookImportEnabled } = require('./import-feature-config');
 const { createBookImporter, hashFile, ImportError, IMPORT_DIRECTORY_NAME } = require('./book-import');
-const { AiConfigStorage, normalizeAiSettings, publicAiConfig } = require('./ai-config');
+const { AiConfigStorage, embeddingSettings, normalizeAiSettings, publicAiConfig } = require('./ai-config');
 const { validateAiBookContext } = require('./ai-book-context');
 const {
   AI_FTS_SCHEMA_VERSION,
   resolveBookPosition,
   readChapterEvidence,
   readBookNavigation,
+  readAllPassages,
+  ensurePdfNodes,
   listCachedChapterSummaries,
   getOrCreateChapterSummary,
   getOrCreateChapterSummarySegment,
@@ -41,6 +43,11 @@ const { parseBookSearchParams, searchBookText } = require('./book-search');
 const { parsePathList, resolveLibraryRoots } = require('./library-roots');
 const { readFnOSAuthorizedRoots, fnOSAuthorizationRevision } = require('./fnos-roots-config');
 const { createDirectAccess } = require('./direct-access');
+const { buildAnswerPayload, gatherEvidence, planQuestion, MAP_ROOT_ID, TYPE_LABELS } = require('./ai-answer-pipeline');
+const { createBookMapStore } = require('./ai-book-map-store');
+const { createBookMapService } = require('./ai-book-map');
+const { createEmbeddingService } = require('./ai-embeddings');
+const { addUsage } = require('./ai-transport');
 const {
   BOOK_ID_PATTERN,
   COLLECTION_ID_PATTERN,
@@ -51,6 +58,8 @@ const {
 } = require('./library-organization');
 const {
   normalizeAiConfig,
+  normalizeAiHistory,
+  sanitizeAiAnswerCitations,
   validateAiRequest,
   requestOpenAiAnswer,
   requestOpenAiChapterSummary,
@@ -745,7 +754,8 @@ async function handlePdfAiStream(request, response, user, bookId, body) {
       const answer = verified ? result.answer : PDF_AI_UNVERIFIED_ANSWER;
       const done = { answer, responseId: result.responseId, streamed: result.streamed,
         citationIntegrity: verified, scope: prepared.input.scope,
-        sources: verified ? prepared.sources : [] };
+        sources: verified ? prepared.sources : [],
+        ...(result.usage ? { usage: result.usage } : {}) };
       if (verified && prepared.input.conversationId && !abortController.signal.aborted && !request.aborted) {
         try {
           await aiConversationStorage.appendCompletedTurn(user.uid, bookId, prepared.input.conversationId, {
@@ -776,6 +786,209 @@ async function handlePdfAiStream(request, response, user, bookId, body) {
     request.removeListener('aborted', onAbort);
     response.removeListener('close', onClose);
     if (response.headersSent && !response.writableEnded) response.end();
+  }
+}
+
+// Sources worth keeping with a saved answer: the ones the answer cites, at
+// most the conversation store's limit.
+function plannedPersistenceSources(context, answer, book = null) {
+  const cited = new Set([...String(answer || '').matchAll(/【(\d+)】/g)].map((match) => Number(match[1])));
+  // PDF sources remember the file they came from, so a changed PDF marks them stale.
+  const fingerprint = book?.type === 'pdf' && /^[a-f0-9]{64}$/.test(String(book.fingerprint || '')) ? book.fingerprint : null;
+  return aiPersistenceSources(context)
+    .filter((source) => !cited.size || cited.has(source.citationIndex))
+    .slice(0, 12)
+    .map((source) => (fingerprint ? { ...source, sourceFingerprint: fingerprint } : source));
+}
+
+// PDFs get a table of contents from bookmarks, detected headings or page
+// windows; computed once per file and written into the search index.
+async function ensurePdfOutline(book, { signal, onProgress } = {}) {
+  if (book?.type !== 'pdf') return;
+  const fingerprint = await currentPdfFingerprint(book);
+  const key = { bookId: book.id, sourceFingerprint: fingerprint, parserVersion: PDF_TEXT_PARSER_VERSION, structureVersion: PDF_AI_STRUCTURE_VERSION };
+  let structure = fingerprint ? await pdfAiProfileStore.getStructure(key) : null;
+  if (!structure) {
+    onProgress?.({ stage: 'structure', message: '正在分析 PDF 的目录结构（首次需要一点时间）…' });
+    structure = buildPdfStructure(await extractPdfStructureSignals(book, { signal }));
+    if (fingerprint) await pdfAiProfileStore.putStructure({ ...key, structure });
+  }
+  await ensurePdfNodes(book, DATA_ROOT, structure);
+}
+
+function plannedAiInput(body) {
+  if (!body || typeof body !== 'object') throw Object.assign(new Error('AI 请求格式无效'), { statusCode: 400 });
+  const question = String(body.question ?? '').trim();
+  const selectedText = String(body.selectedText ?? '').trim();
+  if (!question) throw Object.assign(new Error('问题不能为空'), { statusCode: 400 });
+  if (question.length > 4000) throw Object.assign(new Error('问题过长'), { statusCode: 400 });
+  if (selectedText.length > 4000) throw Object.assign(new Error('选中文本过长'), { statusCode: 400 });
+  let history;
+  try {
+    history = normalizeAiHistory(body.history);
+  } catch (error) {
+    throw Object.assign(error, { statusCode: 400 });
+  }
+  const chapter = body.chapter && typeof body.chapter === 'object' ? {
+    index: Number.isInteger(body.chapter.index) ? body.chapter.index : null,
+    href: String(body.chapter.href || '').slice(0, 500),
+    label: String(body.chapter.label || '').slice(0, 300),
+    position: {
+      href: String(body.chapter.position?.href || '').slice(0, 500),
+      anchor: String(body.chapter.position?.anchor || '').slice(0, 500),
+      text: String(body.chapter.position?.text || '').slice(0, 200)
+    }
+  } : null;
+  return {
+    question,
+    selectedText,
+    history,
+    chapter,
+    conversationId: body.conversationId ? String(body.conversationId) : ''
+  };
+}
+
+let bookMapService = null;
+function getBookMapService() {
+  if (!bookMapService) {
+    bookMapService = createBookMapService({ dataRoot: DATA_ROOT, store: getBookMapStore() });
+  }
+  return bookMapService;
+}
+let bookMapStore = null;
+function getBookMapStore() {
+  if (!bookMapStore) bookMapStore = createBookMapStore({ dataRoot: DATA_ROOT });
+  return bookMapStore;
+}
+
+let embeddingService = null;
+function getEmbeddingService() {
+  if (!embeddingService) {
+    embeddingService = createEmbeddingService({ dataRoot: DATA_ROOT, readPassages: (book) => readAllPassages(book, DATA_ROOT) });
+  }
+  return embeddingService;
+}
+
+async function bookMapSummaries(bookId) {
+  try {
+    return await getBookMapStore().latest(bookId);
+  } catch {
+    return new Map();
+  }
+}
+
+// 问书 with server-side routing and evidence. Events: progress → meta → delta… → done.
+async function handlePlannedAiStream(request, response, user, book, bookId, body) {
+  const input = plannedAiInput(body);
+  if (book.type === 'pdf' && !pdfReaderEnabled()) return sendError(response, 404, 'PDF 阅读尚未启用');
+  const savedConfig = await aiConfigStorage.get(user.uid);
+  const config = publicAiConfig(savedConfig, process.env);
+  if (!config.configured) return sendError(response, 503, 'AI 服务尚未配置');
+  if (input.conversationId) {
+    try {
+      await aiConversationStorage.getConversation(user.uid, bookId, input.conversationId);
+    } catch (error) {
+      return aiConversationError(response, error);
+    }
+  }
+  const abortController = new AbortController();
+  const onAbort = () => abortController.abort();
+  request.once('aborted', onAbort);
+  response.once('close', () => { if (!response.writableEnded) abortController.abort(); });
+  const signal = abortController.signal;
+  let usage = null;
+  const onUsage = (value) => { usage = addUsage(usage, value); };
+  const progress = (event) => sendSseEvent(response, 'progress', event);
+
+  sendSseHeaders(response);
+  try {
+    progress({ stage: 'routing', message: '正在理解问题…' });
+    await ensurePdfOutline(book, { signal, onProgress: progress });
+    const summaries = await bookMapSummaries(book.id);
+    const plan = await planQuestion({
+      book, dataRoot: DATA_ROOT, question: input.question, selectedText: input.selectedText,
+      chapter: input.chapter, savedConfig, env: process.env, signal, onUsage, onProgress: progress,
+      summaries: new Map([...summaries].map(([id, entry]) => [id, entry.summary]))
+    });
+    if (signal.aborted) return;
+    progress({ stage: 'reading', message: '正在读取书中相关内容…' });
+    const vectorSettings = embeddingSettings(savedConfig, process.env);
+    const semantic = vectorSettings.configured ? { service: getEmbeddingService(), settings: vectorSettings, signal } : null;
+    // Build the book's semantic index in the background for later questions.
+    if (semantic) semantic.service.ensureInBackground(book, vectorSettings).catch(() => {});
+    const evidence = await gatherEvidence({
+      book, dataRoot: DATA_ROOT, plan, question: input.question, selectedText: input.selectedText,
+      map: { service: getBookMapService(), savedConfig, env: process.env, onUsage, onProgress: progress, summaries },
+      semantic
+    });
+    if (signal.aborted) return;
+    if (!evidence.context.length) {
+      sendSseEvent(response, 'error', {
+        code: 'AI_NO_EVIDENCE',
+        message: book.type === 'pdf' && !plan.outline.totalChars
+          ? '这份 PDF 没有可提取的文字（可能是扫描版），暂时无法回答。'
+          : '没有在书中找到相关内容，请换一种问法。'
+      });
+      return;
+    }
+    const planInfo = {
+      type: plan.type,
+      typeLabel: TYPE_LABELS[plan.type] || '',
+      scopeLabel: evidence.scopeLabel,
+      nodes: evidence.coverage?.nodes || [],
+      mode: evidence.coverage?.mode || '',
+      navigated: Boolean(plan.navigated),
+      ...(evidence.coverage?.mapEstimate ? { mapEstimate: evidence.coverage.mapEstimate } : {})
+    };
+    const sources = aiSourcesFromContext(evidence.context);
+    sendSseEvent(response, 'meta', {
+      sources,
+      model: config.model,
+      plan: planInfo,
+      evidenceChars: evidence.context.reduce((sum, item) => sum + item.text.length, 0)
+    });
+    progress({ stage: 'answering', message: '正在生成回答…' });
+    const result = await requestOpenAiStream({
+      request: { rawPayload: buildAnswerPayload({
+        book, plan, evidence, question: input.question, selectedText: input.selectedText, history: input.history,
+        bookSummary: (await bookMapSummaries(book.id)).get(MAP_ROOT_ID)?.summary || ''
+      }) },
+      env: process.env,
+      savedConfig,
+      signal,
+      timeoutMs: 120000,
+      onEvent: async (event) => {
+        if (event?.type === 'response.output_text.delta' && typeof event.delta === 'string' && event.delta) {
+          sendSseEvent(response, 'delta', { delta: event.delta });
+        }
+      }
+    });
+    usage = addUsage(usage, result.usage);
+    const answer = sanitizeAiAnswerCitations(result.answer, evidence.context.length).answer;
+    const done = { answer, responseId: result.responseId, streamed: result.streamed, sources, plan: planInfo, ...(usage ? { usage } : {}) };
+    if (input.conversationId && !signal.aborted && !request.aborted) {
+      try {
+        await aiConversationStorage.appendCompletedTurn(user.uid, bookId, input.conversationId, {
+          question: input.question,
+          answer,
+          sources: plannedPersistenceSources(evidence.context, answer, book)
+        });
+        done.persisted = true;
+      } catch (error) {
+        done.persisted = false;
+        done.persistenceErrorCode = aiConversationPersistenceErrorCode(error);
+        recordError(error, { operation: 'ai-conversation-persist', bookId, code: done.persistenceErrorCode });
+      }
+    }
+    sendSseEvent(response, 'done', done);
+  } catch (error) {
+    if (error.code !== 'AI_ABORTED' && !signal.aborted && !response.destroyed) {
+      recordError(error, { operation: 'ai-planned-stream', bookId, code: error.code || null });
+      sendSseEvent(response, 'error', { code: error.code || 'AI_STREAM_FAILED', message: aiUserError(error) });
+    }
+  } finally {
+    request.removeListener('aborted', onAbort);
+    if (!response.writableEnded) response.end();
   }
 }
 
@@ -1766,11 +1979,68 @@ async function handleApi(request, response, pathname, searchParams = new URLSear
     });
   }
 
+  // 导读图: status and outline, start generating, cancel.
+  const aiMapMatch = pathname.match(new RegExp(`^${APP_PREFIX}/api/books/([a-f0-9]{64})/ai/map(/job)?$`));
+  if (aiMapMatch) {
+    const book = await findBook(aiMapMatch[1]);
+    if (book.type === 'pdf') {
+      if (!pdfReaderEnabled()) return sendError(response, 404, 'PDF 阅读尚未启用');
+      await ensurePdfOutline(book);
+    }
+    const service = getBookMapService();
+    const vectorSettings = embeddingSettings(await aiConfigStorage.get(user.uid), process.env);
+    const mapStatus = async () => ({
+      ...(await service.status(book)),
+      vectors: await getEmbeddingService().status(book, vectorSettings).catch(() => ({ state: 'off' }))
+    });
+    if (aiMapMatch[2]) {
+      if (request.method !== 'DELETE') return sendError(response, 405, 'Method not allowed');
+      service.cancel(book.id);
+      return sendJson(response, 200, await mapStatus());
+    }
+    if (request.method === 'GET') return sendJson(response, 200, await mapStatus());
+    if (request.method === 'POST') {
+      const body = await readJsonBody(request);
+      const savedConfig = await aiConfigStorage.get(user.uid);
+      if (!publicAiConfig(savedConfig, process.env).configured) return sendError(response, 503, 'AI 服务尚未配置');
+      if (!service.isRunning(book.id)) {
+        service.run(book, { savedConfig, env: process.env, force: body?.force === true })
+          .catch((error) => { if (error.code !== 'AI_ABORTED') recordError(error, { operation: 'ai-book-map', bookId: book.id, code: error.code || null }); });
+      }
+      return sendJson(response, 202, await mapStatus());
+    }
+    return sendError(response, 405, 'Method not allowed');
+  }
+
+  // Semantic index (向量): start building or stop.
+  const aiVectorsMatch = pathname.match(new RegExp(`^${APP_PREFIX}/api/books/([a-f0-9]{64})/ai/vectors(/job)?$`));
+  if (aiVectorsMatch) {
+    const book = await findBook(aiVectorsMatch[1]);
+    if (book.type === 'pdf' && !pdfReaderEnabled()) return sendError(response, 404, 'PDF 阅读尚未启用');
+    const settings = embeddingSettings(await aiConfigStorage.get(user.uid), process.env);
+    if (!settings.configured) return sendError(response, 503, '尚未配置嵌入模型');
+    const service = getEmbeddingService();
+    if (aiVectorsMatch[2]) {
+      if (request.method !== 'DELETE') return sendError(response, 405, 'Method not allowed');
+      service.cancel(book.id);
+    } else if (request.method === 'POST') {
+      if (!service.isRunning(book.id)) {
+        service.run(book, settings).catch((error) => {
+          if (error.code !== 'AI_ABORTED') recordError(error, { operation: 'ai-vectors', bookId: book.id, code: error.code || null });
+        });
+      }
+    } else {
+      return sendError(response, 405, 'Method not allowed');
+    }
+    return sendJson(response, request.method === 'POST' ? 202 : 200, await service.status(book, settings));
+  }
+
   const aiStreamMatch = pathname.match(new RegExp(`^${APP_PREFIX}/api/books/([a-f0-9]{64})/ai/ask/stream$`));
   if (request.method === 'POST' && aiStreamMatch) {
     const book = await findBook(aiStreamMatch[1]);
-    if (book.type === 'pdf') return handlePdfAiStream(request, response, user, aiStreamMatch[1], await readJsonBody(request));
     const body = await readJsonBody(request);
+    if (body?.mode === 'planned') return handlePlannedAiStream(request, response, user, book, aiStreamMatch[1], body);
+    if (book.type === 'pdf') return handlePdfAiStream(request, response, user, aiStreamMatch[1], body);
     const conversationId = body?.conversationId ? String(body.conversationId) : '';
     let input;
     try {
@@ -1892,7 +2162,8 @@ async function handleApi(request, response, pathname, searchParams = new URLSear
         answer: result.answer,
         responseId: result.responseId,
         streamed: result.streamed ?? false,
-        sources: aiSourcesFromContext(input.context)
+        sources: aiSourcesFromContext(input.context),
+        ...(result.usage ? { usage: result.usage } : {})
       };
       if (chapterSummaryPlan) {
         done.summaryCacheHit = result.cacheHit;

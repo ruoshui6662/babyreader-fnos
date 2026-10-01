@@ -77,6 +77,7 @@ async function readAiEventStream(response, handlers = {}) {
     }
     lastEvent = { event: eventName, data: payload };
     if (eventName === 'meta') handlers.onMeta?.(payload);
+    else if (eventName === 'progress') handlers.onProgress?.(payload);
     else if (eventName === 'delta') handlers.onDelta?.(payload.delta || '');
     else if (eventName === 'done') { completed = true; handlers.onDone?.(payload); }
     else if (eventName === 'error') {
@@ -452,6 +453,29 @@ window.browserHost = {
     return (await apiRequest(`/books/${encodeURIComponent(bookId)}/search?${params.toString()}`, {
       signal
     })).json();
+  },
+
+  async getAiBookMap(bookId) {
+    if (!bookId) throw new Error('当前没有打开的书');
+    return (await apiRequest(`/books/${encodeURIComponent(bookId)}/ai/map`)).json();
+  },
+
+  async generateAiBookMap(bookId, { force = false } = {}) {
+    if (!bookId) throw new Error('当前没有打开的书');
+    return (await apiRequest(`/books/${encodeURIComponent(bookId)}/ai/map`, {
+      method: 'POST',
+      body: JSON.stringify({ force })
+    })).json();
+  },
+
+  async cancelAiBookMap(bookId) {
+    if (!bookId) throw new Error('当前没有打开的书');
+    return (await apiRequest(`/books/${encodeURIComponent(bookId)}/ai/map/job`, { method: 'DELETE' })).json();
+  },
+
+  async buildAiVectors(bookId) {
+    if (!bookId) throw new Error('当前没有打开的书');
+    return (await apiRequest(`/books/${encodeURIComponent(bookId)}/ai/vectors`, { method: 'POST', body: JSON.stringify({}) })).json();
   },
 
   async askAiStream(bookId, payload, handlers = {}, signal) {

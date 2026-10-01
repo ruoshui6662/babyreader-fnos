@@ -1,0 +1,43 @@
+{
+  "schemaVersion": 1,
+  "book": "山居茶事（tests/fixtures/ai-book-qa/book.js 生成）",
+  "notes": "expectedScope：book / chapter / section / passage / selection。expectedNodes 填章节或小节标题；gold 为证据中必须出现的原文片段。position 表示提问时的阅读位置（章序号从 1 开始）。",
+  "cases": [
+    { "id": "overview-1", "type": "overview", "question": "这本书主要讲了什么？", "expectedScope": "book" },
+    { "id": "overview-2", "type": "overview", "question": "总结一下全书的核心观点", "expectedScope": "book" },
+    { "id": "overview-3", "type": "overview", "question": "作者想通过这本书表达什么？", "expectedScope": "book" },
+    { "id": "overview-4", "type": "overview", "question": "用三句话概括这本书", "expectedScope": "book" },
+    { "id": "overview-5", "type": "overview", "question": "这本书的结构是怎样的，每章大概写了什么？", "expectedScope": "book" },
+
+    { "id": "chapter-1", "type": "chapter_summary", "question": "第三章讲了什么？", "expectedScope": "chapter", "expectedNodes": ["第三章 制茶的手艺"], "gold": ["陈守义", "杀青"] },
+    { "id": "chapter-2", "type": "chapter_summary", "question": "第2章的主要内容是什么", "expectedScope": "chapter", "expectedNodes": ["第二章 采茶的时令"], "gold": ["明前尖"] },
+    { "id": "chapter-3", "type": "chapter_summary", "question": "“采茶的时令”这一章讲了哪些要点？", "expectedScope": "chapter", "expectedNodes": ["第二章 采茶的时令"], "gold": ["明前尖"] },
+    { "id": "chapter-4", "type": "chapter_summary", "question": "本章的核心观点是什么？", "position": { "chapter": 4 }, "expectedScope": "chapter", "expectedNodes": ["第四章 茶与邻里"], "gold": ["换十斤新米"] },
+    { "id": "chapter-5", "type": "chapter_summary", "question": "总结一下这一章", "position": { "chapter": 3 }, "expectedScope": "chapter", "expectedNodes": ["第三章 制茶的手艺"], "gold": ["火候是熬出来的"] },
+    { "id": "chapter-6", "type": "chapter_summary", "question": "最后一章写了什么", "expectedScope": "chapter", "expectedNodes": ["第五章 离开与回望"], "gold": ["母亲生病"] },
+    { "id": "chapter-7", "type": "chapter_summary", "question": "第五章作者的结论是什么？", "expectedScope": "chapter", "expectedNodes": ["第五章 离开与回望"], "gold": ["愿意等待的那份心"] },
+
+    { "id": "section-1", "type": "section_summary", "question": "第三章第二节讲的是什么", "expectedScope": "section", "expectedNodes": ["二、杀青与揉捻"], "gold": ["轻—重—轻"] },
+    { "id": "section-2", "type": "section_summary", "question": "“看天采茶”这一节说了什么？", "expectedScope": "section", "expectedNodes": ["二、看天采茶"], "gold": ["雨水茶，三日香"] },
+
+    { "id": "lookup-1", "type": "lookup", "question": "陈守义用什么来烘焙茶叶？", "expectedScope": "passage", "gold": ["松枝的余火"] },
+    { "id": "lookup-2", "type": "lookup", "question": "明前尖的价格是雨前茶的几倍？", "expectedScope": "passage", "gold": ["三倍"] },
+    { "id": "lookup-3", "type": "lookup", "question": "一斤春茶能换多少米？", "expectedScope": "passage", "gold": ["十斤新米"] },
+    { "id": "lookup-4", "type": "lookup", "question": "村里的茶会在什么时候举办？", "expectedScope": "passage", "gold": ["秋分"] },
+    { "id": "lookup-5", "type": "lookup", "question": "作者在云岭村住了多少年？", "expectedScope": "passage", "gold": ["七年"] },
+    { "id": "lookup-6", "type": "lookup", "question": "作者第一次独自制茶的结果怎么样？", "expectedScope": "passage", "gold": ["炒焦了整整一锅"] },
+    { "id": "lookup-7", "type": "lookup", "question": "揉捻的手法有什么讲究？", "expectedScope": "passage", "gold": ["轻—重—轻"] },
+    { "id": "lookup-8", "type": "lookup", "question": "作者多大年纪搬到山里？", "expectedScope": "passage", "gold": ["四十岁"] },
+
+    { "id": "semantic-1", "type": "lookup", "question": "教作者做茶的那位老人是谁？", "expectedScope": "passage", "gold": ["陈守义"] },
+    { "id": "semantic-2", "type": "lookup", "question": "作者离开山村时带走了什么纪念品？", "expectedScope": "passage", "gold": ["老茶"] },
+    { "id": "semantic-3", "type": "lookup", "question": "下雨天采的茶有什么缺点？", "expectedScope": "passage", "gold": ["雨水茶，三日香"] },
+
+    { "id": "selection-1", "type": "explain_selection", "question": "这句话是什么意思？", "selectedText": "火候是熬出来的", "position": { "chapter": 3 }, "expectedScope": "selection", "gold": ["炒焦了整整一锅"] },
+    { "id": "selection-2", "type": "explain_selection", "question": "解释一下", "selectedText": "雨水茶，三日香", "position": { "chapter": 2 }, "expectedScope": "selection", "gold": ["连日阴雨"] },
+    { "id": "selection-3", "type": "explain_selection", "question": "作者为什么这样说？", "selectedText": "泡茶时愿意等待的那份心", "position": { "chapter": 5 }, "expectedScope": "selection", "gold": ["茶的意义不在于茶本身"] },
+
+    { "id": "compare-1", "type": "compare", "question": "第一章和第五章里，作者对喝茶的看法有什么变化？", "expectedScope": "book", "expectedNodes": ["第一章 初到云岭", "第五章 离开与回望"], "gold": ["放慢生活的方式", "与人相处的方式"] },
+    { "id": "compare-2", "type": "compare", "question": "比较第二章和第三章的内容", "expectedScope": "book", "expectedNodes": ["第二章 采茶的时令", "第三章 制茶的手艺"] }
+  ]
+}

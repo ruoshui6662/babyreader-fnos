@@ -206,7 +206,34 @@ function aiChapterLabel(index) {
   return toc?.label || (Number.isInteger(index) ? `第${index + 1}章` : '当前章节');
 }
 
+// EPUB, PDF and plain-text/Markdown books (the server reads the book itself).
+function aiSupportsContentType() {
+  return ['epub', 'pdf', 'text'].includes(state.contentType);
+}
+
+// The first paragraph visible in the reader, so the server can tell which
+// chapter a plain-text reader is in.
+function visibleArticleText() {
+  const reader = document.getElementById('reader');
+  if (!reader) return '';
+  const bounds = reader.getBoundingClientRect();
+  const node = [...document.querySelectorAll('#article p, #article li, #article h1, #article h2, #article h3, #article h4')]
+    .find((element) => {
+      const rect = element.getBoundingClientRect();
+      return rect.bottom > bounds.top + 8 && rect.top < bounds.bottom && String(element.textContent || '').trim();
+    });
+  return String(node?.textContent || '').replace(/\s+/g, ' ').trim().slice(0, 120);
+}
+
 function currentAiChapter() {
+  if (state.contentType === 'pdf') {
+    // The current page places “本页” and the section the reader is in.
+    const pageIndex = window.pdfReaderController?.getCurrentPageIndex?.();
+    return { index: Number.isInteger(pageIndex) ? pageIndex : null, href: '', label: '', position: { href: '', anchor: '', text: '' } };
+  }
+  if (state.contentType === 'text') {
+    return { index: null, href: '', label: '', position: { href: '', anchor: '', text: visibleArticleText() } };
+  }
   const reader = document.getElementById('reader');
   const locator = typeof currentReadingLocator === 'function' && reader
     ? currentReadingLocator(reader)
@@ -224,7 +251,8 @@ function currentAiChapter() {
     label: aiChapterLabel(index),
     position: {
       href,
-      anchor: locator?.href === href ? String(locator.anchor || '') : ''
+      anchor: locator?.href === href ? String(locator.anchor || '') : '',
+      text: String(locator?.textBefore || '').slice(0, 120)
     }
   };
 }
@@ -510,6 +538,15 @@ function renderAiConfidenceNotice(confidence, target = null) {
   element.dataset.tone = guarded ? 'warning' : '';
 }
 
+// “依据：第三章 制茶的手艺（全文）” — what the answer was based on.
+function renderAiScopeNote(plan, target = null) {
+  const element = target || ensureAiConfidenceNotice(_aiActiveAnswerElement?.closest?.('.ai-answer-card'));
+  if (!element || !plan?.scopeLabel) return;
+  element.textContent = `依据：${plan.scopeLabel}`;
+  element.hidden = false;
+  element.dataset.tone = 'info';
+}
+
 function resetAiConversation({ clearConversationId = false, clearConversationList = false } = {}) {
   closeAiConversationConfirmation({ restoreFocus: false });
   _aiConversation = [];
@@ -656,6 +693,229 @@ function renderAiConversationList() {
     list.appendChild(row);
   }
   setAiConversationManagementBusy(_aiConversationManageBusy);
+}
+
+// ── 本书导读 ──────────────────────────────────────────────────────────────
+let _aiBookMapReturnFocus = null;
+let _aiBookMapPoll = null;
+let _aiBookMapStatus = null;
+
+function formatAiTokens(value) {
+  const tokens = Math.max(0, Number(value) || 0);
+  return tokens >= 10000 ? `${(tokens / 10000).toFixed(tokens >= 100000 ? 0 : 1)} 万` : String(Math.round(tokens));
+}
+
+function stopAiBookMapPolling() {
+  if (_aiBookMapPoll) window.clearTimeout(_aiBookMapPoll);
+  _aiBookMapPoll = null;
+}
+
+function aiBookMapStatusText(status) {
+  const estimate = status.estimate || {};
+  const cost = `约 ${formatAiTokens((estimate.inputTokens || 0) + (estimate.outputTokens || 0))} tokens，${estimate.calls || 0} 次调用`;
+  const sampled = estimate.sampled ? '；这本书很长，每章会按比例抽读' : '';
+  if (status.state === 'running') return `正在生成导读（${status.progress?.done || 0}/${status.progress?.total || 0}）…可以关闭此页，生成会在后台继续。`;
+  if (status.state === 'ready') return '导读已生成。问到全书或较长的章节时，回答会直接用它。';
+  if (status.state === 'partial') return `已生成部分导读（${status.progress?.done || 0}/${status.progress?.total || 0}）。补全${cost}${sampled}。`;
+  return `还没有导读。生成需要 AI 通读全书，${cost}${sampled}。也可以直接提问，问到全书时会自动生成。`;
+}
+
+function aiVectorsText(vectors) {
+  if (vectors.state === 'ready') return '语义检索：已建立，查找内容时会同时按意思匹配。';
+  if (vectors.state === 'running') return `语义检索：正在建立（${vectors.progress?.done || 0}/${vectors.progress?.total || 0}）…`;
+  const cost = `约 ${formatAiTokens(vectors.estimateTokens)} tokens`;
+  if (vectors.state === 'partial') return `语义检索：已建立一部分，补全${cost}。`;
+  return vectors.automatic
+    ? `语义检索：未建立（${cost}），提问时会自动在后台建立。`
+    : `语义检索：未建立。这本书较长，需要手动建立（${cost}）。`;
+}
+
+function renderAiVectors(vectors) {
+  const row = aiElement('aiBookMapVectors');
+  const text = aiElement('aiBookMapVectorsText');
+  const build = aiElement('btnBuildAiVectors');
+  const visible = Boolean(vectors) && vectors.state !== 'off';
+  if (row) row.hidden = !visible;
+  if (!visible) return;
+  if (text) text.textContent = `${aiVectorsText(vectors)}${vectors.error && vectors.state !== 'running' ? `（上次：${vectors.error}）` : ''}`;
+  if (build) {
+    build.hidden = vectors.state === 'ready' || vectors.state === 'running';
+    build.disabled = false;
+  }
+}
+
+function renderAiBookMap(status) {
+  _aiBookMapStatus = status;
+  renderAiVectors(status.vectors);
+  const statusElement = aiElement('aiBookMapStatus');
+  const generate = aiElement('btnGenerateAiBookMap');
+  const cancel = aiElement('btnCancelAiBookMap');
+  const progress = aiElement('aiBookMapProgress');
+  const bar = aiElement('aiBookMapProgressBar');
+  const summary = aiElement('aiBookMapSummary');
+  const outline = aiElement('aiBookMapOutline');
+  const running = status.state === 'running';
+  if (statusElement) {
+    statusElement.textContent = `${aiBookMapStatusText(status)}${status.error && !running ? `（上次：${status.error}）` : ''}`;
+  }
+  if (generate) {
+    generate.hidden = running;
+    generate.disabled = false;
+    generate.textContent = status.state === 'ready' ? '重新生成' : status.state === 'partial' ? '补全导读' : '生成导读';
+    generate.dataset.force = status.state === 'ready' ? 'true' : 'false';
+  }
+  if (cancel) cancel.hidden = !running;
+  if (progress) progress.hidden = !running;
+  if (bar) bar.style.width = `${Math.round(100 * (status.progress?.done || 0) / Math.max(1, status.progress?.total || 1))}%`;
+
+  if (summary) {
+    summary.replaceChildren();
+    const book = status.book;
+    summary.hidden = !book;
+    if (book) {
+      const heading = document.createElement('h4');
+      heading.textContent = '全书';
+      const text = document.createElement('p');
+      text.textContent = book.summary || '';
+      summary.append(heading, text);
+      if (book.structure) {
+        const structure = document.createElement('p');
+        structure.className = 'ai-book-map-structure';
+        structure.textContent = book.structure;
+        summary.appendChild(structure);
+      }
+      if (book.points?.length) {
+        const list = document.createElement('ul');
+        for (const point of book.points) {
+          const item = document.createElement('li');
+          item.textContent = point;
+          list.appendChild(item);
+        }
+        summary.appendChild(list);
+      }
+    }
+  }
+
+  if (outline) {
+    outline.replaceChildren();
+    for (const node of status.nodes || []) {
+      const item = document.createElement('details');
+      item.className = 'ai-book-map-node';
+      item.dataset.depth = String(Math.min(2, node.depth || 0));
+      const head = document.createElement('summary');
+      const label = document.createElement('span');
+      label.className = 'ai-book-map-label';
+      label.textContent = node.label;
+      head.appendChild(label);
+      if (!node.summary) {
+        const pending = document.createElement('span');
+        pending.className = 'ai-book-map-pending';
+        pending.textContent = '未生成';
+        head.appendChild(pending);
+      }
+      item.appendChild(head);
+      if (node.summary) {
+        const text = document.createElement('p');
+        text.textContent = node.summary;
+        item.appendChild(text);
+      }
+      if (Number.isInteger(node.anchor?.chapterIndex) && state.contentType === 'epub' && typeof navigateToEpubChapter === 'function') {
+        const jump = document.createElement('button');
+        jump.type = 'button';
+        jump.className = 'ai-book-map-jump';
+        jump.textContent = '跳到这里';
+        jump.addEventListener('click', () => {
+          navigateToEpubChapter(node.anchor.chapterIndex, { reason: 'ai-book-map' });
+          closeAiBookMapSheet({ restoreFocus: false });
+        });
+        item.appendChild(jump);
+      }
+      outline.appendChild(item);
+    }
+  }
+}
+
+async function refreshAiBookMap() {
+  stopAiBookMapPolling();
+  const bookId = state.currentBookId;
+  if (!bookId || typeof browserHost?.getAiBookMap !== 'function') return null;
+  try {
+    const status = await browserHost.getAiBookMap(bookId);
+    if (bookId !== state.currentBookId || aiElement('aiBookMapView')?.hidden !== false) return status;
+    renderAiBookMap(status);
+    if (status.state === 'running' || status.vectors?.state === 'running') {
+      _aiBookMapPoll = window.setTimeout(() => void refreshAiBookMap(), 2000);
+    }
+    return status;
+  } catch (error) {
+    const statusElement = aiElement('aiBookMapStatus');
+    if (statusElement) statusElement.textContent = error.message || '导读状态读取失败';
+    return null;
+  }
+}
+
+async function openAiBookMapSheet(trigger = document.activeElement) {
+  const sheet = aiElement('aiBookMapView');
+  if (!sheet || !state.currentBookId) return false;
+  closeAiConfigSheet({ restoreFocus: false });
+  closeAiConversationsSheet({ restoreFocus: false });
+  _aiBookMapReturnFocus = trigger;
+  sheet.hidden = false;
+  aiElement('btnCloseAiBookMap')?.focus();
+  await refreshAiBookMap();
+  return true;
+}
+
+function closeAiBookMapSheet({ restoreFocus = true } = {}) {
+  stopAiBookMapPolling();
+  const sheet = aiElement('aiBookMapView');
+  if (sheet) sheet.hidden = true;
+  if (restoreFocus && _aiBookMapReturnFocus?.isConnected) _aiBookMapReturnFocus.focus();
+  _aiBookMapReturnFocus = null;
+}
+
+async function startAiBookMapGeneration() {
+  const button = aiElement('btnGenerateAiBookMap');
+  const force = button?.dataset.force === 'true';
+  if (force) {
+    const estimate = _aiBookMapStatus?.fullEstimate;
+    const cost = estimate ? `约 ${formatAiTokens((estimate.inputTokens || 0) + (estimate.outputTokens || 0))} tokens` : '再次通读全书';
+    if (!window.confirm(`重新生成会让 AI 再次通读全书（${cost}），并替换现有导读。继续吗？`)) return false;
+  }
+  if (button) button.disabled = true;
+  try {
+    renderAiBookMap(await browserHost.generateAiBookMap(state.currentBookId, { force }));
+    _aiBookMapPoll = window.setTimeout(() => void refreshAiBookMap(), 1500);
+    return true;
+  } catch (error) {
+    const statusElement = aiElement('aiBookMapStatus');
+    if (statusElement) statusElement.textContent = error.message || '无法开始生成导读';
+    if (button) button.disabled = false;
+    return false;
+  }
+}
+
+async function buildAiVectorsFromSheet() {
+  const button = aiElement('btnBuildAiVectors');
+  if (button) button.disabled = true;
+  try {
+    await browserHost.buildAiVectors(state.currentBookId);
+    _aiBookMapPoll = window.setTimeout(() => void refreshAiBookMap(), 1000);
+  } catch (error) {
+    const text = aiElement('aiBookMapVectorsText');
+    if (text) text.textContent = error.message || '语义索引建立失败';
+    if (button) button.disabled = false;
+  }
+}
+
+async function cancelAiBookMapGeneration() {
+  try {
+    renderAiBookMap(await browserHost.cancelAiBookMap(state.currentBookId));
+  } catch (error) {
+    const statusElement = aiElement('aiBookMapStatus');
+    if (statusElement) statusElement.textContent = error.message || '停止失败';
+  }
+  _aiBookMapPoll = window.setTimeout(() => void refreshAiBookMap(), 1000);
 }
 
 function closeAiConversationsSheet({ restoreFocus = true } = {}) {
@@ -1260,8 +1520,8 @@ async function retrieveAiMatches(question, selectedText, chapter) {
 async function refreshAiStatus() {
   const question = aiElement('aiQuestion');
   const send = aiElement('btnAiAsk');
-  if (state.contentType !== 'epub' && state.contentType !== 'pdf') {
-    setAiStatus('AI 阅读助手仅支持 EPUB 和 PDF。');
+  if (!aiSupportsContentType()) {
+    setAiStatus('当前书籍暂不支持 AI 阅读助手。');
     if (send) {
       send.dataset.configured = 'false';
       send.disabled = true;
@@ -1284,9 +1544,9 @@ async function refreshAiStatus() {
 }
 
 function configurePdfAiDisclosure() {
+  const isPdf = state.contentType === 'pdf';
   const row = aiElement('aiPdfScopeRow');
   if (!row) return;
-  const isPdf = state.contentType === 'pdf';
   row.hidden = !isPdf;
 }
 
@@ -1331,9 +1591,15 @@ async function loadAiConfig() {
     if (baseUrl) baseUrl.value = config.baseUrl || '';
     if (model) model.value = config.model || '';
     if (apiKey) apiKey.value = '';
+    if (aiElement('aiApiFormat')) aiElement('aiApiFormat').value = config.apiFormat === 'responses' ? 'responses' : 'chat';
+    if (aiElement('aiSummaryModel')) aiElement('aiSummaryModel').value = config.summaryModel || '';
+    if (aiElement('aiEmbeddingModel')) aiElement('aiEmbeddingModel').value = config.embeddingModel || '';
+    if (aiElement('aiEmbeddingBaseUrl')) aiElement('aiEmbeddingBaseUrl').value = config.embeddingBaseUrl || '';
+    if (aiElement('aiEmbeddingApiKey')) aiElement('aiEmbeddingApiKey').value = '';
+    if (aiElement('aiEmbeddingSettings') && config.embeddingModel) aiElement('aiEmbeddingSettings').open = true;
     setAiClearKeyPending(false);
     if (aiElement('btnClearAiKey')) aiElement('btnClearAiKey').disabled = !config.hasApiKey;
-    if (hint) hint.textContent = config.hasApiKey ? '当前已配置 API Key；留空保存可保留原 Key。' : '尚未配置 API Key。支持 OpenAI 及兼容 Responses API 的服务。';
+    if (hint) hint.textContent = config.hasApiKey ? '当前已配置 API Key；留空保存可保留原 Key。' : '尚未配置 API Key。支持 OpenAI 协议（Chat Completions 或 Responses）的服务。';
     return config;
   } catch (error) {
     if (hint) hint.textContent = error.message || 'AI 配置读取失败';
@@ -1376,13 +1642,25 @@ function showAiView(view) {
   return true;
 }
 
+function aiConfigFormValues() {
+  const value = (id) => String(aiElement(id)?.value || '').trim();
+  return {
+    baseUrl: value('aiBaseUrl'),
+    model: value('aiModel'),
+    apiKey: value('aiApiKey'),
+    apiFormat: value('aiApiFormat') || 'chat',
+    summaryModel: value('aiSummaryModel'),
+    embeddingModel: value('aiEmbeddingModel'),
+    embeddingBaseUrl: value('aiEmbeddingBaseUrl'),
+    embeddingApiKey: value('aiEmbeddingApiKey')
+  };
+}
+
 async function saveAiSettings() {
   const hint = aiElement('aiConfigHint');
   const save = aiElement('btnSaveAiSettings');
   const payload = {
-    baseUrl: String(aiElement('aiBaseUrl')?.value || '').trim(),
-    model: String(aiElement('aiModel')?.value || '').trim(),
-    apiKey: String(aiElement('aiApiKey')?.value || '').trim(),
+    ...aiConfigFormValues(),
     clearApiKey: _aiClearApiKey
   };
   if (save) save.disabled = true;
@@ -1390,6 +1668,7 @@ async function saveAiSettings() {
   try {
     const config = await browserHost.saveAiConfig(payload);
     if (aiElement('aiApiKey')) aiElement('aiApiKey').value = '';
+    if (aiElement('aiEmbeddingApiKey')) aiElement('aiEmbeddingApiKey').value = '';
     _aiClearApiKey = false;
     applyAiStatus(config);
     if (hint) hint.textContent = config.hasApiKey ? '配置已保存，API Key 已安全保存且不会回显。' : '配置已保存，尚未配置 API Key。';
@@ -1407,9 +1686,7 @@ async function testAiConnection() {
   const button = aiElement('btnTestAiConnection');
   const hint = aiElement('aiConfigHint');
   const payload = {
-    baseUrl: String(aiElement('aiBaseUrl')?.value || '').trim(),
-    model: String(aiElement('aiModel')?.value || '').trim(),
-    apiKey: String(aiElement('aiApiKey')?.value || '').trim(),
+    ...aiConfigFormValues(),
     clearApiKey: _aiClearApiKey
   };
   if (button) button.disabled = true;
@@ -1525,8 +1802,8 @@ async function askPdfAiQuestion() {
   }
 }
 
+// Every format (EPUB, PDF, TXT/Markdown) asks through the server pipeline.
 async function askAiQuestion() {
-  if (state.contentType === 'pdf') return askPdfAiQuestion();
   if (_aiBusy || !state.currentBookId) return false;
   const questionElement = aiElement('aiQuestion');
   const question = String(questionElement?.value || '').trim();
@@ -1548,28 +1825,13 @@ async function askAiQuestion() {
   renderAiAnswer('');
   renderAiSources([]);
   scrollAiConversationToBottom();
-  setAiStatus('正在思考并检索本书内容…', 'busy');
+  setAiStatus('正在思考…', 'busy');
   try {
     const chapter = currentAiChapter();
-    const retrieval = await retrieveAiMatches(question, _aiSelection?.text || '', chapter);
-    if (retrieval.retrievalStatus === 'insufficient_scope') {
-      throw new Error('无法准确定位当前章节，请先跳转到明确章节标题后再提问。');
-    }
-    const matches = retrieval.matches;
-    const locationIsUncertain = Boolean(retrieval.chapterResolution)
-      && (retrieval.chapterResolution.status !== 'resolved' || retrieval.chapterResolution.mappingQuality !== 'exact');
-    const confidence = locationIsUncertain
-      ? {
-        ...retrieval.confidence,
-        message: `${retrieval.confidence?.message || ''} 当前阅读位置${retrieval.chapterResolution?.status === 'resolved' ? '仅能推断' : '尚未能可靠映射'}到目录章节；章节范围问答将要求更明确的位置。`.trim()
-      }
-      : retrieval.confidence;
-    renderAiConfidenceNotice(confidence, assistant.notice);
-    if (retrieval.confidence?.level === 'low') {
-      setAiStatus(`正在思考并检索本书内容… ${retrieval.confidence.message}`, 'warning');
-    }
-    const isBookSummary = retrieval.intent === 'book_summary';
-    if (!matches.length && !isBookSummary) throw new Error('没有检索到足够的书本内容，请换一种问法。');
+    // The server routes the question and reads the book itself; the browser
+    // only says what was asked, what is selected and where the reader is.
+    const matches = [];
+    const confidence = null;
     const conversationId = await ensureAiConversation();
     _aiStreamController = new AbortController();
     let partialAnswer = '';
@@ -1588,17 +1850,21 @@ async function askAiQuestion() {
       });
     };
     const result = await browserHost.askAiStream(state.currentBookId, {
+      mode: 'planned',
       question,
       selectedText: _aiSelection?.text || '',
       chapter,
-      retrievalConfidence: confidence?.level || 'none',
-      context: matches.map(({ text, chapterIndex, chapterHref, chapterLabel }) => ({ text, chapterIndex, chapterHref, chapterLabel })),
       history: _aiConversation.slice(-12),
       ...(conversationId ? { conversationId } : {})
     }, {
+      onProgress: (progress) => {
+        if (requestId !== _aiRequestId || !progress?.message) return;
+        setAiStatus(String(progress.message), 'busy');
+      },
       onMeta: (meta) => {
         if (requestId !== _aiRequestId) return;
         streamSources = meta?.sources || matches;
+        if (meta?.plan?.scopeLabel) renderAiScopeNote(meta.plan, assistant.notice);
         if (meta?.scope === 'book' && meta?.coverage) summaryCoverage = meta.coverage;
         if (Number.isSafeInteger(meta?.estimatedInputTokens) && meta.estimatedInputTokens > 0) {
           const statusScope = meta?.scope === 'book' ? '代表性章节' : '本章';
@@ -1693,8 +1959,8 @@ function closeAiModal({ restoreFocus = true, cancelRequest = false } = {}) {
 }
 
 async function openAiModal(session = null, trigger = document.activeElement) {
-  if (state.contentType !== 'epub' && state.contentType !== 'pdf') {
-    showHighlightHint('AI 阅读助手仅支持 EPUB 和 PDF');
+  if (!aiSupportsContentType()) {
+    showHighlightHint('当前书籍暂不支持 AI 阅读助手');
     return false;
   }
   const modal = aiElement('aiModal');
@@ -1748,6 +2014,14 @@ function setupAiPanel() {
   aiElement('btnAiConversations')?.addEventListener('click', () => {
     void openAiConversationsSheet(aiElement('btnAiConversations'));
   });
+  aiElement('btnAiBookMap')?.addEventListener('click', () => {
+    void openAiBookMapSheet(aiElement('btnAiBookMap'));
+  });
+  aiElement('btnCloseAiBookMap')?.addEventListener('click', () => closeAiBookMapSheet());
+  aiElement('btnCloseAiBookMapBackdrop')?.addEventListener('click', () => closeAiBookMapSheet());
+  aiElement('btnGenerateAiBookMap')?.addEventListener('click', () => void startAiBookMapGeneration());
+  aiElement('btnCancelAiBookMap')?.addEventListener('click', () => void cancelAiBookMapGeneration());
+  aiElement('btnBuildAiVectors')?.addEventListener('click', () => void buildAiVectorsFromSheet());
   aiElement('btnRefreshAiConversations')?.addEventListener('click', () => {
     void refreshAiConversationList();
   });
@@ -1828,6 +2102,7 @@ function setupAiPanel() {
     event.preventDefault();
     event.stopPropagation();
     if (aiElement('aiConversationConfirmView')?.hidden === false) closeAiConversationConfirmation();
+    else if (aiElement('aiBookMapView')?.hidden === false) closeAiBookMapSheet();
     else if (aiElement('aiConversationsView')?.hidden === false) closeAiConversationsSheet();
     else if (aiElement('aiConfigView')?.hidden === false) closeAiConfigSheet();
     else closeAiModal();
@@ -1851,6 +2126,8 @@ window.__zhenshuAiApi = {
   restoreAiConversation,
   openAiConversationsSheet,
   closeAiConversationsSheet,
+  openAiBookMapSheet,
+  closeAiBookMapSheet,
   refreshAiConversationList,
   renderAiConversationList,
   setupAiPanel,

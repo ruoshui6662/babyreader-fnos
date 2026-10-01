@@ -236,7 +236,7 @@ function updateTopbarState() {
     btnNotes.setAttribute('title', notesAvailable ? '打开标记与想法' : '标记与想法仅支持 EPUB 和 PDF');
   }
   if (btnAi) {
-    const aiAvailable = (isEpub || isPdf) && Boolean(state.currentBookId);
+    const aiAvailable = (isEpub || isPdf || state.contentType === 'text') && Boolean(state.currentBookId);
     btnAi.hidden = !aiAvailable;
     btnAi.disabled = !aiAvailable;
     btnAi.innerHTML = aiIconSvg() + railLabel('AI');

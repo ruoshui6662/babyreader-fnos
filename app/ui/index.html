@@ -313,6 +313,7 @@
         <p>回答仅基于当前书本内容</p>
       </div>
       <div class="ai-modal-actions">
+        <button type="button" class="ai-icon-button ai-book-map-button" id="btnAiBookMap" aria-label="本书导读" title="本书导读">导读</button>
         <button type="button" class="ai-icon-button ai-conversations-button" id="btnAiConversations" aria-label="会话列表" title="会话列表">会话</button>
         <button type="button" class="ai-icon-button ai-new-conversation" id="btnAiNewConversation" aria-label="新建对话" title="新建对话">新对话</button>
         <button type="button" class="ai-icon-button" id="btnAiSettings" aria-label="AI 设置" title="AI 设置">设置</button>
@@ -378,6 +379,32 @@
           </div>
         </div>
       </section>
+      <section id="aiBookMapView" class="ai-config-sheet ai-book-map-sheet" data-ai-view="book-map" hidden role="dialog" aria-modal="true" aria-labelledby="aiBookMapTitle">
+        <button type="button" class="ai-config-sheet-backdrop" id="btnCloseAiBookMapBackdrop" aria-label="关闭导读"></button>
+        <div class="ai-config-sheet-card">
+          <header class="ai-config-sheet-header">
+            <div class="ai-config-heading">
+              <h3 id="aiBookMapTitle">本书导读</h3>
+              <p>由 AI 通读全书后写成，同一台 NAS 的读者共享；回答全书和章节问题时会用到。</p>
+            </div>
+            <button type="button" class="ai-icon-button ui-close" id="btnCloseAiBookMap" aria-label="关闭导读" title="关闭">×</button>
+          </header>
+          <div class="ai-config-sheet-content ai-book-map-content">
+            <p class="ai-book-map-status" id="aiBookMapStatus" role="status" aria-live="polite">正在读取导读状态…</p>
+            <div class="ai-book-map-progress" id="aiBookMapProgress" hidden><span id="aiBookMapProgressBar"></span></div>
+            <div class="ai-book-map-actions">
+              <button type="button" class="reader-action-button" id="btnGenerateAiBookMap" hidden>生成导读</button>
+              <button type="button" class="ai-secondary-button" id="btnCancelAiBookMap" hidden>停止</button>
+            </div>
+            <div class="ai-book-map-vectors" id="aiBookMapVectors" hidden>
+              <span id="aiBookMapVectorsText"></span>
+              <button type="button" class="ai-secondary-button" id="btnBuildAiVectors" hidden>建立</button>
+            </div>
+            <article class="ai-book-map-summary" id="aiBookMapSummary" hidden></article>
+            <div class="ai-book-map-outline" id="aiBookMapOutline"></div>
+          </div>
+        </div>
+      </section>
       <section id="aiConversationConfirmView" class="ai-config-sheet ai-conversation-confirm-sheet" data-ai-view="conversation-confirm" hidden role="alertdialog" aria-modal="true" aria-labelledby="aiConversationConfirmTitle" aria-describedby="aiConversationConfirmDescription">
         <button type="button" class="ai-config-sheet-backdrop" id="btnCloseAiConversationConfirmBackdrop" aria-label="取消会话操作"></button>
         <div class="ai-config-sheet-card ai-conversation-confirm-card">
@@ -414,7 +441,34 @@
               <span>API Key</span>
               <input id="aiApiKey" type="password" autocomplete="new-password" placeholder="留空则保留已保存的 Key">
             </label>
-            <p class="ai-config-hint" id="aiConfigHint">支持 OpenAI 及兼容 Responses API 的服务。</p>
+            <label class="ai-config-field">
+              <span>接口协议</span>
+              <select id="aiApiFormat">
+                <option value="chat">Chat Completions（OpenAI 兼容，推荐）</option>
+                <option value="responses">Responses</option>
+              </select>
+            </label>
+            <label class="ai-config-field">
+              <span>导读与导航模型（可选）</span>
+              <input id="aiSummaryModel" type="text" autocomplete="off" placeholder="留空则使用上面的模型">
+            </label>
+            <details class="ai-config-advanced" id="aiEmbeddingSettings">
+              <summary>语义检索（可选）</summary>
+              <p class="ai-config-note">填写嵌入模型后启用，能更好地找到意思相近但用词不同的内容。服务 URL 和 Key 留空时沿用上面的配置。</p>
+              <label class="ai-config-field">
+                <span>嵌入模型</span>
+                <input id="aiEmbeddingModel" type="text" autocomplete="off" placeholder="留空则不启用语义检索">
+              </label>
+              <label class="ai-config-field">
+                <span>嵌入服务 URL</span>
+                <input id="aiEmbeddingBaseUrl" type="url" inputmode="url" autocomplete="off" placeholder="留空则与上面相同">
+              </label>
+              <label class="ai-config-field">
+                <span>嵌入 API Key</span>
+                <input id="aiEmbeddingApiKey" type="password" autocomplete="new-password" placeholder="留空则保留已保存的 Key，或沿用上面的 Key">
+              </label>
+            </details>
+            <p class="ai-config-hint" id="aiConfigHint">支持 OpenAI 协议（Chat Completions 或 Responses）的服务。</p>
             <button type="button" class="ai-index-manager-entry" id="btnOpenAiIndexManager" hidden>管理本地检索索引</button>
           </div>
           <footer class="ai-config-actions">

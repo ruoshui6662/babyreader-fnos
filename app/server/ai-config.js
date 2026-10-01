@@ -4,6 +4,7 @@ const fs = require('node:fs/promises');
 const dns = require('node:dns').promises;
 const net = require('node:net');
 const path = require('node:path');
+const { normalizeApiFormat, resolveApiFormat } = require('./ai-transport');
 
 const DEFAULT_BASE_URL = 'https://api.openai.com/v1';
 const DEFAULT_MODEL = 'gpt-5.5';
@@ -87,28 +88,63 @@ function normalizeUserId(value) {
   return uid;
 }
 
+function nextSecret(input, previous, field, clearField) {
+  let value = clean(previous[field], 500);
+  if (input[clearField] === true) value = '';
+  else if (Object.prototype.hasOwnProperty.call(input, field) && clean(input[field], 500)) value = clean(input[field], 500);
+  return value;
+}
+
 function normalizeAiSettings(input = {}, previous = {}) {
   if (!input || typeof input !== 'object' || Array.isArray(input)) throw new Error('AI 配置格式无效');
   const baseUrl = normalizeBaseUrl(input.baseUrl ?? previous.baseUrl ?? DEFAULT_BASE_URL);
   const model = clean(input.model ?? previous.model ?? DEFAULT_MODEL, 200) || DEFAULT_MODEL;
   if (!model) throw new Error('AI 模型名不能为空');
-  let apiKey = clean(previous.apiKey, 500);
-  if (input.clearApiKey === true) apiKey = '';
-  else if (Object.prototype.hasOwnProperty.call(input, 'apiKey') && clean(input.apiKey, 500)) apiKey = clean(input.apiKey, 500);
-  return { baseUrl, model, apiKey };
+  const apiKey = nextSecret(input, previous, 'apiKey', 'clearApiKey');
+  // Keep the protocol a configuration was saved with; new ones use Chat Completions.
+  const apiFormat = input.apiFormat
+    ? normalizeApiFormat(input.apiFormat, 'chat')
+    : previous.apiFormat || (previous.apiKey || previous.baseUrl || previous.model ? 'responses' : 'chat');
+  const embeddingBaseUrlInput = clean(input.embeddingBaseUrl ?? previous.embeddingBaseUrl ?? '', 500);
+  return {
+    baseUrl,
+    model,
+    apiKey,
+    apiFormat,
+    summaryModel: clean(input.summaryModel ?? previous.summaryModel ?? '', 200),
+    embeddingModel: clean(input.embeddingModel ?? previous.embeddingModel ?? '', 200),
+    embeddingBaseUrl: embeddingBaseUrlInput ? normalizeBaseUrl(embeddingBaseUrlInput) : '',
+    embeddingApiKey: nextSecret(input, previous, 'embeddingApiKey', 'clearEmbeddingApiKey')
+  };
+}
+
+// Embedding requests use their own endpoint and key when given, otherwise the
+// chat service's. Blank model = semantic retrieval off.
+function embeddingSettings(settings = {}, env = process.env) {
+  const model = clean(settings.embeddingModel || env.OPENAI_EMBEDDING_MODEL, 200);
+  const baseUrl = normalizeBaseUrl(settings.embeddingBaseUrl || settings.baseUrl || env.OPENAI_BASE_URL || DEFAULT_BASE_URL);
+  const apiKey = clean(settings.embeddingApiKey || settings.apiKey || env.OPENAI_API_KEY, 500);
+  return { configured: Boolean(model && apiKey), model, baseUrl, apiKey };
 }
 
 function publicAiConfig(settings = {}, env = process.env) {
   const baseUrl = normalizeBaseUrl(settings.baseUrl || env.OPENAI_BASE_URL || DEFAULT_BASE_URL);
   const model = clean(settings.model || env.OPENAI_MODEL || DEFAULT_MODEL, 200) || DEFAULT_MODEL;
   const hasApiKey = Boolean(clean(settings.apiKey || env.OPENAI_API_KEY, 500));
+  const embedding = embeddingSettings(settings, env);
   return {
     configured: hasApiKey,
     provider: 'openai-compatible',
     baseUrl,
     model,
+    apiFormat: resolveApiFormat(settings, env),
+    summaryModel: clean(settings.summaryModel || env.OPENAI_SUMMARY_MODEL, 200),
+    embeddingModel: embedding.model,
+    embeddingBaseUrl: clean(settings.embeddingBaseUrl, 500),
+    hasEmbeddingApiKey: Boolean(clean(settings.embeddingApiKey, 500)),
+    embeddingConfigured: embedding.configured,
     hasApiKey,
-    retrieval: 'local-lexical-rag'
+    retrieval: embedding.configured ? 'hybrid' : 'local-lexical-rag'
   };
 }
 
@@ -149,7 +185,12 @@ class AiConfigStorage {
     return {
       baseUrl: raw.baseUrl ? normalizeBaseUrl(raw.baseUrl) : '',
       model: clean(raw.model, 200),
-      apiKey: clean(raw.apiKey, 500)
+      apiKey: clean(raw.apiKey, 500),
+      apiFormat: raw.apiFormat ? normalizeApiFormat(raw.apiFormat, 'chat') : '',
+      summaryModel: clean(raw.summaryModel, 200),
+      embeddingModel: clean(raw.embeddingModel, 200),
+      embeddingBaseUrl: raw.embeddingBaseUrl ? normalizeBaseUrl(raw.embeddingBaseUrl) : '',
+      embeddingApiKey: clean(raw.embeddingApiKey, 500)
     };
   }
 
@@ -168,6 +209,7 @@ module.exports = {
   isPrivateNetworkAddress,
   resolveSafeAiBaseUrl,
   normalizeAiSettings,
+  embeddingSettings,
   publicAiConfig,
   AiConfigStorage
 };

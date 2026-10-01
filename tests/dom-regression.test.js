@@ -5709,3 +5709,63 @@ test('organize mode renames a book through a dialog and keeps controls on one ro
   assert.equal(library.books[0].originalTitle, '第一本');
   await window.happyDOM.close();
 });
+
+test('the 导读 sheet shows the estimate, starts generation and is available for PDF', async () => {
+  const { window, api } = await createReaderDom();
+  const bookId = '7'.repeat(64);
+  const calls = [];
+  const none = {
+    state: 'none',
+    progress: { done: 0, total: 9 },
+    estimate: { calls: 9, inputTokens: 44000, outputTokens: 3150, sampled: false },
+    fullEstimate: { calls: 9, inputTokens: 44000, outputTokens: 3150 },
+    vectors: { state: 'none', automatic: false, estimateTokens: 30000, progress: { done: 0, total: 80 } },
+    book: null,
+    nodes: [
+      { id: 'c1', label: '第一章 初到云岭', depth: 0, anchor: { chapterIndex: 0 } },
+      { id: 'c1s1', label: '一、搬进山里', depth: 1, anchor: { chapterIndex: 0 } }
+    ]
+  };
+  window.browserHost = {
+    aiStatus: async () => ({ configured: true, model: 'test-model' }),
+    getAiConversations: async () => ({ conversations: [] }),
+    getAiBookMap: async (id) => { calls.push(['status', id]); return none; },
+    generateAiBookMap: async (id, options) => {
+      calls.push(['generate', id, options]);
+      return { ...none, state: 'running', progress: { done: 1, total: 9 } };
+    },
+    cancelAiBookMap: async (id) => { calls.push(['cancel', id]); return none; },
+    buildAiVectors: async (id) => { calls.push(['vectors', id]); return { state: 'running' }; }
+  };
+  api.state.contentType = 'epub';
+  api.state.currentBookId = bookId;
+  api.aiApi.setupAiPanel();
+  await api.aiApi.openAiModal(null, window.document.body);
+  const button = window.document.getElementById('btnAiBookMap');
+  assert.equal(button.hidden, false);
+  button.click();
+  await waitFor(() => window.document.querySelectorAll('.ai-book-map-node').length === 2, '导读 outline did not render');
+  assert.match(window.document.getElementById('aiBookMapStatus').textContent, /约 4\.7 万 tokens，9 次调用/);
+  assert.equal(window.document.getElementById('aiBookMapVectors').hidden, false);
+  assert.match(window.document.getElementById('aiBookMapVectorsText').textContent, /需要手动建立（约 3\.0 万 tokens）/);
+  window.document.getElementById('btnBuildAiVectors').click();
+  await waitFor(() => calls.some(([kind]) => kind === 'vectors'), 'semantic index build did not start');
+  const generate = window.document.getElementById('btnGenerateAiBookMap');
+  assert.equal(generate.textContent, '生成导读');
+  assert.equal(window.document.querySelector('.ai-book-map-node[data-depth="1"]') !== null, true);
+  generate.click();
+  await waitFor(() => calls.some(([kind]) => kind === 'generate'), 'generation did not start');
+  assert.equal(JSON.stringify(calls.find(([kind]) => kind === 'generate')), JSON.stringify(['generate', bookId, { force: false }]));
+  await waitFor(() => window.document.getElementById('btnCancelAiBookMap').hidden === false, 'stop button did not appear');
+  assert.equal(window.document.getElementById('aiBookMapProgress').hidden, false);
+  api.aiApi.closeAiBookMapSheet({ restoreFocus: false });
+  assert.equal(window.document.getElementById('aiBookMapView').hidden, true);
+  api.aiApi.closeAiModal({ restoreFocus: false });
+
+  api.state.contentType = 'pdf';
+  window.pdfReaderController = { getPageCount: () => 3 };
+  await api.aiApi.openAiModal(null, window.document.body);
+  // PDFs have a 导读 too (from bookmarks, headings or page groups).
+  assert.equal(window.document.getElementById('btnAiBookMap').hidden, false);
+  await window.happyDOM.close();
+});

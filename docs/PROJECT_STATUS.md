@@ -56,7 +56,7 @@ fnOS 包: manifest · cmd/*（生命周期脚本）· config/{privilege,resource
 | PDF 阅读 | PDF.js 渲染；连续/单页/双页三种布局；缩放和适应宽度；渲染调度；文本层选区；页级进度和书签；目录；全文 FTS 搜索并精确定位到页 | 本地完成。**始终开启**（v1.3.7 起移除了设置开关） |
 | 标注与笔记 | EPUB/PDF 都支持划线、想法、颜色、笔记侧栏、按页/按章节排序；可导出笔记 | 本地完成，删除后撤销尚未设计 |
 | 全书搜索 | 本地 FTS、续页、跨章节命中；搜索面板不关闭，可前后跳转命中 | 同一页重复短语的精确定位仍会退化成只定位到章节 |
-| AI 问书 | 多轮流式对话；章节和全书检索；摘要缓存；会话持久化；PDF 结构化理解与来源页码；索引管理器（紧凑界面、孤儿索引清理） | 没有做真实供应商和 NAS 验收 |
+| AI 问书 | 服务端问答流水线（`ai-answer-pipeline`）：统一目录树（EPUB 目录、TXT/Markdown 标题识别、PDF 书签/标题/按页分组）→ 规则路由 + 经济模型导航（`ai-router`）→ 按问题类型取证（整章全文、导读、选区上下文、两段式检索 + 段落扩展、可选语义检索）→ 带引用回答；共享导读图（`ai-book-map`）；OpenAI 协议 Chat Completions / Responses（`ai-transport`）；多轮流式、会话持久化、索引管理器 | 离线评测 30 题全部命中；需要用真实模型（`ZHENSHU_EVAL_API=1`）和 NAS 验收 |
 | 书库 | 分类、整理模式批量归类、书卡直接拖拽和长按排序（有 revision 冲突回滚）、筛选、继续阅读卡片、首页 Apple HIG 改版 | 本地完成；触屏真机和视觉对照待做 |
 | MOBI/AZW3 阅读 | 服务端把 MOBI6/KF8 转成确定性的派生 EPUB（`mobi-format`/`mobi-convert`/`mobi-derived`，在 worker 中执行，有缓存），然后复用 EPUB 的全部能力：阅读、目录、划线、进度、搜索、AI；DRM 只检测、提示，不解密 | 本地完成（AZW3 已用真实书验证）。**始终开启**（v1.3.8 起移除了设置开关） |
 | 书籍导入 | 管理员可以通过按钮或拖放导入，文件写入 `zhenshu/library/导入` 共享目录；按内容校验格式，按 SHA-256 去重，不覆盖已有文件；导入与扫描共用库锁；有进度队列；在分类页导入会自动归类 | 本地完成。**对管理员始终开启**（v1.3.8 起移除了设置开关）；网关的请求体上限还没测 |
@@ -74,7 +74,9 @@ fnOS 包: manifest · cmd/*（生命周期脚本）· config/{privilege,resource
 | `ZHENSHU_DIRECT_HOST` | 可选：直连端口的监听地址，默认 `0.0.0.0`（测试用 `127.0.0.1`） |
 | `ZHENSHU_KF8_SAMPLE` | 可选：指向本地 AZW3 样本的绝对路径，用于真实书的转换回归测试（样本不进仓库） |
 | `ZHENSHU_ENABLE_LIBRARY_ORGANIZATION=0` | 回退到扁平书库 |
-| `ZHENSHU_ENABLE_AI_CHAPTER_UNDERSTANDING` | AI 章节/全书概述（灰度） |
+| `ZHENSHU_ENABLE_AI_CHAPTER_UNDERSTANDING` | 仅影响旧的“客户端上传上下文”接口；当前界面使用的服务端流水线不受它控制，章节/全书理解始终开启 |
+| `OPENAI_API_FORMAT` / `OPENAI_SUMMARY_MODEL` / `OPENAI_EMBEDDING_MODEL` | 环境变量方式配置 AI 时的接口协议（`chat`/`responses`）、导读与导航模型、嵌入模型（界面配置优先） |
+| `ZHENSHU_EVAL_API=1` | `scripts/evaluate-ai-book-qa.js` 调用真实模型评测（生成导读、建立向量、作答并评分） |
 | `ZHENSHU_ENABLE_PDF_AI_STRUCTURE` | PDF AI 结构化理解 |
 | `ZHENSHU_DEV_PORT` / `_DEV_UID` / `_DEV_USERNAME` | 本地开发。只在缺少网关 Header 时生效 |
 | `ZHENSHU_GATEWAY_URL` / `_GATEWAY_COOKIE` | `scripts/fnos-device-acceptance.sh` 走网关验收时使用 |

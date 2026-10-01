@@ -1040,8 +1040,16 @@ test('AI configuration normalizes endpoint/model and never exposes the API key',
   assert.deepEqual(settings, {
     baseUrl: 'https://gateway.example/v1',
     model: 'reader-model',
-    apiKey: 'secret-key'
+    apiKey: 'secret-key',
+    // New configurations use Chat Completions; blank optional models stay off.
+    apiFormat: 'chat',
+    summaryModel: '',
+    embeddingModel: '',
+    embeddingBaseUrl: '',
+    embeddingApiKey: ''
   });
+  // A configuration saved before the protocol choice keeps using /responses.
+  assert.equal(normalizeAiSettings({ model: 'reader-model' }, { baseUrl: 'https://gateway.example/v1', model: 'old', apiKey: 'k' }).apiFormat, 'responses');
   assert.throws(() => normalizeAiSettings({ baseUrl: 'javascript:alert(1)' }), /URL/);
   assert.throws(() => normalizeAiSettings({ baseUrl: 'http://127.0.0.1:8080/v1' }), /本机或内网地址/);
   const publicConfig = publicAiConfig(settings);
@@ -1101,7 +1109,7 @@ test('AI connection test validates the configured model without exposing the API
     },
     lookupImpl: async () => ({ address: '93.184.216.34' })
   });
-  assert.deepEqual(result, { ok: true, model: 'reader-model' });
+  assert.deepEqual(result, { ok: true, model: 'reader-model', apiFormat: 'responses' });
   assert.equal(captured.url, 'https://gateway.example/v1/responses');
   assert.equal(captured.options.headers.Authorization, 'Bearer secret-key');
   assert.equal(captured.body.input[0].content[0].text, '连接测试：请只回复 OK。');
@@ -1118,7 +1126,7 @@ test('AI connection test accepts a successful provider response without requirin
     }),
     lookupImpl: async () => ({ address: '93.184.216.34' })
   });
-  assert.deepEqual(result, { ok: true, model: 'deepseek-flash' });
+  assert.deepEqual(result, { ok: true, model: 'deepseek-flash', apiFormat: 'responses' });
 });
 
 test('server validates AI context against the current text book before upstream access', async (t) => {

@@ -2,7 +2,7 @@
 
 const crypto = require('node:crypto');
 
-const AI_EPUB_PARSER_VERSION = 2;
+const AI_EPUB_PARSER_VERSION = 3;
 const MAX_ARCHIVE_ENTRIES = 10_000;
 const MAX_SPINE_ITEMS = 10_000;
 const MAX_TOC_ITEMS = 10_000;
@@ -232,27 +232,35 @@ function parseNcxEntries(ncxXml, ncxPath) {
   const stack = [];
   const tokenRe = /<navPoint\b[^>]*>|<\/navPoint\s*>/gi;
   let match;
+  // Entries are recorded in document order (when a navPoint opens) so a
+  // parent always precedes its children; its label is filled in once the
+  // navPoint closes.
   while ((match = tokenRe.exec(source)) !== null) {
     if (/^<navPoint\b/i.test(match[0])) {
-      stack.push({ start: tokenRe.lastIndex, depth: stack.length });
+      const entry = { label: '', href: '', fragment: '', depth: stack.length, valid: false };
+      entries.push(entry);
+      stack.push({ start: tokenRe.lastIndex, entry });
       if (stack.length > MAX_TOC_DEPTH) {
         throw Object.assign(new Error('EPUB NCX nesting exceeds the structure limit'), { code: 'AI_EPUB_TOC_LIMIT' });
+      }
+      if (entries.length > MAX_TOC_ITEMS) {
+        throw Object.assign(new Error('EPUB NCX exceeds the structure limit'), { code: 'AI_EPUB_TOC_LIMIT' });
       }
       continue;
     }
     const point = stack.pop();
     if (!point) continue;
-    const body = source.slice(point.start, match.index);
+    // Only this navPoint's own label and target, not a child's.
+    const body = source.slice(point.start, match.index).replace(/<navPoint\b[\s\S]*$/i, '');
     const labelMatch = body.match(/<navLabel\b[^>]*>[\s\S]*?<text\b[^>]*>([\s\S]*?)<\/text>[\s\S]*?<\/navLabel>/i);
     const contentMatch = body.match(/<content\b[^>]*src\s*=\s*(["'])(.*?)\1/i);
     const target = contentMatch ? resolveHref(ncxPath, contentMatch[2]) : null;
     const label = labelMatch ? normalizeBookText(labelMatch[1]).slice(0, 512) : '';
-    if (target?.valid && target.path && label) entries.push({ label, href: target.path, fragment: target.fragment, depth: point.depth });
-    if (entries.length > MAX_TOC_ITEMS) {
-      throw Object.assign(new Error('EPUB NCX exceeds the structure limit'), { code: 'AI_EPUB_TOC_LIMIT' });
+    if (target?.valid && target.path && label) {
+      Object.assign(point.entry, { label, href: target.path, fragment: target.fragment, valid: true });
     }
   }
-  return entries;
+  return entries.filter((entry) => entry.valid).map(({ valid, ...entry }) => entry);
 }
 
 function stableChapterId(href, fragment, ordinal) {

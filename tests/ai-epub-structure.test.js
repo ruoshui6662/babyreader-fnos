@@ -136,6 +136,26 @@ test('legacy NCX navigation resolves chapter fragments', () => {
   assert.equal(structure.chapters[0].mappingQuality, 'exact');
 });
 
+test('nested NCX navigation keeps each chapter under its own volume', () => {
+  const point = (id, label, src, children = '') => `<navPoint id="${id}"><navLabel><text>${label}</text></navLabel><content src="${src}"/>${children}</navPoint>`;
+  const structure = parseEpubStructure(fileMap({
+    'META-INF/container.xml': '<container><rootfiles><rootfile full-path="OPS/book.opf"/></rootfiles></container>',
+    'OPS/book.opf': `<package><manifest>
+      <item id="ncx" href="toc.ncx" media-type="application/x-dtbncx+xml"/>
+      <item id="a" href="a.xhtml" media-type="application/xhtml+xml"/>
+      <item id="b" href="b.xhtml" media-type="application/xhtml+xml"/>
+      </manifest><spine toc="ncx"><itemref idref="a"/><itemref idref="b"/></spine></package>`,
+    'OPS/toc.ncx': `<ncx><navMap>${point('p0', '人物志', 'a.xhtml', point('p1', '甲', 'a.xhtml#x'))}${point('p2', '第一册', 'b.xhtml', point('p3', '第一章', 'b.xhtml#c1') + point('p4', '第二章', 'b.xhtml#c2'))}</navMap></ncx>`,
+    'OPS/a.xhtml': '<html><body><h1>人物志</h1><p id="x">甲的介绍</p></body></html>',
+    'OPS/b.xhtml': '<html><body><h1>第一册</h1><h2 id="c1">第一章</h2><p>一</p><h2 id="c2">第二章</h2><p>二</p></body></html>'
+  }));
+  const byLabel = Object.fromEntries(structure.chapters.map((chapter) => [chapter.label, chapter]));
+  assert.deepEqual(structure.chapters.map((chapter) => chapter.label), ['人物志', '甲', '第一册', '第一章', '第二章']);
+  assert.equal(byLabel['甲'].parentId, byLabel['人物志'].id);
+  assert.equal(byLabel['第一章'].parentId, byLabel['第一册'].id);
+  assert.equal(byLabel['第二章'].parentId, byLabel['第一册'].id);
+});
+
 test('TOC nesting beyond the parser bound fails with a stable error code', () => {
   const nested = `${'<ol><li>'.repeat(MAX_TOC_DEPTH + 1)}<a href="text.xhtml#chapter">超深目录</a>${'</li></ol>'.repeat(MAX_TOC_DEPTH + 1)}`;
   assert.throws(() => parseEpubStructure(fileMap({

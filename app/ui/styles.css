@@ -5281,7 +5281,8 @@ body.is-epub .reader-floating-toolbar {
 }
 
 .ai-question-field textarea,
-.ai-config-field input {
+.ai-config-field input,
+.ai-config-field select {
   box-sizing: border-box;
   width: 100%;
   padding: 11px 12px;
@@ -5300,7 +5301,8 @@ body.is-epub .reader-floating-toolbar {
 }
 
 .ai-question-field textarea:focus-visible,
-.ai-config-field input:focus-visible {
+.ai-config-field input:focus-visible,
+.ai-config-field select:focus-visible {
   outline: 2px solid var(--color-focus);
   outline-offset: 1px;
 }
@@ -7885,4 +7887,162 @@ button.ui-close,
 .library-rename-actions button:disabled {
   opacity: .55;
   cursor: default;
+}
+
+/* AI 设置：可选的语义检索分组 */
+.ai-config-advanced {
+  display: grid;
+  gap: 10px;
+  padding: 10px 12px;
+  border: 1px solid var(--color-separator);
+  border-radius: 12px;
+}
+.ai-config-advanced[open] {
+  padding-bottom: 12px;
+}
+.ai-config-advanced > summary {
+  cursor: pointer;
+  color: var(--color-text);
+  font-size: 13px;
+  font-weight: 600;
+}
+.ai-config-advanced[open] > summary {
+  margin-bottom: 8px;
+}
+.ai-config-advanced .ai-config-field + .ai-config-field {
+  margin-top: 8px;
+}
+.ai-config-note {
+  margin: 0 0 8px;
+  color: var(--color-text-2);
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+/* AI 问书：回答依据的范围（全书导读 / 某章全文 / 选中段落…） */
+.ai-confidence-notice[data-tone="info"] {
+  color: var(--color-text-2);
+  background: var(--color-fill);
+  border-color: transparent;
+}
+
+/* AI 问书：本书导读 */
+.ai-book-map-content {
+  display: grid;
+  gap: 12px;
+}
+.ai-book-map-status {
+  margin: 0;
+  color: var(--color-text-2);
+  font-size: 13px;
+  line-height: 1.6;
+}
+.ai-book-map-progress {
+  height: 4px;
+  overflow: hidden;
+  border-radius: 2px;
+  background: var(--color-fill);
+}
+.ai-book-map-progress > span {
+  display: block;
+  width: 0;
+  height: 100%;
+  background: var(--color-accent);
+  transition: width var(--dur-med) var(--ease-out);
+}
+.ai-book-map-actions {
+  display: flex;
+  gap: 8px;
+}
+.ai-book-map-actions > button:not([hidden]) {
+  min-height: 34px;
+  padding: 0 16px;
+  border-radius: var(--radius-pill);
+  font: inherit;
+  font-size: 12px;
+}
+.ai-book-map-summary {
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: var(--color-fill);
+  font-size: 13px;
+  line-height: 1.7;
+}
+.ai-book-map-summary h4 {
+  margin: 0 0 6px;
+  font-size: 13px;
+}
+.ai-book-map-summary p,
+.ai-book-map-summary ul {
+  margin: 0 0 6px;
+}
+.ai-book-map-summary ul {
+  padding-left: 18px;
+}
+.ai-book-map-structure {
+  color: var(--color-text-2);
+}
+.ai-book-map-outline {
+  display: grid;
+  gap: 2px;
+}
+.ai-book-map-node {
+  padding: 6px 4px;
+  border-bottom: 1px solid var(--color-separator);
+  font-size: 13px;
+}
+.ai-book-map-node[data-depth="1"] { padding-left: 16px; }
+.ai-book-map-node[data-depth="2"] { padding-left: 28px; }
+.ai-book-map-node > summary {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  cursor: pointer;
+  color: var(--color-text);
+}
+.ai-book-map-label {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.ai-book-map-pending {
+  flex: 0 0 auto;
+  color: var(--color-text-3, var(--color-text-2));
+  font-size: 11px;
+}
+.ai-book-map-node > p {
+  margin: 6px 0 4px;
+  color: var(--color-text-2);
+  line-height: 1.7;
+}
+.ai-book-map-jump {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--color-accent);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.ai-book-map-vectors:not([hidden]) {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  border: 1px dashed var(--color-separator);
+  border-radius: 10px;
+  color: var(--color-text-2);
+  font-size: 12px;
+  line-height: 1.6;
+}
+.ai-book-map-vectors > span {
+  flex: 1 1 auto;
+}
+.ai-book-map-vectors > button:not([hidden]) {
+  flex: 0 0 auto;
+  min-height: 28px;
+  padding: 0 12px;
+  border-radius: var(--radius-pill);
+  font: inherit;
+  font-size: 12px;
 }

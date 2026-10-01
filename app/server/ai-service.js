@@ -2,6 +2,15 @@
 
 const { normalizeBaseUrl, resolveSafeAiBaseUrl } = require('./ai-config');
 const { assessRetrievalConfidence } = require('./ai-retrieval');
+const {
+  createChatStreamTranslator,
+  decodeResponse,
+  encodeRequest,
+  endpointFor,
+  normalizeUsage,
+  resolveApiFormat,
+  wantsCompletionTokenParameter
+} = require('./ai-transport');
 
 const DEFAULT_BASE_URL = 'https://api.openai.com/v1';
 const DEFAULT_MODEL = 'gpt-5.5';
@@ -29,9 +38,38 @@ function normalizeAiConfig(env = process.env, saved = {}) {
     configured: Boolean(apiKey),
     baseUrl,
     model,
+    summaryModel: cleanString(saved.summaryModel || env.OPENAI_SUMMARY_MODEL, 200) || model,
+    apiFormat: resolveApiFormat(saved, env),
     provider: 'openai-compatible',
     retrieval: 'local-lexical-rag'
   };
+}
+
+// The model for a call: the reader's chat model, or the cheaper model chosen
+// for summaries and navigation.
+function modelFor(config, role) {
+  return role === 'summary' ? config.summaryModel || config.model : config.model;
+}
+
+// Sends one model request over the configured protocol. A Chat Completions
+// model that rejects `max_tokens` is retried once with `max_completion_tokens`.
+async function postModel({ config, apiKey, baseUrl, payload, fetchImpl, signal, accept = 'application/json' }) {
+  const send = (options) => fetchImpl(`${baseUrl}${endpointFor(config.apiFormat)}`, {
+    method: 'POST',
+    redirect: 'error',
+    headers: {
+      Accept: accept,
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${apiKey}`
+    },
+    body: JSON.stringify(encodeRequest(config.apiFormat, payload, options)),
+    signal
+  });
+  const response = await send();
+  if (config.apiFormat !== 'chat' || response.status !== 400 || !payload?.max_output_tokens) return { response };
+  const errorPayload = await readResponseJsonLimited(response, MAX_UPSTREAM_ERROR_BYTES);
+  if (!wantsCompletionTokenParameter(400, errorPayload)) return { response, errorPayload };
+  return { response: await send({ tokenParameter: 'max_completion_tokens' }) };
 }
 
 function normalizeChapter(value) {
@@ -262,7 +300,7 @@ async function requestOpenAiChapterSummary({
         retrievalConfidence: 'high',
           maxOutputTokens: 300
         },
-        env, savedConfig, fetchImpl, lookupImpl, signal, timeoutMs: remainingTime()
+        env, savedConfig, fetchImpl, lookupImpl, signal, timeoutMs: remainingTime(), modelRole: 'summary'
       })
     });
     const mapped = typeof mapTaskCache === 'function'
@@ -420,7 +458,7 @@ function createAbortController(externalSignal) {
   return { controller, abort };
 }
 
-async function requestOpenAiAnswer({ request, env = process.env, savedConfig = {}, fetchImpl = globalThis.fetch, lookupImpl, timeoutMs = 30000, signal }) {
+async function requestOpenAiAnswer({ request, env = process.env, savedConfig = {}, fetchImpl = globalThis.fetch, lookupImpl, timeoutMs = 30000, signal, modelRole = 'chat', onUsage = null }) {
   const config = normalizeAiConfig(env, savedConfig);
   const apiKey = cleanString(savedConfig.apiKey || env.OPENAI_API_KEY);
   if (!config.configured) {
@@ -432,22 +470,18 @@ async function requestOpenAiAnswer({ request, env = process.env, savedConfig = {
   const { controller, abort } = createAbortController(signal);
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
-    const response = await fetchImpl(`${baseUrl}/responses`, {
-      method: 'POST',
-      redirect: 'error',
-      headers: {
-        Accept: 'application/json',
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${apiKey}`
-      },
-      body: JSON.stringify(request?.pdfProfile
-        ? buildPdfProfilePayload({ model: config.model, ...request })
+    const model = modelFor(config, modelRole);
+    const requestPayload = request?.rawPayload
+      ? { ...request.rawPayload, model }
+      : request?.pdfProfile
+        ? buildPdfProfilePayload({ model, ...request })
         : request?.pdfEvidence
-          ? buildPdfResponsesPayload({ model: config.model, ...request })
-          : buildResponsesPayload({ model: config.model, ...request })),
-      signal: controller.signal
+          ? buildPdfResponsesPayload({ model, ...request })
+          : buildResponsesPayload({ model, ...request });
+    const { response, errorPayload } = await postModel({
+      config, apiKey, baseUrl, payload: requestPayload, fetchImpl, signal: controller.signal
     });
-    const payload = await readResponseJsonLimited(response);
+    const payload = errorPayload || await readResponseJsonLimited(response);
     if (!response.ok) {
       throw Object.assign(new Error(`OpenAI 请求失败：${response.status}`), {
         code: 'AI_UPSTREAM_FAILED',
@@ -456,7 +490,13 @@ async function requestOpenAiAnswer({ request, env = process.env, savedConfig = {
         upstreamCode: payload?.error?.code || null
       });
     }
-    const answer = extractResponsesText(payload);
+    const decoded = decodeResponse(config.apiFormat, payload);
+    if (decoded.usage && typeof onUsage === 'function') onUsage(decoded.usage);
+    const answer = decoded.text;
+    if (request?.rawPayload) {
+      if (!answer) throw Object.assign(new Error('AI 未返回可读回答'), { code: 'AI_EMPTY_RESPONSE', statusCode: 502 });
+      return answer;
+    }
     if (!answer) throw Object.assign(new Error('AI 未返回可读回答'), { code: 'AI_EMPTY_RESPONSE', statusCode: 502 });
     const citations = sanitizeAiAnswerCitations(answer, request?.context?.length || 0);
     return request?.pdfEvidence
@@ -509,7 +549,7 @@ async function requestOpenAiPdfProfile({
     if (signal?.aborted) throw Object.assign(new Error('PDF 论文画像已取消'), { code: 'AI_ABORTED', statusCode: 499 });
     const result = await requestOpenAiAnswer({
       request: { pdfProfile: true, stage: 'map', question, text: task.text, maxOutputTokens: 600 },
-      env, savedConfig, fetchImpl, lookupImpl, signal, timeoutMs: Math.min(remaining(), 30000)
+      env, savedConfig, fetchImpl, lookupImpl, signal, timeoutMs: Math.min(remaining(), 30000), modelRole: 'summary'
     });
     mapResults.push({ taskId: task.id, profile: parsePdfProfileJson(result) });
   }
@@ -519,7 +559,7 @@ async function requestOpenAiPdfProfile({
     const reduceText = JSON.stringify(mapResults).slice(0, PDF_AI_STRUCTURE_LIMITS.maxReduceInputChars);
     const result = await requestOpenAiAnswer({
       request: { pdfProfile: true, stage: 'reduce', question, text: reduceText },
-      env, savedConfig, fetchImpl, lookupImpl, signal, timeoutMs: Math.min(remaining(), 30000)
+      env, savedConfig, fetchImpl, lookupImpl, signal, timeoutMs: Math.min(remaining(), 30000), modelRole: 'summary'
     });
     combined = parsePdfProfileJson(result);
   }
@@ -534,6 +574,7 @@ async function requestOpenAiStream({
   lookupImpl,
   timeoutMs = 30000,
   signal,
+  modelRole = 'chat',
   onEvent = async () => {}
 }) {
   const config = normalizeAiConfig(env, savedConfig);
@@ -549,12 +590,17 @@ async function requestOpenAiStream({
   const { controller, abort } = createAbortController(signal);
   let timedOut = false;
   const timer = setTimeout(() => { timedOut = true; controller.abort(); }, timeoutMs);
-  const payload = { ...(request?.pdfEvidence
-    ? buildPdfResponsesPayload({ model: config.model, ...request })
-    : buildResponsesPayload({ model: config.model, ...request })), stream: true };
+  const model = modelFor(config, modelRole);
+  const payload = { ...(request?.rawPayload
+    ? { ...request.rawPayload, model }
+    : request?.pdfEvidence
+      ? buildPdfResponsesPayload({ model, ...request })
+      : buildResponsesPayload({ model, ...request })), stream: true };
+  const chatStream = config.apiFormat === 'chat' ? createChatStreamTranslator() : null;
   let answer = '';
   let responseId = null;
   let completed = false;
+  let usage = null;
 
   const emit = async (event) => {
     if (event?.type === 'response.failed' || event?.type === 'response.incomplete' || event?.type === 'error'
@@ -567,25 +613,24 @@ async function requestOpenAiStream({
       responseId = event.response?.id || responseId;
       const finalText = extractResponsesText(event.response);
       if (finalText) answer = finalText;
+      usage = normalizeUsage(event.response?.usage) || usage;
       completed = true;
     }
     await onEvent(event);
   };
+  // Chat Completions chunks are translated to the Responses events above.
+  const emitRaw = async (event) => {
+    if (!chatStream) return emit(event);
+    for (const translated of chatStream.translate(event)) await emit(translated);
+  };
 
   try {
-    const response = await fetchImpl(`${baseUrl}/responses`, {
-      method: 'POST',
-      redirect: 'error',
-      headers: {
-        Accept: 'text/event-stream, application/json',
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${apiKey}`
-      },
-      body: JSON.stringify(payload),
-      signal: controller.signal
+    const { response, errorPayload } = await postModel({
+      config, apiKey, baseUrl, payload, fetchImpl, signal: controller.signal,
+      accept: 'text/event-stream, application/json'
     });
     if (!response.ok) {
-      await readResponseJsonLimited(response, MAX_UPSTREAM_ERROR_BYTES);
+      if (!errorPayload) await readResponseJsonLimited(response, MAX_UPSTREAM_ERROR_BYTES);
       throw Object.assign(new Error(`OpenAI 请求失败：${response.status}`), {
         code: 'AI_UPSTREAM_FAILED',
         statusCode: 502,
@@ -597,16 +642,17 @@ async function requestOpenAiStream({
     const contentType = String(response.headers?.get?.('content-type') || '').toLowerCase();
     if (!contentType.includes('text/event-stream') || !response.body?.getReader) {
       const json = await readResponseJsonLimited(response);
-      if (json?.status && json.status !== 'completed') {
+      const decoded = decodeResponse(config.apiFormat, json);
+      if (decoded.status && decoded.status !== 'completed') {
         throw Object.assign(new Error('AI 服务未能完成回答，请重试。'), { code: 'AI_UPSTREAM_FAILED', statusCode: 502 });
       }
-      const text = extractResponsesText(json);
+      const text = decoded.text;
       if (!text) throw Object.assign(new Error('AI 未返回可读回答'), { code: 'AI_EMPTY_RESPONSE', statusCode: 502 });
-      responseId = json.id || null;
+      responseId = decoded.id;
       await emit({ type: 'response.output_text.delta', delta: text });
-      await emit({ type: 'response.completed', response: json });
+      await emit({ type: 'response.completed', response: { id: decoded.id, status: 'completed', output_text: text, usage: json?.usage } });
       const citations = sanitizeAiAnswerCitations(answer, request?.context?.length || 0);
-      return { answer: citations.answer, responseId, streamed: false,
+      return { answer: request?.rawPayload ? answer : citations.answer, responseId, streamed: false, usage,
         ...(request?.pdfEvidence ? { citationIntegrity: citations.citationIntegrity } : {}) };
     }
 
@@ -625,17 +671,20 @@ async function requestOpenAiStream({
       const parsed = parseResponsesSseChunk(buffer, decoder.decode(value, { stream: true }), []);
       buffer = parsed.buffer;
       for (const event of parsed.events) {
-        await emit(event);
+        await emitRaw(event);
         if (completed) break;
       }
     }
     const tail = decoder.decode();
     const final = parseResponsesSseChunk(buffer, `${tail}\n\n`, []);
-    for (const event of final.events) await emit(event);
+    for (const event of final.events) await emitRaw(event);
+    // A Chat Completions stream that ends without [DONE] but with text is complete.
+    if (!completed && chatStream && answer) await emitRaw({ done: true });
     if (!completed) throw Object.assign(new Error('AI 回答传输中断，请重试。'), { code: 'AI_INCOMPLETE_RESPONSE', statusCode: 502 });
     if (!answer) throw Object.assign(new Error('AI 未返回可读回答'), { code: 'AI_EMPTY_RESPONSE', statusCode: 502 });
+    usage = usage || chatStream?.usage || null;
     const citations = sanitizeAiAnswerCitations(answer, request?.context?.length || 0);
-    return { answer: citations.answer, responseId, streamed: true,
+    return { answer: request?.rawPayload ? answer : citations.answer, responseId, streamed: true, usage,
       ...(request?.pdfEvidence ? { citationIntegrity: citations.citationIntegrity } : {}) };
   } catch (error) {
     if (error?.name === 'AbortError') {
@@ -670,18 +719,11 @@ async function testOpenAiConnection({
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
-    const response = await fetchImpl(`${baseUrl}/responses`, {
-      method: 'POST',
-      redirect: 'error',
-      headers: {
-        Accept: 'application/json',
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${apiKey}`
-      },
-      body: JSON.stringify(buildConnectionTestPayload(config.model)),
-      signal: controller.signal
+    const { response, errorPayload } = await postModel({
+      config, apiKey, baseUrl, payload: buildConnectionTestPayload(config.model), fetchImpl, signal: controller.signal
     });
-    const payload = await readResponseJsonLimited(response, response.ok ? MAX_UPSTREAM_RESPONSE_BYTES : MAX_UPSTREAM_ERROR_BYTES);
+    const payload = errorPayload
+      || await readResponseJsonLimited(response, response.ok ? MAX_UPSTREAM_RESPONSE_BYTES : MAX_UPSTREAM_ERROR_BYTES);
     if (!response.ok) {
       throw Object.assign(new Error(`OpenAI 请求失败：${response.status}`), {
         code: 'AI_UPSTREAM_FAILED',
@@ -698,7 +740,7 @@ async function testOpenAiConnection({
         upstreamCode: payload.error.code || null
       });
     }
-    return { ok: true, model: config.model };
+    return { ok: true, model: config.model, apiFormat: config.apiFormat };
   } catch (error) {
     if (error?.name === 'AbortError') {
       throw Object.assign(new Error('AI 连接测试超时'), { code: 'AI_TIMEOUT', statusCode: 504 });
@@ -722,6 +764,8 @@ module.exports = {
   MAX_HISTORY_LENGTH,
   MAX_UPSTREAM_RESPONSE_BYTES,
   MAX_UPSTREAM_ERROR_BYTES,
+  modelFor,
+  resolveApiFormat,
   normalizeAiConfig,
   normalizeAiHistory,
   validateAiRequest,
