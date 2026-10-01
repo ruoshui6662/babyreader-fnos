@@ -1,6 +1,8 @@
 # Working Change Log
 
-## 更名为“枕书”、直连端口、AI 问书细节（未发布）2026-10-01
+## 枕书 v0.0.1 2026-10-01 — 更名为“枕书”、直连端口、AI 问书细节
+
+版本号随新应用 ID `zhenshu` 从 0.0.1 重新开始（用户指定）；此前的 v1.x 版本属于旧应用 `babyreader-fnos`。
 
 **更名**（用户选择“枕书”，并作为一个新应用发布）：
 - 应用名称改为“枕书”，fnOS 应用 ID 由 `babyreader-fnos` 改为 `zhenshu`：网关地址变为 `/app/zhenshu/`，包用户与共享目录 `zhenshu/library`，环境变量前缀改为 `ZHENSHU_`（如 `ZHENSHU_PDF_ENABLED`），私有请求头改为 `X-Zhenshu-*`，浏览器本地存储键也随之改名。
