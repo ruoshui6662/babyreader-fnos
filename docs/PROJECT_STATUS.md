@@ -128,7 +128,7 @@ npm run build:fpk        # 需要 fnpack（本机在 C:/Users/admin/bin/fnpack�
 3. 视觉矩阵：浅色、深色、米黄三种主题；1/20/100 本书；窄屏；触屏长按。
 4. 删除撤销的设计：旧 ID、来源指纹、revision 冲突处理。
 5. **v1.3.0 的 NAS 验收**（MOBI/AZW3 与导入）：按 `FNOS_DEVICE_ACCEPTANCE.md` §5.7 执行，先跑 `import-probe`；如果网关的请求体上限太小，需要补上分片上传，再发补丁版本。验收通过后，再发一个补丁版本把两个开关改为默认开启。计划与记录见 `docs/superpowers/plans/2026-09-30-mobi-and-book-import.md` 和对应的 progress 文件。
-6. 技术债：拖拽预览每次都重新插入全部书卡（O(n)）；AI 输入框几何差 8.8px；`pdf-ai-profile` 测试偶发失败。
+6. 技术债：拖拽预览每次都重新插入全部书卡（O(n)）；AI 输入框几何差 8.8px。（`pdf-ai-profile` 偶发失败与卡死已在 v1.3.6 修复。）E2E 仍有 7 个长期失败的用例（划线 2 个、PDF 2 个、AI 面板 3 个），尚未排查。
 
 ## 8. 分支与 worktree 处理记录（2026-09-30）
 
