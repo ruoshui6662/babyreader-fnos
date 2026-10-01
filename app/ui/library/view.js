@@ -306,7 +306,7 @@ function renderFlatLibrary(library, { organizationEnabled = false } = {}) {
 
     const emptyCopy = document.createElement('p');
     emptyCopy.className = 'library-empty-copy';
-    emptyCopy.textContent = '在 fnOS 中授权书库目录后，EPUB、Markdown、TXT 和已启用的 PDF 会出现在这里。';
+    emptyCopy.textContent = '在 fnOS 中授权书库目录后，EPUB、PDF、MOBI/AZW3、Markdown 和 TXT 会出现在这里。';
     empty.appendChild(emptyCopy);
     shell.appendChild(empty);
   } else {

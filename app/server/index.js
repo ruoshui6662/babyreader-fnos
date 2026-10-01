@@ -40,6 +40,7 @@ const { createPdfAiProfileStore } = require('./pdf-ai-profile-store');
 const { parseBookSearchParams, searchBookText } = require('./book-search');
 const { parsePathList, resolveLibraryRoots } = require('./library-roots');
 const { readFnOSAuthorizedRoots, fnOSAuthorizationRevision } = require('./fnos-roots-config');
+const { createDirectAccess } = require('./direct-access');
 const {
   BOOK_ID_PATTERN,
   COLLECTION_ID_PATTERN,
@@ -2116,8 +2117,11 @@ async function handleApi(request, response, pathname, searchParams = new URLSear
   return sendError(response, 404, 'API route not found');
 }
 
+let directAccess = null;
+
 async function handleRequest(request, response) {
   try {
+    directAccess?.recordGatewayUser(request);
     const url = new URL(request.url, 'http://localhost');
     if (!url.pathname.startsWith(APP_PREFIX)) return sendError(response, 404, 'Route not found');
     if (url.pathname.startsWith(`${APP_PREFIX}/api/`)) {
@@ -2143,6 +2147,8 @@ async function start() {
   if (process.platform !== 'win32' && !process.env.ZHENSHU_DEV_PORT) await fs.rm(SOCKET_PATH, { force: true });
 
   const server = http.createServer((request, response) => void handleRequest(request, response));
+  directAccess = createDirectAccess({ configRoot: CONFIG_ROOT, appPrefix: APP_PREFIX, handleRequest });
+  directAccess.start();
   let shuttingDown = false;
   const removeSocket = async () => {
     if (!process.env.ZHENSHU_DEV_PORT && process.platform !== 'win32') {
@@ -2157,6 +2163,7 @@ async function start() {
       process.exit(1);
     }, 10000);
     forceExit.unref();
+    void directAccess?.close();
     server.close(async () => {
       clearTimeout(forceExit);
       await removeSocket();

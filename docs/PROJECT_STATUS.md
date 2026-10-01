@@ -36,7 +36,7 @@ fnOS 统一网关 /app/zhenshu ──(Unix socket ${TRIM_APPDEST}/app.sock)─�
              notes-panel · search · selection-menu · settings · ai · ai-index-manager ·
              device-profile · document · editor · lifecycle · actions
     shell/   drawer
-fnOS 包: manifest · cmd/*（生命周期脚本）· config/{privilege,resource} · wizard/config（安装/配置向导）
+fnOS 包: manifest · cmd/*（生命周期脚本）· config/{privilege,resource} · wizard/install（安装向导：直连访问）· wizard/config（应用设置：直连访问）
 ```
 
 持久化数据：
@@ -60,6 +60,7 @@ fnOS 包: manifest · cmd/*（生命周期脚本）· config/{privilege,resource
 | 书库 | 分类、整理模式批量归类、书卡直接拖拽和长按排序（有 revision 冲突回滚）、筛选、继续阅读卡片、首页 Apple HIG 改版 | 本地完成；触屏真机和视觉对照待做 |
 | MOBI/AZW3 阅读 | 服务端把 MOBI6/KF8 转成确定性的派生 EPUB（`mobi-format`/`mobi-convert`/`mobi-derived`，在 worker 中执行，有缓存），然后复用 EPUB 的全部能力：阅读、目录、划线、进度、搜索、AI；DRM 只检测、提示，不解密 | 本地完成（AZW3 已用真实书验证）。**始终开启**（v1.3.8 起移除了设置开关） |
 | 书籍导入 | 管理员可以通过按钮或拖放导入，文件写入 `zhenshu/library/导入` 共享目录；按内容校验格式，按 SHA-256 去重，不覆盖已有文件；导入与扫描共用库锁；有进度队列；在分类页导入会自动归类 | 本地完成。**对管理员始终开启**（v1.3.8 起移除了设置开关）；网关的请求体上限还没测 |
+| 直连端口 | 可选的独立端口（`wizard/install`/`wizard/config` 的“直连访问”，默认关闭）：访问密码（scrypt 哈希）+ 签名会话 Cookie，读写一个指定飞牛用户的数据，非管理员；丢弃客户端 `X-Trim-*`；配置文件 `etc/direct-access.json`，用户映射 `etc/gateway-users.json`（`direct-access.js`、`direct-access-config.js`） | 本地完成（单元测试 + 浏览器冒烟）；需真机验收 |
 | fnOS 集成 | 统一网关 Header 身份；授权目录 `TRIM_DATA_ACCESSIBLE_PATHS`/`TRIM_DATA_SHARE_PATHS`（realpath 校验、去重、父子目录裁剪）；包专用用户（非 root） | 本地完成，需真机验收 |
 
 ## 4. 配置开关（环境变量 / 向导）
@@ -69,6 +70,8 @@ fnOS 包: manifest · cmd/*（生命周期脚本）· config/{privilege,resource
 | `ZHENSHU_PDF_ENABLED` | PDF 阅读与搜索始终开启；仅当设为 `0/false/no/off` 时作为运维紧急关闭开关。旧版本留下的 `pdf-feature.json` 会被忽略（`pdf-feature-config.js`） |
 | `ZHENSHU_MOBI_ENABLED` | MOBI/AZW3 阅读始终开启；仅当设为 `0/false/no/off` 时作为运维紧急关闭开关（`mobi-feature-config.js`） |
 | `ZHENSHU_IMPORT_ENABLED` | 管理员从浏览器导入书籍，始终开启（仍只限管理员）；仅当设为 `0/false/no/off` 时作为运维紧急关闭开关（`import-feature-config.js`） |
+| `wizard_direct_mode/port/password/user` | 直连访问向导字段，由 `install_callback`/`config_callback` 交给 `direct-access-config.js set` 保存；设置中留空即保持不变 |
+| `ZHENSHU_DIRECT_HOST` | 可选：直连端口的监听地址，默认 `0.0.0.0`（测试用 `127.0.0.1`） |
 | `ZHENSHU_KF8_SAMPLE` | 可选：指向本地 AZW3 样本的绝对路径，用于真实书的转换回归测试（样本不进仓库） |
 | `ZHENSHU_ENABLE_LIBRARY_ORGANIZATION=0` | 回退到扁平书库 |
 | `ZHENSHU_ENABLE_AI_CHAPTER_UNDERSTANDING` | AI 章节/全书概述（灰度） |

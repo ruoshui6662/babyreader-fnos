@@ -1,0 +1,48 @@
+[
+  {
+    "stepTitle": "直连访问（可选）",
+    "items": [
+      {
+        "type": "tips",
+        "helpText": "默认通过飞牛桌面（5666 端口）打开枕书。开启直连访问后，也可以在浏览器里直接打开 http://NAS 地址:端口/，凭访问密码阅读，并以下面填写的飞牛用户的书架和进度显示。该用户需先在飞牛桌面打开一次枕书。不需要可保持关闭，之后也能在应用设置中修改。"
+      },
+      {
+        "type": "radio",
+        "field": "wizard_direct_mode",
+        "label": "直连访问",
+        "initValue": "off",
+        "options": [
+          { "label": "关闭", "value": "off" },
+          { "label": "开启", "value": "on" }
+        ]
+      },
+      {
+        "type": "text",
+        "field": "wizard_direct_port",
+        "label": "访问端口",
+        "initValue": "8089",
+        "rules": [
+          { "pattern": "^$|^[0-9]{4,5}$", "message": "请填写 1024 到 65535 之间的端口，且不能是 5666 或 5667" }
+        ]
+      },
+      {
+        "type": "password",
+        "field": "wizard_direct_password",
+        "label": "访问密码（至少 8 位）",
+        "initValue": "",
+        "rules": [
+          { "pattern": "^$|^.{8,128}$", "message": "访问密码需要 8 到 128 个字符" }
+        ]
+      },
+      {
+        "type": "text",
+        "field": "wizard_direct_user",
+        "label": "以哪个飞牛用户身份阅读",
+        "initValue": "",
+        "rules": [
+          { "pattern": "^$|^[A-Za-z0-9._@-][A-Za-z0-9._@ -]{0,63}$", "message": "请填写有效的飞牛用户名" }
+        ]
+      }
+    ]
+  }
+]

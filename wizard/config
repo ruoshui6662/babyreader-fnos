@@ -7,5 +7,52 @@
         "helpText": "EPUB、PDF、MOBI/AZW3、Markdown 和 TXT 均已默认开启，无需设置；管理员可在书库中直接导入书籍。受 DRM 保护的 Kindle 书无法阅读。"
       }
     ]
+  },
+  {
+    "stepTitle": "直连访问",
+    "items": [
+      {
+        "type": "tips",
+        "helpText": "开启后可在浏览器直接打开 http://NAS 地址:端口/，凭访问密码阅读，并以所填飞牛用户的书架和进度显示（该用户需先在飞牛桌面打开一次枕书）。留空的项保持原设置不变；修改密码或用户会让已登录的设备重新输入密码。"
+      },
+      {
+        "type": "radio",
+        "field": "wizard_direct_mode",
+        "label": "直连访问",
+        "initValue": "keep",
+        "options": [
+          { "label": "保持不变", "value": "keep" },
+          { "label": "开启", "value": "on" },
+          { "label": "关闭", "value": "off" }
+        ]
+      },
+      {
+        "type": "text",
+        "field": "wizard_direct_port",
+        "label": "访问端口（留空不变）",
+        "initValue": "",
+        "rules": [
+          { "pattern": "^$|^[0-9]{4,5}$", "message": "请填写 1024 到 65535 之间的端口，且不能是 5666 或 5667" }
+        ]
+      },
+      {
+        "type": "password",
+        "field": "wizard_direct_password",
+        "label": "新的访问密码（留空不变）",
+        "initValue": "",
+        "rules": [
+          { "pattern": "^$|^.{8,128}$", "message": "访问密码需要 8 到 128 个字符" }
+        ]
+      },
+      {
+        "type": "text",
+        "field": "wizard_direct_user",
+        "label": "以哪个飞牛用户身份阅读（留空不变）",
+        "initValue": "",
+        "rules": [
+          { "pattern": "^$|^[A-Za-z0-9._@-][A-Za-z0-9._@ -]{0,63}$", "message": "请填写有效的飞牛用户名" }
+        ]
+      }
+    ]
   }
 ]

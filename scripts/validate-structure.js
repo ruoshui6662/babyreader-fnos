@@ -60,6 +60,8 @@ const requiredFiles = [
   'UPSTREAM_BASELINES',
   'app/server/index.js',
   'app/server/fnos-roots-config.js',
+  'app/server/direct-access.js',
+  'app/server/direct-access-config.js',
   'app/server/pdf-ai-structure.js',
   'app/server/pdf-ai-profile.js',
   'app/server/pdf-ai-profile-store.js',
@@ -96,6 +98,7 @@ const requiredFiles = [
   'config/privilege',
   'config/resource',
   'wizard/config',
+  'wizard/install',
   ...lifecycleScripts,
   ...auxiliaryShellScripts
 ];

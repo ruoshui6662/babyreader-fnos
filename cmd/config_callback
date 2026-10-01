@@ -21,4 +21,12 @@ TRIM_DATA_ACCESSIBLE_PATHS="${TRIM_DATA_ACCESSIBLE_PATHS:-}" TRIM_PKGETC="$PKG_E
   exit 1
 }
 
+# 直连访问：留空的项保持不变。密码只以哈希保存，不写入日志。
+if ! ERROR=$(TRIM_PKGETC="$PKG_ETC" "$NODE_BIN" "$APP_DEST/server/direct-access-config.js" set 2>&1); then
+  MESSAGE="直连访问设置未保存：$ERROR"
+  [ -n "${TRIM_TEMP_LOGFILE:-}" ] && printf '%s\n' "$MESSAGE" > "$TRIM_TEMP_LOGFILE"
+  printf '%s\n' "$MESSAGE" >&2
+  exit 1
+fi
+
 exit 0

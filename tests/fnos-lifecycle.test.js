@@ -181,7 +181,9 @@ test('release enables library organization but gates new AI chapter summaries be
 test('fnOS app settings carry no format or import switches: all formats are always on', () => {
   const steps = JSON.parse(read('wizard/config'));
   const items = steps.flatMap((step) => step.items || []);
-  assert.deepEqual(items.filter((item) => item.type !== 'tips'), []);
+  // The only inputs are the optional direct-port settings.
+  assert.deepEqual(items.filter((item) => item.type !== 'tips').map((item) => item.field),
+    ['wizard_direct_mode', 'wizard_direct_port', 'wizard_direct_password', 'wizard_direct_user']);
   assert.ok(items.some((item) => /PDF/.test(item.helpText) && /MOBI\/AZW3/.test(item.helpText)));
   assert.doesNotMatch(read('cmd/config_callback'), /feature-config|wizard_(pdf_reader|mobi_reader|import)_enabled/);
 });
@@ -200,6 +202,7 @@ test('configuration callback ignores legacy switch fields and leaves service sta
   fs.cpSync(path.join(root, 'cmd', 'config_callback'), path.join(appDest, 'cmd', 'config_callback'));
   fs.cpSync(path.join(root, 'app', 'server', 'fnos-roots-config.js'), path.join(appDest, 'server', 'fnos-roots-config.js'));
   fs.cpSync(path.join(root, 'app', 'server', 'library-roots.js'), path.join(appDest, 'server', 'library-roots.js'));
+  fs.cpSync(path.join(root, 'app', 'server', 'direct-access-config.js'), path.join(appDest, 'server', 'direct-access-config.js'));
   const socketMarker = path.join(appDest, 'app.sock');
   const pidMarker = path.join(tempRoot, 'zhenshu.pid');
   fs.writeFileSync(socketMarker, 'existing socket marker');
@@ -243,6 +246,7 @@ test('fnOS library authorization changes update the private snapshot without lif
   fs.cpSync(path.join(root, 'cmd', 'config_callback'), path.join(appDest, 'cmd', 'config_callback'));
   fs.cpSync(path.join(root, 'app', 'server', 'fnos-roots-config.js'), path.join(appDest, 'server', 'fnos-roots-config.js'));
   fs.cpSync(path.join(root, 'app', 'server', 'library-roots.js'), path.join(appDest, 'server', 'library-roots.js'));
+  fs.cpSync(path.join(root, 'app', 'server', 'direct-access-config.js'), path.join(appDest, 'server', 'direct-access-config.js'));
   fs.writeFileSync(path.join(appDest, 'cmd', 'main'), [
     '#!/bin/sh',
     'if [ "$1" = status ]; then exit "${ZHENSHU_TEST_SERVICE_STATUS:-0}"; fi',
