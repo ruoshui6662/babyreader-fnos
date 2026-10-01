@@ -7,7 +7,7 @@ const os = require('node:os');
 const path = require('node:path');
 const test = require('node:test');
 
-const SANDBOX = path.join(os.tmpdir(), 'babyreader-ai-index-api-' + process.pid);
+const SANDBOX = path.join(os.tmpdir(), 'zhenshu-ai-index-api-' + process.pid);
 const DATA_ROOT = path.join(SANDBOX, 'var');
 const CONFIG_ROOT = path.join(SANDBOX, 'etc');
 const LIBRARY_ROOT = path.join(SANDBOX, 'library');
@@ -75,13 +75,13 @@ test.after(async () => {
 });
 
 test('index list requires an authenticated administrator and redacts paths', async () => {
-  const admin = await request('/app/babyreader-fnos/api/ai/indexes');
+  const admin = await request('/app/zhenshu/api/ai/indexes');
   assert.equal(admin.status, 200);
   assert.equal('dataRoot' in admin.body, false);
   assert.equal(JSON.stringify(admin.body).includes(DATA_ROOT), false);
   assert.equal(JSON.stringify(admin.body).includes(BOOK_PATH), false);
 
-  const regular = await request('/app/babyreader-fnos/api/ai/indexes', {
+  const regular = await request('/app/zhenshu/api/ai/indexes', {
     headers: { 'x-trim-userid': 'regular-user', 'x-trim-isadmin': 'false' }
   });
   assert.equal(regular.status, 403);
@@ -89,7 +89,7 @@ test('index list requires an authenticated administrator and redacts paths', asy
   const previous = process.env.NODE_ENV;
   process.env.NODE_ENV = 'production';
   try {
-    const anonymous = await request('/app/babyreader-fnos/api/ai/indexes');
+    const anonymous = await request('/app/zhenshu/api/ai/indexes');
     assert.equal(anonymous.status, 401);
   } finally {
     process.env.NODE_ENV = previous;
@@ -102,18 +102,18 @@ test('single index delete is idempotent and accepts only a book id', async () =>
   await fs.mkdir(path.dirname(filePath), { recursive: true });
   await fs.writeFile(filePath, 'index');
 
-  const deleted = await request('/app/babyreader-fnos/api/ai/indexes/' + BOOK_ID, {
+  const deleted = await request('/app/zhenshu/api/ai/indexes/' + BOOK_ID, {
     method: 'DELETE'
   });
   assert.equal(deleted.status, 200);
   await assert.rejects(() => fs.access(filePath), { code: 'ENOENT' });
 
-  const repeated = await request('/app/babyreader-fnos/api/ai/indexes/' + BOOK_ID, {
+  const repeated = await request('/app/zhenshu/api/ai/indexes/' + BOOK_ID, {
     method: 'DELETE'
   });
   assert.equal(repeated.status, 200);
 
-  const invalid = await request('/app/babyreader-fnos/api/ai/indexes/not-a-book', {
+  const invalid = await request('/app/zhenshu/api/ai/indexes/not-a-book', {
     method: 'DELETE'
   });
   assert.equal(invalid.status, 404);
@@ -125,14 +125,14 @@ test('cleanup requires confirmation and only removes confirmed orphan indexes', 
   await fs.mkdir(path.dirname(orphanPath), { recursive: true });
   await fs.writeFile(orphanPath, 'orphan-index');
 
-  const notConfirmed = await writeRequest('/app/babyreader-fnos/api/ai/indexes/cleanup', {
+  const notConfirmed = await writeRequest('/app/zhenshu/api/ai/indexes/cleanup', {
     kind: 'orphans',
     confirm: false
   });
   assert.equal(notConfirmed.status, 400);
   await fs.access(orphanPath);
 
-  const cleaned = await writeRequest('/app/babyreader-fnos/api/ai/indexes/cleanup', {
+  const cleaned = await writeRequest('/app/zhenshu/api/ai/indexes/cleanup', {
     kind: 'orphans',
     confirm: true
   });
@@ -153,7 +153,7 @@ test('cleanup fails closed when the library scan is not healthy', async () => {
   await fs.mkdir(path.dirname(orphanPath), { recursive: true });
   await fs.writeFile(orphanPath, 'orphan-index');
 
-  const response = await writeRequest('/app/babyreader-fnos/api/ai/indexes/cleanup', {
+  const response = await writeRequest('/app/zhenshu/api/ai/indexes/cleanup', {
     kind: 'orphans',
     confirm: true
   });
@@ -171,7 +171,7 @@ test('healthy library scan removes indexes for deleted books and exposes only cl
   await fs.writeFile(orphanPath, 'orphan-index');
 
   await fs.rm(BOOK_PATH);
-  const response = await request('/app/babyreader-fnos/api/library/scan', {
+  const response = await request('/app/zhenshu/api/library/scan', {
     method: 'POST'
   });
 
@@ -199,7 +199,7 @@ test('rejected library roots preserve indexes during automatic cleanup', async (
     libraryRoots: [path.join(SANDBOX, 'missing-library-root')]
   }));
 
-  const response = await request('/app/babyreader-fnos/api/library/scan', {
+  const response = await request('/app/zhenshu/api/library/scan', {
     method: 'POST'
   });
 

@@ -8,8 +8,8 @@ const { createMobiFixture } = require('../tests/fixtures/mobi-fixtures');
 // adds its own book and switch and removes both afterwards (workers: 1), so
 // the shared fixture library is unchanged for every other spec.
 
-const APP_PATH = '/app/babyreader-fnos/';
-const RUNTIME = path.resolve(__dirname, '..', process.env.BABYREADER_E2E_RUNTIME_ROOT || '.runtime/e2e-resource-lifecycle');
+const APP_PATH = '/app/zhenshu/';
+const RUNTIME = path.resolve(__dirname, '..', process.env.ZHENSHU_E2E_RUNTIME_ROOT || '.runtime/e2e-resource-lifecycle');
 const MOBI_FILE = path.join(RUNTIME, 'library', 'e2e-kindle.mobi');
 const TITLE = 'E2E Kindle 书';
 

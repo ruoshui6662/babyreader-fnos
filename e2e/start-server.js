@@ -8,15 +8,15 @@ const { FIXTURE_TEXT } = require('./fixtures/reader-fixtures');
 const { createCorruptPdfFixture, createImageOnlyPdfFixture, createPdfFixture } = require('../tests/fixtures/pdf-fixtures');
 
 const root = path.resolve(__dirname, '..');
-const runtimeRoot = path.resolve(process.env.BABYREADER_E2E_RUNTIME_ROOT || path.join(root, '.runtime', 'e2e'));
+const runtimeRoot = path.resolve(process.env.ZHENSHU_E2E_RUNTIME_ROOT || path.join(root, '.runtime', 'e2e'));
 const configRoot = path.join(runtimeRoot, 'etc');
 const dataRoot = path.join(runtimeRoot, 'var');
 const libraryRoot = path.join(runtimeRoot, 'library');
-// Empty stand-in for the app's fnOS data share (babyreader-fnos/library); the
+// Empty stand-in for the app's fnOS data share (zhenshu/library); the
 // import spec writes here. It adds no books, so other specs see no change.
-const shareRoot = path.join(runtimeRoot, 'share', 'babyreader-fnos', 'library');
-const sampleEpubPath = process.env.BABYREADER_E2E_SAMPLE_EPUB;
-const samplePdfPath = process.env.BABYREADER_E2E_SAMPLE_PDF;
+const shareRoot = path.join(runtimeRoot, 'share', 'zhenshu', 'library');
+const sampleEpubPath = process.env.ZHENSHU_E2E_SAMPLE_EPUB;
+const samplePdfPath = process.env.ZHENSHU_E2E_SAMPLE_PDF;
 
 fs.rmSync(runtimeRoot, { recursive: true, force: true });
 fs.mkdirSync(configRoot, { recursive: true });
@@ -40,7 +40,7 @@ fs.writeFileSync(path.join(libraryRoot, 'e2e-reader.md'), [
 fs.writeFileSync(path.join(libraryRoot, 'plain-text.txt'), [
   'E2E Plain Text',
   '',
-  'A deterministic text fixture for BabyReader.'
+  'A deterministic text fixture for 枕书.'
 ].join('\n'), 'utf8');
 
 const e2ePdf = createPdfFixture({
@@ -107,7 +107,7 @@ const epub = zipSync({
   'OEBPS/content.opf': strToU8(`<?xml version="1.0" encoding="UTF-8"?>
 <package xmlns="http://www.idpf.org/2007/opf" version="3.0" unique-identifier="book-id">
   <metadata xmlns:dc="http://purl.org/dc/elements/1.1/">
-    <dc:identifier id="book-id">babyreader-e2e</dc:identifier>
+    <dc:identifier id="book-id">zhenshu-e2e</dc:identifier>
     <dc:title>E2E EPUB</dc:title>
     <dc:creator>Playwright</dc:creator>
     <dc:language>zh-CN</dc:language>
@@ -200,13 +200,13 @@ fs.writeFileSync(path.join(libraryRoot, 'e2e-repeated-image.epub'), Buffer.from(
 // the repository; callers opt in through an absolute path environment value.
 if (sampleEpubPath) {
   if (!path.isAbsolute(sampleEpubPath)) {
-    throw new Error('BABYREADER_E2E_SAMPLE_EPUB must be an absolute local EPUB path.');
+    throw new Error('ZHENSHU_E2E_SAMPLE_EPUB must be an absolute local EPUB path.');
   }
   if (!fs.existsSync(sampleEpubPath)) {
-    throw new Error(`BABYREADER_E2E_SAMPLE_EPUB does not exist: ${sampleEpubPath}`);
+    throw new Error(`ZHENSHU_E2E_SAMPLE_EPUB does not exist: ${sampleEpubPath}`);
   }
   fs.copyFileSync(sampleEpubPath, path.join(libraryRoot, path.basename(sampleEpubPath)));
-  if (process.env.BABYREADER_E2E_SAMPLE_COMPARE_IMAGES === '1') {
+  if (process.env.ZHENSHU_E2E_SAMPLE_COMPARE_IMAGES === '1') {
     const files = unzipSync(new Uint8Array(fs.readFileSync(sampleEpubPath)));
     const decoder = new TextDecoder('utf-8');
     const encoder = new TextEncoder();
@@ -231,10 +231,10 @@ if (sampleEpubPath) {
 
 if (samplePdfPath) {
   if (!path.isAbsolute(samplePdfPath) || path.extname(samplePdfPath).toLowerCase() !== '.pdf') {
-    throw new Error('BABYREADER_E2E_SAMPLE_PDF must be an absolute local PDF path.');
+    throw new Error('ZHENSHU_E2E_SAMPLE_PDF must be an absolute local PDF path.');
   }
   if (!fs.existsSync(samplePdfPath)) {
-    throw new Error('BABYREADER_E2E_SAMPLE_PDF does not exist.');
+    throw new Error('ZHENSHU_E2E_SAMPLE_PDF does not exist.');
   }
   fs.copyFileSync(samplePdfPath, path.join(libraryRoot, path.basename(samplePdfPath)));
 }
@@ -247,10 +247,10 @@ fs.writeFileSync(
 
 Object.assign(process.env, {
   NODE_ENV: 'development',
-  BABYREADER_DEV_PORT: '8099',
-  BABYREADER_DEV_UID: 'playwright-user',
-  BABYREADER_DEV_USERNAME: 'Playwright User',
-  BABYREADER_PDF_ENABLED: '1',
+  ZHENSHU_DEV_PORT: '8099',
+  ZHENSHU_DEV_UID: 'playwright-user',
+  ZHENSHU_DEV_USERNAME: 'Playwright User',
+  ZHENSHU_PDF_ENABLED: '1',
   TRIM_PKGETC: configRoot,
   TRIM_PKGVAR: dataRoot,
   TRIM_PKGTMP: path.join(runtimeRoot, 'tmp'),
@@ -260,7 +260,7 @@ Object.assign(process.env, {
 const { start } = require('../app/server/index');
 
 async function waitForHealth() {
-  const url = 'http://127.0.0.1:8099/app/babyreader-fnos/api/health';
+  const url = 'http://127.0.0.1:8099/app/zhenshu/api/health';
   for (let attempt = 0; attempt < 100; attempt += 1) {
     try {
       const response = await fetch(url);
@@ -276,13 +276,13 @@ async function waitForHealth() {
 async function main() {
   await start();
   await waitForHealth();
-  const response = await fetch('http://127.0.0.1:8099/app/babyreader-fnos/api/library/scan', {
+  const response = await fetch('http://127.0.0.1:8099/app/zhenshu/api/library/scan', {
     method: 'POST'
   });
   if (!response.ok) {
     throw new Error(`Initial E2E library scan failed: ${response.status} ${await response.text()}`);
   }
-  console.log('BabyReader E2E fixture library is ready');
+  console.log('枕书 E2E fixture library is ready');
 }
 
 main().catch((error) => {

@@ -1,4 +1,4 @@
-name: BabyReader fnOS CI
+name: 枕书 fnOS CI
 
 on:
   push:
@@ -107,7 +107,7 @@ jobs:
           test -n "$(find dist-v* -maxdepth 1 -name '*.fpk.sha256' -print -quit)"
       - uses: actions/upload-artifact@v4
         with:
-          name: babyreader-fnos-${{ github.sha }}
+          name: zhenshu-${{ github.sha }}
           path: |
             dist-v*/*.fpk
             dist-v*/*.fpk.sha256

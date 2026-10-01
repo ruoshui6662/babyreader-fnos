@@ -12,11 +12,11 @@ const test = require('node:test');
 const { zipSync, strToU8 } = require('fflate');
 const { createMobiFixture } = require('./fixtures/mobi-fixtures');
 
-const SANDBOX = path.join(os.tmpdir(), `babyreader-import-api-${process.pid}`);
+const SANDBOX = path.join(os.tmpdir(), `zhenshu-import-api-${process.pid}`);
 const DATA_ROOT = path.join(SANDBOX, 'var');
 const CONFIG_ROOT = path.join(SANDBOX, 'etc');
 const LIBRARY_ROOT = path.join(SANDBOX, 'library');
-const SHARE_ROOT = path.join(SANDBOX, 'share', 'babyreader-fnos', 'library');
+const SHARE_ROOT = path.join(SANDBOX, 'share', 'zhenshu', 'library');
 const IMPORT_DIR = path.join(SHARE_ROOT, '导入');
 
 process.env.TRIM_PKGVAR = DATA_ROOT;
@@ -24,9 +24,9 @@ process.env.TRIM_PKGETC = CONFIG_ROOT;
 process.env.TRIM_DATA_ACCESSIBLE_PATHS = '';
 process.env.TRIM_DATA_SHARE_PATHS = SHARE_ROOT;
 process.env.NODE_ENV = 'production';
-process.env.BABYREADER_ENABLE_LIBRARY_ORGANIZATION = '1';
-delete process.env.BABYREADER_IMPORT_ENABLED;
-delete process.env.BABYREADER_MOBI_ENABLED;
+process.env.ZHENSHU_ENABLE_LIBRARY_ORGANIZATION = '1';
+delete process.env.ZHENSHU_IMPORT_ENABLED;
+delete process.env.ZHENSHU_MOBI_ENABLED;
 const { handleRequest, loadConfiguration } = require('../app/server/index');
 
 const ADMIN = { 'x-trim-userid': 'admin', 'x-trim-isadmin': 'true' };
@@ -53,8 +53,8 @@ async function upload(bytes, name, headers = ADMIN, extra = {}) {
     headers: {
       ...headers,
       'content-type': 'application/octet-stream',
-      'x-babyreader-request': 'import',
-      'x-babyreader-filename': encodeURIComponent(name),
+      'x-zhenshu-request': 'import',
+      'x-zhenshu-filename': encodeURIComponent(name),
       ...extra
     },
     body: bytes
@@ -79,7 +79,7 @@ test.before(async () => {
   await loadConfiguration();
   server = http.createServer((request, response) => void handleRequest(request, response));
   await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
-  baseUrl = `http://127.0.0.1:${server.address().port}/app/babyreader-fnos`;
+  baseUrl = `http://127.0.0.1:${server.address().port}/app/zhenshu`;
   await fetch(`${baseUrl}/api/library/scan`, { method: 'POST', headers: ADMIN });
 });
 
@@ -92,19 +92,19 @@ test.after(async () => {
 });
 
 test('the import kill switch refuses uploads and stops advertising import', async () => {
-  process.env.BABYREADER_IMPORT_ENABLED = 'false';
+  process.env.ZHENSHU_IMPORT_ENABLED = 'false';
   const result = await upload(epubBytes('关闭时'), 'off.epub', ADMIN);
   assert.equal(result.status, 404);
   assert.equal(result.body.code, 'IMPORT_DISABLED');
   assert.equal((await library(ADMIN)).features.bookImport, false);
-  delete process.env.BABYREADER_IMPORT_ENABLED;
+  delete process.env.ZHENSHU_IMPORT_ENABLED;
 });
 
 test('import is on by default, but only administrators, from this origin and with the import header, may upload', async () => {
   assert.equal((await library(ADMIN)).features.bookImport, true);
   assert.equal((await library(READER)).features.bookImport, false);
   assert.equal((await upload(epubBytes('x'), 'x.epub', READER)).body.code, 'IMPORT_FORBIDDEN');
-  assert.equal((await upload(epubBytes('x'), 'x.epub', ADMIN, { 'x-babyreader-request': 'other' })).status, 403);
+  assert.equal((await upload(epubBytes('x'), 'x.epub', ADMIN, { 'x-zhenshu-request': 'other' })).status, 403);
   assert.equal((await upload(epubBytes('x'), 'x.epub', ADMIN, { 'sec-fetch-site': 'cross-site' })).body.code, 'IMPORT_BAD_REQUEST');
   assert.deepEqual(await fs.readdir(IMPORT_DIR).catch(() => []), []);
 });
@@ -146,12 +146,12 @@ test('the same content is refused as a duplicate; a new book with the same name 
 
 test('MOBI imports follow the MOBI kill switch and are read through the derived EPUB', async () => {
   const bytes = createMobiFixture({ title: '导入的 Kindle 书' });
-  process.env.BABYREADER_MOBI_ENABLED = 'false';
+  process.env.ZHENSHU_MOBI_ENABLED = 'false';
   const disabled = await upload(bytes, 'kindle.mobi');
   assert.equal(disabled.status, 409);
   assert.equal(disabled.body.code, 'IMPORT_FORMAT_DISABLED');
 
-  delete process.env.BABYREADER_MOBI_ENABLED;
+  delete process.env.ZHENSHU_MOBI_ENABLED;
   const imported = await upload(bytes, 'kindle.mobi');
   assert.equal(imported.status, 201);
   assert.equal(imported.body.book.type, 'epub');
@@ -176,8 +176,8 @@ test('an oversized declared length is refused before the body is read', async ()
       method: 'PUT',
       headers: {
         ...ADMIN,
-        'x-babyreader-request': 'import',
-        'x-babyreader-filename': 'huge.epub',
+        'x-zhenshu-request': 'import',
+        'x-zhenshu-filename': 'huge.epub',
         'content-length': String(512 * 1024 * 1024)
       }
     }, (response) => {
@@ -188,7 +188,7 @@ test('an oversized declared length is refused before the body is read', async ()
     request.write(Buffer.alloc(1024));
   });
   assert.equal(status, 413);
-  assert.equal((await fs.readdir(IMPORT_DIR)).some((name) => name.startsWith('.babyreader-import')), false);
+  assert.equal((await fs.readdir(IMPORT_DIR)).some((name) => name.startsWith('.zhenshu-import')), false);
 });
 
 test('a missing share makes import unavailable instead of writing elsewhere', async () => {

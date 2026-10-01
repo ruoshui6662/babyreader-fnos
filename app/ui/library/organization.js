@@ -1,4 +1,4 @@
-/* BabyReader UI module: library/organization */
+/* 枕书 UI module: library/organization */
 
 'use strict';
 
@@ -1130,7 +1130,7 @@ function renderLibraryOrganization(library) {
       ? makeLibraryOrganizationEmpty('这个分类还没有书', '点击上方的“添加书籍”，把书放进这个分类。')
       : route.mode === 'unassigned'
         ? makeLibraryOrganizationEmpty('所有书都已归类', '新扫描到的书会先出现在这里。')
-        : makeLibraryOrganizationEmpty('书库还是空的', '在 fnOS 中授权书库目录后，EPUB、Markdown、TXT 和已启用的 PDF 会出现在这里。'));
+        : makeLibraryOrganizationEmpty('书库还是空的', '在 fnOS 中授权书库目录后，EPUB、PDF、MOBI/AZW3、Markdown 和 TXT 会出现在这里。'));
   shell.appendChild(booksSection);
   article.appendChild(shell);
   setupLibraryFilter(shell);

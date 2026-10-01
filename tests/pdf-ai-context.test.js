@@ -53,10 +53,10 @@ test('PDF structured retrieval feature flag is explicit and defaults off', () =>
   assert.equal(typeof pdfAiStructuredRetrievalEnabled, 'function');
   assert.equal(pdfAiStructuredRetrievalEnabled({}), false);
   for (const value of ['1', 'true', 'yes', 'on']) {
-    assert.equal(pdfAiStructuredRetrievalEnabled({ BABYREADER_ENABLE_PDF_AI_STRUCTURE: value }), true);
+    assert.equal(pdfAiStructuredRetrievalEnabled({ ZHENSHU_ENABLE_PDF_AI_STRUCTURE: value }), true);
   }
   for (const value of ['', '0', 'false', 'enabled']) {
-    assert.equal(pdfAiStructuredRetrievalEnabled({ BABYREADER_ENABLE_PDF_AI_STRUCTURE: value }), false);
+    assert.equal(pdfAiStructuredRetrievalEnabled({ ZHENSHU_ENABLE_PDF_AI_STRUCTURE: value }), false);
   }
 });
 
@@ -94,7 +94,7 @@ test('PDF AI evidence is bounded and cites only indexed pages', () => {
 });
 
 test('PDF AI page query never leaks a different page, and image-only PDF reports no text', async () => {
-  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'babyreader-pdf-ai-'));
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'zhenshu-pdf-ai-'));
   try {
     const file = path.join(root, 'book.pdf');
     await fs.writeFile(file, createPdfFixture({ pageTexts: ['苹果营养研究', '香蕉市场调查', '葡萄栽培技术'] }));

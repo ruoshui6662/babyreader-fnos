@@ -1,4 +1,4 @@
-/* BabyReader UI module: reader/pdf-annotation-geometry */
+/* 枕书 UI module: reader/pdf-annotation-geometry */
 
 'use strict';
 

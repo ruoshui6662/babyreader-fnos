@@ -135,7 +135,7 @@ function buildMarkup(chapters, { toc = true } = {}) {
 
 function createMobiFixture({
   title = 'MOBI 测试书',
-  author = 'BabyReader Fixtures',
+  author = '枕书 Fixtures',
   chapters = defaultChapters(),
   compression = 'palmdoc',
   encryption = 0,

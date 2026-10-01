@@ -19,7 +19,7 @@ const decoder = new TextDecoder();
 const text = (files, name) => decoder.decode(files[name]);
 
 async function convert(bytes, options = {}) {
-  const epub = await convertMobiToEpub(bytes, { identifier: 'urn:babyreader:test', ...options });
+  const epub = await convertMobiToEpub(bytes, { identifier: 'urn:zhenshu:test', ...options });
   return { epub, files: safeUnzip(Buffer.from(epub)) };
 }
 
@@ -154,11 +154,11 @@ test('DRM, structurally empty KF8, truncated and oversized sources are rejected 
   );
 });
 
-// Optional real-book check: BABYREADER_KF8_SAMPLE=/abs/path/book.azw3. The
+// Optional real-book check: ZHENSHU_KF8_SAMPLE=/abs/path/book.azw3. The
 // sample stays outside the repository (see the MOBI progress ledger).
-const kf8Sample = process.env.BABYREADER_KF8_SAMPLE;
+const kf8Sample = process.env.ZHENSHU_KF8_SAMPLE;
 test('a real KF8/AZW3 sample converts deterministically with intact links and TOC', {
-  skip: kf8Sample ? false : 'set BABYREADER_KF8_SAMPLE to an absolute local AZW3 path'
+  skip: kf8Sample ? false : 'set ZHENSHU_KF8_SAMPLE to an absolute local AZW3 path'
 }, async () => {
   const source = require('node:fs').readFileSync(kf8Sample);
   const first = await convertMobiToEpub(source, { identifier: 'urn:sample' });

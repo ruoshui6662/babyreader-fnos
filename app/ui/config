@@ -1,13 +1,13 @@
 {
   ".url": {
-    "babyreader-fnos.main": {
-      "title": "BabyReader",
+    "zhenshu.main": {
+      "title": "枕书",
       "icon": "images/icon_{0}.png",
       "type": "url",
       "protocol": "",
-      "gatewayPrefix": "/app/babyreader-fnos",
+      "gatewayPrefix": "/app/zhenshu",
       "gatewaySocket": "app.sock",
-      "url": "/app/babyreader-fnos/",
+      "url": "/app/zhenshu/",
       "allUsers": true
     }
   }

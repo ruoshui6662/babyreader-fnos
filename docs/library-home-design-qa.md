@@ -2,7 +2,7 @@
 
 ## Scope
 
-- Reference: `C:/Users/admin/Downloads/babyreader_apple_hig_demo_v6_stability_rule.html`
+- Reference: `C:/Users/admin/Downloads/zhenshu_apple_hig_demo_v6_stability_rule.html`
 - Changed surfaces: library home layout, book-cover grid, recent-reading card, category navigation, responsive breakpoints, and reserved extension slots.
 - Protected behavior: scanning, authorization, search, category assignment/reordering, opening a book, reader routes, and server APIs.
 

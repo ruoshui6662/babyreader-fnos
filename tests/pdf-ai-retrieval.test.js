@@ -42,7 +42,7 @@ test('PDF retrieval plans prefer relevant structures and keep ranges sorted, mer
 });
 
 test('range FTS fusion returns only selected pages, deduplicates overlap and remains bounded', async (t) => {
-  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'babyreader-pdf-ai-ranges-'));
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'zhenshu-pdf-ai-ranges-'));
   t.after(() => fs.rm(root, { recursive: true, force: true }));
   const file = path.join(root, 'ranges.pdf');
   await fs.writeFile(file, createPdfFixture({ pageTexts: [

@@ -25,7 +25,7 @@ const PDF_AI_STRUCTURE_LIMITS = Object.freeze({
 });
 
 function pdfAiStructuredRetrievalEnabled(env = process.env) {
-  const value = String(env?.BABYREADER_ENABLE_PDF_AI_STRUCTURE || '').trim().toLowerCase();
+  const value = String(env?.ZHENSHU_ENABLE_PDF_AI_STRUCTURE || '').trim().toLowerCase();
   return ['1', 'true', 'yes', 'on'].includes(value);
 }
 

@@ -1,4 +1,4 @@
-/* BabyReader UI module: core/user-state */
+/* 枕书 UI module: core/user-state */
 
 'use strict';
 
@@ -142,7 +142,7 @@ function setDirty(nextDirty) {
 
 function storageKey(prefix) {
   if (!state.currentPath) return null;
-  return `babyreader:${prefix}:${state.contentType}:${state.currentPath}`;
+  return `zhenshu:${prefix}:${state.contentType}:${state.currentPath}`;
 }
 
 function savedPosition() {

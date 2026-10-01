@@ -15,7 +15,7 @@ const {
 const { inspectZip, safeUnzip } = require('../app/server/zip');
 
 test('resolveAuthorizedPath accepts files inside an authorized realpath root', async (t) => {
-  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'babyreader-root-'));
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'zhenshu-root-'));
   t.after(() => fs.rm(root, { recursive: true, force: true }));
   const file = path.join(root, 'book.md');
   await fs.writeFile(file, '# Book', 'utf8');
@@ -24,8 +24,8 @@ test('resolveAuthorizedPath accepts files inside an authorized realpath root', a
 });
 
 test('resolveAuthorizedPath rejects files outside authorized roots', async (t) => {
-  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'babyreader-root-'));
-  const outside = await fs.mkdtemp(path.join(os.tmpdir(), 'babyreader-outside-'));
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'zhenshu-root-'));
+  const outside = await fs.mkdtemp(path.join(os.tmpdir(), 'zhenshu-outside-'));
   t.after(() => Promise.all([
     fs.rm(root, { recursive: true, force: true }),
     fs.rm(outside, { recursive: true, force: true })
@@ -40,8 +40,8 @@ test('resolveAuthorizedPath rejects files outside authorized roots', async (t) =
 });
 
 test('library traversal skips symbolic links when supported', async (t) => {
-  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'babyreader-root-'));
-  const outside = await fs.mkdtemp(path.join(os.tmpdir(), 'babyreader-outside-'));
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'zhenshu-root-'));
+  const outside = await fs.mkdtemp(path.join(os.tmpdir(), 'zhenshu-outside-'));
   t.after(() => Promise.all([
     fs.rm(root, { recursive: true, force: true }),
     fs.rm(outside, { recursive: true, force: true })

@@ -63,7 +63,7 @@ async function main(argv = process.argv.slice(2)) {
     throw new Error('用法：node scripts/evaluate-pdf-ai-structured-retrieval.js --baseline|--compare');
   }
   if (!isFtsAvailable()) throw new Error('当前 Node.js 运行时不可用 SQLite FTS5');
-  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'babyreader-pdf-ai-baseline-'));
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'zhenshu-pdf-ai-baseline-'));
   try {
     const bytes = createPdfFixture({ pageTexts: paper.pages.map((page) => page.text) });
     const reports = [];

@@ -1,4 +1,4 @@
-/* BabyReader UI module: core/state */
+/* 枕书 UI module: core/state */
 
 'use strict';
 
@@ -57,7 +57,7 @@ const state = {
 };
 
 /* --- Browser Host API --- */
-const API_PREFIX = '/app/babyreader-fnos/api';
+const API_PREFIX = '/app/zhenshu/api';
 
 // Body-font choices. Every stack ends in a generic family so a missing CJK
 // serif degrades to the platform's own 宋体-class face instead of a blank.

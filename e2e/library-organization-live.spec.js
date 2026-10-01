@@ -1,12 +1,12 @@
 'use strict';
 
 const { test, expect } = require('@playwright/test');
-const API = '/app/babyreader-fnos/api';
-const APP = '/app/babyreader-fnos/';
+const API = '/app/zhenshu/api';
+const APP = '/app/zhenshu/';
 
 test.beforeEach(async ({ page, request }) => {
   const catalog = await (await request.get(`${API}/library`)).json();
-  test.skip(!catalog.features.libraryOrganization, 'Run with BABYREADER_ENABLE_LIBRARY_ORGANIZATION=1');
+  test.skip(!catalog.features.libraryOrganization, 'Run with ZHENSHU_ENABLE_LIBRARY_ORGANIZATION=1');
   let snapshot = await (await request.get(`${API}/library/organization`)).json();
   for (const collection of snapshot.collections) {
     const removed = await request.delete(`${API}/library/collections/${collection.id}`, { data: { revision: snapshot.revision } });

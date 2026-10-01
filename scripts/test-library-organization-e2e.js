@@ -10,7 +10,7 @@ const result = spawnSync(process.execPath, [
 ], {
   cwd: path.resolve(__dirname, '..'),
   stdio: 'inherit',
-  env: { ...process.env, BABYREADER_ENABLE_LIBRARY_ORGANIZATION: '1' }
+  env: { ...process.env, ZHENSHU_ENABLE_LIBRARY_ORGANIZATION: '1' }
 });
 if (result.error) console.error(result.error.message);
 process.exit(result.status ?? 1);

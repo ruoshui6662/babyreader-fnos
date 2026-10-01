@@ -7,7 +7,7 @@
 const { test, expect } = require('@playwright/test');
 const { resetEpubFixtureState, resetReaderSettings } = require('./helpers/reader');
 
-const APP_PATH = '/app/babyreader-fnos/';
+const APP_PATH = '/app/zhenshu/';
 
 test.beforeEach(async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 800 });
@@ -19,7 +19,7 @@ test.beforeEach(async ({ page }) => {
 
 async function putSettings(page, settings) {
   await page.evaluate(async (body) => {
-    const response = await fetch('/app/babyreader-fnos/api/settings', {
+    const response = await fetch('/app/zhenshu/api/settings', {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body)

@@ -1,6 +1,6 @@
 'use strict';
 
-function createPdfFixture({ text = 'BabyReader synthetic PDF fixture', pages = 1, pageTexts = null, pageColumns = null, encrypted = false } = {}) {
+function createPdfFixture({ text = '枕书 synthetic PDF fixture', pages = 1, pageTexts = null, pageColumns = null, encrypted = false } = {}) {
   const pageCount = Array.isArray(pageColumns) ? pageColumns.length : Array.isArray(pageTexts) ? pageTexts.length : pages;
   const fontObject = 3 + pageCount * 2;
   const pdfText = (value) => {
@@ -30,8 +30,8 @@ function createPdfFixture({ text = 'BabyReader synthetic PDF fixture', pages = 1
     objects.push(`<< /Length ${Buffer.byteLength(stream)} >>\nstream\n${stream}\nendstream`);
   }
   const cmapObject = fontObject + 3;
-  objects.push(`<< /Type /Font /Subtype /Type0 /BaseFont /BabyReaderFixture /Encoding /Identity-H /DescendantFonts [${fontObject + 1} 0 R] /ToUnicode ${cmapObject} 0 R >>`);
-  objects.push('<< /Type /Font /Subtype /CIDFontType0 /BaseFont /BabyReaderFixture /CIDSystemInfo << /Registry (Adobe) /Ordering (Identity) /Supplement 0 >> /DW 1000 >>');
+  objects.push(`<< /Type /Font /Subtype /Type0 /BaseFont /枕书Fixture /Encoding /Identity-H /DescendantFonts [${fontObject + 1} 0 R] /ToUnicode ${cmapObject} 0 R >>`);
+  objects.push('<< /Type /Font /Subtype /CIDFontType0 /BaseFont /枕书Fixture /CIDSystemInfo << /Registry (Adobe) /Ordering (Identity) /Supplement 0 >> /DW 1000 >>');
   objects.push('<< /Length 0 >>');
   const sourceText = Array.isArray(pageColumns)
     ? pageColumns.flatMap((columns) => Array.isArray(columns) ? columns.map((column) => column.text) : []).join('')
@@ -61,7 +61,7 @@ function createPdfFixture({ text = 'BabyReader synthetic PDF fixture', pages = 1
   if (encrypted) {
     objects.push('<< /Filter /Standard /V 1 /R 2 /O (01234567890123456789012345678901) /U (01234567890123456789012345678901) /P -4 >>');
   }
-  let pdf = '%PDF-1.7\n% BabyReader test fixture\n';
+  let pdf = '%PDF-1.7\n% 枕书 test fixture\n';
   const offsets = [0];
   objects.forEach((object, index) => {
     offsets.push(Buffer.byteLength(pdf, 'ascii'));
@@ -95,7 +95,7 @@ function createImageOnlyPdfFixture() {
     `<< /Length ${Buffer.byteLength(stream)} >>\nstream\n${stream}\nendstream`,
     `<< /Type /XObject /Subtype /Image /Width 1 /Height 1 /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /ASCIIHexDecode /Length ${pixels.length} >>\nstream\n${pixels}\nendstream`
   ];
-  let pdf = '%PDF-1.7\n% BabyReader image-only fixture\n';
+  let pdf = '%PDF-1.7\n% 枕书 image-only fixture\n';
   const offsets = [0];
   objects.forEach((object, index) => {
     offsets.push(Buffer.byteLength(pdf, 'ascii'));

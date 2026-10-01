@@ -7,9 +7,9 @@ const { zipSync, strToU8 } = require('fflate');
 // and drop in a real browser. The spec turns import on, and afterwards removes
 // every imported file, turns import off and rescans (workers: 1).
 
-const APP_PATH = '/app/babyreader-fnos/';
-const RUNTIME = path.resolve(__dirname, '..', process.env.BABYREADER_E2E_RUNTIME_ROOT || '.runtime/e2e-resource-lifecycle');
-const IMPORT_DIR = path.join(RUNTIME, 'share', 'babyreader-fnos', 'library', '导入');
+const APP_PATH = '/app/zhenshu/';
+const RUNTIME = path.resolve(__dirname, '..', process.env.ZHENSHU_E2E_RUNTIME_ROOT || '.runtime/e2e-resource-lifecycle');
+const IMPORT_DIR = path.join(RUNTIME, 'share', 'zhenshu', 'library', '导入');
 
 function epubBytes(title, body) {
   return Buffer.from(zipSync({

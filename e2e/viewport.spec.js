@@ -11,7 +11,7 @@ const {
 test.describe('Viewport transition persistence', () => {
   test.beforeEach(async ({ page }) => {
     await page.setViewportSize({ width: 1200, height: 800 });
-    await page.goto('/app/babyreader-fnos/');
+    await page.goto('/app/zhenshu/');
     await resetReaderSettings(page);
     await resetEpubFixtureState(page);
     await openEpubFixture(page);

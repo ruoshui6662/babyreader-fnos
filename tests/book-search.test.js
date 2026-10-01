@@ -19,7 +19,7 @@ const { AI_FTS_SCHEMA_VERSION, AI_FTS_CHUNK_SIZE, ensureIndex, indexPath, isFtsA
 
 const BOOK_ID = 'c'.repeat(64);
 
-async function temporaryDirectory(t, prefix = 'babyreader-search-') {
+async function temporaryDirectory(t, prefix = 'zhenshu-search-') {
   const directory = await fs.mkdtemp(path.join(os.tmpdir(), prefix));
   t.after(() => fs.rm(directory, { recursive: true, force: true }));
   return directory;
@@ -205,7 +205,7 @@ test('EPUB indexing follows nested encoded spine hrefs and excludes non-spine re
 });
 
 test('EPUB index stores logical chapter structure without changing spine-index retrieval fields', { skip: !isFtsAvailable() }, async (t) => {
-  const root = await temporaryDirectory(t, 'babyreader-ai-chapter-structure-');
+  const root = await temporaryDirectory(t, 'zhenshu-ai-chapter-structure-');
   const bookPath = path.join(root, 'chapter-structure.epub');
   const files = {
     'META-INF/container.xml': new TextEncoder().encode(
@@ -448,7 +448,7 @@ test('search cursors become stale when the indexed source changes', async (t) =>
 });
 
 test('PDF search indexes exact Chinese matches by zero-based page and UTF-16 page offset', { skip: !isFtsAvailable() }, async (t) => {
-  const root = await temporaryDirectory(t, 'babyreader-pdf-search-');
+  const root = await temporaryDirectory(t, 'zhenshu-pdf-search-');
   const bookPath = path.join(root, 'multi-page.pdf');
   const pages = [
     '第一页前文。目标词在这里；目标词再次出现。',
@@ -476,7 +476,7 @@ test('PDF search indexes exact Chinese matches by zero-based page and UTF-16 pag
 });
 
 test('image-only PDF is explicitly non-searchable rather than an empty successful index', { skip: !isFtsAvailable() }, async (t) => {
-  const root = await temporaryDirectory(t, 'babyreader-pdf-textless-');
+  const root = await temporaryDirectory(t, 'zhenshu-pdf-textless-');
   const bookPath = path.join(root, 'image-only.pdf');
   await fs.writeFile(bookPath, createPdfFixture({ pageTexts: [null, ''] }));
 
@@ -487,7 +487,7 @@ test('image-only PDF is explicitly non-searchable rather than an empty successfu
 });
 
 test('PDF parser-version mismatch rebuilds only that book index and malformed PDFs fail closed', { skip: !isFtsAvailable() }, async (t) => {
-  const root = await temporaryDirectory(t, 'babyreader-pdf-version-');
+  const root = await temporaryDirectory(t, 'zhenshu-pdf-version-');
   const bookPath = path.join(root, 'versioned.pdf');
   await fs.writeFile(bookPath, createPdfFixture({ text: '当前版本唯一词' }));
   const book = createBook('3'.repeat(64), bookPath, 'pdf');
@@ -510,7 +510,7 @@ test('PDF parser-version mismatch rebuilds only that book index and malformed PD
 });
 
 test('failed PDF rebuild retains the last complete index and does not modify another book index', { skip: !isFtsAvailable() }, async (t) => {
-  const root = await temporaryDirectory(t, 'babyreader-pdf-atomic-');
+  const root = await temporaryDirectory(t, 'zhenshu-pdf-atomic-');
   const pdfPath = path.join(root, 'atomic.pdf');
   const textPath = path.join(root, 'unrelated.txt');
   const pdfBook = createBook('5'.repeat(64), pdfPath, 'pdf');

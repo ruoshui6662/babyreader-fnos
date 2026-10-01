@@ -5,7 +5,7 @@
 
 const { test, expect } = require('@playwright/test');
 
-const APP_PATH = '/app/babyreader-fnos/';
+const APP_PATH = '/app/zhenshu/';
 
 test('the brand mark is served as favicon, launcher icons and top-bar mark', async ({ page }) => {
   await page.goto(APP_PATH);

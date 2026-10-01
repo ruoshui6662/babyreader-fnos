@@ -1,4 +1,4 @@
-/* BabyReader UI module: library/view */
+/* 枕书 UI module: library/view */
 
 'use strict';
 
@@ -153,10 +153,10 @@ function createLibraryHiddenPdfNotice(library) {
   const count = (value) => (Number.isSafeInteger(value) && value > 0 ? value : 0);
   const lines = [];
   if (features.pdfReader === false && count(features.hiddenPdfCount)) {
-    lines.push(`另有 ${features.hiddenPdfCount} 本 PDF 已扫描；管理员已关闭 PDF 阅读（BABYREADER_PDF_ENABLED）。`);
+    lines.push(`另有 ${features.hiddenPdfCount} 本 PDF 已扫描；管理员已关闭 PDF 阅读（ZHENSHU_PDF_ENABLED）。`);
   }
   if (features.mobiReader === false && count(features.hiddenMobiCount)) {
-    lines.push(`另有 ${features.hiddenMobiCount} 本 MOBI/AZW3 已扫描；管理员已关闭 MOBI/AZW3 阅读（BABYREADER_MOBI_ENABLED）。`);
+    lines.push(`另有 ${features.hiddenMobiCount} 本 MOBI/AZW3 已扫描；管理员已关闭 MOBI/AZW3 阅读（ZHENSHU_MOBI_ENABLED）。`);
   }
   if (count(features.drmProtectedMobiCount)) {
     lines.push(`${features.drmProtectedMobiCount} 本 Kindle 书受 DRM 保护，无法阅读。`);
@@ -306,7 +306,7 @@ function renderFlatLibrary(library, { organizationEnabled = false } = {}) {
 
     const emptyCopy = document.createElement('p');
     emptyCopy.className = 'library-empty-copy';
-    emptyCopy.textContent = '在 fnOS 中授权书库目录后，EPUB、Markdown、TXT 和已启用的 PDF 会出现在这里。';
+    emptyCopy.textContent = '在 fnOS 中授权书库目录后，EPUB、PDF、MOBI/AZW3、Markdown 和 TXT 会出现在这里。';
     empty.appendChild(emptyCopy);
     shell.appendChild(empty);
   } else {

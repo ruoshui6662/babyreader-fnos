@@ -17,7 +17,7 @@ const { FIXTURE_TEXT } = require('./fixtures/reader-fixtures');
 
 test.describe('Highlight CRUD', () => {
   test.beforeEach(async ({ page }) => {
-    await page.goto('/app/babyreader-fnos/');
+    await page.goto('/app/zhenshu/');
     await resetReaderSettings(page);
     await resetEpubFixtureState(page);
     await openEpubFixture(page);
@@ -30,7 +30,7 @@ test.describe('Highlight CRUD', () => {
       const response = await fetch(`${prefix}/api/state`);
       const state = await response.json();
       return state.settings?.readingMode;
-    }, '/app/babyreader-fnos');
+    }, '/app/zhenshu');
     expect(readingMode).toBe('scroll');
   });
 

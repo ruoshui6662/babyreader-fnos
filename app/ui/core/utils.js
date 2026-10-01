@@ -1,4 +1,4 @@
-/* BabyReader UI module: core/utils */
+/* 枕书 UI module: core/utils */
 
 'use strict';
 

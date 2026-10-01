@@ -19,3 +19,4 @@ manifest text eol=lf
 UPSTREAM_BASELINES text eol=lf
 app/ui/config text eol=lf
 config/* text eol=lf
+wizard/* text eol=lf

@@ -8,7 +8,7 @@ const path = require('node:path');
 const test = require('node:test');
 const { createPdfFixture } = require('./fixtures/pdf-fixtures');
 
-const SANDBOX = path.join(os.tmpdir(), `babyreader-pdf-disabled-${process.pid}`);
+const SANDBOX = path.join(os.tmpdir(), `zhenshu-pdf-disabled-${process.pid}`);
 const DATA_ROOT = path.join(SANDBOX, 'var');
 const CONFIG_ROOT = path.join(SANDBOX, 'etc');
 const LIBRARY_ROOT = path.join(SANDBOX, 'library');
@@ -22,8 +22,8 @@ process.env.TRIM_PKGETC = CONFIG_ROOT;
 process.env.TRIM_DATA_ACCESSIBLE_PATHS = '';
 process.env.TRIM_DATA_SHARE_PATHS = '';
 process.env.NODE_ENV = 'production';
-process.env.BABYREADER_ENABLE_LIBRARY_ORGANIZATION = '1';
-delete process.env.BABYREADER_PDF_ENABLED;
+process.env.ZHENSHU_ENABLE_LIBRARY_ORGANIZATION = '1';
+delete process.env.ZHENSHU_PDF_ENABLED;
 const { handleRequest, loadConfiguration } = require('../app/server/index');
 let server;
 let baseUrl;
@@ -49,7 +49,7 @@ test.before(async () => {
   await loadConfiguration();
   server = http.createServer((request, response) => void handleRequest(request, response));
   await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
-  baseUrl = `http://127.0.0.1:${server.address().port}/app/babyreader-fnos`;
+  baseUrl = `http://127.0.0.1:${server.address().port}/app/zhenshu`;
 });
 
 test.after(async () => {
@@ -61,8 +61,8 @@ test.after(async () => {
 });
 
 function setPdfKillSwitch(disabled) {
-  if (disabled) process.env.BABYREADER_PDF_ENABLED = 'false';
-  else delete process.env.BABYREADER_PDF_ENABLED;
+  if (disabled) process.env.ZHENSHU_PDF_ENABLED = 'false';
+  else delete process.env.ZHENSHU_PDF_ENABLED;
 }
 
 test('PDF reading is on by default, even with a stale disabled setting from the removed switch', async () => {

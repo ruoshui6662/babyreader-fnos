@@ -1,4 +1,4 @@
-# BabyReader UI Interface Map
+# 枕书 UI Interface Map
 
 ## Reader Shell
 
@@ -160,7 +160,7 @@ Reader Shell 保持正文为第一视觉层级。目录、显示设置及后续�
 - `PUT /books/:id/progress`
 - `PUT /books/:id/highlights`
 
-所有请求继续通过 `/app/babyreader-fnos/api` 前缀。fnOS 用户身份和 `X-Trim-Userid` 隔离继续由现有服务端安全逻辑处理。reserved 功能不会调用预留但尚不存在的接口。
+所有请求继续通过 `/app/zhenshu/api` 前缀。fnOS 用户身份和 `X-Trim-Userid` 隔离继续由现有服务端安全逻辑处理。reserved 功能不会调用预留但尚不存在的接口。
 
 ## 响应式约定
 

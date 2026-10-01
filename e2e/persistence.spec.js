@@ -13,7 +13,7 @@ const {
 test.describe('Reading progress persistence', () => {
   test.beforeEach(async ({ page }) => {
     await page.setViewportSize({ width: 1200, height: 800 });
-    await page.goto('/app/babyreader-fnos/');
+    await page.goto('/app/zhenshu/');
     await resetReaderSettings(page);
     await resetEpubFixtureState(page);
     await openEpubFixture(page);
@@ -121,7 +121,7 @@ test.describe('Reading progress persistence', () => {
     });
 
     await page.reload({ waitUntil: 'load' });
-    await page.goto('/app/babyreader-fnos/');
+    await page.goto('/app/zhenshu/');
     await expect(page.locator('.library-view h1')).toHaveText('书库');
     await page.locator('.library-book').filter({ hasText: 'E2E EPUB' }).click();
     await expect(page.locator('#article')).toContainText('E2E EPUB Chapter 2');

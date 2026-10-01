@@ -13,7 +13,7 @@ const BOOK_ID = 'a'.repeat(64);
 const BASE = { uid: 'reader-1', bookId: BOOK_ID, sourceFingerprint: 'fingerprint-1', provider: 'openai', baseUrl: 'https://api.example/v1', model: 'test-model', parserVersion: 'pdfjs-v1', structureVersion: 'structure-v1', strategyVersion: 'strategy-v1', promptVersion: 'prompt-v1' };
 
 async function makeStore(t) {
-  const dataRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'babyreader-pdf-ai-profile-'));
+  const dataRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'zhenshu-pdf-ai-profile-'));
   t.after(() => fs.rm(dataRoot, { recursive: true, force: true }));
   return { dataRoot, store: createPdfAiProfileStore({ dataRoot }) };
 }

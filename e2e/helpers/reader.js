@@ -2,7 +2,7 @@
 
 const { expect } = require('@playwright/test');
 
-const APP_PREFIX = '/app/babyreader-fnos';
+const APP_PREFIX = '/app/zhenshu';
 
 async function getEpubFixtureId(page) {
   return page.evaluate(async (prefix) => {
@@ -112,7 +112,7 @@ async function resetReaderSettings(page) {
 
 // Open a fixture EPUB book from the library.
 async function openEpubFixture(page) {
-  await page.goto('/app/babyreader-fnos/');
+  await page.goto('/app/zhenshu/');
   await expect(page.locator('.library-view h1')).toHaveText('书库');
   const book = page.locator('.library-book').filter({ hasText: 'E2E EPUB' });
   await expect(book).toBeVisible();

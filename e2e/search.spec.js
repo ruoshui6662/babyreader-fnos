@@ -5,7 +5,7 @@ const {
   resetReaderSettings
 } = require('./helpers/reader');
 
-const APP_PATH = '/app/babyreader-fnos/';
+const APP_PATH = '/app/zhenshu/';
 
 async function openLibraryBook(page, title, text) {
   await page.goto(APP_PATH);

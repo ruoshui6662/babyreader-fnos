@@ -7,7 +7,7 @@ const os = require('node:os');
 const path = require('node:path');
 const test = require('node:test');
 
-const SANDBOX = path.join(os.tmpdir(), `babyreader-library-organization-api-${process.pid}`);
+const SANDBOX = path.join(os.tmpdir(), `zhenshu-library-organization-api-${process.pid}`);
 const DATA_ROOT = path.join(SANDBOX, 'var');
 const CONFIG_ROOT = path.join(SANDBOX, 'etc');
 const LIBRARY_ROOT = path.join(SANDBOX, 'library');
@@ -103,7 +103,7 @@ test('organization API requires an authenticated fnOS identity', async () => {
   const previous = process.env.NODE_ENV;
   process.env.NODE_ENV = 'production';
   try {
-    const raw = await fetch(`${baseUrl}/app/babyreader-fnos/api/library/organization`);
+    const raw = await fetch(`${baseUrl}/app/zhenshu/api/library/organization`);
     assert.equal(raw.status, 401);
   } finally {
     process.env.NODE_ENV = previous;
@@ -111,7 +111,7 @@ test('organization API requires an authenticated fnOS identity', async () => {
 });
 
 test('organization read returns a resolved, path-free model', async () => {
-  const response = await request('/app/babyreader-fnos/api/library/organization');
+  const response = await request('/app/zhenshu/api/library/organization');
   assert.equal(response.status, 200);
   assert.equal(response.body.revision, 0);
   assert.equal(response.body.books.length, 2);
@@ -123,7 +123,7 @@ test('organization read returns a resolved, path-free model', async () => {
 
 test('freshly scanned unassigned books can save their displayed order', async () => {
   const headers = userHeaders('fresh-order-user');
-  const result = await jsonRequest('/app/babyreader-fnos/api/library/organization/order', 'PUT', {
+  const result = await jsonRequest('/app/zhenshu/api/library/organization/order', 'PUT', {
     scope: 'unassigned', order: [SECOND_BOOK_ID, BOOK_ID], revision: 0
   }, headers);
   assert.equal(result.status, 200);
@@ -132,7 +132,7 @@ test('freshly scanned unassigned books can save their displayed order', async ()
 
 test('all-book order is persisted per user and rejects missing or duplicate IDs', async () => {
   const headers = userHeaders('all-order-user');
-  const url = '/app/babyreader-fnos/api/library/organization/order';
+  const url = '/app/zhenshu/api/library/organization/order';
   const result = await jsonRequest(url, 'PUT', { scope: 'all', order: [SECOND_BOOK_ID, BOOK_ID], revision: 0 }, headers);
   assert.equal(result.status, 200);
   assert.deepEqual(result.body.allBookOrder, [SECOND_BOOK_ID, BOOK_ID]);
@@ -141,15 +141,15 @@ test('all-book order is persisted per user and rejects missing or duplicate IDs'
     const rejected = await jsonRequest(url, 'PUT', { scope: 'all', order, revision: 1 }, headers);
     assert.equal(rejected.status, 400);
   }
-  const fresh = await request('/app/babyreader-fnos/api/library/organization', { headers });
+  const fresh = await request('/app/zhenshu/api/library/organization', { headers });
   assert.deepEqual(fresh.body.allBookOrder, [SECOND_BOOK_ID, BOOK_ID]);
-  const other = await request('/app/babyreader-fnos/api/library/organization', { headers: userHeaders('other-order-user') });
+  const other = await request('/app/zhenshu/api/library/organization', { headers: userHeaders('other-order-user') });
   assert.deepEqual(other.body.allBookOrder, [BOOK_ID, SECOND_BOOK_ID]);
 });
 
 test('reordering visible collection books retains temporarily missing references', async () => {
   const headers = userHeaders('offline-order-user');
-  const created = await jsonRequest('/app/babyreader-fnos/api/library/collections', 'POST', { name: '保留离线', revision: 0 }, headers);
+  const created = await jsonRequest('/app/zhenshu/api/library/collections', 'POST', { name: '保留离线', revision: 0 }, headers);
   const id = created.body.collections[0].id;
   // Model a previously saved assignment whose source file has temporarily disappeared.
   const { UserStorage } = require('../app/server/storage');
@@ -158,7 +158,7 @@ test('reordering visible collection books retains temporarily missing references
     draft.collectionOrders[id] = [UNKNOWN_BOOK_ID, BOOK_ID, SECOND_BOOK_ID];
     draft.bookAssignments = { [UNKNOWN_BOOK_ID]: id, [BOOK_ID]: id, [SECOND_BOOK_ID]: id };
   });
-  const reordered = await jsonRequest('/app/babyreader-fnos/api/library/organization/order', 'PUT', {
+  const reordered = await jsonRequest('/app/zhenshu/api/library/organization/order', 'PUT', {
     scope: id, order: [SECOND_BOOK_ID, BOOK_ID], revision: 2
   }, headers);
   assert.equal(reordered.status, 200);
@@ -169,7 +169,7 @@ test('reordering visible collection books retains temporarily missing references
 });
 
 test('organization mutations create, rename, place and reorder collections', async () => {
-  const created = await jsonRequest('/app/babyreader-fnos/api/library/collections', 'POST', {
+  const created = await jsonRequest('/app/zhenshu/api/library/collections', 'POST', {
     name: '  营养   科学  ',
     revision: 0
   });
@@ -179,7 +179,7 @@ test('organization mutations create, rename, place and reorder collections', asy
   assert.equal(created.body.revision, 1);
 
   const renamed = await jsonRequest(
-    `/app/babyreader-fnos/api/library/collections/${collection.id}`,
+    `/app/zhenshu/api/library/collections/${collection.id}`,
     'PATCH',
     { name: '<script>alert(1)</script>', revision: 1 }
   );
@@ -187,7 +187,7 @@ test('organization mutations create, rename, place and reorder collections', asy
   assert.equal(renamed.body.collections[0].name, '<script>alert(1)</script>');
 
   const placed = await jsonRequest(
-    `/app/babyreader-fnos/api/library/books/${BOOK_ID}/placement`,
+    `/app/zhenshu/api/library/books/${BOOK_ID}/placement`,
     'PUT',
     { collectionId: collection.id, beforeBookId: null, revision: 2 }
   );
@@ -196,7 +196,7 @@ test('organization mutations create, rename, place and reorder collections', asy
   assert.equal(placed.body.bookAssignments[BOOK_ID], collection.id);
 
   const secondPlaced = await jsonRequest(
-    `/app/babyreader-fnos/api/library/books/${SECOND_BOOK_ID}/placement`,
+    `/app/zhenshu/api/library/books/${SECOND_BOOK_ID}/placement`,
     'PUT',
     { collectionId: collection.id, beforeBookId: BOOK_ID, revision: 3 }
   );
@@ -204,7 +204,7 @@ test('organization mutations create, rename, place and reorder collections', asy
   assert.deepEqual(secondPlaced.body.collectionOrders[collection.id], [SECOND_BOOK_ID, BOOK_ID]);
   assert.deepEqual(secondPlaced.body.unassignedOrder, []);
 
-  const reordered = await jsonRequest('/app/babyreader-fnos/api/library/organization/order', 'PUT', {
+  const reordered = await jsonRequest('/app/zhenshu/api/library/organization/order', 'PUT', {
     scope: collection.id,
     order: [BOOK_ID, SECOND_BOOK_ID],
     revision: 4
@@ -214,7 +214,7 @@ test('organization mutations create, rename, place and reorder collections', asy
 });
 
 test('organization API rejects stale revisions and invalid book ids without leaking paths', async () => {
-  const response = await jsonRequest('/app/babyreader-fnos/api/library/collections', 'POST', {
+  const response = await jsonRequest('/app/zhenshu/api/library/collections', 'POST', {
     name: '过期操作',
     revision: 0
   });
@@ -222,7 +222,7 @@ test('organization API rejects stale revisions and invalid book ids without leak
   assert.equal(response.body.error, '书库已在其他页面更新，请重新加载');
 
   const invalid = await jsonRequest(
-    '/app/babyreader-fnos/api/library/books/not-a-book/placement',
+    '/app/zhenshu/api/library/books/not-a-book/placement',
     'PUT',
     { collectionId: null, revision: 4 }
   );
@@ -230,7 +230,7 @@ test('organization API rejects stale revisions and invalid book ids without leak
   assert.equal(JSON.stringify(invalid.body).includes(LIBRARY_ROOT), false);
 
   const missing = await jsonRequest(
-    `/app/babyreader-fnos/api/library/books/${UNKNOWN_BOOK_ID}/placement`,
+    `/app/zhenshu/api/library/books/${UNKNOWN_BOOK_ID}/placement`,
     'PUT',
     { collectionId: null, revision: 5 }
   );
@@ -238,17 +238,17 @@ test('organization API rejects stale revisions and invalid book ids without leak
 });
 
 test('organization state is isolated by user and deleting a collection unassigns books', async () => {
-  const other = await request('/app/babyreader-fnos/api/library/organization', {
+  const other = await request('/app/zhenshu/api/library/organization', {
     headers: userHeaders('user-b')
   });
   assert.equal(other.status, 200);
   assert.equal(other.body.revision, 0);
   assert.deepEqual(other.body.collections, []);
 
-  const current = await request('/app/babyreader-fnos/api/library/organization');
+  const current = await request('/app/zhenshu/api/library/organization');
   const collectionId = current.body.collections[0].id;
   const deleted = await jsonRequest(
-    `/app/babyreader-fnos/api/library/collections/${collectionId}`,
+    `/app/zhenshu/api/library/collections/${collectionId}`,
     'DELETE',
     { revision: current.body.revision }
   );
@@ -258,7 +258,7 @@ test('organization state is isolated by user and deleting a collection unassigns
 });
 
 test('legacy library API remains a flat catalog and exposes only the feature flag', async () => {
-  const response = await request('/app/babyreader-fnos/api/library');
+  const response = await request('/app/zhenshu/api/library');
   assert.equal(response.status, 200);
   assert.equal(response.body.features.libraryOrganization, false);
   assert.equal('organization' in response.body, false);
@@ -267,15 +267,15 @@ test('legacy library API remains a flat catalog and exposes only the feature fla
 });
 
 test('organization preferences accept only the bounded view modes', async () => {
-  const current = await request('/app/babyreader-fnos/api/library/organization');
-  const updated = await jsonRequest('/app/babyreader-fnos/api/library/organization/preferences', 'PUT', {
+  const current = await request('/app/zhenshu/api/library/organization');
+  const updated = await jsonRequest('/app/zhenshu/api/library/organization/preferences', 'PUT', {
     viewMode: 'source-folders',
     revision: current.body.revision
   });
   assert.equal(updated.status, 200);
   assert.equal(updated.body.preferences.viewMode, 'source-folders');
 
-  const invalid = await jsonRequest('/app/babyreader-fnos/api/library/organization/preferences', 'PUT', {
+  const invalid = await jsonRequest('/app/zhenshu/api/library/organization/preferences', 'PUT', {
     viewMode: 'delete-files',
     revision: updated.body.revision
   });
@@ -298,13 +298,13 @@ test('organization reconcile dry-runs first and only confirmed cleanup removes o
     bookAssignments: { [BOOK_ID]: collectionId, [UNKNOWN_BOOK_ID]: collectionId }
   }), 'utf8');
 
-  const before = await request('/app/babyreader-fnos/api/library/organization', {
+  const before = await request('/app/zhenshu/api/library/organization', {
     headers: userHeaders('user-c')
   });
   assert.deepEqual(before.body.orphanedBookIds, [UNKNOWN_BOOK_ID]);
 
   const dryRun = await jsonRequest(
-    '/app/babyreader-fnos/api/library/organization/reconcile',
+    '/app/zhenshu/api/library/organization/reconcile',
     'POST',
     { revision: 0 },
     userHeaders('user-c')
@@ -315,13 +315,13 @@ test('organization reconcile dry-runs first and only confirmed cleanup removes o
   assert.equal(dryRun.body.orphanCount, 1);
   assert.equal(dryRun.body.revision, 0);
 
-  const stillPresent = await request('/app/babyreader-fnos/api/library/organization', {
+  const stillPresent = await request('/app/zhenshu/api/library/organization', {
     headers: userHeaders('user-c')
   });
   assert.deepEqual(stillPresent.body.orphanedBookIds, [UNKNOWN_BOOK_ID]);
 
   const confirmed = await jsonRequest(
-    '/app/babyreader-fnos/api/library/organization/reconcile',
+    '/app/zhenshu/api/library/organization/reconcile',
     'POST',
     { revision: 0, confirm: true },
     userHeaders('user-c')
@@ -348,7 +348,7 @@ test('organization reconcile fails closed when the library scan is unhealthy', a
   }), 'utf8');
   try {
     const response = await jsonRequest(
-      '/app/babyreader-fnos/api/library/organization/reconcile',
+      '/app/zhenshu/api/library/organization/reconcile',
       'POST',
       { revision: 0, confirm: true },
       userHeaders('user-d')

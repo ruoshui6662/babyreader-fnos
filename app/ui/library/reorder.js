@@ -1,4 +1,4 @@
-/* BabyReader UI module: library/reorder */
+/* 枕书 UI module: library/reorder */
 
 'use strict';
 

@@ -85,7 +85,7 @@ function fingerprintBook(realPath, stat) {
 function sourceRootId(realRoot) {
   return crypto
     .createHash('sha256')
-    .update(`babyreader-source-root\0${path.resolve(realRoot)}`)
+    .update(`zhenshu-source-root\0${path.resolve(realRoot)}`)
     .digest('hex');
 }
 
@@ -212,7 +212,7 @@ async function writeCover(coverDirectory, id, cover) {
   if (!cover) return null;
   const safeExtension = cover.extension.replace(/[^.a-z0-9]/gi, '') || '.bin';
   await fs.writeFile(path.join(coverDirectory, `${id}${safeExtension}`), cover.bytes, { mode: 0o600 });
-  return `/app/babyreader-fnos/api/books/${id}/cover`;
+  return `/app/zhenshu/api/books/${id}/cover`;
 }
 
 // Indexes one authorized file. Shared by full scans and single-book imports so

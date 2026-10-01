@@ -3,9 +3,9 @@
 const path = require('node:path');
 const { test, expect } = require('@playwright/test');
 
-const samplePath = process.env.BABYREADER_E2E_SAMPLE_EPUB;
-const sampleTitle = process.env.BABYREADER_E2E_SAMPLE_TITLE || (samplePath ? path.basename(samplePath, '.epub') : '');
-const readinessThrottleRate = Math.max(1, Number(process.env.BABYREADER_E2E_CPU_THROTTLE) || 12);
+const samplePath = process.env.ZHENSHU_E2E_SAMPLE_EPUB;
+const sampleTitle = process.env.ZHENSHU_E2E_SAMPLE_TITLE || (samplePath ? path.basename(samplePath, '.epub') : '');
+const readinessThrottleRate = Math.max(1, Number(process.env.ZHENSHU_E2E_CPU_THROTTLE) || 12);
 
 async function setCpuThrottle(page, rate) {
   const cdp = await page.context().newCDPSession(page);
@@ -84,10 +84,10 @@ function maxLongTaskMs(longTasks) {
 async function openSampleInScrollMode(page, throttleRate, pageErrors) {
   page.on('pageerror', (error) => pageErrors.push(error.message));
   await setCpuThrottle(page, throttleRate);
-  await page.goto('/app/babyreader-fnos/');
+  await page.goto('/app/zhenshu/');
   await expect(page.locator('.library-view h1')).toHaveText('书库');
   await page.evaluate(async () => {
-    const response = await fetch('/app/babyreader-fnos/api/settings', {
+    const response = await fetch('/app/zhenshu/api/settings', {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ readingMode: 'scroll', continuousScroll: true })
@@ -97,11 +97,11 @@ async function openSampleInScrollMode(page, throttleRate, pageErrors) {
   await page.reload({ waitUntil: 'load' });
   await expect(page.locator('.library-view h1')).toHaveText('书库');
   await page.evaluate(() => {
-    window.__babyReaderLongTasks = [];
+    window.__zhenshuLongTasks = [];
     if (!('PerformanceObserver' in window)) return;
     const observer = new PerformanceObserver((list) => {
       for (const entry of list.getEntries()) {
-        window.__babyReaderLongTasks.push({ start: entry.startTime, duration: entry.duration });
+        window.__zhenshuLongTasks.push({ start: entry.startTime, duration: entry.duration });
       }
     });
     observer.observe({ type: 'longtask', buffered: true });
@@ -115,12 +115,12 @@ async function openSampleInScrollMode(page, throttleRate, pageErrors) {
   return {
     openedMs,
     readiness,
-    longTasks: await page.evaluate(() => window.__babyReaderLongTasks || [])
+    longTasks: await page.evaluate(() => window.__zhenshuLongTasks || [])
   };
 }
 
 test('optional real EPUB makes its first scroll chapter interactive within eight seconds at 12x CPU throttle', async ({ page }) => {
-  test.skip(!samplePath, 'Set BABYREADER_E2E_SAMPLE_EPUB to run this local-only investigation.');
+  test.skip(!samplePath, 'Set ZHENSHU_E2E_SAMPLE_EPUB to run this local-only investigation.');
   const pageErrors = [];
   const result = await openSampleInScrollMode(page, readinessThrottleRate, pageErrors);
   const maxObservedLongTaskMs = maxLongTaskMs(result.longTasks);
@@ -129,7 +129,7 @@ test('optional real EPUB makes its first scroll chapter interactive within eight
 });
 
 test('optional real EPUB changes source path at a scroll chapter boundary with one mounted chapter', async ({ page }) => {
-  test.skip(!samplePath, 'Set BABYREADER_E2E_SAMPLE_EPUB to run this local-only investigation.');
+  test.skip(!samplePath, 'Set ZHENSHU_E2E_SAMPLE_EPUB to run this local-only investigation.');
   const pageErrors = [];
   const result = await openSampleInScrollMode(page, 4, pageErrors);
   const before = await page.locator('#article').evaluate((article) => ({
@@ -151,7 +151,7 @@ test('optional real EPUB changes source path at a scroll chapter boundary with o
   await expect.poll(() => page.locator('#reader').evaluate((reader) => reader.scrollTop), { timeout: 8_000 })
     .toBe(0);
 
-  const longTasks = await page.evaluate(() => window.__babyReaderLongTasks || []);
+  const longTasks = await page.evaluate(() => window.__zhenshuLongTasks || []);
   const maxObservedLongTaskMs = maxLongTaskMs(longTasks);
   console.log(`REAL_EPUB_BOUNDARY ${JSON.stringify({ ...before, after, ...result, longTasks, maxObservedLongTaskMs })}`);
   expect(maxObservedLongTaskMs).toBeLessThanOrEqual(1_000);

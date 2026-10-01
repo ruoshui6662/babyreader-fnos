@@ -254,7 +254,7 @@ function createBookImporter({
         if (error instanceof ImportError) throw error;
         throw importError('IMPORT_NO_TARGET', 503, '导入目录不可用，请检查 fnOS 共享目录权限。');
       }
-      temporary = path.join(directory, `.babyreader-import-${crypto.randomUUID()}.part`);
+      temporary = path.join(directory, `.zhenshu-import-${crypto.randomUUID()}.part`);
       const { size, sha256 } = await receive(stream, temporary, format.maxBytes, declared);
       await validateContent(temporary, format, size);
       // Dedupe, publish and catalog under the library lock so scans and other

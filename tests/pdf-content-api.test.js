@@ -12,7 +12,7 @@ const { scanLibrary } = require('../app/server/library');
 const { parseSingleByteRange } = require('../app/server/byte-range');
 const { createInvalidPdfFixture, createPdfFixture } = require('./fixtures/pdf-fixtures');
 
-const SANDBOX = path.join(os.tmpdir(), `babyreader-pdf-api-${process.pid}`);
+const SANDBOX = path.join(os.tmpdir(), `zhenshu-pdf-api-${process.pid}`);
 const DATA_ROOT = path.join(SANDBOX, 'var');
 const CONFIG_ROOT = path.join(SANDBOX, 'etc');
 const LIBRARY_ROOT = path.join(SANDBOX, 'library');
@@ -33,7 +33,7 @@ process.env.TRIM_PKGETC = CONFIG_ROOT;
 process.env.TRIM_DATA_ACCESSIBLE_PATHS = '';
 process.env.TRIM_DATA_SHARE_PATHS = '';
 process.env.NODE_ENV = 'production';
-process.env.BABYREADER_PDF_ENABLED = 'true';
+process.env.ZHENSHU_PDF_ENABLED = 'true';
 const { handleRequest, loadConfiguration } = require('../app/server/index');
 let apiServer;
 let apiBaseUrl;
@@ -63,7 +63,7 @@ test('single byte range parser rejects malformed, multipart, unsatisfiable, empt
 });
 
 test('library scan recognizes signature-valid PDFs without parsing their bytes as text', async (t) => {
-  const root = await temporaryDirectory(t, 'babyreader-pdf-scan-');
+  const root = await temporaryDirectory(t, 'zhenshu-pdf-scan-');
   const pdfPath = path.join(root, 'synthetic.pdf');
   await fs.writeFile(pdfPath, createPdfFixture());
   const index = await scanLibrary([root]);
@@ -76,7 +76,7 @@ test('library scan recognizes signature-valid PDFs without parsing their bytes a
 });
 
 test('library scan discovers PDFs in nested authorized folders regardless of extension case', async (t) => {
-  const root = await temporaryDirectory(t, 'babyreader-pdf-nested-');
+  const root = await temporaryDirectory(t, 'zhenshu-pdf-nested-');
   const nested = path.join(root, '分类', '子目录');
   await fs.mkdir(nested, { recursive: true });
   await fs.writeFile(path.join(root, 'root.pdf'), createPdfFixture());
@@ -90,7 +90,7 @@ test('library scan discovers PDFs in nested authorized folders regardless of ext
 });
 
 test('library scan rejects invalid PDF signatures and signatures hidden beyond the bounded header probe', async (t) => {
-  const root = await temporaryDirectory(t, 'babyreader-invalid-pdf-');
+  const root = await temporaryDirectory(t, 'zhenshu-invalid-pdf-');
   await fs.writeFile(path.join(root, 'plain.pdf'), Buffer.from('not a PDF', 'ascii'));
   await fs.writeFile(path.join(root, 'late-signature.pdf'), createInvalidPdfFixture());
   const index = await scanLibrary([root]);
@@ -101,7 +101,7 @@ test('library scan rejects invalid PDF signatures and signatures hidden beyond t
 });
 
 test('library scan ignores PDF symlinks and never discovers files outside an authorized root', async (t) => {
-  const sandbox = await temporaryDirectory(t, 'babyreader-pdf-symlink-');
+  const sandbox = await temporaryDirectory(t, 'zhenshu-pdf-symlink-');
   const root = path.join(sandbox, 'authorized');
   const outside = path.join(sandbox, 'outside.pdf');
   await fs.mkdir(root);
@@ -118,7 +118,7 @@ test('library scan ignores PDF symlinks and never discovers files outside an aut
 });
 
 test('library scan ignores directories with a .pdf suffix instead of treating them as books', async (t) => {
-  const root = await temporaryDirectory(t, 'babyreader-pdf-directory-');
+  const root = await temporaryDirectory(t, 'zhenshu-pdf-directory-');
   await fs.mkdir(path.join(root, 'not-a-file.pdf'));
   const index = await scanLibrary([root]);
   assert.equal(index.scan.discoveredCount, 0);
@@ -126,7 +126,7 @@ test('library scan ignores directories with a .pdf suffix instead of treating th
 });
 
 test('library scan records large PDF size using bounded header inspection, not a whole-file text read', async (t) => {
-  const root = await temporaryDirectory(t, 'babyreader-large-pdf-');
+  const root = await temporaryDirectory(t, 'zhenshu-large-pdf-');
   const pdfPath = path.join(root, 'large.pdf');
   const handle = await fs.open(pdfPath, 'w');
   await handle.write(Buffer.from('%PDF-1.7\n', 'ascii'), 0, 9, 0);
@@ -182,11 +182,11 @@ test.after(async () => {
 });
 
 function contentUrl(bookId) {
-  return `${apiBaseUrl}/app/babyreader-fnos/api/books/${bookId}/content`;
+  return `${apiBaseUrl}/app/zhenshu/api/books/${bookId}/content`;
 }
 
 function pdfAnnotationsUrl(bookId) {
-  return `${apiBaseUrl}/app/babyreader-fnos/api/books/${bookId}/pdf-annotations`;
+  return `${apiBaseUrl}/app/zhenshu/api/books/${bookId}/pdf-annotations`;
 }
 
 function pdfAnnotationInput(id = PDF_ANNOTATION_ID, overrides = {}) {
@@ -327,14 +327,14 @@ test('PDF annotation API enforces PDF enablement, authorized books, JSON limits,
   assert.equal(tooLarge.status, 413);
   await tooLarge.arrayBuffer();
 
-  const originalEnabled = process.env.BABYREADER_PDF_ENABLED;
+  const originalEnabled = process.env.ZHENSHU_PDF_ENABLED;
   try {
-    process.env.BABYREADER_PDF_ENABLED = 'false';
+    process.env.ZHENSHU_PDF_ENABLED = 'false';
     const disabled = await fetch(url, { headers: { 'x-trim-userid': 'api-limits' } });
     assert.equal(disabled.status, 404);
     await disabled.arrayBuffer();
   } finally {
-    process.env.BABYREADER_PDF_ENABLED = originalEnabled;
+    process.env.ZHENSHU_PDF_ENABLED = originalEnabled;
   }
 
   const settingsPath = path.join(CONFIG_ROOT, 'settings.json');
@@ -509,7 +509,7 @@ test('PDF search and AI evidence use page-aware FTS locators', async () => {
 
 test('aborting a large PDF range does not prevent subsequent authorized reads', async () => {
   await new Promise((resolve, reject) => {
-    const request = http.get(`${apiBaseUrl}/app/babyreader-fnos/api/books/${LARGE_PDF_ID}/content`, {
+    const request = http.get(`${apiBaseUrl}/app/zhenshu/api/books/${LARGE_PDF_ID}/content`, {
       headers: { 'x-trim-userid': 'reader', range: 'bytes=0-8388607' }
     }, (response) => {
       response.once('data', () => {

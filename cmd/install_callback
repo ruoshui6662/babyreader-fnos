@@ -4,4 +4,26 @@ set -eu
 
 # 安装回调只完成安装阶段收尾。服务由 fnOS 在安装成功后通过 cmd/main start 启动，
 # 避免安装事务中提前创建进程、PID、日志或 Unix Socket。
+
+APP_DEST="${TRIM_APPDEST:-$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)}"
+PKG_ETC="${TRIM_PKGETC:-$APP_DEST/etc}"
+
+# 安装向导里的“直连访问”（可选）。密码只以哈希保存，不写入日志。
+if [ "${wizard_direct_mode:-off}" = "on" ]; then
+  NODE_BIN=/var/apps/nodejs_v22/target/bin/node
+  [ -x "$NODE_BIN" ] || NODE_BIN=$(command -v node) || NODE_BIN=
+  if [ -z "$NODE_BIN" ]; then
+    MESSAGE="未找到 Node.js 运行时，无法保存直连访问设置。"
+  elif ERROR=$(TRIM_PKGETC="$PKG_ETC" "$NODE_BIN" "$APP_DEST/server/direct-access-config.js" set 2>&1); then
+    MESSAGE=
+  else
+    MESSAGE="直连访问设置未保存：$ERROR"
+  fi
+  if [ -n "$MESSAGE" ]; then
+    [ -n "${TRIM_TEMP_LOGFILE:-}" ] && printf '%s\n' "$MESSAGE" > "$TRIM_TEMP_LOGFILE"
+    printf '%s\n' "$MESSAGE" >&2
+    exit 1
+  fi
+fi
+
 exit 0

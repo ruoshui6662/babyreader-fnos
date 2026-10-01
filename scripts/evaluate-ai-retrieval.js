@@ -160,7 +160,7 @@ async function main(argv = process.argv.slice(2)) {
   const dataset = JSON.parse(await fs.readFile(datasetPath, 'utf8'));
   const dataRoot = args['data-root']
     ? path.resolve(String(args['data-root']))
-    : await fs.mkdtemp(path.join(os.tmpdir(), 'babyreader-ai-eval-'));
+    : await fs.mkdtemp(path.join(os.tmpdir(), 'zhenshu-ai-eval-'));
   try {
     const report = await evaluateBook({ bookPath: String(args.book), dataset, dataRoot });
     process.stdout.write(`${JSON.stringify(report, null, 2)}\n`);

@@ -188,7 +188,7 @@ function setupAiIndexManager() {
   });
 }
 
-window.__babyReaderAiIndexApi = {
+window.__zhenshuAiIndexApi = {
   syncAiIndexManagerAccess,
   renderAiIndexManager,
   refreshAiIndexManager,

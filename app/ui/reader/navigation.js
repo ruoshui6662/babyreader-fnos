@@ -1,4 +1,4 @@
-/* BabyReader UI module: reader/navigation */
+/* 枕书 UI module: reader/navigation */
 
 'use strict';
 
@@ -95,16 +95,16 @@ function setupKeyboard() {
 
 function setupEpubContentKeyboard(contents) {
   const doc = contents?.document;
-  if (!doc || doc._babyreaderShortcutsBound) return;
-  doc._babyreaderShortcutsBound = true;
+  if (!doc || doc._zhenshuShortcutsBound) return;
+  doc._zhenshuShortcutsBound = true;
   doc.addEventListener('keydown', handleKeyboardShortcut, true);
 }
 
 function setupEpubContentSelection(contents) {
   const doc = contents?.document;
   const win = contents?.window;
-  if (!doc || !win || doc._babyreaderSelectionBound) return;
-  doc._babyreaderSelectionBound = true;
+  if (!doc || !win || doc._zhenshuSelectionBound) return;
+  doc._zhenshuSelectionBound = true;
 
   const readSelection = () => {
     const sel = win.getSelection();

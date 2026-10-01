@@ -1,4 +1,4 @@
-/* BabyReader UI module: reader/highlights */
+/* 枕书 UI module: reader/highlights */
 
 'use strict';
 
@@ -299,7 +299,7 @@ function updateTopbarState() {
 
 function toggleToc() {
   state.tocOpen = !state.tocOpen;
-  localStorage.setItem('babyreader-toc-open', state.tocOpen ? '1' : '0');
+  localStorage.setItem('zhenshu-toc-open', state.tocOpen ? '1' : '0');
   updateTopbarState();
   requestAnimationFrame(redrawDomHighlights);
 }
@@ -788,8 +788,8 @@ async function deleteActiveHighlight() {
 
 function setupHighlightEditor() {
   const editor = document.getElementById('highlightEditor');
-  if (!editor || editor._babyreaderBound) return;
-  editor._babyreaderBound = true;
+  if (!editor || editor._zhenshuBound) return;
+  editor._zhenshuBound = true;
 
   document.getElementById('btnCloseHighlightEditor')?.addEventListener('click', () => closeHighlightEditor());
   document.getElementById('btnSaveHighlight')?.addEventListener('click', saveActiveHighlightEdits);
@@ -808,7 +808,7 @@ function highlightFileName() {
 }
 
 function highlightFilePathLabel(filename = highlightFileName()) {
-  return `~/Documents/BabyReader/${filename}`;
+  return `~/Documents/枕书/${filename}`;
 }
 
 function clearReaderSelection() {
@@ -1002,8 +1002,8 @@ function setPendingDomHighlight(range, text) {
 
 function setupDomHighlightInteraction() {
   const article = document.getElementById('article');
-  if (!article || article._babyreaderDomHighlightBound) return;
-  article._babyreaderDomHighlightBound = true;
+  if (!article || article._zhenshuDomHighlightBound) return;
+  article._zhenshuDomHighlightBound = true;
 
   const readSelection = () => {
     if (state.contentType !== 'epub') return;

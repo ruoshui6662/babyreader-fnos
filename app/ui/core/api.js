@@ -1,4 +1,4 @@
-/* BabyReader UI module: core/api */
+/* 枕书 UI module: core/api */
 
 'use strict';
 
@@ -123,8 +123,8 @@ window.browserHost = {
     const promise = new Promise((resolve, reject) => {
       xhr.open('PUT', `${API_PREFIX}/library/imports`);
       xhr.setRequestHeader('Content-Type', 'application/octet-stream');
-      xhr.setRequestHeader('X-BabyReader-Request', 'import');
-      xhr.setRequestHeader('X-BabyReader-Filename', encodeURIComponent(file.name));
+      xhr.setRequestHeader('X-Zhenshu-Request', 'import');
+      xhr.setRequestHeader('X-Zhenshu-Filename', encodeURIComponent(file.name));
       xhr.upload.onprogress = (event) => {
         if (event.lengthComputable && typeof onProgress === 'function') onProgress(event.loaded / event.total);
       };

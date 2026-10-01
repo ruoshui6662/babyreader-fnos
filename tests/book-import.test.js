@@ -21,7 +21,7 @@ function epubBytes(title = '导入 EPUB') {
 }
 
 async function sandbox(t) {
-  const directory = await fs.mkdtemp(path.join(os.tmpdir(), 'babyreader-import-'));
+  const directory = await fs.mkdtemp(path.join(os.tmpdir(), 'zhenshu-import-'));
   t.after(() => fs.rm(directory, { recursive: true, force: true }));
   return directory;
 }
