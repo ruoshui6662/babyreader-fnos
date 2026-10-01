@@ -1131,7 +1131,11 @@ test('UX reorder handles stay available without dominating the resting shelf', a
   assert.equal(categoryHandle.tabIndex, 0, 'collapsed category handles remain keyboard reachable');
   assert.equal(window.getComputedStyle(categoryHandle).width, '0px');
   window.document.querySelector('.library-mode-button').click();
-  assert.equal(window.getComputedStyle(window.document.querySelector('.library-grid .library-reorder-handle')).opacity, '1');
+  // Books are dragged by the card; their handle stays keyboard-only even in 整理.
+  const manageBookHandle = window.document.querySelector('.library-grid .library-reorder-handle');
+  assert.ok(manageBookHandle.classList.contains('is-keyboard-only'));
+  assert.equal(manageBookHandle.tabIndex, 0);
+  assert.equal(window.getComputedStyle(manageBookHandle).opacity, '0');
   assert.equal(window.getComputedStyle(window.document.querySelector('.library-category-navigation .library-reorder-handle')).width, '28px');
   await window.happyDOM.close();
 });
@@ -5659,5 +5663,49 @@ test('imports started inside a collection are filed into it, and dropped files j
   assert.deepEqual(placed, [['d'.repeat(64), collectionId, null, 7]]);
   assert.match(window.document.querySelector('.library-import-item').textContent, /已放入当前分类/);
   window.history.replaceState({}, '');
+  await window.happyDOM.close();
+});
+
+test('organize mode renames a book through a dialog and keeps controls on one row', async () => {
+  const { window, api } = await createReaderDom();
+  const first = { id: 'a'.repeat(64), title: '第一本', type: 'txt', relativePath: 'one.txt' };
+  const second = { id: 'b'.repeat(64), title: '第二本', type: 'txt', relativePath: 'two.txt' };
+  const organization = {
+    version: 1, revision: 4, updatedAt: null, preferences: { viewMode: 'flat' },
+    collections: [], collectionOrders: {}, unassignedOrder: [first.id, second.id],
+    allBookOrder: [first.id, second.id], bookAssignments: {}, bookTitles: {}, orphanedBookIds: [],
+    books: [first, second]
+  };
+  const calls = [];
+  window.browserHost.renameLibraryBook = async (bookId, title, revision) => {
+    calls.push({ bookId, title, revision });
+    const renamed = { ...first, title, originalTitle: first.title };
+    return { ...organization, revision: revision + 1, bookTitles: { [bookId]: title }, books: [renamed, second] };
+  };
+  const library = { books: [{ ...first }, { ...second }], features: { libraryOrganization: true }, organization };
+  api.renderLibrary(library);
+  window.document.querySelector('.library-mode-button').click();
+
+  const controls = window.document.querySelectorAll('.library-grid .library-book-manage-controls');
+  assert.equal(controls.length, 2);
+  assert.ok(controls[0].querySelector('select.library-book-collection-select'));
+  const rename = controls[0].querySelector('button.library-book-rename');
+  assert.match(rename.getAttribute('aria-label'), /重命名：第一本/);
+
+  rename.click();
+  const dialog = window.document.querySelector('.library-rename-dialog');
+  assert.ok(dialog);
+  const input = dialog.querySelector('input');
+  assert.equal(input.value, '第一本');
+  assert.equal(dialog.querySelector('.library-rename-reset').hidden, true);
+  input.value = '  改过的  名字 ';
+  dialog.querySelector('form').dispatchEvent(new window.Event('submit', { bubbles: true, cancelable: true }));
+  for (let i = 0; i < 5; i += 1) await Promise.resolve();
+  assert.deepEqual(calls, [{ bookId: first.id, title: '改过的 名字', revision: 4 }]);
+  assert.equal(window.document.querySelector('.library-rename-dialog'), null);
+  assert.equal(window.document.querySelector('.library-grid .library-book-metadata strong').textContent, '改过的 名字');
+  // The shared book list (继续阅读, reader title) follows the new name.
+  assert.equal(library.books[0].title, '改过的 名字');
+  assert.equal(library.books[0].originalTitle, '第一本');
   await window.happyDOM.close();
 });

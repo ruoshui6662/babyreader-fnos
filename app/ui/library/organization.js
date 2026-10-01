@@ -308,10 +308,12 @@ async function commitLibraryOrganizationOrder(library, scope, order, focusId = n
   }
 }
 
-function addLibraryReorderControls(item, id, itemLabel, order, scope, library, { leadingHandle = false } = {}) {
+function addLibraryReorderControls(item, id, itemLabel, order, scope, library, { leadingHandle = false, keyboardOnly = false } = {}) {
   item.dataset.reorderId = id;
   const handle = document.createElement('span');
-  handle.className = 'library-reorder-handle';
+  // Books are dragged by the card itself; their handle only serves keyboard
+  // reordering and stays invisible until it has keyboard focus.
+  handle.className = keyboardOnly ? 'library-reorder-handle is-keyboard-only' : 'library-reorder-handle';
   handle.dataset.reorderHandle = 'true';
   handle.setAttribute('role', 'group');
   handle.tabIndex = 0;
@@ -696,7 +698,7 @@ function libraryOrganizationBookGrid(books, { library, scope, order } = {}) {
     item.className = 'library-reorder-item';
     const card = createLibraryBookCard(book, { open: !manage });
     item.appendChild(card);
-    addLibraryReorderControls(item, book.id, book.title || book.relativePath, order, scope, library);
+    addLibraryReorderControls(item, book.id, book.title || book.relativePath, order, scope, library, { keyboardOnly: true });
     if (!manage) {
       grid.appendChild(item);
       continue;
@@ -726,7 +728,16 @@ function libraryOrganizationBookGrid(books, { library, scope, order } = {}) {
         } catch { /* Keep the original assignment available for retry. */ }
       }
     });
-    item.appendChild(select);
+    const controls = document.createElement('div');
+    controls.className = 'library-book-manage-controls';
+    const rename = document.createElement('button');
+    rename.type = 'button';
+    rename.className = 'library-book-rename';
+    rename.setAttribute('aria-label', `重命名：${book.title || '书籍'}`);
+    rename.title = '重命名';
+    rename.addEventListener('click', () => showLibraryBookRenameDialog(library, book, rename));
+    controls.append(select, rename);
+    item.appendChild(controls);
     grid.appendChild(item);
   }
   if (sortable) setupLibraryBookPointerReorder(grid, order, scope, library);
@@ -1062,7 +1073,7 @@ function renderLibraryOrganization(library) {
   if (manage) {
     const hint = document.createElement('p');
     hint.className = 'library-summary library-manage-hint';
-    hint.textContent = '拖动书籍封面调整顺序；手机长按书卡后拖动。分类也可使用 ⋮⋮ 手柄。';
+    hint.textContent = '拖动书籍封面调整顺序（手机长按书卡后拖动）；点铅笔按钮可重命名书籍。分类也可使用 ⋮⋮ 手柄。';
     shell.appendChild(hint);
   }
 
@@ -1252,6 +1263,95 @@ function showLibraryCollectionRenameForm(shell, library, collection, trigger) {
     }
   });
   shell.querySelector('.library-category-navigation')?.after(form);
+  input.focus();
+  input.select();
+}
+
+// Renames a book for this reader only: the file on the NAS keeps its name and
+// other fnOS users keep seeing the book's own title.
+function showLibraryBookRenameDialog(library, book, trigger) {
+  document.querySelector('.library-rename-dialog')?.remove();
+  const originalTitle = book.originalTitle || book.title || '';
+  const dialog = document.createElement('dialog');
+  dialog.className = 'library-rename-dialog';
+  dialog.setAttribute('aria-labelledby', 'libraryRenameTitle');
+  const form = document.createElement('form');
+  form.method = 'dialog';
+  const heading = document.createElement('h2');
+  heading.id = 'libraryRenameTitle';
+  heading.textContent = '重命名';
+  const input = document.createElement('input');
+  input.type = 'text';
+  input.maxLength = 200;
+  input.value = book.title || '';
+  input.setAttribute('aria-label', '书名');
+  input.addEventListener('input', () => input.setCustomValidity(''));
+  const hint = document.createElement('p');
+  hint.className = 'library-rename-hint';
+  hint.textContent = book.originalTitle
+    ? `原书名：${originalTitle}`
+    : '只改变你在枕书里看到的书名，不会修改 NAS 上的文件。';
+  const actions = document.createElement('div');
+  actions.className = 'library-rename-actions';
+  const reset = document.createElement('button');
+  reset.type = 'button';
+  reset.className = 'library-rename-reset';
+  reset.textContent = '恢复原名';
+  reset.hidden = !book.originalTitle;
+  const cancel = document.createElement('button');
+  cancel.type = 'button';
+  cancel.textContent = '取消';
+  const save = document.createElement('button');
+  save.type = 'submit';
+  save.className = 'is-primary';
+  save.textContent = '保存';
+  actions.append(reset, cancel, save);
+  form.append(heading, input, hint, actions);
+  dialog.appendChild(form);
+
+  const close = () => {
+    if (dialog.open && typeof dialog.close === 'function') dialog.close();
+    dialog.remove();
+    if (trigger?.isConnected) trigger.focus({ preventScroll: true });
+  };
+  const commit = async (title) => {
+    for (const button of [reset, cancel, save]) button.disabled = true;
+    try {
+      const next = await window.browserHost.renameLibraryBook(book.id, title, library.organization.revision);
+      const renamed = (next.books || []).find((entry) => entry.id === book.id);
+      // The shelf, 继续阅读 and the reader all read titles from library.books.
+      for (const entry of library.books || []) {
+        if (entry.id !== book.id || !renamed) continue;
+        entry.title = renamed.title;
+        if (renamed.originalTitle) entry.originalTitle = renamed.originalTitle;
+        else delete entry.originalTitle;
+      }
+      dialog.remove();
+      renderLibraryOrganization({ ...library, organization: next });
+      document.querySelector(`[data-reorder-id="${book.id}"] .library-book-rename`)?.focus({ preventScroll: true });
+    } catch (error) {
+      showHighlightHint(error.message || '重命名失败，请重试');
+      for (const button of [reset, cancel, save]) button.disabled = false;
+    }
+  };
+  cancel.addEventListener('click', close);
+  reset.addEventListener('click', () => commit(''));
+  dialog.addEventListener('cancel', (event) => { event.preventDefault(); close(); });
+  dialog.addEventListener('click', (event) => { if (event.target === dialog) close(); });
+  form.addEventListener('submit', (event) => {
+    event.preventDefault();
+    const title = input.value.normalize('NFKC').replace(/\s+/gu, ' ').trim();
+    if (!title) {
+      input.setCustomValidity('请输入书名');
+      input.reportValidity();
+      return;
+    }
+    if (title === book.title) return close();
+    commit(title);
+  });
+  document.body.appendChild(dialog);
+  if (typeof dialog.showModal === 'function') dialog.showModal();
+  else dialog.setAttribute('open', '');
   input.focus();
   input.select();
 }

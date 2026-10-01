@@ -19,7 +19,7 @@ test.beforeEach(async ({ page, request }) => {
 });
 
 async function drag(page, source, target) {
-  const draggedId = await source.locator('..').getAttribute('data-reorder-id');
+  const draggedId = await source.locator('xpath=ancestor::*[@data-reorder-id][1]').getAttribute('data-reorder-id');
   const from = await source.boundingBox();
   const to = await target.boundingBox();
   await page.mouse.move(from.x + from.width / 2, from.y + from.height / 2);
@@ -36,7 +36,7 @@ test('real API: flat shelf drag persists after refresh', async ({ page }) => {
   const cards = page.locator('.library-reorder-item');
   expect(await cards.count()).toBeGreaterThanOrEqual(2);
   const secondId = await cards.nth(1).getAttribute('data-reorder-id');
-  await drag(page, cards.first().locator('.library-reorder-handle'), cards.nth(1));
+  await drag(page, cards.first().locator('.library-book-cover'), cards.nth(1));
   await expect(cards.first()).toHaveAttribute('data-reorder-id', secondId);
   await page.reload();
   await expect(page.locator('.library-book').first()).toHaveAttribute('data-book-id', secondId);
@@ -384,7 +384,7 @@ test('real API: create a collection, add consecutive books, reopen and reorder',
   await page.getByRole('button', { name: '整理', exact: true }).click();
   const cards = page.locator('.library-reorder-item');
   const secondId = await cards.nth(1).getAttribute('data-reorder-id');
-  await drag(page, cards.first().locator('.library-reorder-handle'), cards.nth(1));
+  await drag(page, cards.first().locator('.library-book-cover'), cards.nth(1));
   await expect(cards.first()).toHaveAttribute('data-reorder-id', secondId);
   await page.reload();
   await expect(page.locator('.library-heading h1')).toHaveText(title);
@@ -402,7 +402,7 @@ test('real API: unassigned order saves and a book can move into a collection fro
   await page.getByRole('button', { name: '整理', exact: true }).click();
   const cards = page.locator('.library-reorder-item');
   const secondId = await cards.nth(1).getAttribute('data-reorder-id');
-  await drag(page, cards.first().locator('.library-reorder-handle'), cards.nth(1));
+  await drag(page, cards.first().locator('.library-book-cover'), cards.nth(1));
   await expect(cards.first()).toHaveAttribute('data-reorder-id', secondId);
   await page.getByRole('button', { name: '返回书库', exact: true }).click();
   await page.getByRole('button', { name: '整理', exact: true }).click();
@@ -511,7 +511,7 @@ test.describe('mobile organization', () => {
     await page.getByRole('button', { name: '整理', exact: true }).click();
     const cards = page.locator('.library-reorder-item');
     const secondId = await cards.nth(1).getAttribute('data-reorder-id');
-    const from = await cards.first().locator('.library-reorder-handle').boundingBox();
+    const from = await cards.first().locator('.library-book-cover').boundingBox();
     const to = await cards.nth(1).boundingBox();
     const client = await page.context().newCDPSession(page);
     const point = { x: from.x + from.width / 2, y: from.y + from.height / 2 };

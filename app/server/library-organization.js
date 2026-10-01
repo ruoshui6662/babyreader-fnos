@@ -6,6 +6,8 @@ const ALLOWED_VIEW_MODES = new Set(['flat', 'collections', 'source-folders']);
 const MAX_COLLECTIONS = 100;
 const MAX_COLLECTION_NAME_LENGTH = 80;
 const MAX_ORGANIZATION_BYTES = 2 * 1024 * 1024;
+const MAX_BOOK_TITLE_LENGTH = 200;
+const MAX_BOOK_TITLES = 20000;
 
 function organizationError(code, message) {
   return Object.assign(new Error(message), { code });
@@ -29,6 +31,31 @@ function normalizeName(value) {
     throw invalidOrganization('Invalid collection name');
   }
   return name;
+}
+
+// A reader's own name for a book. Empty means "use the book's own title".
+function normalizeBookTitle(value) {
+  if (value === null || value === undefined) return '';
+  const title = String(value).normalize('NFKC').replace(/\s+/gu, ' ').trim();
+  if (title.length > MAX_BOOK_TITLE_LENGTH || /[\u0000-\u001f\u007f]/u.test(title)) {
+    throw organizationError('INVALID_BOOK_TITLE', 'Invalid book title');
+  }
+  return title;
+}
+
+function normalizeBookTitles(value) {
+  if (value === undefined || value === null) return {};
+  if (typeof value !== 'object' || Array.isArray(value)) throw invalidOrganization('Invalid book titles');
+  const output = {};
+  for (const [bookId, title] of Object.entries(value)) {
+    if (!validBookId(bookId) || typeof title !== 'string') continue;
+    let normalized;
+    try { normalized = normalizeBookTitle(title); } catch { continue; }
+    if (!normalized) continue;
+    output[bookId] = normalized;
+    if (Object.keys(output).length >= MAX_BOOK_TITLES) break;
+  }
+  return output;
 }
 
 function normalizeTimestamp(value, fallback) {
@@ -60,7 +87,8 @@ function createEmptyLibraryOrganization(now = null) {
     allBookOrder: [],
     unassignedOrder: [],
     collectionOrders: {},
-    bookAssignments: {}
+    bookAssignments: {},
+    bookTitles: {}
   };
 }
 
@@ -152,7 +180,8 @@ function normalizeLibraryOrganization(value) {
     allBookOrder: normalizeBookOrder(value.allBookOrder),
     unassignedOrder,
     collectionOrders,
-    bookAssignments
+    bookAssignments,
+    bookTitles: normalizeBookTitles(value.bookTitles)
   };
 }
 
@@ -196,6 +225,7 @@ function resolveLibraryOrganization(indexBooks, organization) {
     collectionOrders,
     unassignedOrder,
     bookAssignments: normalized.bookAssignments,
+    bookTitles: Object.fromEntries(Object.entries(normalized.bookTitles).filter(([bookId]) => activeIds.has(bookId))),
     orphanedBookIds
   };
 }
@@ -226,6 +256,9 @@ function reconcileLibraryOrganization(value, activeBookIds) {
   next.bookAssignments = Object.fromEntries(
     Object.entries(next.bookAssignments).filter(([bookId]) => activeIds.has(bookId))
   );
+  next.bookTitles = Object.fromEntries(
+    Object.entries(next.bookTitles).filter(([bookId]) => activeIds.has(bookId))
+  );
 
   return {
     organization: normalizeLibraryOrganization(next),
@@ -238,9 +271,11 @@ module.exports = {
   BOOK_ID_PATTERN,
   COLLECTION_ID_PATTERN,
   MAX_COLLECTIONS,
+  MAX_BOOK_TITLE_LENGTH,
   MAX_COLLECTION_NAME_LENGTH,
   MAX_ORGANIZATION_BYTES,
   createEmptyLibraryOrganization,
+  normalizeBookTitle,
   normalizeLibraryOrganization,
   reconcileLibraryOrganization,
   resolveLibraryOrganization

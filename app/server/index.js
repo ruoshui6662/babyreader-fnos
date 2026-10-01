@@ -44,6 +44,8 @@ const { createDirectAccess } = require('./direct-access');
 const {
   BOOK_ID_PATTERN,
   COLLECTION_ID_PATTERN,
+  normalizeBookTitle,
+  normalizeLibraryOrganization,
   reconcileLibraryOrganization,
   resolveLibraryOrganization
 } = require('./library-organization');
@@ -892,9 +894,13 @@ async function readJsonBody(request) {
   }
 }
 
-function publicBook(book) {
+function publicBook(book, bookTitles = null) {
   if (!book || book.error) return book;
-  const { path: ignoredPath, root: ignoredRoot, ...safe } = book;
+  const { path: ignoredPath, root: ignoredRoot, ...renamed } = book;
+  // A reader's own name replaces the title everywhere; the original stays
+  // available so the rename dialog can offer it back.
+  const customTitle = bookTitles?.[book.id];
+  const safe = customTitle ? { ...renamed, title: customTitle, originalTitle: book.title || '' } : renamed;
   // Readers open MOBI/AZW3 through their derived EPUB; the real format is kept
   // for labels only.
   if (safe.type === 'mobi') return { ...safe, type: 'epub', format: safe.sourceFormat === 'kf8' ? 'azw3' : 'mobi' };
@@ -918,6 +924,7 @@ function organizationApiError(response, error) {
     INVALID_ORGANIZATION: 400,
     INVALID_ORGANIZATION_REVISION: 400,
     INVALID_ORGANIZATION_MUTATION: 400,
+    INVALID_BOOK_TITLE: 400,
     COLLECTION_NOT_FOUND: 404,
     BOOK_NOT_FOUND: 404,
     ORGANIZATION_CONFLICT: 409,
@@ -930,6 +937,7 @@ function organizationApiError(response, error) {
     INVALID_ORGANIZATION: '组织参数无效',
     INVALID_ORGANIZATION_REVISION: '组织版本无效',
     INVALID_ORGANIZATION_MUTATION: '组织操作无效',
+    INVALID_BOOK_TITLE: '书名最多 200 个字，且不能包含控制字符',
     COLLECTION_NOT_FOUND: '分类不存在',
     BOOK_NOT_FOUND: '书籍不存在',
     ORGANIZATION_CONFLICT: '书库已在其他页面更新，请重新加载',
@@ -984,10 +992,20 @@ async function getLibraryOrganizationSnapshot(uid, index = null) {
     unassignedOrder: visibleOrder(resolved.unassignedOrder),
     bookAssignments: Object.fromEntries(Object.entries(resolved.bookAssignments)
       .filter(([bookId]) => visibleIds.has(bookId))),
+    bookTitles: Object.fromEntries(Object.entries(resolved.bookTitles)
+      .filter(([bookId]) => visibleIds.has(bookId))),
     orphanedBookIds: resolved.orphanedBookIds,
-    books: visibleBooks.map(publicBook),
+    books: visibleBooks.map((book) => publicBook(book, resolved.bookTitles)),
     features: libraryFeatures(currentIndex, switches)
   };
+}
+
+async function userBookTitles(uid) {
+  try {
+    return normalizeLibraryOrganization(await storage.getLibraryOrganization(uid)).bookTitles;
+  } catch {
+    return {};
+  }
 }
 
 async function mutateLibraryOrganization(user, body, mutation) {
@@ -1302,6 +1320,7 @@ async function handleApi(request, response, pathname, searchParams = new URLSear
   if (request.method === 'GET' && pathname === `${APP_PREFIX}/api/library`) {
     await refreshAuthorizationIfChanged();
     const index = await storage.getLibraryIndex();
+    const bookTitles = await userBookTitles(user.uid);
     const switches = readerFormatSwitches();
     return sendJson(response, 200, {
       ...index,
@@ -1309,26 +1328,53 @@ async function handleApi(request, response, pathname, searchParams = new URLSear
       configured: authorizedRoots.length > 0,
       authorizedRootCount: authorizedRoots.length,
       scanState: currentScanState(),
-      books: index.books.filter((book) => isBookVisible(book, switches)).map(publicBook)
+      books: index.books.filter((book) => isBookVisible(book, switches))
+        .map((book) => publicBook(book, bookTitles))
     });
   }
   if (request.method === 'POST' && pathname === `${APP_PREFIX}/api/library/scan`) {
     if (!user.isAdmin) return sendError(response, 403, 'Administrator access is required');
     const index = await runLibraryScan();
     const switches = readerFormatSwitches();
+    const bookTitles = await userBookTitles(user.uid);
     return sendJson(response, 200, {
       ...index,
       features: libraryFeatures(index, switches, { canImport: user.isAdmin }),
       configured: authorizedRoots.length > 0,
       authorizedRootCount: authorizedRoots.length,
       scanState: currentScanState(),
-      books: index.books.filter((book) => isBookVisible(book, switches)).map(publicBook)
+      books: index.books.filter((book) => isBookVisible(book, switches))
+        .map((book) => publicBook(book, bookTitles))
     });
   }
 
   const organizationCollectionMatch = pathname.match(new RegExp(`^${APP_PREFIX}/api/library/collections/([^/]+)$`));
   const organizationPlacementMatch = pathname.match(new RegExp(`^${APP_PREFIX}/api/library/books/([^/]+)/placement$`));
+  const organizationTitleMatch = pathname.match(new RegExp(`^${APP_PREFIX}/api/library/books/([^/]+)/title$`));
   try {
+    if (organizationTitleMatch && request.method === 'PUT') {
+      const bookId = decodeURIComponent(organizationTitleMatch[1]);
+      if (!BOOK_ID_PATTERN.test(bookId)) {
+        throw Object.assign(new Error('Invalid book ID'), { code: 'INVALID_ORGANIZATION' });
+      }
+      const book = await findBook(bookId, { allowMobiMetadata: true });
+      const body = await readJsonBody(request);
+      const title = normalizeBookTitle(body?.title);
+      const result = await mutateLibraryOrganization(user, body, (draft, activeBookIds) => {
+        if (!activeBookIds.has(bookId)) {
+          throw Object.assign(new Error('Book not found'), { code: 'BOOK_NOT_FOUND' });
+        }
+        // Naming a book back to its own title clears the override.
+        if (!title || title === String(book?.title || '').normalize('NFKC').replace(/\s+/gu, ' ').trim()) {
+          delete draft.bookTitles[bookId];
+        } else {
+          draft.bookTitles[bookId] = title;
+        }
+        return draft;
+      });
+      return sendJson(response, 200, result);
+    }
+
     if (request.method === 'GET' && pathname === `${APP_PREFIX}/api/library/organization`) {
       return sendJson(response, 200, await getLibraryOrganizationSnapshot(user.uid));
     }

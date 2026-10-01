@@ -7735,3 +7735,154 @@ button.ui-close,
   font: 500 12px/1 var(--font-ui);
   cursor: pointer;
 }
+
+/* 书库整理（2026-10）：书卡直接拖动排序，不再显示右上角的拖动手柄；
+   手柄只留给键盘（聚焦后上下方向键移动），聚焦时在封面上画焦点环。 */
+.library-grid .library-reorder-item .library-reorder-handle.is-keyboard-only {
+  top: 0;
+  right: 0;
+  width: 1px !important;
+  height: 1px !important;
+  padding: 0;
+  border: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  opacity: 0 !important;
+  pointer-events: none;
+}
+.library-grid .library-reorder-item:has(> .library-reorder-handle.is-keyboard-only:focus-visible) .library-book-cover {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 3px;
+}
+
+/* 整理模式：同一行书卡等高，分类和重命名固定在卡片底部，书名一行或两行都能对齐。 */
+.library-grid.is-manage-mode {
+  align-items: stretch;
+}
+.library-grid.is-manage-mode > .library-reorder-item {
+  display: flex;
+  flex-direction: column;
+}
+.library-grid.is-manage-mode .library-reorder-item > .library-book {
+  flex: 0 0 auto;
+  cursor: grab;
+}
+.library-book-manage-controls {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: auto;
+  padding-top: 8px;
+}
+.library-book-manage-controls .library-book-collection-select {
+  flex: 1 1 auto;
+  min-width: 0;
+  margin-top: 0;
+}
+.library-book-rename {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border: 1px solid var(--library-separator, var(--color-separator));
+  border-radius: 10px;
+  color: var(--library-text-muted, var(--color-text-2));
+  background: var(--library-surface, var(--color-fill));
+  cursor: pointer;
+  transition: color var(--dur-fast) var(--ease-out), background-color var(--dur-fast) var(--ease-out);
+}
+.library-book-rename::before {
+  width: 16px;
+  height: 16px;
+  content: '';
+  background: currentColor;
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.9' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M4 20h4L19 9a2.8 2.8 0 0 0-4-4L4 16z'/%3E%3Cpath d='m13.5 6.5 4 4'/%3E%3C/svg%3E") center / contain no-repeat;
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.9' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M4 20h4L19 9a2.8 2.8 0 0 0-4-4L4 16z'/%3E%3Cpath d='m13.5 6.5 4 4'/%3E%3C/svg%3E") center / contain no-repeat;
+}
+.library-book-rename:hover,
+.library-book-rename:focus-visible {
+  color: var(--library-accent, var(--color-accent));
+  background: color-mix(in srgb, var(--library-accent, var(--color-accent)) 10%, var(--library-surface, var(--color-fill)));
+}
+.library-book-rename:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+}
+
+/* 书名重命名对话框 */
+.library-rename-dialog {
+  position: fixed;
+  inset: 0;
+  box-sizing: border-box;
+  height: fit-content;
+  margin: auto;
+  width: min(400px, calc(100vw - 32px));
+  padding: 22px 22px 18px;
+  border: 1px solid var(--library-separator, var(--color-separator));
+  border-radius: 16px;
+  color: var(--library-text, var(--color-text));
+  background: var(--library-surface-raised, var(--color-bg, #fff));
+  box-shadow: var(--shadow-float, 0 18px 48px rgba(0, 0, 0, .18));
+}
+.library-rename-dialog::backdrop {
+  background: rgba(0, 0, 0, .28);
+}
+.library-rename-dialog h2 {
+  margin: 0 0 14px;
+  font-size: 17px;
+  font-weight: 600;
+}
+.library-rename-dialog input {
+  box-sizing: border-box;
+  width: 100%;
+  padding: 10px 12px;
+  font: inherit;
+  font-size: 15px;
+  color: inherit;
+  border: 1px solid var(--library-separator, var(--color-separator));
+  border-radius: 10px;
+  background: var(--library-surface, var(--color-fill));
+}
+.library-rename-dialog input:focus {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 1px;
+}
+.library-rename-hint {
+  margin: 8px 0 18px;
+  font-size: 12px;
+  color: var(--library-text-muted, var(--color-text-2));
+  overflow-wrap: anywhere;
+}
+.library-rename-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+}
+.library-rename-actions button {
+  min-height: 36px;
+  padding: 0 16px;
+  font: inherit;
+  font-size: 14px;
+  color: inherit;
+  border: 1px solid var(--library-separator, var(--color-separator));
+  border-radius: 10px;
+  background: transparent;
+  cursor: pointer;
+}
+.library-rename-actions .library-rename-reset {
+  margin-right: auto;
+  color: var(--library-text-muted, var(--color-text-2));
+}
+.library-rename-actions .is-primary {
+  color: #fff;
+  border-color: transparent;
+  background: var(--library-accent, var(--color-accent));
+  font-weight: 600;
+}
+.library-rename-actions button:disabled {
+  opacity: .55;
+  cursor: default;
+}
