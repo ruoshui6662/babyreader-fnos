@@ -1,5 +1,5 @@
 appname=babyreader-fnos
-version=1.3.4
+version=1.3.5
 display_name=BabyReader
 desc=适用于飞牛 fnOS 的 EPUB、Markdown 和 TXT 阅读器，支持授权书库扫描、阅读进度与划线持久化。
 source=thirdparty
@@ -13,4 +13,4 @@ desktop_applaunchname=babyreader-fnos.main
 ctl_stop=true
 checkport=false
 disable_authorization_path=false
-changelog=修复 PDF 选中文字时颜色深浅不均（引号、英文与中文交界处出现深色块）。
+changelog=连续滚动阅读更沉浸：正文可滚到毛玻璃顶栏下方，向下阅读时顶栏自动隐藏，向上滚动或鼠标移到顶部时显示。
