@@ -535,3 +535,80 @@ test.describe('mobile organization', () => {
     await expect(page.locator('.library-book').first()).toHaveAttribute('data-book-id', secondId);
   });
 });
+
+test.describe('phone library with organization', () => {
+  test.use({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
+  test.beforeEach(async ({ page }) => {
+    await page.addInitScript(() => {
+      Object.defineProperty(navigator, 'userAgent', {
+        configurable: true,
+        get: () => 'Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 Chrome/120 Mobile Safari/537.36'
+      });
+    });
+    await page.goto(APP);
+    await expect(page.locator('html')).toHaveAttribute('data-reader-surface', 'mobile');
+  });
+
+  test('⋯ creates a category and the long-press sheet moves a book into it', async ({ page }) => {
+    await page.locator('.library-more-button').click();
+    await page.locator('.library-more-menu').getByRole('menuitem', { name: '新建分类' }).click();
+    const name = `手机分类${Date.now() % 10000}`;
+    await page.locator('.library-collection-form input').fill(name);
+    await page.locator('.library-collection-form').getByRole('button', { name: /创建|保存|确定/ }).click();
+    await expect(page.locator('.library-category-navigation')).toContainText(name);
+    await expect(page.locator('.library-empty, .library-organization-empty').first()).toContainText('⋯');
+    await page.locator('.library-category-navigation').getByRole('button', { name: /我的书籍/ }).click();
+    await expect(page.locator('.library-heading h1')).toHaveText('书库');
+
+    const book = page.locator('.library-grid .library-book').first();
+    const bookId = await book.getAttribute('data-book-id');
+    const client = await page.context().newCDPSession(page);
+    const box = await book.locator('.library-book-cover').boundingBox();
+    const point = { x: box.x + box.width / 2, y: box.y + box.height / 2 };
+    await client.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [point] });
+    const sheet = page.locator('.library-book-sheet');
+    await expect(sheet).toBeVisible();
+    // Outside 整理 the long press does not start dragging.
+    await expect(page.locator('.library-reorder-item.is-library-dragging')).toHaveCount(0);
+    await client.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+    await expect(page.locator('body')).toHaveClass(/is-library/);
+    await expect(sheet.locator('.library-book-sheet-action')).toHaveText(['打开', '重命名', '移动到分类', '书籍信息', '取消']);
+
+    await sheet.getByRole('button', { name: '移动到分类' }).click();
+    const saved = page.waitForResponse((response) => /\/library\/books\//.test(response.url()) && response.request().method() !== 'GET');
+    await sheet.getByRole('button', { name }).click();
+    expect((await saved).ok()).toBeTruthy();
+    await expect(sheet).toHaveCount(0);
+    await page.locator('.library-category-navigation').getByRole('button', { name: new RegExp(name) }).click();
+    await expect(page.locator(`.library-grid [data-book-id="${bookId}"]`)).toBeVisible();
+  });
+
+  test('the sheet renames a book; 整理 shows a bottom bar where touch sorting works', async ({ page }) => {
+    const book = page.locator('.library-grid .library-book').first();
+    await book.dispatchEvent('contextmenu');
+    await page.locator('.library-book-sheet').getByRole('button', { name: '重命名' }).click();
+    const dialog = page.locator('.library-rename-dialog');
+    await expect(dialog).toBeVisible();
+    await dialog.getByRole('button', { name: '取消' }).click();
+
+    await page.locator('.library-more-button').click();
+    await page.locator('.library-more-menu').getByRole('menuitem', { name: '整理' }).click();
+    const bar = page.locator('.library-manage-bar');
+    await expect(bar).toBeVisible();
+    const cards = page.locator('.library-grid .library-reorder-item');
+    const firstId = await cards.first().getAttribute('data-reorder-id');
+    const from = await cards.first().locator('.library-book-cover').boundingBox();
+    const to = await cards.nth(1).boundingBox();
+    const client = await page.context().newCDPSession(page);
+    await client.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x: from.x + from.width / 2, y: from.y + from.height / 2 }] });
+    await expect(cards.first()).toHaveClass(/is-library-dragging/);
+    await expect(page.locator('.library-book-sheet')).toHaveCount(0);
+    await client.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x: to.x + to.width * 0.75, y: to.y + to.height / 2 }] });
+    await expect(cards.nth(1)).toHaveAttribute('data-reorder-id', firstId);
+    const saved = page.waitForResponse((r) => r.url().endsWith('/organization/order') && r.request().method() === 'PUT', { timeout: 5000 });
+    await client.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+    expect((await saved).status()).toBe(200);
+    await page.locator('.library-manage-bar').getByRole('button', { name: '完成' }).click();
+    await expect(page.locator('.library-manage-bar')).toHaveCount(0);
+  });
+});

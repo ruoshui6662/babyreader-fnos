@@ -285,6 +285,7 @@ function renderFlatLibrary(library, { organizationEnabled = false } = {}) {
   actions.appendChild(scanButton);
   header.appendChild(actions);
   shell.appendChild(header);
+  if (typeof setupLibraryPhoneMenu === 'function') setupLibraryPhoneMenu(actions);
   shell.appendChild(scanStatus);
   const recentCard = createLibraryRecentCard(validBooks);
   if (recentCard) shell.appendChild(recentCard);
