@@ -156,8 +156,9 @@ test('library and welcome states expose the dense library structure', async ({ p
   await expect(page.locator('.library-book').first()).toHaveCSS('box-shadow', 'none');
   await expect(page.locator('.library-book-cover').first()).toBeVisible();
   const appShell = await (await page.request.get(APP_PATH)).text();
-  expect(appShell).toContain('class="welcome-mark"');
-  expect(appShell).toContain('把书放进书库目录，即可从这里开始阅读。');
+  // No welcome screen: a refresh shows only the background until the shelf loads.
+  expect(appShell).not.toContain('class="welcome-mark"');
+  expect(appShell).not.toContain('To acquire the habit of reading');
 
   await page.evaluate(() => renderLibrary({ books: [] }));
   await expect(page.locator('.library-empty')).toBeVisible();

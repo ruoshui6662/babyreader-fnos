@@ -753,9 +753,10 @@ function themeIconSvg(nextTheme) {
     `;
   }
 
+  // A full crescent on the same 24 grid and 1.8 stroke as the rail icons.
   return `
     <svg viewBox="0 0 24 24" data-icon="theme" aria-hidden="true" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-      <path d="M20 14.6A8 8 0 1 1 9.4 4a6.6 6.6 0 0 0 10.6 10.6Z"></path>
+      <path d="M12 3.2a6.4 6.4 0 0 0 8.8 8.8A8.8 8.8 0 1 1 12 3.2Z"></path>
     </svg>
   `;
 }
