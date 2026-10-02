@@ -6,8 +6,15 @@
   <title>枕书</title>
   <link rel="icon" type="image/svg+xml" href="images/logo.svg">
   <link rel="icon" type="image/png" sizes="64x64" href="images/icon_64.png">
-  <link rel="apple-touch-icon" href="images/icon_256.png">
-  <link rel="stylesheet" href="styles.css?v=88">
+  <link rel="apple-touch-icon" href="images/apple-touch-icon.png">
+  <!-- Add to Home Screen: full-screen reading without the browser bars. -->
+  <link rel="manifest" href="manifest.webmanifest" crossorigin="use-credentials">
+  <meta name="theme-color" content="#141416">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="枕书">
+  <link rel="stylesheet" href="styles.css?v=89">
 </head>
 <body class="is-welcome">
   <!-- Reader Shell: low-distraction navigation with stable legacy IDs -->
@@ -644,8 +651,8 @@
   <script src="core/user-state.js?v=38"></script>
   <script src="reader/annotations.js?v=2"></script>
   <script src="reader/device-profile.js?v=34"></script>
-  <script src="reader/epub.js?v=32"></script>
-  <script src="reader/document.js?v=28"></script>
+  <script src="reader/epub.js?v=33"></script>
+  <script src="reader/document.js?v=29"></script>
   <script src="reader/editor.js?v=28"></script>
   <script src="reader/highlights.js?v=38"></script>
   <script src="reader/ai.js?v=4"></script>
@@ -656,14 +663,14 @@
   <script src="reader/notes-panel.js?v=4"></script>
   <script src="reader/progress.js?v=36"></script>
   <script src="reader/bookmarks.js?v=4"></script>
-  <script src="reader/pagination.js?v=36"></script>
+  <script src="reader/pagination.js?v=37"></script>
   <script src="reader/settings.js?v=34"></script>
   <script src="reader/jump-back.js?v=1"></script>
   <script src="reader/navigation.js?v=31"></script>
   <script src="reader/pdf-annotation-geometry.js?v=1"></script>
   <script src="reader/pdf-annotations.js?v=1"></script>
   <script src="reader/pdf-render-scheduler.js?v=1"></script>
-  <script src="reader/pdf.js?v=15"></script>
+  <script src="reader/pdf.js?v=16"></script>
   <script src="reader/lifecycle.js?v=33"></script>
   <script src="reader/search.js?v=4"></script>
   <script src="shell/drawer.js?v=33"></script>

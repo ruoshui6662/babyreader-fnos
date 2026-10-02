@@ -8656,3 +8656,43 @@ html[data-reader-surface="mobile"] .library-manage-done {
 html[data-reader-surface="mobile"] .library-view:has(.library-manage-bar) { padding-bottom: 72px; }
 html[data-reader-surface="mobile"] .library-view .library-manage-hint { display: none; }
 .library-book-sheet-hint { margin: 4px 4px 8px; color: var(--text-dim); font-size: 13px; }
+
+/* ============================================================
+   Phone basics (M4): no pull-to-refresh or rubber-band showing the page
+   behind the reader, no double-tap-zoom delay on controls, and justified
+   Chinese text spreads short lines over every character instead of a few
+   wide gaps (a long Latin word may break rather than leave a hole).
+   ============================================================ */
+html[data-reader-surface="mobile"],
+html[data-reader-surface="mobile"] body {
+  overscroll-behavior: none;
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+html[data-reader-surface="mobile"] button,
+html[data-reader-surface="mobile"] a,
+html[data-reader-surface="mobile"] input,
+html[data-reader-surface="mobile"] select,
+html[data-reader-surface="mobile"] label,
+html[data-reader-surface="mobile"] .reader {
+  touch-action: manipulation;
+}
+html[data-reader-surface="mobile"] button { -webkit-tap-highlight-color: transparent; }
+html[data-reader-surface="mobile"] .article .epub-chapter p,
+html[data-reader-surface="mobile"] .article .epub-chapter li {
+  text-justify: inter-character;
+  overflow-wrap: anywhere;
+}
+/* PDF pages pan with one finger; two fingers zoom the pages, not the app. */
+html[data-reader-surface="mobile"] body.is-pdf-reader #pdfPages { touch-action: pan-x pan-y; }
+html[data-reader-surface="mobile"] #article[data-text-script="cjk"] .epub-chapter p,
+html[data-reader-surface="mobile"] #article[data-text-script="cjk"] .epub-chapter li { word-break: break-all; }
+/* Phone pages are the screen itself: no card corners or shadow. */
+html[data-reader-surface="mobile"] body.is-epub.paged-reading .reader .article {
+  border-radius: 0;
+  box-shadow: none;
+}
+html[data-reader-surface="mobile"] body.is-epub.mobile-reading:not(.paged-reading) .reader .article {
+  padding-right: clamp(12px, calc(var(--reader-page-margin, 40px) * .5), 48px);
+  padding-left: clamp(12px, calc(var(--reader-page-margin, 40px) * .5), 48px);
+}

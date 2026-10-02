@@ -5832,3 +5832,29 @@ test('the 导读 sheet shows the estimate, starts generation and is available fo
   assert.equal(window.document.getElementById('btnAiBookMap').hidden, false);
   await window.happyDOM.close();
 });
+
+test('phone pagination runs edge to edge with a text inset from the margin slider', async () => {
+  const { api } = await createReaderDom();
+  const phone = api.createPaginationGeometry({
+    readerWidth: 390, readerHeight: 780, mode: 'double', pageMargin: 40, devicePixelRatio: 3, phone: true
+  });
+  assert.equal(phone.columns, 1);
+  assert.equal(phone.insetLeft, 0);
+  assert.equal(phone.insetRight, 0);
+  assert.equal(phone.bandTop, 0);
+  assert.equal(phone.columnPadding, 20);
+  assert.equal(phone.columnWidth, 350);
+  // The next page starts exactly one column plus gap later, and the gap
+  // covers both text insets so no neighbouring column shows.
+  assert.equal(phone.pageGroupWidth, phone.columnWidth + phone.columnGap);
+  assert.ok(phone.columnGap >= phone.columnPadding * 2);
+
+  const wide = api.createPaginationGeometry({
+    readerWidth: 390, readerHeight: 780, mode: 'double', pageMargin: 96, devicePixelRatio: 3, phone: true
+  });
+  assert.equal(wide.columnPadding, 48);
+  const desktop = api.createPaginationGeometry({
+    readerWidth: 390, readerHeight: 780, mode: 'single', pageMargin: 40, devicePixelRatio: 3
+  });
+  assert.ok(desktop.insetLeft > 0);
+});

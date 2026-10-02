@@ -1146,6 +1146,48 @@ function createPdfReaderController({
   doc.getElementById('pdfZoomOut')?.addEventListener('click', () => setPdfScale(scale - 0.1));
   doc.getElementById('pdfZoomIn')?.addEventListener('click', () => setPdfScale(scale + 0.1));
   doc.getElementById('pdfFitWidth')?.addEventListener('click', () => { void fitPdfWidth(); });
+  // Two-finger pinch zooms the PDF pages (not the whole web page): the pages
+  // preview the zoom with a CSS scale, and lifting a finger re-renders them
+  // at the new scale.
+  {
+    const pinchSurface = surface();
+    let pinch = null;
+    const span = (touches) => Math.hypot(touches[0].clientX - touches[1].clientX, touches[0].clientY - touches[1].clientY);
+    const preview = (ratio) => {
+      const host = pageHost();
+      if (!host) return;
+      host.style.transformOrigin = pinch ? `${pinch.originX}px ${pinch.originY}px` : '';
+      host.style.transform = ratio === 1 ? '' : `scale(${ratio})`;
+    };
+    pinchSurface?.addEventListener('touchstart', (event) => {
+      if (event.touches.length !== 2 || !pdfDocument) return;
+      const host = pageHost();
+      const rect = host?.getBoundingClientRect();
+      pinch = {
+        distance: Math.max(1, span(event.touches)),
+        scale,
+        ratio: 1,
+        originX: ((event.touches[0].clientX + event.touches[1].clientX) / 2) - (rect?.left || 0),
+        originY: ((event.touches[0].clientY + event.touches[1].clientY) / 2) - (rect?.top || 0)
+      };
+    }, { passive: true });
+    pinchSurface?.addEventListener('touchmove', (event) => {
+      if (!pinch || event.touches.length !== 2) return;
+      event.preventDefault();
+      const limit = (value) => Math.max(0.5 / pinch.scale, Math.min(2 / pinch.scale, value));
+      pinch.ratio = limit(span(event.touches) / pinch.distance);
+      preview(pinch.ratio);
+    }, { passive: false });
+    const finish = () => {
+      if (!pinch) return;
+      const { ratio, scale: base } = pinch;
+      pinch = null;
+      preview(1);
+      if (Math.abs(ratio - 1) > 0.03) setPdfScale(base * ratio);
+    };
+    pinchSurface?.addEventListener('touchend', (event) => { if (event.touches.length < 2) finish(); });
+    pinchSurface?.addEventListener('touchcancel', finish);
+  }
   pageHost()?.addEventListener('scroll', schedulePageFromScroll, { passive: true });
   doc.addEventListener('selectionchange', scheduleSelectionCleanup);
   win.addEventListener('resize', () => {
@@ -1205,6 +1247,7 @@ function createPdfReaderController({
     renderVisiblePdfPages,
     setLayoutMode,
     setPdfScale,
+    getScale: () => scale,
     zoomBy: (delta) => setPdfScale(scale + delta)
   };
 }

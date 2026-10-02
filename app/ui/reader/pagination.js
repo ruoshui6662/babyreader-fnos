@@ -55,8 +55,12 @@ function createPaginationGeometry({
   mode,
   pageMargin = state.pageMargin,
   columnGap = DEFAULT_PAGE_GAP,
-  devicePixelRatio = window.devicePixelRatio || 1
+  devicePixelRatio = window.devicePixelRatio || 1,
+  phone = false
 }) {
+  if (phone) {
+    return createPhonePaginationGeometry({ readerWidth, readerHeight, pageMargin, devicePixelRatio });
+  }
   // Insets live on the reader viewport (CSS), never on the multicol box:
   // padding on a multicol container applies once to the whole flow, which
   // shifts every column start and breaks spread alignment.
@@ -146,6 +150,41 @@ function createPaginationGeometry({
     pageGroupWidth,
     pageHeight,
     trailingSafety: Math.max(0, textWidth - spreadWidth)
+  });
+}
+
+// Phones read edge to edge like WeChat Reading: no card or outer band, one
+// column, and a text inset from the margin slider (default 40 -> 20px).
+function createPhonePaginationGeometry({ readerWidth, readerHeight, pageMargin, devicePixelRatio }) {
+  const viewportWidth = Math.max(1, Math.floor(Number(readerWidth) || 0));
+  const viewportHeight = Math.max(1, Math.floor(Number(readerHeight) || 0));
+  const requestedMargin = Math.max(0, Number(pageMargin) || 0);
+  const columnPadding = Math.max(12, Math.min(48, Math.round(requestedMargin * 0.5)));
+  const gap = floorToDevicePixel(Math.max(columnPadding * 2, 32), devicePixelRatio);
+  const columnWidth = Math.max(1, floorToDevicePixel(viewportWidth - columnPadding * 2, devicePixelRatio));
+  const padTop = Math.min(36, Math.max(20, Math.round(viewportHeight * 0.04)));
+  const padBottom = 12;
+  const pageHeight = Math.max(1, floorToDevicePixel(viewportHeight - padTop - padBottom, devicePixelRatio));
+  return Object.freeze({
+    columns: 1,
+    viewportWidth,
+    viewportHeight,
+    paperWidth: columnWidth + columnPadding * 2,
+    columnPadding,
+    verticalPadding: padTop,
+    padTop,
+    padBottom,
+    bandTop: 0,
+    bandBottom: 0,
+    insetLeft: 0,
+    insetRight: 0,
+    columnGap: gap,
+    columnWidth,
+    spreadWidth: columnWidth,
+    pageStepWidth: columnWidth + gap,
+    pageGroupWidth: columnWidth + gap,
+    pageHeight,
+    trailingSafety: Math.max(0, viewportWidth - columnWidth)
   });
 }
 
@@ -497,7 +536,8 @@ function measurePagination({ preserveLocator = true, onSettled = null, allowEpub
     mode: state.effectiveReadingMode,
     pageMargin: state.pageMargin,
     columnGap: DEFAULT_PAGE_GAP,
-    devicePixelRatio: window.devicePixelRatio || 1
+    devicePixelRatio: window.devicePixelRatio || 1,
+    phone: typeof isMobileReaderSurface === 'function' && isMobileReaderSurface()
   });
   state.paginationGeometry = geometry;
   state.columnWidth = geometry.columnWidth;
