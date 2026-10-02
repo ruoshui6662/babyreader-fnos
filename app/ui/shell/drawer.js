@@ -277,12 +277,18 @@ function openReaderPanel(panelName, trigger = document.activeElement) {
       tab.tabIndex = selected ? 0 : -1;
     });
     if (title) title.textContent = panelConfig.title;
+    if (panelName === 'toc' && typeof revealCurrentTocEntry === 'function') {
+      requestAnimationFrame(() => revealCurrentTocEntry());
+    }
     if (panelName === 'notes' && typeof renderNotesPanel === 'function') renderNotesPanel();
     if (panelName === 'bookmarks' && typeof renderBookmarkList === 'function') {
       renderBookmarkList();
       if (typeof refreshBookmarks === 'function') void refreshBookmarks();
     }
   } else if (panelConfig.surface === 'settings') {
+    // Phones open the short sheet; 更多设置 expands it.
+    document.getElementById('readerSettingsSheet')?.classList.remove('is-expanded');
+    document.getElementById('btnSettingsMore')?.setAttribute('aria-expanded', 'false');
     syncSettingsPanel();
   }
 

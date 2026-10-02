@@ -8050,3 +8050,649 @@ button.ui-close,
   font: inherit;
   font-size: 12px;
 }
+
+/* 选区菜单（2026-10 移动端）：桌面保留三种样式按钮与颜色；手机只显示单行
+   “划线 · 写想法 · 复制 · 问 AI · 搜索”，划线后再弹出划线气泡改颜色和样式。 */
+.selection-menu [data-selection-action="highlight"] { display: none; }
+html[data-reader-surface="mobile"] .selection-menu:not(.annotation-menu) {
+  flex-wrap: nowrap;
+  gap: 0;
+  padding: 3px;
+  border-radius: 12px;
+}
+html[data-reader-surface="mobile"] .selection-menu [data-selection-action="highlight"] { display: inline-flex; order: 1; }
+html[data-reader-surface="mobile"] .selection-menu [data-selection-action="thought"] { order: 2; }
+html[data-reader-surface="mobile"] .selection-menu [data-selection-action="copy"] { order: 3; }
+html[data-reader-surface="mobile"] .selection-menu [data-selection-action="ai"] { order: 4; }
+html[data-reader-surface="mobile"] .selection-menu [data-selection-action="search"] { order: 5; }
+html[data-reader-surface="mobile"] .selection-menu [data-selection-action="marker"],
+html[data-reader-surface="mobile"] .selection-menu [data-selection-action="wave"],
+html[data-reader-surface="mobile"] .selection-menu [data-selection-action="line"],
+html[data-reader-surface="mobile"] .selection-menu .selection-color-palette { display: none; }
+html[data-reader-surface="mobile"] .selection-menu:not(.annotation-menu) > button {
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 44px;
+  padding: 6px 11px;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+}
+html[data-reader-surface="mobile"] .selection-menu-hint { order: 9; }
+
+/* 划线气泡：颜色与样式一行，操作一行 */
+.annotation-menu {
+  flex-direction: column;
+  flex-wrap: nowrap;
+  gap: 4px;
+  padding: 6px;
+  border-radius: 12px;
+}
+.annotation-menu-look,
+.annotation-menu-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.annotation-menu-look { padding: 2px 4px; }
+.annotation-menu .annotation-menu-look [data-annotation-color] {
+  width: 28px;
+  min-width: 28px;
+  height: 28px;
+  min-height: 28px;
+  padding: 0;
+  border: 2px solid transparent;
+  border-radius: 50%;
+}
+.annotation-menu [data-annotation-color="yellow"] { background-color: #f5ce56; }
+.annotation-menu [data-annotation-color="green"] { background-color: #82c99a; }
+.annotation-menu [data-annotation-color="blue"] { background-color: #78b4ef; }
+.annotation-menu [data-annotation-color="pink"] { background-color: #e8a1be; }
+.annotation-menu .annotation-menu-look [data-annotation-color][aria-pressed="true"] { border-color: #fff; }
+.annotation-menu-divider {
+  width: 1px;
+  height: 20px;
+  margin: 0 4px;
+  background: rgba(255, 255, 255, .24);
+}
+.annotation-menu [data-annotation-style][aria-pressed="true"] {
+  background: rgba(255, 255, 255, .18);
+}
+.annotation-menu-actions > button {
+  flex: 1 1 auto;
+  min-height: 40px;
+  font-size: 13px;
+}
+.annotation-menu [data-annotation-action="delete"] { color: #ff8a80; }
+
+
+/* ============================================================
+   Phone reading (M1): full-screen text; tapping the middle shows a top bar
+   and a two-row bottom bar that overlay the page (nothing reflows); a quiet
+   footer shows chapter and percent while the chrome is hidden.
+   ============================================================ */
+.mobile-topbar-action,
+.mobile-more-menu,
+.mobile-reading-footer { display: none; }
+.mobile-more-menu[hidden],
+.mobile-reading-footer[hidden] { display: none !important; }
+
+html[data-reader-surface="mobile"] body.mobile-reading .reader-shell-nav {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 195;
+  height: calc(var(--topbar-h) + env(safe-area-inset-top, 0px));
+  padding-top: env(safe-area-inset-top, 0px);
+  padding-left: calc(8px + env(safe-area-inset-left, 0px));
+  padding-right: calc(8px + env(safe-area-inset-right, 0px));
+  background: color-mix(in srgb, var(--reader-stage, var(--color-bg)) 94%, transparent);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  transform: translateY(-100%);
+  opacity: 0;
+  pointer-events: none;
+  transition: transform var(--dur-fast) var(--ease-out), opacity var(--dur-fast) var(--ease-out);
+}
+html[data-reader-surface="mobile"] body.mobile-reading.mobile-chrome-open .reader-shell-nav,
+html[data-reader-surface="mobile"] body.mobile-reading.mobile-chrome-open.mobile-topbar-hidden .reader-shell-nav {
+  transform: none;
+  opacity: 1;
+  pointer-events: auto;
+}
+html[data-reader-surface="mobile"] body.mobile-reading .reader-shell-nav .app-mark,
+html[data-reader-surface="mobile"] body.mobile-reading .reader-shell-nav .app-name,
+html[data-reader-surface="mobile"] body.mobile-reading .reader-shell-nav .reader-status,
+html[data-reader-surface="mobile"] body.mobile-reading #btnLibraryTheme { display: none !important; }
+html[data-reader-surface="mobile"] body.mobile-reading .topbar-left { min-width: 0; flex: 1 1 auto; gap: 4px; }
+html[data-reader-surface="mobile"] body.mobile-reading .file-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 15px;
+}
+html[data-reader-surface="mobile"] body.mobile-reading .file-name::before { content: none; }
+html[data-reader-surface="mobile"] body.mobile-reading .topbar-right { position: relative; gap: 2px; flex: 0 0 auto; }
+html[data-reader-surface="mobile"] body.mobile-reading .mobile-topbar-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+}
+html[data-reader-surface="mobile"] body.mobile-reading .mobile-topbar-action svg { width: 22px; height: 22px; stroke: currentColor; }
+html[data-reader-surface="mobile"] body.mobile-reading #btnMobileTopBookmark[aria-pressed="true"] svg { fill: currentColor; color: var(--accent); }
+html[data-reader-surface="mobile"] body.mobile-reading .mobile-more-menu {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  z-index: 230;
+  display: flex;
+  flex-direction: column;
+  min-width: 168px;
+  padding: 6px;
+  background: var(--color-bar, var(--surface));
+  border: 1px solid var(--color-separator, var(--border));
+  border-radius: 12px;
+  box-shadow: var(--shadow-float, 0 12px 32px rgba(0, 0, 0, 0.28));
+}
+html[data-reader-surface="mobile"] body.mobile-reading .mobile-more-menu button {
+  min-height: 44px;
+  padding: 0 14px;
+  color: var(--text);
+  text-align: left;
+  font-size: 15px;
+  background: transparent;
+  border: 0;
+  border-radius: 8px;
+}
+html[data-reader-surface="mobile"] body.mobile-reading .mobile-more-menu button:active { background: var(--surface-alt); }
+
+/* The text owns the whole screen; only the safe areas and the footer strip
+   are kept clear, so showing the chrome never moves a line. */
+html[data-reader-surface="mobile"] body.mobile-reading .reader,
+html[data-reader-surface="mobile"] body.mobile-reading.mobile-topbar-hidden .reader,
+html[data-reader-surface="mobile"] body.is-epub.mobile-reading.mobile-chrome-open .reader {
+  top: env(safe-area-inset-top, 0px);
+  bottom: calc(24px + env(safe-area-inset-bottom, 0px));
+  left: env(safe-area-inset-left, 0px);
+  right: env(safe-area-inset-right, 0px);
+  padding-bottom: 0;
+  overscroll-behavior: contain;
+}
+
+html[data-reader-surface="mobile"] body.mobile-reading .mobile-reading-footer {
+  position: fixed;
+  left: calc(20px + env(safe-area-inset-left, 0px));
+  right: calc(20px + env(safe-area-inset-right, 0px));
+  bottom: env(safe-area-inset-bottom, 0px);
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  height: 24px;
+  color: var(--text-dim);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  pointer-events: none;
+}
+html[data-reader-surface="mobile"] body.mobile-reading .mobile-reading-footer span:first-child {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+html[data-reader-surface="mobile"] body.mobile-reading .mobile-reader-toolbar {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 195;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 4px;
+  padding: 8px calc(8px + env(safe-area-inset-right, 0px)) calc(6px + env(safe-area-inset-bottom, 0px)) calc(8px + env(safe-area-inset-left, 0px));
+  background: color-mix(in srgb, var(--reader-stage, var(--color-bg)) 94%, transparent);
+  border-top: 1px solid color-mix(in srgb, var(--border) 50%, transparent);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+html[data-reader-surface="mobile"] body.mobile-reading .mobile-reader-progress,
+html[data-reader-surface="mobile"] body.mobile-reading .mobile-reader-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+html[data-reader-surface="mobile"] body.mobile-reading .mobile-reader-toolbar button {
+  flex: 1 1 0;
+  max-width: none;
+  min-width: 0;
+  min-height: 44px;
+  padding: 4px 2px;
+  color: var(--text);
+  font-size: 11px;
+  background: transparent;
+  border: 0;
+  border-radius: 10px;
+}
+html[data-reader-surface="mobile"] body.mobile-reading .mobile-reader-toolbar button:active { background: var(--surface-alt); }
+html[data-reader-surface="mobile"] body.mobile-reading .mobile-reader-toolbar button:disabled { opacity: 0.38; }
+html[data-reader-surface="mobile"] body.mobile-reading .mobile-reader-progress .mobile-chapter-button {
+  flex: 0 0 auto;
+  padding: 0 10px;
+  font-size: 13px;
+  color: var(--text-dim);
+}
+html[data-reader-surface="mobile"] body.mobile-reading .mobile-reader-progress .mobile-chapter-button[hidden] { display: none; }
+html[data-reader-surface="mobile"] body.mobile-reading .mobile-progress-track {
+  position: relative;
+  flex: 1 1 auto;
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  height: 44px;
+}
+html[data-reader-surface="mobile"] body.mobile-reading #mobileReaderProgress {
+  width: 100%;
+  height: 28px;
+  margin: 0;
+  accent-color: var(--accent);
+  background: transparent;
+}
+html[data-reader-surface="mobile"] body.mobile-reading .mobile-progress-bubble {
+  position: absolute;
+  bottom: calc(100% + 4px);
+  max-width: 70vw;
+  padding: 6px 10px;
+  overflow: hidden;
+  color: var(--button-text, #fff);
+  font-size: 12px;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  background: var(--accent);
+  border-radius: 8px;
+  transform: translateX(-50%);
+  pointer-events: none;
+}
+html[data-reader-surface="mobile"] body.mobile-reading .mobile-progress-bubble[hidden] { display: none; }
+html[data-reader-surface="mobile"] body.mobile-reading .mobile-reader-actions button {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+}
+@media (prefers-reduced-motion: reduce) {
+  html[data-reader-surface="mobile"] body.mobile-reading .reader-shell-nav { transition: none; }
+}
+
+
+/* ============================================================
+   Phone panels (M2): one bottom-sheet look. A grip on top (drag down to
+   close), the settings sheet opens short and 更多设置 expands it, contents
+   and AI nearly fill the screen, AI's header actions sit behind ⋯.
+   ============================================================ */
+.sheet-grip,
+.settings-mode-segments,
+.settings-more-toggle,
+.ai-more-button,
+.ai-more-menu { display: none; }
+.ai-more-menu[hidden] { display: none !important; }
+
+html[data-reader-surface="mobile"] .sheet-grip {
+  display: block;
+  flex: 0 0 auto;
+  width: 36px;
+  height: 5px;
+  margin: -6px auto 6px;
+  background: color-mix(in srgb, var(--text-dim, #888) 55%, transparent);
+  border-radius: 3px;
+}
+html[data-reader-surface="mobile"] .reader-sheet.is-dragging,
+html[data-reader-surface="mobile"] .ai-modal.is-dragging { will-change: transform; }
+
+html[data-reader-surface="mobile"] .reader-sheet {
+  padding-top: 14px;
+  padding-left: calc(16px + env(safe-area-inset-left, 0px));
+  padding-right: calc(16px + env(safe-area-inset-right, 0px));
+}
+html[data-reader-surface="mobile"] #readerDrawer {
+  height: min(88dvh, 760px);
+  max-height: min(88dvh, 760px);
+}
+html[data-reader-surface="mobile"] #readerSettingsSheet {
+  height: auto;
+  max-height: min(62dvh, 560px);
+  transition: max-height var(--dur-fast) var(--ease-out);
+}
+html[data-reader-surface="mobile"] #readerSettingsSheet.is-expanded {
+  height: min(88dvh, 760px);
+  max-height: min(88dvh, 760px);
+}
+/* Short sheet: appearance and 翻页方式 only; the rest waits behind 更多设置. */
+html[data-reader-surface="mobile"] #readerSettingsSheet:not(.is-expanded) [data-settings-group="highlight"],
+html[data-reader-surface="mobile"] #readerSettingsSheet:not(.is-expanded) [data-settings-group="typography"],
+html[data-reader-surface="mobile"] #readerSettingsSheet:not(.is-expanded) .settings-user,
+html[data-reader-surface="mobile"] #readerSettingsSheet .settings-reading-mode-field,
+html[data-reader-surface="mobile"] #readerSettingsSheet .settings-toc-open-field { display: none !important; }
+html[data-reader-surface="mobile"] #readerSettingsSheet .settings-mode-segments:not([hidden]) {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px;
+  padding: 3px;
+  background: var(--surface-alt, rgba(127, 127, 127, .12));
+  border-radius: 11px;
+}
+html[data-reader-surface="mobile"] .settings-mode-segments button {
+  min-height: 40px;
+  color: var(--text);
+  font-size: 14px;
+  background: transparent;
+  border: 0;
+  border-radius: 9px;
+}
+html[data-reader-surface="mobile"] .settings-mode-segments button[aria-checked="true"] {
+  color: var(--button-text, #fff);
+  background: var(--accent);
+}
+html[data-reader-surface="mobile"] .settings-more-toggle {
+  display: block;
+  width: 100%;
+  min-height: 44px;
+  margin: 4px 0 12px;
+  color: var(--accent);
+  font-size: 15px;
+  background: transparent;
+  border: 0;
+}
+/* Fonts scroll sideways in one row instead of stacking two. */
+html[data-reader-surface="mobile"] #readerSettingsSheet .settings-font-cards {
+  display: flex;
+  gap: 8px;
+  margin: 0 -4px;
+  padding: 2px 4px 4px;
+  overflow-x: auto;
+  scroll-snap-type: x proximity;
+  scrollbar-width: none;
+}
+html[data-reader-surface="mobile"] #readerSettingsSheet .settings-font-cards::-webkit-scrollbar { display: none; }
+html[data-reader-surface="mobile"] #readerSettingsSheet .settings-font-cards button {
+  flex: 0 0 96px;
+  scroll-snap-align: start;
+}
+
+/* AI: nearly full screen, header actions behind ⋯, composer above the keyboard. */
+@media (max-width: 800px) {
+  html[data-reader-surface="mobile"] .ai-modal {
+    top: auto;
+    right: 0;
+    bottom: var(--keyboard-inset, 0px);
+    left: 0;
+    width: 100%;
+    max-width: none;
+    height: min(calc(92dvh - var(--keyboard-inset, 0px)), 860px);
+    max-height: calc(100dvh - var(--keyboard-inset, 0px) - env(safe-area-inset-top, 0px));
+    padding-top: 8px;
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+    border-right: 0;
+    border-bottom: 0;
+    border-left: 0;
+    border-radius: 20px 20px 0 0;
+    transform: none;
+  }
+  html[data-reader-surface="mobile"] .ai-modal .sheet-grip { margin: 0 auto 2px; }
+  html[data-reader-surface="mobile"] .ai-modal .ai-modal-header { padding: 6px 12px 10px 20px; }
+  html[data-reader-surface="mobile"] .ai-modal .ai-modal-heading p { display: none; }
+  html[data-reader-surface="mobile"] .ai-modal .ai-modal-actions { position: relative; }
+  html[data-reader-surface="mobile"] .ai-modal .ai-modal-actions > #btnAiBookMap,
+  html[data-reader-surface="mobile"] .ai-modal .ai-modal-actions > #btnAiConversations,
+  html[data-reader-surface="mobile"] .ai-modal .ai-modal-actions > #btnAiNewConversation,
+  html[data-reader-surface="mobile"] .ai-modal .ai-modal-actions > #btnAiSettings { display: none; }
+  html[data-reader-surface="mobile"] .ai-modal .ai-more-button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 44px;
+    height: 44px;
+    padding: 0;
+    color: var(--color-text-2);
+    background: transparent;
+    border: 0;
+  }
+  html[data-reader-surface="mobile"] .ai-modal .ai-more-button svg { width: 22px; height: 22px; }
+  html[data-reader-surface="mobile"] .ai-modal .ai-more-menu {
+    position: absolute;
+    top: calc(100% + 4px);
+    right: 0;
+    z-index: 5;
+    display: flex;
+    flex-direction: column;
+    min-width: 160px;
+    padding: 6px;
+    background: var(--color-elevated);
+    border: 1px solid var(--color-separator);
+    border-radius: 12px;
+    box-shadow: 0 12px 32px rgba(0, 0, 0, .28);
+  }
+  html[data-reader-surface="mobile"] .ai-modal .ai-more-menu button {
+    min-height: 44px;
+    padding: 0 14px;
+    color: var(--color-text);
+    font-size: 15px;
+    text-align: left;
+    background: transparent;
+    border: 0;
+    border-radius: 8px;
+  }
+  html[data-reader-surface="mobile"] .ai-modal .ai-more-menu button:active { background: var(--color-fill); }
+}
+html[data-reader-surface="mobile"] #readerSettingsSheet .settings-group { min-width: 0; }
+
+
+/* ============================================================
+   Phone library (M3): actions behind ⋯, long-press book sheet, organize
+   mode with a bottom bar.
+   ============================================================ */
+.library-more-button,
+.library-more-menu,
+.library-manage-bar { display: none; }
+.library-more-menu[hidden] { display: none !important; }
+
+html[data-reader-surface="mobile"] .library-header { position: relative; }
+html[data-reader-surface="mobile"] .library-heading { padding-right: 52px; }
+html[data-reader-surface="mobile"] .library-header-actions.has-phone-menu > button:not(.library-back-button) { display: none; }
+html[data-reader-surface="mobile"] .library-more-button {
+  position: absolute;
+  top: 0;
+  right: -6px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  color: var(--library-text, var(--color-text));
+  background: transparent;
+  border: 0;
+  border-radius: 50%;
+}
+html[data-reader-surface="mobile"] .library-more-button svg { width: 24px; height: 24px; }
+html[data-reader-surface="mobile"] .library-more-menu:not([hidden]) {
+  position: absolute;
+  top: 46px;
+  right: 0;
+  z-index: 40;
+  display: flex;
+  flex-direction: column;
+  min-width: 168px;
+  padding: 6px;
+  background: var(--color-bar, var(--surface));
+  border: 1px solid var(--color-separator, var(--border));
+  border-radius: 12px;
+  box-shadow: var(--shadow-float, 0 12px 32px rgba(0, 0, 0, 0.28));
+}
+html[data-reader-surface="mobile"] .library-more-menu button {
+  min-height: 44px;
+  padding: 0 14px;
+  color: var(--text);
+  font-size: 15px;
+  text-align: left;
+  background: transparent;
+  border: 0;
+  border-radius: 8px;
+}
+html[data-reader-surface="mobile"] .library-more-menu button:active { background: var(--surface-alt); }
+html[data-reader-surface="mobile"] .library-more-menu button:disabled { opacity: .45; }
+
+/* Long press opens the sheet; the browser's own callout never shows. */
+html[data-reader-surface="mobile"] .library-book {
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+.library-book-sheet-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 258;
+  background: rgba(0, 0, 0, .42);
+}
+.library-book-sheet {
+  position: fixed;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 259;
+  display: flex;
+  flex-direction: column;
+  max-height: min(80dvh, 640px);
+  padding: 14px calc(16px + env(safe-area-inset-right, 0px)) calc(12px + env(safe-area-inset-bottom, 0px)) calc(16px + env(safe-area-inset-left, 0px));
+  color: var(--text);
+  background: var(--color-bar, var(--surface));
+  border-radius: 20px 20px 0 0;
+  box-shadow: 0 -12px 40px rgba(0, 0, 0, .3);
+}
+@media (min-width: 768px) {
+  .library-book-sheet {
+    right: auto;
+    bottom: auto;
+    top: 50%;
+    left: 50%;
+    width: 360px;
+    border-radius: 16px;
+    transform: translate(-50%, -50%);
+  }
+}
+.library-book-sheet .sheet-grip { display: block; width: 36px; height: 5px; margin: -6px auto 8px; background: color-mix(in srgb, var(--text-dim, #888) 55%, transparent); border-radius: 3px; }
+.library-book-sheet-title {
+  margin: 0 4px 8px;
+  overflow: hidden;
+  font-size: 16px;
+  font-weight: 600;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.library-book-sheet-body {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow-y: auto;
+}
+.library-book-sheet-action {
+  min-height: 48px;
+  padding: 0 12px;
+  color: var(--text);
+  font-size: 16px;
+  text-align: left;
+  background: transparent;
+  border: 0;
+  border-bottom: 1px solid color-mix(in srgb, var(--border) 60%, transparent);
+}
+.library-book-sheet-action:last-child { border-bottom: 0; color: var(--text-dim); text-align: center; }
+.library-book-sheet-action[aria-pressed="true"]::after { content: "✓"; float: right; color: var(--accent); }
+.library-book-sheet-action:active { background: var(--surface-alt); }
+.library-book-info {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 10px 16px;
+  margin: 4px 4px 12px;
+  font-size: 14px;
+}
+.library-book-info dt { color: var(--text-dim); }
+.library-book-info dd { margin: 0; overflow-wrap: anywhere; }
+
+html[data-reader-surface="mobile"] .library-manage-bar {
+  position: fixed;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 60;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px calc(16px + env(safe-area-inset-right, 0px)) calc(8px + env(safe-area-inset-bottom, 0px)) calc(16px + env(safe-area-inset-left, 0px));
+  color: var(--text-dim);
+  font-size: 13px;
+  background: color-mix(in srgb, var(--color-bar, var(--surface)) 94%, transparent);
+  border-top: 1px solid color-mix(in srgb, var(--border) 60%, transparent);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+html[data-reader-surface="mobile"] .library-manage-done {
+  min-width: 88px;
+  min-height: 44px;
+  color: var(--button-text, #fff);
+  font-size: 15px;
+  background: var(--accent);
+  border: 0;
+  border-radius: 22px;
+}
+html[data-reader-surface="mobile"] .library-view:has(.library-manage-bar) { padding-bottom: 72px; }
+html[data-reader-surface="mobile"] .library-view .library-manage-hint { display: none; }
+.library-book-sheet-hint { margin: 4px 4px 8px; color: var(--text-dim); font-size: 13px; }
+
+/* ============================================================
+   Phone basics (M4): no pull-to-refresh or rubber-band showing the page
+   behind the reader, no double-tap-zoom delay on controls, and justified
+   Chinese text spreads short lines over every character instead of a few
+   wide gaps (a long Latin word may break rather than leave a hole).
+   ============================================================ */
+html[data-reader-surface="mobile"],
+html[data-reader-surface="mobile"] body {
+  overscroll-behavior: none;
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+html[data-reader-surface="mobile"] button,
+html[data-reader-surface="mobile"] a,
+html[data-reader-surface="mobile"] input,
+html[data-reader-surface="mobile"] select,
+html[data-reader-surface="mobile"] label,
+html[data-reader-surface="mobile"] .reader {
+  touch-action: manipulation;
+}
+html[data-reader-surface="mobile"] button { -webkit-tap-highlight-color: transparent; }
+html[data-reader-surface="mobile"] .article .epub-chapter p,
+html[data-reader-surface="mobile"] .article .epub-chapter li {
+  text-justify: inter-character;
+  overflow-wrap: anywhere;
+}
+/* PDF pages pan with one finger; two fingers zoom the pages, not the app. */
+html[data-reader-surface="mobile"] body.is-pdf-reader #pdfPages { touch-action: pan-x pan-y; }
+html[data-reader-surface="mobile"] #article[data-text-script="cjk"] .epub-chapter p,
+html[data-reader-surface="mobile"] #article[data-text-script="cjk"] .epub-chapter li { word-break: break-all; }
+/* Phone pages are the screen itself: no card corners or shadow. */
+html[data-reader-surface="mobile"] body.is-epub.paged-reading .reader .article {
+  border-radius: 0;
+  box-shadow: none;
+}
+html[data-reader-surface="mobile"] body.is-epub.mobile-reading:not(.paged-reading) .reader .article {
+  padding-right: clamp(12px, calc(var(--reader-page-margin, 40px) * .5), 48px);
+  padding-left: clamp(12px, calc(var(--reader-page-margin, 40px) * .5), 48px);
+}

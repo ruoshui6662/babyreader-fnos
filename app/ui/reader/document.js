@@ -245,6 +245,10 @@ async function renderEpubChapter(index, options = {}) {
     state.epubChapterIndex = chapter.index;
     state.currentChapterIndex = chapter.index;
     article.dataset.epubSkippedResourceCount = String(archive.diagnostics.skippedResourceCount || 0);
+    // Mostly-CJK chapters may break a Latin word at a line end (phones
+    // otherwise leave a widely spaced short line before it); set before
+    // pagination measures.
+    article.dataset.textScript = chapterTextScript(article.textContent);
 
     await new Promise((resolve) => requestAnimationFrame(resolve));
     if (!isCurrent()) return false;
@@ -287,6 +291,13 @@ async function renderEpubChapter(index, options = {}) {
       updateReadingProgress({ chapterIndexHint: state.epubChapterIndex });
     }
   }
+}
+
+function chapterTextScript(text) {
+  const sample = String(text || '').replace(/\s+/g, '').slice(0, 2000);
+  if (!sample) return 'latin';
+  const cjk = sample.match(/[\u3040-\u30ff\u3400-\u9fff\uf900-\ufaff\uac00-\ud7af]/g)?.length || 0;
+  return cjk / sample.length >= 0.3 ? 'cjk' : 'latin';
 }
 
 function navigateToEpubChapter(index, options = {}) {

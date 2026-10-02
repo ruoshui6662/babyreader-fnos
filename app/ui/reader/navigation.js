@@ -162,6 +162,26 @@ function setCurrentTocTarget(target) {
   });
 }
 
+// Opening the contents shows where the reader is: the current chapter is
+// marked and scrolled into view (a finer entry already marked in the same
+// chapter wins).
+function revealCurrentTocEntry() {
+  const links = [...document.querySelectorAll('.toc a[data-target]')];
+  if (!links.length) return null;
+  const pathOf = (link) => String(link.getAttribute('data-target') || '').replace(/^epub-path:/, '').split('#')[0];
+  let current = links.find((link) => link.getAttribute('aria-current') === 'location') || null;
+  if (state.contentType === 'epub') {
+    const index = Number.isInteger(state.currentChapterIndex) ? state.currentChapterIndex : state.epubChapterIndex;
+    const path = state.chapterPaths?.[index] || '';
+    if (path && (!current || pathOf(current) !== path)) {
+      current = links.find((link) => pathOf(link) === path) || current;
+      if (current) setCurrentTocTarget(current.getAttribute('data-target'));
+    }
+  }
+  current?.scrollIntoView?.({ block: 'center' });
+  return current;
+}
+
 async function navigateEpubTarget(target, sourceChapter = null) {
   if (!target || state.contentType !== 'epub' || isEpubChapterLoading()) return false;
 

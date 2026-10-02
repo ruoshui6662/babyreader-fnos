@@ -1432,7 +1432,8 @@ async function serveStatic(request, response, pathname) {
     '.css': 'text/css; charset=utf-8',
     '.png': 'image/png',
     '.svg': 'image/svg+xml',
-    '.woff2': 'font/woff2'
+    '.woff2': 'font/woff2',
+    '.webmanifest': 'application/manifest+json; charset=utf-8'
   };
   const bytes = await fs.readFile(candidate);
   // Revalidate every request for first-party assets. An FPK upgrade replaces

@@ -128,6 +128,7 @@ function createLibraryBookCard(book, { open = true } = {}) {
     button.setAttribute('aria-label', `${libraryBookTitle(book)}${book.author ? `，${book.author}` : ''}，已读 ${percent}%`);
   }
   if (open) {
+    attachLibraryBookLongPress(button, book);
     button.addEventListener('click', () => {
       window.browserHost.openBook(book).catch((error) => showHighlightHint(error.message));
     });
@@ -623,6 +624,9 @@ function setupLibraryBookPointerReorder(grid, order, scope, library) {
     const source = event.target.closest?.('[data-reorder-handle], .library-book');
     const item = source?.closest?.('[data-reorder-id]');
     if (!item || item.parentElement !== grid || item.hidden) return;
+    // On a phone a long press outside 整理 opens the book's sheet instead.
+    if (isPhoneLibrary() && event.pointerType !== 'mouse' && !libraryOrganizationManageMode()
+        && !event.target.closest?.('[data-reorder-handle]')) return;
     pointerId = event.pointerId;
     pointerType = event.pointerType || 'mouse';
     pendingItem = item;
@@ -1067,8 +1071,11 @@ function renderLibraryOrganization(library) {
   }
   header.appendChild(actions);
   shell.appendChild(header);
+  setupLibraryPhoneMenu(actions);
   const scanStatus = createLibraryScanStatus(library.scan);
   shell.appendChild(scanStatus);
+  const activeManageButton = actions.querySelector('.library-mode-button');
+  if (manage && activeManageButton && isPhoneLibrary()) shell.appendChild(createLibraryManageBar(activeManageButton));
 
   if (manage) {
     const hint = document.createElement('p');
@@ -1142,7 +1149,9 @@ function renderLibraryOrganization(library) {
   booksSection.appendChild(books.length
     ? libraryOrganizationBookGrid(books, { library, scope, order })
     : collection
-      ? makeLibraryOrganizationEmpty('这个分类还没有书', '点击上方的“添加书籍”，把书放进这个分类。')
+      ? makeLibraryOrganizationEmpty('这个分类还没有书', isPhoneLibrary()
+        ? '点右上角 ⋯ 里的“添加书籍”，或在书库长按书籍“移动到分类”。'
+        : '点击上方的“添加书籍”，把书放进这个分类。')
       : route.mode === 'unassigned'
         ? makeLibraryOrganizationEmpty('所有书都已归类', '新扫描到的书会先出现在这里。')
         : makeLibraryOrganizationEmpty('书库还是空的', '在 fnOS 中授权书库目录后，EPUB、PDF、MOBI/AZW3、Markdown 和 TXT 会出现在这里。'));
@@ -1151,6 +1160,265 @@ function renderLibraryOrganization(library) {
   setupLibraryFilter(shell);
   if (typeof setupLibraryImportDrop === 'function') setupLibraryImportDrop(shell, library, importContext);
   return true;
+}
+
+// ---------------------------------------------------------------------------
+// Phone library (M3): the header actions sit behind ⋯, a long press on a book
+// opens its action sheet, and organize mode gets a bottom bar with 完成.
+// ---------------------------------------------------------------------------
+
+function isPhoneLibrary() {
+  return typeof isMobileReaderSurface === 'function' && isMobileReaderSurface();
+}
+
+// The ⋯ menu re-reads the real header buttons each time it opens, so labels
+// and disabled states (扫描中…) stay true; picking an item clicks the button.
+function setupLibraryPhoneMenu(actions) {
+  if (!actions || !isPhoneLibrary() || actions.querySelector('.library-more-button')) return;
+  const header = actions.closest('.library-header');
+  const sources = () => [...actions.querySelectorAll(':scope > button')]
+    .filter((button) => !button.classList.contains('library-back-button')
+      && !button.classList.contains('library-more-button'));
+  if (!sources().length) return;
+  actions.classList.add('has-phone-menu');
+  const more = document.createElement('button');
+  more.type = 'button';
+  more.className = 'library-more-button';
+  more.setAttribute('aria-label', '更多操作');
+  more.setAttribute('aria-haspopup', 'menu');
+  more.setAttribute('aria-expanded', 'false');
+  more.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="5.5" cy="12" r="1"></circle><circle cx="12" cy="12" r="1"></circle><circle cx="18.5" cy="12" r="1"></circle></svg>';
+  const menu = document.createElement('div');
+  menu.className = 'library-more-menu';
+  menu.setAttribute('role', 'menu');
+  menu.hidden = true;
+  const close = () => {
+    menu.hidden = true;
+    more.setAttribute('aria-expanded', 'false');
+  };
+  more.addEventListener('click', (event) => {
+    event.stopPropagation();
+    if (!menu.hidden) {
+      close();
+      return;
+    }
+    menu.replaceChildren(...sources().map((source) => {
+      const item = document.createElement('button');
+      item.type = 'button';
+      item.setAttribute('role', 'menuitem');
+      item.textContent = source.textContent.trim();
+      item.disabled = source.disabled;
+      item.addEventListener('click', () => {
+        close();
+        source.click();
+      });
+      return item;
+    }));
+    menu.hidden = false;
+    more.setAttribute('aria-expanded', 'true');
+  });
+  document.addEventListener('pointerdown', (event) => {
+    if (!menu.hidden && !menu.contains(event.target) && !more.contains(event.target)) close();
+  }, true);
+  (header || actions).append(more, menu);
+}
+
+function libraryBookCollectionId(library, bookId) {
+  return library?.organization?.bookAssignments?.[bookId] || '';
+}
+
+function closeLibraryBookSheet() {
+  document.querySelector('.library-book-sheet')?.remove();
+  document.querySelector('.library-book-sheet-backdrop')?.remove();
+}
+
+// Long press on a phone (or the context-menu gesture) opens a book's sheet:
+// 打开 · 重命名 · 移动到分类 · 书籍信息.
+function showLibraryBookSheet(book, trigger = null) {
+  closeLibraryBookSheet();
+  const library = typeof window !== 'undefined' ? window.__libraryOrganizationLibrary : null;
+  const organized = Boolean(library?.organization && Array.isArray(library.organization.collections));
+  const backdrop = document.createElement('div');
+  backdrop.className = 'library-book-sheet-backdrop';
+  // The finger that long-pressed lifts over the new backdrop; only a tap
+  // that starts on the backdrop closes the sheet.
+  let backdropArmed = false;
+  backdrop.addEventListener('pointerdown', () => { backdropArmed = true; });
+  backdrop.addEventListener('click', () => {
+    if (backdropArmed) closeLibraryBookSheet();
+    backdropArmed = false;
+  });
+  const sheet = document.createElement('section');
+  sheet.className = 'library-book-sheet';
+  sheet.setAttribute('role', 'dialog');
+  sheet.setAttribute('aria-modal', 'true');
+  sheet.setAttribute('aria-label', libraryBookTitle(book));
+  const grip = document.createElement('div');
+  grip.className = 'sheet-grip';
+  grip.setAttribute('aria-hidden', 'true');
+  const title = document.createElement('h2');
+  title.className = 'library-book-sheet-title';
+  title.textContent = libraryBookTitle(book);
+  const body = document.createElement('div');
+  body.className = 'library-book-sheet-body';
+  sheet.append(grip, title, body);
+
+  const action = (label, handler, { danger = false } = {}) => {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'library-book-sheet-action';
+    if (danger) button.classList.add('is-danger');
+    button.textContent = label;
+    button.addEventListener('click', handler);
+    return button;
+  };
+  const showActions = () => {
+    const items = [action('打开', () => {
+      closeLibraryBookSheet();
+      window.browserHost.openBook(book).catch((error) => showHighlightHint(error.message));
+    })];
+    if (organized) {
+      items.push(action('重命名', () => {
+        closeLibraryBookSheet();
+        showLibraryBookRenameDialog(library, book, trigger);
+      }));
+      items.push(action('移动到分类', () => showMoves()));
+    }
+    items.push(action('书籍信息', () => showInfo()));
+    items.push(action('取消', () => closeLibraryBookSheet()));
+    body.replaceChildren(...items);
+    items[0].focus({ preventScroll: true });
+  };
+  const showMoves = () => {
+    const current = libraryBookCollectionId(library, book.id);
+    const items = [{ id: '', name: '未分类' }, ...library.organization.collections].map((collection) => {
+      const button = action(collection.name, async () => {
+        if (collection.id === current) {
+          closeLibraryBookSheet();
+          return;
+        }
+        body.querySelectorAll('button').forEach((item) => { item.disabled = true; });
+        try {
+          const next = await window.browserHost.placeLibraryBook(book.id, collection.id || null, null, library.organization.revision);
+          closeLibraryBookSheet();
+          renderLibraryOrganization({ ...library, organization: next });
+          showHighlightHint(`已移到“${collection.name}”`);
+        } catch (error) {
+          showHighlightHint(error.message || '分类保存失败，请重试');
+          body.querySelectorAll('button').forEach((item) => { item.disabled = false; });
+        }
+      });
+      button.setAttribute('aria-pressed', String(collection.id === current));
+      return button;
+    });
+    if (!library.organization.collections.length) {
+      const hint = document.createElement('p');
+      hint.className = 'library-book-sheet-hint';
+      hint.textContent = '还没有分类。可在书库右上角 ⋯ 里“新建分类”。';
+      items.unshift(hint);
+    }
+    items.push(action('返回', () => showActions()));
+    body.replaceChildren(...items);
+  };
+  const showInfo = () => {
+    const list = document.createElement('dl');
+    list.className = 'library-book-info';
+    const percent = libraryBookProgressPercent(book);
+    const collectionId = libraryBookCollectionId(library, book.id);
+    const collection = organized && collectionId
+      ? library.organization.collections.find((item) => item.id === collectionId)
+      : null;
+    const rows = [
+      ['书名', libraryBookTitle(book)],
+      book.originalTitle && book.originalTitle !== book.title ? ['原书名', book.originalTitle] : null,
+      book.author ? ['作者', book.author] : null,
+      ['格式', libraryBookFormatLabel(book)],
+      organized ? ['分类', collection?.name || '未分类'] : null,
+      ['阅读进度', percent === null ? '未开始' : percent >= 100 ? '已读完' : `${percent}%`],
+      book.relativePath ? ['文件', book.relativePath] : null
+    ].filter(Boolean);
+    for (const [label, value] of rows) {
+      const term = document.createElement('dt');
+      term.textContent = label;
+      const detail = document.createElement('dd');
+      detail.textContent = value;
+      list.append(term, detail);
+    }
+    body.replaceChildren(list, action('返回', () => showActions()));
+  };
+  sheet.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      closeLibraryBookSheet();
+      trigger?.focus?.({ preventScroll: true });
+    }
+  });
+  document.body.append(backdrop, sheet);
+  showActions();
+  return sheet;
+}
+
+function attachLibraryBookLongPress(button, book) {
+  let timer = null;
+  let start = null;
+  // One gesture may report both the timer and contextmenu, and the click
+  // that ends it must not also open the book.
+  let swallowClick = false;
+  const cancel = () => {
+    clearTimeout(timer);
+    timer = null;
+    start = null;
+  };
+  const open = () => {
+    if (document.querySelector('.library-book-sheet')) return;
+    swallowClick = true;
+    setTimeout(() => { swallowClick = false; }, 1000);
+    navigator.vibrate?.(10);
+    showLibraryBookSheet(book, button);
+  };
+  button.addEventListener('pointerdown', (event) => {
+    swallowClick = false;
+    if (!isPhoneLibrary() || event.pointerType === 'mouse' || libraryOrganizationManageMode()) return;
+    start = [event.clientX, event.clientY];
+    timer = setTimeout(() => {
+      timer = null;
+      open();
+    }, 500);
+  });
+  button.addEventListener('pointermove', (event) => {
+    if (start && Math.hypot(event.clientX - start[0], event.clientY - start[1]) > 10) cancel();
+  });
+  button.addEventListener('pointerup', cancel);
+  button.addEventListener('pointercancel', cancel);
+  // Android also reports a long press as contextmenu; never show the
+  // browser's own link/image menu over the cover.
+  button.addEventListener('contextmenu', (event) => {
+    if (!isPhoneLibrary() || libraryOrganizationManageMode()) return;
+    event.preventDefault();
+    cancel();
+    open();
+  });
+  button.addEventListener('click', (event) => {
+    if (!swallowClick) return;
+    swallowClick = false;
+    event.preventDefault();
+    event.stopImmediatePropagation();
+  });
+}
+
+// Organize mode on a phone: a bar at the bottom with the hint and 完成.
+function createLibraryManageBar(manageButton) {
+  const bar = document.createElement('div');
+  bar.className = 'library-manage-bar';
+  const hint = document.createElement('span');
+  hint.textContent = '长按封面拖动排序 · 铅笔改书名';
+  const done = document.createElement('button');
+  done.type = 'button';
+  done.className = 'library-manage-done';
+  done.textContent = '完成';
+  done.addEventListener('click', () => manageButton.click());
+  bar.append(hint, done);
+  return bar;
 }
 
 function makeLibraryOrganizationEmpty(message, guidance = '') {

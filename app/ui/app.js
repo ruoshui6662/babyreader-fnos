@@ -74,6 +74,8 @@ function openDefaultReaderToc() {
   // A generated page list (PDF without an outline) is navigation, not a
   // table of contents worth opening on arrival.
   if (state.toc.every((item) => item?.generated === true)) return false;
+  // On a phone the contents would cover the whole page the reader came for.
+  if (typeof isMobileReaderSurface === 'function' && isMobileReaderSurface()) return false;
   const trigger = document.getElementById('btnToc') || document.activeElement;
   return openReaderPanel('toc', trigger);
 }
