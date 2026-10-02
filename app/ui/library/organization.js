@@ -1073,7 +1073,11 @@ function renderLibraryOrganization(library) {
   if (manage) {
     const hint = document.createElement('p');
     hint.className = 'library-summary library-manage-hint';
-    hint.textContent = '拖动书籍封面调整顺序（手机长按书卡后拖动）；点铅笔按钮可重命名书籍。分类也可使用 ⋮⋮ 手柄。';
+    // Books move by their cover; category chips keep a grip because touch
+    // screens cannot drag them by their label.
+    hint.textContent = organization.collections.length
+      ? '拖动书籍封面调整顺序（手机上长按后拖动），点铅笔按钮重命名书籍；分类拖动左侧的 ⋮⋮ 调整顺序。'
+      : '拖动书籍封面调整顺序（手机上长按后拖动），点铅笔按钮重命名书籍。';
     shell.appendChild(hint);
   }
 

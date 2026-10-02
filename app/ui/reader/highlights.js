@@ -193,7 +193,7 @@ function updateTopbarState() {
     btnExport.disabled = isPdf && btnExport.dataset.exportBookId === state.currentBookId
       && btnExport.dataset.exportGeneration === String(window.pdfReaderController?.getGeneration?.() ?? '');
     btnExport.innerHTML = exportIconSvg();
-    const exportLabel = isEpub || isPdf ? '导出标记与想法' : '导出标记与想法仅支持 EPUB 和 PDF';
+    const exportLabel = isEpub || isPdf ? '导出标记与想法' : '纯文本书暂不支持导出标记与想法';
     btnExport.setAttribute('aria-label', exportLabel);
     btnExport.setAttribute('title', exportLabel);
   }
@@ -223,8 +223,8 @@ function updateTopbarState() {
     btnBookmarks.disabled = !bookmarkAvailable;
     btnBookmarks.setAttribute('aria-pressed', bookmarkActive ? 'true' : 'false');
     const bookmarkLabel = bookmarkActive ? '取消当前书签' : '添加当前书签';
-    btnBookmarks.setAttribute('aria-label', bookmarkAvailable ? bookmarkLabel : '书签仅支持 EPUB 和 PDF');
-    btnBookmarks.setAttribute('title', bookmarkAvailable ? bookmarkLabel : '书签仅支持 EPUB 和 PDF');
+    btnBookmarks.setAttribute('aria-label', bookmarkAvailable ? bookmarkLabel : '纯文本书暂不支持书签');
+    btnBookmarks.setAttribute('title', bookmarkAvailable ? bookmarkLabel : '纯文本书暂不支持书签');
     if (typeof renderBookmarkButtonState === 'function') renderBookmarkButtonState();
   }
   if (btnNotes) {
@@ -232,8 +232,8 @@ function updateTopbarState() {
     btnNotes.hidden = !notesAvailable;
     btnNotes.disabled = !notesAvailable;
     btnNotes.innerHTML = notesIconSvg() + railLabel('笔记');
-    btnNotes.setAttribute('aria-label', notesAvailable ? '打开标记与想法' : '标记与想法仅支持 EPUB 和 PDF');
-    btnNotes.setAttribute('title', notesAvailable ? '打开标记与想法' : '标记与想法仅支持 EPUB 和 PDF');
+    btnNotes.setAttribute('aria-label', notesAvailable ? '打开标记与想法' : '纯文本书暂不支持标记与想法');
+    btnNotes.setAttribute('title', notesAvailable ? '打开标记与想法' : '纯文本书暂不支持标记与想法');
   }
   if (btnAi) {
     const aiAvailable = (isEpub || isPdf || state.contentType === 'text') && Boolean(state.currentBookId);

@@ -30,7 +30,7 @@
 开发、CI 与 fnOS 运行统一使用 Node.js 22。
 
 ```bash
-cd D:/AI编程/reader/zhenshu
+cd D:/AI编程/reader/babyreader-fnos
 npm ci
 ```
 
@@ -152,7 +152,7 @@ fnpack --help
 然后运行：
 
 ```bash
-cd D:/AI编程/reader/zhenshu
+cd D:/AI编程/reader/babyreader-fnos
 npm test
 npm run check
 npm run build:fpk
