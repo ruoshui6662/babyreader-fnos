@@ -438,6 +438,7 @@ function createPdfReaderController({
     }
     const label = doc.getElementById('pdfPageCount');
     if (label) label.textContent = `/ ${pdfDocument?.numPages || 0}`;
+    if (typeof globalThis.syncMobileReadingBar === 'function') globalThis.syncMobileReadingBar();
   }
 
   function scaleForPage(page) {

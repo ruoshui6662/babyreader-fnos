@@ -196,16 +196,23 @@ async function jumpToBookmark(bookmark) {
 }
 
 function renderBookmarkButtonState() {
-  const button = document.getElementById('btnBookmarks');
-  if (!button) return false;
+  // The desktop toolbar button and the phone top-bar button show one state.
+  const buttons = ['btnBookmarks', 'btnMobileTopBookmark']
+    .map((id) => document.getElementById(id))
+    .filter(Boolean);
+  if (!buttons.length) return false;
   const available = ['epub', 'pdf'].includes(state.contentType) && Boolean(state.currentBookId);
   const active = available && isCurrentBookmark();
-  button.disabled = !available;
-  button.dataset.bookmarkActive = active ? 'true' : 'false';
-  button.setAttribute('aria-pressed', active ? 'true' : 'false');
   const label = active ? '取消当前书签' : '添加当前书签';
-  button.setAttribute('aria-label', available ? label : '纯文本书暂不支持书签');
-  button.setAttribute('title', available ? label : '纯文本书暂不支持书签');
+  for (const button of buttons) {
+    button.disabled = !available;
+    button.dataset.bookmarkActive = active ? 'true' : 'false';
+    button.setAttribute('aria-pressed', active ? 'true' : 'false');
+    button.setAttribute('aria-label', available ? label : '纯文本书暂不支持书签');
+    button.setAttribute('title', available ? label : '纯文本书暂不支持书签');
+  }
+  const list = document.querySelector('#mobileMoreMenu [data-reader-action="openBookmarks"]');
+  if (list) list.disabled = !available;
   return active;
 }
 

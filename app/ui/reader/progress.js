@@ -153,6 +153,8 @@ function updateReadingProgress(options = {}) {
       : pageFraction
     : Math.max(0, Math.min(1, (chapterIndex + chapterPercentage) / chapterCount));
   progress.textContent = `第 ${chapterIndex + 1}/${chapterCount} 章 · ${Math.round(percentage * 100)}%`;
+  state.readingPercentage = percentage;
+  if (typeof syncMobileReadingBar === 'function') syncMobileReadingBar();
 
   const previous = document.getElementById('btnPreviousChapter');
   const next = document.getElementById('btnNextChapter');

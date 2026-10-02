@@ -14,10 +14,7 @@ async function performReturnToLibrary() {
   if (typeof closeHighlightEditor === 'function' && closeHighlightEditor({ restoreFocus: false }) === false) return;
   const bookId = state.currentBookId;
   const reader = document.getElementById('reader');
-  const backButtons = [
-    document.getElementById('btnBackToLibrary'),
-    document.getElementById('btnMobileBackToLibrary')
-  ].filter(Boolean);
+  const backButtons = [document.getElementById('btnBackToLibrary')].filter(Boolean);
 
   if (typeof setMobileTopbarHidden === 'function') setMobileTopbarHidden(false);
   if (typeof setDesktopTopbarHidden === 'function') setDesktopTopbarHidden(false);
@@ -63,44 +60,50 @@ function setupHighlightButtons() {
 
 function setupReaderNavigation() {
   const reader = document.getElementById('reader');
-  const chromeToggle = document.getElementById('mobileReaderChromeToggle');
-  let closeTimer = null;
   let lastScrollTop = Math.max(0, Number(reader?.scrollTop) || 0);
 
   const closeMobileChrome = () => {
-    clearTimeout(closeTimer);
     if (typeof setMobileChromeOpen === 'function') setMobileChromeOpen(false);
   };
 
-  const scheduleMobileChromeClose = () => {
-    clearTimeout(closeTimer);
-    closeTimer = setTimeout(closeMobileChrome, 4200);
-  };
-
-  chromeToggle?.addEventListener('click', (event) => {
-    event.preventDefault();
-    if (!isMobileReaderSurface() || !state.currentPath) return;
-    const open = !isMobileChromeOpen();
-    setMobileChromeOpen(open);
-    if (open) scheduleMobileChromeClose();
-  });
-
+  // Phone tap zones (WeChat Reading): in paged EPUBs the left third turns
+  // back, the right third forward and the middle shows the reading chrome;
+  // scrolling books, plain text and PDFs show the chrome on any tap. While
+  // the chrome is open, any tap on the page just hides it.
   reader?.addEventListener('click', (event) => {
-    if (!isMobileReaderSurface() || state.contentType !== 'epub') return;
+    if (!isMobileReaderSurface() || !state.currentPath) return;
+    if (!['epub', 'pdf', 'text'].includes(state.contentType)) return;
     if (isPaginationInteractionTarget(event.target)) return;
+    if (event.target?.closest?.('.pdf-text-layer a, .pdf-annotation-layer a')) return;
     const selection = window.getSelection?.();
     if (selection && !selection.isCollapsed) return;
     // The tap that dismissed a selection or annotation bubble does nothing else.
     if (typeof selectionMenuRecentlyDismissed === 'function' && selectionMenuRecentlyDismissed()) return;
-    setMobileChromeOpen(!isMobileChromeOpen());
-    if (isMobileChromeOpen()) scheduleMobileChromeClose();
+    if (Date.now() - (state.lastMobileSwipeAt || 0) < 400) return;
+    if (isMobileChromeOpen()) {
+      closeMobileChrome();
+      return;
+    }
+    const paged = state.contentType === 'epub' && state.effectiveReadingMode !== 'scroll';
+    const width = window.innerWidth || reader.clientWidth || 1;
+    if (paged && event.clientX < width / 3) {
+      navigatePageGroup(-1);
+      return;
+    }
+    if (paged && event.clientX > (width * 2) / 3) {
+      navigatePageGroup(1);
+      return;
+    }
+    setMobileChromeOpen(true);
   });
 
   reader?.addEventListener('scroll', () => {
     const currentScrollTop = Math.max(0, Number(reader.scrollTop) || 0);
     const isMobileEpub = isMobileReaderSurface() && state.contentType === 'epub';
+    if (isMobileReaderSurface() && typeof syncMobileReadingBar === 'function') syncMobileReadingBar();
 
     if (!isMobileEpub) {
+      if (isMobileReaderSurface() && isMobileChromeOpen() && Math.abs(currentScrollTop - lastScrollTop) > 24) closeMobileChrome();
       if (typeof setMobileTopbarHidden === 'function') setMobileTopbarHidden(false);
       if (typeof setDesktopTopbarHidden === 'function') {
         const delta = currentScrollTop - lastScrollTop;
@@ -181,6 +184,7 @@ function setupPositionTracking() {
       snapPaginationToNearestGroup({ save: true });
       return;
     }
+    state.lastMobileSwipeAt = Date.now();
     navigatePageGroup(deltaX < 0 ? 1 : -1);
   });
 

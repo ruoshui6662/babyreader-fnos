@@ -496,7 +496,13 @@ function syncSettingsPanel() {
     updateTypographySliderHint('pageMargin', state.pageMargin, false);
   }
   if (highlightColor) highlightColor.value = state.highlightColor;
-  if (readingMode) readingMode.value = state.readingMode;
+  if (readingMode) {
+    // The same two modes, named the way phones name them.
+    const phone = typeof isMobileReaderSurface === 'function' && isMobileReaderSurface();
+    const labels = phone ? { scroll: '上下滚动', double: '左右翻页' } : { scroll: '连续滚动', double: '双页分页' };
+    [...readingMode.options].forEach((option) => { option.textContent = labels[option.value] || option.textContent; });
+    readingMode.value = state.readingMode;
+  }
   if (pdfLayoutMode) pdfLayoutMode.value = state.pdfLayoutMode;
   if (fontFamily) fontFamily.value = state.fontFamily;
   if (textIndent) {

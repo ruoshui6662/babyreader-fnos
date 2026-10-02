@@ -5,20 +5,25 @@
 function currentUserSettings() {
   const savedSettings = state.userState.settings || {};
   const savedMode = savedSettings.readingMode === 'single' ? 'double' : savedSettings.readingMode;
-  const storedReadingMode = state.readingModeAutoApplied
-    ? ['scroll', 'double'].includes(savedMode)
-      ? savedMode
-      : savedSettings.continuousScroll === false ? 'double' : 'scroll'
+  const savedDesktopMode = ['scroll', 'double'].includes(savedMode)
+    ? savedMode
+    : savedSettings.continuousScroll === false ? 'double' : 'scroll';
+  // Phones and desktops keep separate reading modes: a phone saves only its
+  // own choice and leaves the desktop one as it was, and the other way round.
+  const phone = typeof isMobileReaderSurface === 'function' && isMobileReaderSurface();
+  const readingMode = phone || !['scroll', 'double'].includes(state.readingMode)
+    ? savedDesktopMode
     : state.readingMode;
-  const readingMode = ['scroll', 'double'].includes(storedReadingMode)
-    ? storedReadingMode
-    : state.readingMode;
+  const mobileReadingMode = phone
+    ? state.readingMode === 'scroll' ? 'scroll' : 'paged'
+    : savedSettings.mobileReadingMode === 'scroll' ? 'scroll' : 'paged';
   return {
     theme: state.theme,
     fontSize: zoomLevel,
     lineHeight: state.lineHeight,
     pageMargin: state.pageMargin,
     readingMode,
+    mobileReadingMode,
     pdfLayoutMode: ['continuous', 'single', 'double'].includes(state.pdfLayoutMode)
       ? state.pdfLayoutMode : 'continuous',
     continuousScroll: readingMode === 'scroll',
@@ -59,9 +64,13 @@ function applyUserState(userState) {
   const restoredMode = allowedReadingModes.includes(storedMode)
     ? storedMode
     : settings.continuousScroll === false ? 'double' : 'scroll';
-  const mobileDefault = typeof isMobileReaderSurface === 'function' && isMobileReaderSurface();
-  state.readingModeAutoApplied = mobileDefault && restoredMode !== 'scroll';
-  state.readingMode = mobileDefault ? 'scroll' : restoredMode;
+  // Phones page left and right by default (WeChat Reading); 上下滚动 is the
+  // phone's own opt-in and never changes the desktop mode.
+  const phone = typeof isMobileReaderSurface === 'function' && isMobileReaderSurface();
+  state.readingModeAutoApplied = false;
+  state.readingMode = phone
+    ? settings.mobileReadingMode === 'scroll' ? 'scroll' : 'double'
+    : restoredMode;
   state.pdfLayoutMode = ['continuous', 'single', 'double'].includes(settings.pdfLayoutMode)
     ? settings.pdfLayoutMode : 'continuous';
   state.continuousScroll = state.readingMode === 'scroll';

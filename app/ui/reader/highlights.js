@@ -80,12 +80,10 @@ function settingsIconSvg() {
 // The phone toolbar shows the same icons above its captions (once).
 function decorateMobileToolbar() {
   const icons = {
-    btnMobileBackToLibrary: `<svg viewBox="0 0 24 24" data-icon="library" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 4h3v16H5zM10 4h3v16h-3z"></path><path d="m15.4 5.3 2.9-.8 3.9 15-2.9.8z"></path></svg>`,
     btnMobileToc: tocIconSvg(),
-    btnMobileBookmarks: bookmarkIconSvg(),
-    btnMobileSearch: searchIconSvg(),
     btnMobileNotes: notesIconSvg(),
-    btnMobileHighlight: highlightIconSvg(),
+    btnMobileAi: aiIconSvg(),
+    btnMobileTheme: themeIconSvg(state.theme === 'dark' ? 'light' : 'dark'),
     btnMobileSettings: settingsIconSvg()
   };
   for (const [id, svg] of Object.entries(icons)) {
@@ -261,12 +259,12 @@ function updateTopbarState() {
   const readingProgress = document.getElementById('readingProgress');
   const floatingToolbar = document.getElementById('readerFloatingToolbar');
   const mobileToolbar = document.getElementById('mobileReaderToolbar');
-  const mobileBack = document.getElementById('btnMobileBackToLibrary');
-  const mobileBookmarks = document.getElementById('btnMobileBookmarks');
-  const mobileSearch = document.getElementById('btnMobileSearch');
+  const mobileBookmark = document.getElementById('btnMobileTopBookmark');
+  const mobileSearch = document.getElementById('btnMobileTopSearch');
   const mobileNotes = document.getElementById('btnMobileNotes');
+  const mobileToc = document.getElementById('btnMobileToc');
+  const mobileAi = document.getElementById('btnMobileAi');
   const mobilePrevious = document.getElementById('btnMobilePreviousChapter');
-  const mobileHighlight = document.getElementById('btnMobileHighlight');
   const mobileNext = document.getElementById('btnMobileNextChapter');
   const hasDocument = Boolean(state.currentPath);
 
@@ -284,15 +282,26 @@ function updateTopbarState() {
   if (mobileToolbar && typeof setMobileChromeOpen === 'function') {
     setMobileChromeOpen(isMobileChromeOpen());
   }
-  if (mobileBack) mobileBack.disabled = !hasDocument;
-  if (mobileBookmarks) mobileBookmarks.disabled = !((isEpub || isPdf) && Boolean(state.currentBookId));
+  if (mobileBookmark) mobileBookmark.disabled = !((isEpub || isPdf) && Boolean(state.currentBookId));
   if (mobileSearch) mobileSearch.disabled = !searchAvailable;
   if (mobileNotes) mobileNotes.disabled = !(isEpub || isPdf);
-  if (mobilePrevious) mobilePrevious.disabled = !isEpub || state.currentChapterIndex <= 0;
-  if (mobileHighlight) mobileHighlight.disabled = !isEpub;
-  if (mobileNext) {
-    mobileNext.disabled = !isEpub
-      || state.currentChapterIndex >= Math.max(0, state.chapterPaths.length - 1);
+  if (mobileToc) mobileToc.disabled = !(isEpub || isPdf);
+  if (mobileAi) mobileAi.disabled = Boolean(document.getElementById('btnAi')?.disabled);
+  const moreMenu = document.getElementById('mobileMoreMenu');
+  if (moreMenu) {
+    const exportItem = moreMenu.querySelector('[data-reader-action="exportHighlights"]');
+    const aiItem = moreMenu.querySelector('[data-reader-action="openAi"]');
+    if (exportItem) exportItem.disabled = !(isEpub || isPdf);
+    if (aiItem) aiItem.disabled = Boolean(document.getElementById('btnAi')?.disabled);
+  }
+  if (isEpub) {
+    if (mobilePrevious) mobilePrevious.disabled = state.currentChapterIndex <= 0;
+    if (mobileNext) {
+      mobileNext.disabled = state.currentChapterIndex >= Math.max(0, state.chapterPaths.length - 1);
+    }
+  } else {
+    if (mobilePrevious) mobilePrevious.disabled = !isPdf;
+    if (mobileNext) mobileNext.disabled = !isPdf;
   }
   if (isEpub) requestAnimationFrame(updateReadingProgress);
 }

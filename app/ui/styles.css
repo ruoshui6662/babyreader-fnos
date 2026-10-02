@@ -8124,3 +8124,209 @@ html[data-reader-surface="mobile"] .selection-menu-hint { order: 9; }
   font-size: 13px;
 }
 .annotation-menu [data-annotation-action="delete"] { color: #ff8a80; }
+
+
+/* ============================================================
+   Phone reading (M1): full-screen text; tapping the middle shows a top bar
+   and a two-row bottom bar that overlay the page (nothing reflows); a quiet
+   footer shows chapter and percent while the chrome is hidden.
+   ============================================================ */
+.mobile-topbar-action,
+.mobile-more-menu,
+.mobile-reading-footer { display: none; }
+.mobile-more-menu[hidden],
+.mobile-reading-footer[hidden] { display: none !important; }
+
+html[data-reader-surface="mobile"] body.mobile-reading .reader-shell-nav {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 195;
+  height: calc(var(--topbar-h) + env(safe-area-inset-top, 0px));
+  padding-top: env(safe-area-inset-top, 0px);
+  padding-left: calc(8px + env(safe-area-inset-left, 0px));
+  padding-right: calc(8px + env(safe-area-inset-right, 0px));
+  background: color-mix(in srgb, var(--reader-stage, var(--color-bg)) 94%, transparent);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  transform: translateY(-100%);
+  opacity: 0;
+  pointer-events: none;
+  transition: transform var(--dur-fast) var(--ease-out), opacity var(--dur-fast) var(--ease-out);
+}
+html[data-reader-surface="mobile"] body.mobile-reading.mobile-chrome-open .reader-shell-nav,
+html[data-reader-surface="mobile"] body.mobile-reading.mobile-chrome-open.mobile-topbar-hidden .reader-shell-nav {
+  transform: none;
+  opacity: 1;
+  pointer-events: auto;
+}
+html[data-reader-surface="mobile"] body.mobile-reading .reader-shell-nav .app-mark,
+html[data-reader-surface="mobile"] body.mobile-reading .reader-shell-nav .app-name,
+html[data-reader-surface="mobile"] body.mobile-reading .reader-shell-nav .reader-status,
+html[data-reader-surface="mobile"] body.mobile-reading #btnLibraryTheme { display: none !important; }
+html[data-reader-surface="mobile"] body.mobile-reading .topbar-left { min-width: 0; flex: 1 1 auto; gap: 4px; }
+html[data-reader-surface="mobile"] body.mobile-reading .file-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 15px;
+}
+html[data-reader-surface="mobile"] body.mobile-reading .file-name::before { content: none; }
+html[data-reader-surface="mobile"] body.mobile-reading .topbar-right { position: relative; gap: 2px; flex: 0 0 auto; }
+html[data-reader-surface="mobile"] body.mobile-reading .mobile-topbar-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+}
+html[data-reader-surface="mobile"] body.mobile-reading .mobile-topbar-action svg { width: 22px; height: 22px; stroke: currentColor; }
+html[data-reader-surface="mobile"] body.mobile-reading #btnMobileTopBookmark[aria-pressed="true"] svg { fill: currentColor; color: var(--accent); }
+html[data-reader-surface="mobile"] body.mobile-reading .mobile-more-menu {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  z-index: 230;
+  display: flex;
+  flex-direction: column;
+  min-width: 168px;
+  padding: 6px;
+  background: var(--color-bar, var(--surface));
+  border: 1px solid var(--color-separator, var(--border));
+  border-radius: 12px;
+  box-shadow: var(--shadow-float, 0 12px 32px rgba(0, 0, 0, 0.28));
+}
+html[data-reader-surface="mobile"] body.mobile-reading .mobile-more-menu button {
+  min-height: 44px;
+  padding: 0 14px;
+  color: var(--text);
+  text-align: left;
+  font-size: 15px;
+  background: transparent;
+  border: 0;
+  border-radius: 8px;
+}
+html[data-reader-surface="mobile"] body.mobile-reading .mobile-more-menu button:active { background: var(--surface-alt); }
+
+/* The text owns the whole screen; only the safe areas and the footer strip
+   are kept clear, so showing the chrome never moves a line. */
+html[data-reader-surface="mobile"] body.mobile-reading .reader,
+html[data-reader-surface="mobile"] body.mobile-reading.mobile-topbar-hidden .reader,
+html[data-reader-surface="mobile"] body.is-epub.mobile-reading.mobile-chrome-open .reader {
+  top: env(safe-area-inset-top, 0px);
+  bottom: calc(24px + env(safe-area-inset-bottom, 0px));
+  left: env(safe-area-inset-left, 0px);
+  right: env(safe-area-inset-right, 0px);
+  padding-bottom: 0;
+  overscroll-behavior: contain;
+}
+
+html[data-reader-surface="mobile"] body.mobile-reading .mobile-reading-footer {
+  position: fixed;
+  left: calc(20px + env(safe-area-inset-left, 0px));
+  right: calc(20px + env(safe-area-inset-right, 0px));
+  bottom: env(safe-area-inset-bottom, 0px);
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  height: 24px;
+  color: var(--text-dim);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  pointer-events: none;
+}
+html[data-reader-surface="mobile"] body.mobile-reading .mobile-reading-footer span:first-child {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+html[data-reader-surface="mobile"] body.mobile-reading .mobile-reader-toolbar {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 195;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 4px;
+  padding: 8px calc(8px + env(safe-area-inset-right, 0px)) calc(6px + env(safe-area-inset-bottom, 0px)) calc(8px + env(safe-area-inset-left, 0px));
+  background: color-mix(in srgb, var(--reader-stage, var(--color-bg)) 94%, transparent);
+  border-top: 1px solid color-mix(in srgb, var(--border) 50%, transparent);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+html[data-reader-surface="mobile"] body.mobile-reading .mobile-reader-progress,
+html[data-reader-surface="mobile"] body.mobile-reading .mobile-reader-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+html[data-reader-surface="mobile"] body.mobile-reading .mobile-reader-toolbar button {
+  flex: 1 1 0;
+  max-width: none;
+  min-width: 0;
+  min-height: 44px;
+  padding: 4px 2px;
+  color: var(--text);
+  font-size: 11px;
+  background: transparent;
+  border: 0;
+  border-radius: 10px;
+}
+html[data-reader-surface="mobile"] body.mobile-reading .mobile-reader-toolbar button:active { background: var(--surface-alt); }
+html[data-reader-surface="mobile"] body.mobile-reading .mobile-reader-toolbar button:disabled { opacity: 0.38; }
+html[data-reader-surface="mobile"] body.mobile-reading .mobile-reader-progress .mobile-chapter-button {
+  flex: 0 0 auto;
+  padding: 0 10px;
+  font-size: 13px;
+  color: var(--text-dim);
+}
+html[data-reader-surface="mobile"] body.mobile-reading .mobile-reader-progress .mobile-chapter-button[hidden] { display: none; }
+html[data-reader-surface="mobile"] body.mobile-reading .mobile-progress-track {
+  position: relative;
+  flex: 1 1 auto;
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  height: 44px;
+}
+html[data-reader-surface="mobile"] body.mobile-reading #mobileReaderProgress {
+  width: 100%;
+  height: 28px;
+  margin: 0;
+  accent-color: var(--accent);
+  background: transparent;
+}
+html[data-reader-surface="mobile"] body.mobile-reading .mobile-progress-bubble {
+  position: absolute;
+  bottom: calc(100% + 4px);
+  max-width: 70vw;
+  padding: 6px 10px;
+  overflow: hidden;
+  color: var(--button-text, #fff);
+  font-size: 12px;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  background: var(--accent);
+  border-radius: 8px;
+  transform: translateX(-50%);
+  pointer-events: none;
+}
+html[data-reader-surface="mobile"] body.mobile-reading .mobile-progress-bubble[hidden] { display: none; }
+html[data-reader-surface="mobile"] body.mobile-reading .mobile-reader-actions button {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+}
+@media (prefers-reduced-motion: reduce) {
+  html[data-reader-surface="mobile"] body.mobile-reading .reader-shell-nav { transition: none; }
+}

@@ -2245,7 +2245,7 @@ test('PDF bookmarks capture, toggle, display, and jump to the exact zero-based p
   assert.equal(api.readerPanels.bookmarks.enabled(), true);
   assert.equal(api.renderBookmarkButtonState(), false);
   assert.equal(window.document.getElementById('btnBookmarks').disabled, false);
-  assert.equal(window.document.getElementById('btnMobileBookmarks').disabled, false);
+  assert.equal(window.document.getElementById('btnMobileTopBookmark').disabled, false);
 
   window.browserHost.createBookmark = async (input) => ({ id: 'pdf-mark-1', ...input });
   window.browserHost.deleteBookmark = async (id) => ({ deleted: true, id });
@@ -4149,7 +4149,7 @@ test('topbar navigation controls use icon-only SVGs without changing actions', a
   }
 });
 
-test('text documents keep the shared desktop and mobile return-to-library entry', async () => {
+test('text documents keep the shared return-to-library entry on desktop and phone', async () => {
   const { window, api } = await createReaderDom();
   api.state.contentType = 'text';
   api.state.currentBookId = 'a'.repeat(64);
@@ -4157,13 +4157,13 @@ test('text documents keep the shared desktop and mobile return-to-library entry'
 
   api.updateTopbarState();
 
+  // Phones use the same top-bar back button (shown with the reading chrome).
   assert.equal(window.document.getElementById('btnBackToLibrary').hidden, false);
-  assert.equal(window.document.getElementById('btnMobileBackToLibrary').disabled, false);
+  assert.equal(window.document.getElementById('btnMobileBackToLibrary'), null);
 
   api.state.currentPath = '';
   api.updateTopbarState();
   assert.equal(window.document.getElementById('btnBackToLibrary').hidden, true);
-  assert.equal(window.document.getElementById('btnMobileBackToLibrary').disabled, true);
 });
 
 test('reader drawer separates fixed chrome from the scrollable panel viewport', async () => {
@@ -4194,10 +4194,25 @@ test('mobile continuous-scroll controls use flow chapter boundaries and a compac
   const document = window.document;
   const toolbar = document.getElementById('mobileReaderToolbar');
 
-  assert.equal(document.getElementById('mobileReaderChromeToggle')?.getAttribute('aria-label'), '显示阅读工具');
+  // No floating ⋯ toggle: tapping the page shows the chrome. Row 1 moves
+  // through the book, row 2 holds the five reading entries.
+  assert.equal(document.getElementById('mobileReaderChromeToggle'), null);
   assert.deepEqual(
-    [...toolbar.querySelectorAll('button')].map((button) => button.dataset.readerAction),
-    ['backToLibrary', 'openToc', 'openBookmarks', 'openSearch', 'openNotes', 'highlight', 'openSettings']
+    [...toolbar.querySelectorAll('.mobile-reader-progress button')].map((button) => button.dataset.readerAction),
+    ['previousChapter', 'nextChapter']
+  );
+  assert.equal(toolbar.querySelector('.mobile-reader-progress input[type="range"]')?.id, 'mobileReaderProgress');
+  assert.deepEqual(
+    [...toolbar.querySelectorAll('.mobile-reader-actions button')].map((button) => button.dataset.readerAction),
+    ['openToc', 'openNotes', 'openAi', 'toggleTheme', 'openSettings']
+  );
+  assert.deepEqual(
+    [...document.querySelectorAll('.topbar-right .mobile-topbar-action')].map((button) => button.id),
+    ['btnMobileTopSearch', 'btnMobileTopBookmark', 'btnMobileMore']
+  );
+  assert.deepEqual(
+    [...document.querySelectorAll('#mobileMoreMenu button')].map((button) => button.dataset.readerAction),
+    ['openBookmarks', 'exportHighlights', 'openAi']
   );
   assert.equal(document.getElementById('btnMobilePreviousPage'), null);
   assert.equal(document.getElementById('btnMobileNextPage'), null);
@@ -4209,10 +4224,50 @@ test('mobile continuous-scroll controls use flow chapter boundaries and a compac
   api.state.currentPath = 'fixture.epub';
   api.setMobileChromeOpen(true);
   assert.equal(document.body.dataset.mobileChrome, 'open');
+  assert.equal(document.body.classList.contains('mobile-reading'), true);
   assert.equal(toolbar.hidden, false);
+  assert.equal(document.getElementById('mobileReadingFooter').hidden, true);
   api.setMobileChromeOpen(false);
   assert.equal(document.body.dataset.mobileChrome, 'closed');
   assert.equal(toolbar.hidden, true);
+  // While the chrome is hidden a quiet footer shows where the reader is.
+  assert.equal(document.getElementById('mobileReadingFooter').hidden, false);
+});
+
+test('phone tap zones turn pages at the edges and show the chrome in the middle', async () => {
+  const { window, api } = await createReaderDom();
+  const document = window.document;
+  const reader = document.getElementById('reader');
+  document.documentElement.dataset.readerSurface = 'mobile';
+  api.state.contentType = 'epub';
+  api.state.currentPath = 'fixture.epub';
+  api.state.effectiveReadingMode = 'double';
+  api.state.pageGroupCount = 5;
+  api.state.pageGroup = 2;
+  const turns = [];
+  const recordTurn = () => turns.push(api.state.pageGroup);
+  api.setupReaderNavigation();
+  const width = window.innerWidth;
+  const tap = (x) => reader.dispatchEvent(new window.MouseEvent('click', { bubbles: true, clientX: x, clientY: 200 }));
+
+  tap(width - 10);
+  recordTurn();
+  tap(10);
+  recordTurn();
+  assert.equal(document.body.classList.contains('mobile-chrome-open'), false);
+  tap(width / 2);
+  assert.equal(document.body.classList.contains('mobile-chrome-open'), true);
+  // With the chrome open any tap only hides it.
+  tap(width - 10);
+  assert.equal(document.body.classList.contains('mobile-chrome-open'), false);
+  assert.equal(api.state.pageGroup, 2);
+  assert.deepEqual(turns, [3, 2]);
+
+  // Scrolling books: any tap shows the chrome.
+  api.state.effectiveReadingMode = 'scroll';
+  tap(width - 10);
+  assert.equal(document.body.classList.contains('mobile-chrome-open'), true);
+  assert.equal(api.state.pageGroup, 2);
 });
 
 test('mobile reader hides the topbar while scrolling down and restores it while scrolling up', async () => {
@@ -4235,25 +4290,31 @@ test('mobile reader hides the topbar while scrolling down and restores it while 
   assert.equal(window.document.body.classList.contains('mobile-topbar-hidden'), false);
 });
 
-test('mobile devices default to continuous reading without overwriting the desktop preference', async () => {
+test('phones page left and right by default and keep their own mode apart from the desktop one', async () => {
   const mobile = await createReaderDom();
   mobile.window.document.documentElement.dataset.readerSurface = 'mobile';
-  mobile.api.applyUserState({ settings: { readingMode: 'double', continuousScroll: false }, books: {} });
+  mobile.api.applyUserState({ settings: { readingMode: 'scroll', continuousScroll: true }, books: {} });
 
-  assert.equal(mobile.api.state.readingMode, 'scroll');
-  assert.equal(mobile.api.state.effectiveReadingMode, 'scroll');
-  assert.equal(mobile.api.currentUserSettings().readingMode, 'double');
+  assert.equal(mobile.api.state.readingMode, 'double');
+  assert.equal(mobile.api.currentUserSettings().readingMode, 'scroll');
+  assert.equal(mobile.api.currentUserSettings().mobileReadingMode, 'paged');
 
-  const legacyMobile = await createReaderDom();
-  legacyMobile.window.document.documentElement.dataset.readerSurface = 'mobile';
-  legacyMobile.api.applyUserState({ settings: { continuousScroll: false }, books: {} });
-  assert.equal(legacyMobile.api.state.readingMode, 'scroll');
-  assert.equal(legacyMobile.api.currentUserSettings().readingMode, 'double');
+  // Choosing 上下滚动 on the phone saves only the phone's mode.
+  mobile.api.state.readingMode = 'scroll';
+  assert.equal(mobile.api.currentUserSettings().readingMode, 'scroll');
+  assert.equal(mobile.api.currentUserSettings().mobileReadingMode, 'scroll');
+
+  const phoneScroll = await createReaderDom();
+  phoneScroll.window.document.documentElement.dataset.readerSurface = 'mobile';
+  phoneScroll.api.applyUserState({ settings: { readingMode: 'double', mobileReadingMode: 'scroll' }, books: {} });
+  assert.equal(phoneScroll.api.state.readingMode, 'scroll');
+  assert.equal(phoneScroll.api.currentUserSettings().readingMode, 'double');
 
   const desktop = await createReaderDom();
   desktop.window.document.documentElement.dataset.readerSurface = 'desktop';
-  desktop.api.applyUserState({ settings: { readingMode: 'double', continuousScroll: false }, books: {} });
+  desktop.api.applyUserState({ settings: { readingMode: 'double', mobileReadingMode: 'scroll' }, books: {} });
   assert.equal(desktop.api.state.readingMode, 'double');
+  assert.equal(desktop.api.currentUserSettings().mobileReadingMode, 'scroll');
 });
 
 test('PDF layout preference and shared highlight color keep EPUB controls intact', async () => {
@@ -4504,12 +4565,12 @@ test('bookmark toolbar, Drawer list, and mobile entry are enabled for EPUB and P
 
   api.renderToc();
   const desktopButton = document.getElementById('btnBookmarks');
-  const mobileButton = document.getElementById('btnMobileBookmarks');
+  const mobileButton = document.querySelector('#mobileMoreMenu [data-reader-action="openBookmarks"]');
   assert.equal(desktopButton.disabled, false);
   assert.equal(desktopButton.dataset.readerStatus, undefined);
   assert.equal(api.readerPanels.bookmarks.enabled(), true);
   assert.ok(mobileButton);
-  assert.equal(mobileButton.disabled, false);
+  assert.equal(document.getElementById('btnMobileTopBookmark').disabled, false);
 
   api.renderBookmarkList();
   assert.equal(document.querySelectorAll('#bookmarkList [data-bookmark-id]').length, 1);

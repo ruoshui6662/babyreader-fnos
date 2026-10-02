@@ -264,6 +264,10 @@ class UserStorage {
           : Number.isFinite(state.settings.pageMargin) ? state.settings.pageMargin : 40,
         readingMode,
         continuousScroll: readingMode === 'scroll',
+        // Phones keep their own mode; default 左右翻页.
+        mobileReadingMode: ['paged', 'scroll'].includes(settings.mobileReadingMode)
+          ? settings.mobileReadingMode
+          : ['paged', 'scroll'].includes(state.settings.mobileReadingMode) ? state.settings.mobileReadingMode : 'paged',
         pdfLayoutMode: allowedPdfLayoutModes.has(settings.pdfLayoutMode)
           ? settings.pdfLayoutMode
           : allowedPdfLayoutModes.has(state.settings.pdfLayoutMode)

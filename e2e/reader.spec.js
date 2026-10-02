@@ -1,7 +1,7 @@
 'use strict';
 
 const { test, expect } = require('@playwright/test');
-const { resetEpubFixtureState, resetReaderSettings } = require('./helpers/reader');
+const { resetEpubFixtureState, resetReaderSettings, showMobileReaderChrome } = require('./helpers/reader');
 
 const APP_PATH = '/app/zhenshu/';
 
@@ -1710,11 +1710,14 @@ test('mobile viewport keeps the reader chrome collapsed until requested', async 
   await openEpubFixture(page);
 
   await expect(page.locator('#mobileReaderToolbar')).toBeHidden();
-  await page.locator('#mobileReaderChromeToggle').click();
-  await expect(page.locator('#mobileReaderToolbar')).toBeVisible();
+  await expect(page.locator('#mobileReadingFooter')).toBeVisible();
+  await showMobileReaderChrome(page);
+  await expect(page.locator('#mobileReadingFooter')).toBeHidden();
   await page.locator('#btnMobileSettings').click();
   await expect(page.locator('#readerSettingsSheet')).toBeVisible();
-  await expect(page.locator('#settingReadingMode')).toHaveValue('scroll');
+  // Phones default to 左右翻页.
+  await expect(page.locator('#settingReadingMode')).toHaveValue('double');
+  await expect(page.locator('#settingReadingMode option:checked')).toHaveText('左右翻页');
   const mobileSurface = await page.locator('#readerSettingsSheet').evaluate((element) => {
     const style = getComputedStyle(element);
     const backdrop = document.getElementById('readerSettingsBackdrop');
@@ -1749,9 +1752,57 @@ test('mobile Markdown reader exposes an enabled return-to-library action', async
   });
 
   await openFixtureBook(page);
-  await page.locator('#mobileReaderChromeToggle').click();
-  await expect(page.locator('#mobileReaderToolbar')).toBeVisible();
-  await expect(page.locator('#btnMobileBackToLibrary')).toBeEnabled();
-  await page.locator('#btnMobileBackToLibrary').click();
+  await showMobileReaderChrome(page);
+  await expect(page.locator('#btnBackToLibrary')).toBeVisible();
+  await expect(page.locator('#btnBackToLibrary')).toBeEnabled();
+  await page.locator('#btnBackToLibrary').click();
   await expect(page.locator('.library-view h1')).toHaveText('书库');
+});
+
+test('phone back gesture closes the open panel first, then returns to the shelf', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.addInitScript(() => {
+    Object.defineProperty(navigator, 'userAgent', {
+      configurable: true,
+      get: () => 'Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 Chrome/120 Mobile Safari/537.36'
+    });
+  });
+
+  await openEpubFixture(page);
+  if (await page.locator('#readerDrawer').isVisible()) await page.locator('#btnCloseSettings').click();
+  await showMobileReaderChrome(page);
+  await page.locator('#btnMobileToc').click();
+  await expect(page.locator('#readerDrawer')).toBeVisible();
+  await page.goBack();
+  await expect(page.locator('#readerDrawer')).toBeHidden();
+  await expect(page.locator('body')).not.toHaveClass(/is-library/);
+  await page.goBack();
+  await expect(page.locator('.library-view h1')).toHaveText('书库');
+});
+
+test('phone tap zones page through the book and the progress bar jumps chapters', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.addInitScript(() => {
+    Object.defineProperty(navigator, 'userAgent', {
+      configurable: true,
+      get: () => 'Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 Chrome/120 Mobile Safari/537.36'
+    });
+  });
+
+  await openEpubFixture(page);
+  if (await page.locator('#readerDrawer').isVisible()) await page.locator('#btnCloseSettings').click();
+  await expect(page.locator('body')).toHaveAttribute('data-reading-mode', 'double');
+  const before = await page.evaluate(() => document.getElementById('readingProgress').textContent);
+  await page.mouse.click(370, 420);
+  await expect.poll(() => page.evaluate(() => document.getElementById('readingProgress').textContent)).not.toBe(before);
+  await expect(page.locator('#mobileReaderToolbar')).toBeHidden();
+
+  await showMobileReaderChrome(page);
+  await page.locator('#mobileReaderProgress').evaluate((slider) => {
+    slider.value = '900';
+    slider.dispatchEvent(new Event('input'));
+    slider.dispatchEvent(new Event('change'));
+  });
+  await expect(page.locator('#readingProgress')).toContainText('第 3/');
+  await expect(page.locator('#mobileReadingFooterChapter')).not.toHaveText('');
 });

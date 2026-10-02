@@ -351,6 +351,12 @@ async function copySelectionText(text) {
     // Fall through to the legacy textarea path.
   }
 
+  // The legacy path selects a hidden textarea; put back whatever the reader
+  // had selected by then (the clipboard API may have failed late).
+  const selection = window.getSelection?.();
+  const savedRanges = selection
+    ? Array.from({ length: selection.rangeCount }, (_, index) => selection.getRangeAt(index).cloneRange())
+    : [];
   try {
     const textarea = document.createElement('textarea');
     textarea.value = text;
@@ -361,6 +367,10 @@ async function copySelectionText(text) {
     textarea.select();
     const copied = document.execCommand?.('copy') === true;
     textarea.remove();
+    if (selection) {
+      selection.removeAllRanges();
+      savedRanges.forEach((range) => selection.addRange(range));
+    }
     showHighlightHint(copied ? '已复制' : '复制失败，请重试');
     return copied;
   } catch {

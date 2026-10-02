@@ -779,6 +779,7 @@ function applyTheme(theme, persist = true) {
   if (persist) {
     localStorage.setItem('zhenshu-theme', state.theme);
   }
+  if (typeof syncMobileReadingBar === 'function') syncMobileReadingBar();
 
   applyEpubTheme();
 }

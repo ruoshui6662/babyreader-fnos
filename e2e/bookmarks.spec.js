@@ -7,7 +7,8 @@ const {
   resetEpubFixtureState,
   resetReaderSettings,
   waitForBookmarkRequest,
-  waitForSettingsSave
+  waitForSettingsSave,
+  showMobileReaderChrome
 } = require('./helpers/reader');
 
 const APP_PATH = '/app/zhenshu/';
@@ -221,13 +222,20 @@ test.describe('Mobile EPUB bookmarks', () => {
 
   test('mobile entry opens the bookmark Drawer and keeps a 44px touch target', async ({ page }) => {
     await expect(page.locator('#mobileReaderToolbar')).toBeHidden();
-    await page.locator('#mobileReaderChromeToggle').click();
-    const mobileBookmarks = page.locator('#btnMobileBookmarks');
+    await showMobileReaderChrome(page);
+    // The top bar marks the page; the list lives in the ⋯ menu.
+    const topBookmark = page.locator('#btnMobileTopBookmark');
+    await expect(topBookmark).toBeVisible();
+    await expect(topBookmark).toBeEnabled();
+    await page.locator('#btnMobileMore').click();
+    const mobileBookmarks = page.locator('#mobileMoreMenu [data-reader-action="openBookmarks"]');
     await expect(mobileBookmarks).toBeVisible();
     await expect(mobileBookmarks).toBeEnabled();
-    const box = await mobileBookmarks.boundingBox();
-    expect(box).not.toBeNull();
-    expect(box.height).toBeGreaterThanOrEqual(44);
+    for (const target of [topBookmark, mobileBookmarks]) {
+      const box = await target.boundingBox();
+      expect(box).not.toBeNull();
+      expect(box.height).toBeGreaterThanOrEqual(44);
+    }
 
     await mobileBookmarks.click();
     await expect(page.locator('#readerDrawer')).toBeVisible();

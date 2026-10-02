@@ -2,12 +2,12 @@
 <html lang="zh-CN">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <title>枕书</title>
   <link rel="icon" type="image/svg+xml" href="images/logo.svg">
   <link rel="icon" type="image/png" sizes="64x64" href="images/icon_64.png">
   <link rel="apple-touch-icon" href="images/icon_256.png">
-  <link rel="stylesheet" href="styles.css?v=85">
+  <link rel="stylesheet" href="styles.css?v=86">
 </head>
 <body class="is-welcome">
   <!-- Reader Shell: low-distraction navigation with stable legacy IDs -->
@@ -33,6 +33,20 @@
     </div>
     <div class="topbar-right">
       <button class="reader-nav-button library-theme-toggle" id="btnLibraryTheme" type="button" data-reader-action="toggleTheme" aria-label="切换浅色模式" title="切换浅色模式"></button>
+      <button class="reader-nav-button mobile-topbar-action" id="btnMobileTopSearch" type="button" data-reader-action="openSearch" data-reader-panel="search" aria-controls="readerSearchSheet" aria-expanded="false" aria-label="搜索本书" title="搜索本书">
+        <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="10.5" cy="10.5" r="6.5"></circle><path d="m15.5 15.5 5 5"></path></svg>
+      </button>
+      <button class="reader-nav-button mobile-topbar-action" id="btnMobileTopBookmark" type="button" data-reader-action="toggleBookmark" aria-pressed="false" aria-label="添加当前书签" title="添加当前书签">
+        <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6.5 4.5h11v15l-5.5-3.6-5.5 3.6z"></path></svg>
+      </button>
+      <button class="reader-nav-button mobile-topbar-action" id="btnMobileMore" type="button" aria-haspopup="menu" aria-expanded="false" aria-controls="mobileMoreMenu" aria-label="更多" title="更多">
+        <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="5.5" cy="12" r="1"></circle><circle cx="12" cy="12" r="1"></circle><circle cx="18.5" cy="12" r="1"></circle></svg>
+      </button>
+      <div class="mobile-more-menu" id="mobileMoreMenu" role="menu" hidden>
+        <button type="button" role="menuitem" data-reader-action="openBookmarks" data-reader-panel="bookmarks">书签列表</button>
+        <button type="button" role="menuitem" data-reader-action="exportHighlights">导出标记与想法</button>
+        <button type="button" role="menuitem" data-reader-action="openAi">AI 问书</button>
+      </div>
     </div>
   </header>
 
@@ -515,16 +529,30 @@
     </div>
   </section>
 
-  <button class="mobile-reader-chrome-toggle" id="mobileReaderChromeToggle" type="button" hidden aria-expanded="false" aria-label="显示阅读工具" title="显示阅读工具">⋯</button>
+  <!-- Phone reading chrome: tap the middle of the page to show or hide it.
+       Row 1: previous chapter · progress · next chapter. Row 2: five entries. -->
   <nav class="mobile-reader-toolbar" id="mobileReaderToolbar" hidden aria-label="移动端阅读工具栏">
-    <button type="button" id="btnMobileBackToLibrary" data-reader-action="backToLibrary" aria-label="返回书架">书架</button>
-    <button type="button" id="btnMobileToc" data-reader-action="openToc" data-reader-panel="toc" aria-controls="readerDrawer" aria-expanded="false" aria-label="打开目录">目录</button>
-    <button type="button" id="btnMobileBookmarks" data-reader-action="openBookmarks" data-reader-panel="bookmarks" aria-controls="readerDrawer" aria-expanded="false" aria-label="打开书签" disabled>书签</button>
-    <button type="button" id="btnMobileSearch" data-reader-action="openSearch" data-reader-panel="search" aria-controls="readerSearchSheet" aria-expanded="false" aria-label="搜索本书" disabled>搜索</button>
-    <button type="button" id="btnMobileNotes" data-reader-action="openNotes" data-reader-panel="notes" aria-controls="readerDrawer" aria-expanded="false" aria-label="打开标记与想法">笔记</button>
-    <button type="button" id="btnMobileHighlight" data-reader-action="highlight" aria-label="创建或编辑划线">划线</button>
-    <button type="button" id="btnMobileSettings" data-reader-action="openSettings" data-reader-panel="settings" aria-controls="readerSettingsSheet" aria-expanded="false" aria-label="打开显示设置">设置</button>
+    <div class="mobile-reader-progress">
+      <button type="button" class="mobile-chapter-button" id="btnMobilePreviousChapter" data-reader-action="previousChapter" aria-label="上一章">上一章</button>
+      <div class="mobile-progress-track">
+        <input type="range" id="mobileReaderProgress" min="0" max="1000" step="1" value="0" aria-label="阅读进度">
+        <output class="mobile-progress-bubble" id="mobileReaderProgressBubble" for="mobileReaderProgress" hidden></output>
+      </div>
+      <button type="button" class="mobile-chapter-button" id="btnMobileNextChapter" data-reader-action="nextChapter" aria-label="下一章">下一章</button>
+    </div>
+    <div class="mobile-reader-actions">
+      <button type="button" id="btnMobileToc" data-reader-action="openToc" data-reader-panel="toc" aria-controls="readerDrawer" aria-expanded="false" aria-label="打开目录">目录</button>
+      <button type="button" id="btnMobileNotes" data-reader-action="openNotes" data-reader-panel="notes" aria-controls="readerDrawer" aria-expanded="false" aria-label="打开标记与想法">笔记</button>
+      <button type="button" id="btnMobileAi" data-reader-action="openAi" aria-controls="aiModal" aria-label="打开 AI 问书">AI</button>
+      <button type="button" id="btnMobileTheme" data-reader-action="toggleTheme" aria-label="切换夜间模式">夜间</button>
+      <button type="button" id="btnMobileSettings" data-reader-action="openSettings" data-reader-panel="settings" aria-controls="readerSettingsSheet" aria-expanded="false" aria-label="打开显示设置">设置</button>
+    </div>
   </nav>
+  <!-- Shown while the chrome is hidden: where you are, quietly. -->
+  <div class="mobile-reading-footer" id="mobileReadingFooter" aria-hidden="true" hidden>
+    <span id="mobileReadingFooterChapter"></span>
+    <span id="mobileReadingFooterPercent"></span>
+  </div>
 
   <!-- Reader view -->
   <div class="reader is-welcome" id="reader">
@@ -599,30 +627,30 @@
   <script src="core/utils.js?v=28"></script>
   <script src="core/api.js?v=30"></script>
   <script src="core/reader-route.js?v=1"></script>
-  <script src="core/user-state.js?v=37"></script>
+  <script src="core/user-state.js?v=38"></script>
   <script src="reader/annotations.js?v=2"></script>
-  <script src="reader/device-profile.js?v=32"></script>
-  <script src="reader/epub.js?v=31"></script>
+  <script src="reader/device-profile.js?v=33"></script>
+  <script src="reader/epub.js?v=32"></script>
   <script src="reader/document.js?v=28"></script>
   <script src="reader/editor.js?v=28"></script>
-  <script src="reader/highlights.js?v=37"></script>
+  <script src="reader/highlights.js?v=38"></script>
   <script src="reader/ai.js?v=4"></script>
   <script src="reader/ai-index-manager.js?v=1"></script>
-  <script src="reader/selection-menu.js?v=5"></script>
+  <script src="reader/selection-menu.js?v=6"></script>
   <script src="reader/pdf-notes-export.js?v=1"></script>
   <script src="reader/actions.js?v=28"></script>
   <script src="reader/notes-panel.js?v=4"></script>
-  <script src="reader/progress.js?v=35"></script>
-  <script src="reader/bookmarks.js?v=3"></script>
+  <script src="reader/progress.js?v=36"></script>
+  <script src="reader/bookmarks.js?v=4"></script>
   <script src="reader/pagination.js?v=36"></script>
-  <script src="reader/settings.js?v=32"></script>
+  <script src="reader/settings.js?v=33"></script>
   <script src="reader/jump-back.js?v=1"></script>
   <script src="reader/navigation.js?v=30"></script>
   <script src="reader/pdf-annotation-geometry.js?v=1"></script>
   <script src="reader/pdf-annotations.js?v=1"></script>
   <script src="reader/pdf-render-scheduler.js?v=1"></script>
-  <script src="reader/pdf.js?v=14"></script>
-  <script src="reader/lifecycle.js?v=32"></script>
+  <script src="reader/pdf.js?v=15"></script>
+  <script src="reader/lifecycle.js?v=33"></script>
   <script src="reader/search.js?v=4"></script>
   <script src="shell/drawer.js?v=32"></script>
   <script src="library/reorder.js?v=1"></script>
@@ -630,6 +658,6 @@
   <script src="library/import.js?v=1"></script>
   <script src="library/organization.js?v=12"></script>
   <script src="library/view.js?v=36"></script>
-  <script src="app.js?v=38"></script>
+  <script src="app.js?v=39"></script>
 </body>
 </html>

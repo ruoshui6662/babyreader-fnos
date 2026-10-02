@@ -100,6 +100,8 @@ test.describe('Phone text selection and highlighting', () => {
 
     // The next one-tap 划线 reuses the last style.
     await page.locator('#annotationMenu [data-annotation-action="copy"]').click();
+    await expect(page.locator('#annotationMenu')).toBeHidden();
+    await page.waitForTimeout(300);
     await selectLikeAPhone(page, 30, 40);
     await page.locator('#selectionMenu [data-selection-action="highlight"]').click();
     await expect.poll(() => page.locator('.br-highlight-box[data-annotation-style="line"]').evaluateAll(

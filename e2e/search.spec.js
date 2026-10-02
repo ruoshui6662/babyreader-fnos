@@ -2,7 +2,8 @@ const { test, expect, devices } = require('@playwright/test');
 const {
   openEpubFixture,
   resetEpubFixtureState,
-  resetReaderSettings
+  resetReaderSettings,
+  showMobileReaderChrome
 } = require('./helpers/reader');
 
 const APP_PATH = '/app/zhenshu/';
@@ -305,18 +306,15 @@ test.describe('mobile search entry', () => {
 
   test('opens search from the mobile toolbar', async ({ page }) => {
     await openEpubFixture(page);
-    await expect(page.locator('#mobileReaderChromeToggle')).toBeVisible();
-    await page.locator('#mobileReaderChromeToggle').click();
-    await expect(page.locator('#mobileReaderToolbar')).toBeVisible();
-    await runSearch(page, 'E2E EPUB Chapter 1', '#btnMobileSearch');
+    await showMobileReaderChrome(page);
+    await runSearch(page, 'E2E EPUB Chapter 1', '#btnMobileTopSearch');
     await expect(page.locator('.reader-search-result')).toContainText('E2E EPUB Chapter 1');
   });
 
   test('opens search from the mobile toolbar for a Markdown book', async ({ page }) => {
     await openLibraryBook(page, 'E2E Markdown', 'E2E Reader');
-    await expect(page.locator('#mobileReaderChromeToggle')).toBeVisible();
-    await page.locator('#mobileReaderChromeToggle').click();
-    await runSearch(page, 'E2E Reader', '#btnMobileSearch');
+    await showMobileReaderChrome(page);
+    await runSearch(page, 'E2E Reader', '#btnMobileTopSearch');
     await expect(page.locator('.reader-search-result')).toContainText('E2E Reader');
   });
 });
