@@ -743,6 +743,44 @@ async function performHighlightEditorSave() {
   }
 }
 
+// Recolour or restyle one annotation without opening the editor (the phone
+// annotation bubble). Returns the updated record, or null.
+async function updateAnnotationAppearance(id, { color, style } = {}) {
+  if (!id) return null;
+  const changes = {};
+  if (['yellow', 'green', 'blue', 'pink'].includes(color)) changes.color = color;
+  if (['marker', 'wave', 'line'].includes(style)) changes.style = style;
+  if (!Object.keys(changes).length) return null;
+  if (state.contentType === 'pdf') {
+    const bookId = state.currentBookId;
+    try {
+      const updated = await window.browserHost.updatePdfAnnotation(id, changes, bookId);
+      if (state.currentBookId === bookId && state.contentType === 'pdf') {
+        setPdfAnnotationRendererRecords(bookId, pdfAnnotationCache(bookId));
+        if (typeof renderNotesPanel === 'function') renderNotesPanel();
+      }
+      return updated || changes;
+    } catch (error) {
+      showHighlightHint(error.message || '标记更新失败，请重试');
+      return null;
+    }
+  }
+  const highlights = loadHighlights();
+  const index = highlights.findIndex((item) => item.id === id);
+  if (index < 0) return null;
+  highlights[index] = { ...highlights[index], ...changes, updatedAt: new Date().toISOString() };
+  saveHighlights(highlights);
+  if (typeof renderNotesPanel === 'function') renderNotesPanel();
+  redrawDomHighlights();
+  try {
+    await queueHighlightSave();
+  } catch {
+    showHighlightHint('标记更新失败，请重试');
+    return null;
+  }
+  return highlights[index];
+}
+
 async function deleteHighlightById(id) {
   if (!id) return false;
   if (!window.confirm('删除这条标记及其想法？书籍原文不会改变，此操作无法撤销。')) return false;
@@ -885,6 +923,9 @@ function drawHighlightRects(id, range, color = 'yellow', style = 'marker') {
     box.addEventListener('click', (event) => {
       event.preventDefault();
       event.stopPropagation();
+      // Phones get the compact annotation bubble; desktops the full editor.
+      if (typeof isMobileReaderSurface === 'function' && isMobileReaderSurface()
+          && typeof openAnnotationMenu === 'function' && openAnnotationMenu(id)) return;
       openHighlightEditor(id);
     });
     layer.appendChild(box);

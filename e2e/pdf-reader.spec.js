@@ -1345,7 +1345,8 @@ test('mobile PDF text selection still exposes the shared marking actions', async
 
   await expect(page.locator('#selectionMenu')).toBeVisible();
   await expect(page.locator('#btnMobileHighlight')).toBeDisabled();
-  await expect(page.locator('#selectionMenu [data-selection-action="marker"]')).toBeVisible();
+  // Phones show the one-tap 划线; the style is chosen afterwards in the bubble.
+  await expect(page.locator('#selectionMenu [data-selection-action="highlight"]')).toBeVisible();
   const bounds = await page.locator('#selectionMenu').evaluate((menu) => {
     const rect = menu.getBoundingClientRect();
     return { left: rect.left, right: rect.right, viewportWidth: innerWidth };

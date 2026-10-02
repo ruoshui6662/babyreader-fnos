@@ -8050,3 +8050,77 @@ button.ui-close,
   font: inherit;
   font-size: 12px;
 }
+
+/* 选区菜单（2026-10 移动端）：桌面保留三种样式按钮与颜色；手机只显示单行
+   “划线 · 写想法 · 复制 · 问 AI · 搜索”，划线后再弹出划线气泡改颜色和样式。 */
+.selection-menu [data-selection-action="highlight"] { display: none; }
+html[data-reader-surface="mobile"] .selection-menu:not(.annotation-menu) {
+  flex-wrap: nowrap;
+  gap: 0;
+  padding: 3px;
+  border-radius: 12px;
+}
+html[data-reader-surface="mobile"] .selection-menu [data-selection-action="highlight"] { display: inline-flex; order: 1; }
+html[data-reader-surface="mobile"] .selection-menu [data-selection-action="thought"] { order: 2; }
+html[data-reader-surface="mobile"] .selection-menu [data-selection-action="copy"] { order: 3; }
+html[data-reader-surface="mobile"] .selection-menu [data-selection-action="ai"] { order: 4; }
+html[data-reader-surface="mobile"] .selection-menu [data-selection-action="search"] { order: 5; }
+html[data-reader-surface="mobile"] .selection-menu [data-selection-action="marker"],
+html[data-reader-surface="mobile"] .selection-menu [data-selection-action="wave"],
+html[data-reader-surface="mobile"] .selection-menu [data-selection-action="line"],
+html[data-reader-surface="mobile"] .selection-menu .selection-color-palette { display: none; }
+html[data-reader-surface="mobile"] .selection-menu:not(.annotation-menu) > button {
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 44px;
+  padding: 6px 11px;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+}
+html[data-reader-surface="mobile"] .selection-menu-hint { order: 9; }
+
+/* 划线气泡：颜色与样式一行，操作一行 */
+.annotation-menu {
+  flex-direction: column;
+  flex-wrap: nowrap;
+  gap: 4px;
+  padding: 6px;
+  border-radius: 12px;
+}
+.annotation-menu-look,
+.annotation-menu-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.annotation-menu-look { padding: 2px 4px; }
+.annotation-menu .annotation-menu-look [data-annotation-color] {
+  width: 28px;
+  min-width: 28px;
+  height: 28px;
+  min-height: 28px;
+  padding: 0;
+  border: 2px solid transparent;
+  border-radius: 50%;
+}
+.annotation-menu [data-annotation-color="yellow"] { background-color: #f5ce56; }
+.annotation-menu [data-annotation-color="green"] { background-color: #82c99a; }
+.annotation-menu [data-annotation-color="blue"] { background-color: #78b4ef; }
+.annotation-menu [data-annotation-color="pink"] { background-color: #e8a1be; }
+.annotation-menu .annotation-menu-look [data-annotation-color][aria-pressed="true"] { border-color: #fff; }
+.annotation-menu-divider {
+  width: 1px;
+  height: 20px;
+  margin: 0 4px;
+  background: rgba(255, 255, 255, .24);
+}
+.annotation-menu [data-annotation-style][aria-pressed="true"] {
+  background: rgba(255, 255, 255, .18);
+}
+.annotation-menu-actions > button {
+  flex: 1 1 auto;
+  min-height: 40px;
+  font-size: 13px;
+}
+.annotation-menu [data-annotation-action="delete"] { color: #ff8a80; }

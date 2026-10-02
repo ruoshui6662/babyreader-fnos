@@ -90,6 +90,8 @@ function setupReaderNavigation() {
     if (isPaginationInteractionTarget(event.target)) return;
     const selection = window.getSelection?.();
     if (selection && !selection.isCollapsed) return;
+    // The tap that dismissed a selection or annotation bubble does nothing else.
+    if (typeof selectionMenuRecentlyDismissed === 'function' && selectionMenuRecentlyDismissed()) return;
     setMobileChromeOpen(!isMobileChromeOpen());
     if (isMobileChromeOpen()) scheduleMobileChromeClose();
   });

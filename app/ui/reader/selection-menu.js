@@ -5,6 +5,33 @@
 let _selectionMenu = null;
 let _activeSelectionSession = null;
 let _selectionMenuBound = false;
+let _annotationMenu = null;
+let _activeAnnotationId = null;
+let _selectionDismissedAt = 0;
+const ANNOTATION_STYLE_KEY = 'zhenshu-annotation-style';
+
+function isPhoneReader() {
+  return typeof isMobileReaderSurface === 'function' && isMobileReaderSurface();
+}
+
+// The style a one-tap “划线” uses: the last one chosen in the bubble.
+function preferredAnnotationStyle() {
+  try {
+    const saved = localStorage.getItem(ANNOTATION_STYLE_KEY);
+    if (['marker', 'wave', 'line'].includes(saved)) return saved;
+  } catch {}
+  return 'marker';
+}
+
+function rememberAnnotationStyle(style) {
+  try { localStorage.setItem(ANNOTATION_STYLE_KEY, style); } catch {}
+}
+
+// A tap that only dismissed the selection or a bubble must not also toggle
+// the reading chrome or turn the page.
+function selectionMenuRecentlyDismissed() {
+  return Date.now() - _selectionDismissedAt < 450;
+}
 
 const selectionActions = Object.freeze({
   copy: async () => {
@@ -14,6 +41,7 @@ const selectionActions = Object.freeze({
     closeSelectionMenu({ clearSelection: copied });
     return copied;
   },
+  highlight: () => createSelectionAnnotation(preferredAnnotationStyle()),
   marker: () => createSelectionAnnotation('marker'),
   wave: () => createSelectionAnnotation('wave'),
   line: () => createSelectionAnnotation('line'),
@@ -105,7 +133,9 @@ function ensureSelectionMenu() {
   menu.setAttribute('role', 'toolbar');
   menu.setAttribute('aria-label', '选中文本操作');
 
+  // “划线” is the phone's one-tap action; desktops show the three styles.
   const items = [
+    ['highlight', '划线'],
     ['copy', '复制'],
     ['marker', '马克笔'],
     ['wave', '波浪线'],
@@ -165,22 +195,38 @@ function ensureSelectionMenu() {
   return menu;
 }
 
-function positionSelectionMenu(session) {
-  const menu = ensureSelectionMenu();
+// Desktop: above the selection. Phone: below it, clear of the system
+// copy/share bar and the selection handles; above only when there is no room.
+function placeFloatingMenu(menu, anchor) {
   const margin = 8;
   const menuWidth = menu.offsetWidth || 360;
   const menuHeight = menu.offsetHeight || 44;
-  const left = Math.max(margin, Math.min(
-    window.innerWidth - menuWidth - margin,
-    (session.menuAnchor || session.anchor).left - menuWidth / 2
-  ));
-  const anchor = session.menuAnchor || session.anchor;
-  const above = anchor.top - menuHeight - 12;
-  const top = above >= margin
-    ? above
-    : Math.min(window.innerHeight - menuHeight - margin, anchor.bottom + 12);
+  const viewportHeight = window.visualViewport?.height || window.innerHeight;
+  const left = Math.max(margin, Math.min(window.innerWidth - menuWidth - margin, anchor.left - menuWidth / 2));
+  let top;
+  if (isPhoneReader()) {
+    const below = anchor.bottom + 28;
+    top = below + menuHeight <= viewportHeight - margin ? below : anchor.top - menuHeight - 40;
+  } else {
+    const above = anchor.top - menuHeight - 12;
+    top = above >= margin ? above : anchor.bottom + 12;
+  }
+  top = Math.max(margin, Math.min(viewportHeight - menuHeight - margin, top));
   menu.style.left = `${Math.max(margin, left)}px`;
-  menu.style.top = `${Math.max(margin, top)}px`;
+  menu.style.top = `${top}px`;
+}
+
+function positionSelectionMenu(session) {
+  placeFloatingMenu(ensureSelectionMenu(), session.menuAnchor || session.anchor);
+}
+
+// The selection moves with scrolling and resizing; follow it.
+function liveSelectionAnchor(session) {
+  if (session?.range) {
+    const anchor = selectionAnchorForRange(session.range);
+    if (anchor.top !== 80 || anchor.bottom !== 100) return anchor;
+  }
+  return session?.menuAnchor || session?.anchor || null;
 }
 
 function openSelectionMenu(session) {
@@ -240,6 +286,7 @@ function pdfSelectionUnavailableMessage(selection) {
 }
 
 function closeSelectionMenu({ clearSelection = true, restoreFocus = clearSelection } = {}) {
+  if (_selectionMenu && !_selectionMenu.hidden) _selectionDismissedAt = Date.now();
   if (_selectionMenu) _selectionMenu.hidden = true;
   _activeSelectionSession = null;
   if (clearSelection) clearReaderSelection();
@@ -328,14 +375,142 @@ async function createSelectionAnnotation(style) {
   try {
     const annotation = await currentAnnotationAdapter(state.contentType).create(session, { style });
     if (_activeSelectionSession !== session) return Boolean(annotation);
+    const anchor = liveSelectionAnchor(session);
     closeSelectionMenu({ clearSelection: Boolean(annotation) });
     if (!annotation) showHighlightHint('标记未保存，请重新选择文本后重试');
+    // Phone: the mark is made; offer colour, style, note and delete next to it.
+    else if (isPhoneReader() && annotation.id) openAnnotationMenu(annotation.id, { anchor, text: session.text });
     return Boolean(annotation);
   } catch (error) {
     if (_activeSelectionSession !== session) return false;
     showHighlightHint(error.message || '标记保存失败，请重试');
     return false;
   }
+}
+
+function annotationRecord(id) {
+  return currentAnnotationAdapter(state.contentType).list().find((item) => item.id === id) || null;
+}
+
+function annotationAnchor(id) {
+  const boxes = [...document.querySelectorAll(`.br-highlight-box[data-highlight-id="${CSS.escape(String(id))}"]`)];
+  if (!boxes.length) return null;
+  const rects = boxes.map((box) => box.getBoundingClientRect());
+  const top = Math.min(...rects.map((rect) => rect.top));
+  const bottom = Math.max(...rects.map((rect) => rect.bottom));
+  const first = rects[0];
+  return { left: first.left + first.width / 2, top, bottom };
+}
+
+function ensureAnnotationMenu() {
+  if (_annotationMenu) return _annotationMenu;
+  const menu = document.createElement('div');
+  menu.id = 'annotationMenu';
+  menu.className = 'selection-menu annotation-menu';
+  menu.setAttribute('role', 'toolbar');
+  menu.setAttribute('aria-label', '划线操作');
+  menu.hidden = true;
+  const look = document.createElement('div');
+  look.className = 'annotation-menu-look';
+  for (const [color, label] of [['yellow', '黄色'], ['green', '绿色'], ['blue', '蓝色'], ['pink', '粉色']]) {
+    const swatch = document.createElement('button');
+    swatch.type = 'button';
+    swatch.dataset.annotationColor = color;
+    swatch.setAttribute('aria-label', label);
+    look.appendChild(swatch);
+  }
+  const divider = document.createElement('span');
+  divider.className = 'annotation-menu-divider';
+  divider.setAttribute('aria-hidden', 'true');
+  look.appendChild(divider);
+  for (const [style, label] of [['marker', '马克笔'], ['line', '直线'], ['wave', '波浪线']]) {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.dataset.annotationStyle = style;
+    button.setAttribute('aria-label', label);
+    button.title = label;
+    button.textContent = label;
+    look.appendChild(button);
+  }
+  const actions = document.createElement('div');
+  actions.className = 'annotation-menu-actions';
+  for (const [action, label] of [['thought', '写想法'], ['copy', '复制'], ['ai', '问 AI'], ['delete', '删除']]) {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.dataset.annotationAction = action;
+    button.textContent = label;
+    actions.appendChild(button);
+  }
+  menu.append(look, actions);
+  menu.addEventListener('pointerdown', (event) => event.preventDefault());
+  menu.addEventListener('click', (event) => {
+    const target = event.target.closest?.('button');
+    if (!target || !_activeAnnotationId) return;
+    event.preventDefault();
+    event.stopPropagation();
+    void handleAnnotationMenu(target);
+  });
+  document.body.appendChild(menu);
+  _annotationMenu = menu;
+  return menu;
+}
+
+function syncAnnotationMenu(record) {
+  const menu = ensureAnnotationMenu();
+  menu.querySelectorAll('[data-annotation-color]').forEach((button) => {
+    button.setAttribute('aria-pressed', String(button.dataset.annotationColor === record?.color));
+  });
+  menu.querySelectorAll('[data-annotation-style]').forEach((button) => {
+    button.setAttribute('aria-pressed', String(button.dataset.annotationStyle === (record?.style || 'marker')));
+  });
+}
+
+/** The phone's bubble for one annotation: colour, style, note, copy, AI, delete. */
+function openAnnotationMenu(id, { anchor = null, text = '' } = {}) {
+  const record = annotationRecord(id);
+  if (!record) return false;
+  closeSelectionMenu({ clearSelection: false, restoreFocus: false });
+  const menu = ensureAnnotationMenu();
+  _activeAnnotationId = id;
+  menu.dataset.text = text || record.text || '';
+  syncAnnotationMenu(record);
+  menu.hidden = false;
+  placeFloatingMenu(menu, anchor || annotationAnchor(id) || { left: window.innerWidth / 2, top: 80, bottom: 100 });
+  return true;
+}
+
+function closeAnnotationMenu() {
+  if (_annotationMenu && !_annotationMenu.hidden) _selectionDismissedAt = Date.now();
+  if (_annotationMenu) _annotationMenu.hidden = true;
+  _activeAnnotationId = null;
+}
+
+async function handleAnnotationMenu(button) {
+  const id = _activeAnnotationId;
+  const record = annotationRecord(id);
+  const text = _annotationMenu?.dataset.text || record?.text || '';
+  if (button.dataset.annotationColor || button.dataset.annotationStyle) {
+    const style = button.dataset.annotationStyle;
+    if (style) rememberAnnotationStyle(style);
+    if (button.dataset.annotationColor) {
+      state.highlightColor = button.dataset.annotationColor;
+      document.body.dataset.highlightColor = state.highlightColor;
+      if (typeof persistUserSettings === 'function') persistUserSettings();
+    }
+    const updated = await updateAnnotationAppearance(id, { color: button.dataset.annotationColor, style });
+    if (updated && _activeAnnotationId === id) {
+      syncAnnotationMenu(annotationRecord(id) || updated);
+      const anchor = annotationAnchor(id);
+      if (anchor) placeFloatingMenu(_annotationMenu, anchor);
+    }
+    return;
+  }
+  const action = button.dataset.annotationAction;
+  closeAnnotationMenu();
+  if (action === 'thought') openHighlightEditor(id);
+  else if (action === 'copy') await copySelectionText(text);
+  else if (action === 'ai' && typeof openAiForSelection === 'function') openAiForSelection({ text });
+  else if (action === 'delete') await deleteHighlightById(id);
 }
 
 function dispatchSelectionAction(action) {
@@ -345,25 +520,90 @@ function dispatchSelectionAction(action) {
   return handler();
 }
 
+function selectionInsideReader(selection) {
+  if (!selection || selection.isCollapsed || selection.rangeCount === 0) return false;
+  const node = selection.getRangeAt(0).commonAncestorContainer;
+  const element = node?.nodeType === Node.ELEMENT_NODE ? node : node?.parentElement;
+  return Boolean(element?.closest?.('#article .epub-chapter, #article, .pdf-page-text-layer, .pdf-page'));
+}
+
 function setupSelectionMenu() {
   if (_selectionMenuBound) return;
   _selectionMenuBound = true;
   ensureSelectionMenu().hidden = true;
 
+  // Pointer state: a mouse drag is still choosing its range until mouseup.
+  // Touch selection never ends with a pointerup on Android (the system takes
+  // the touch over), so selectionchange is what opens the menu there.
+  let pointerDown = false;
+  let pointerType = '';
   document.addEventListener('pointerdown', (event) => {
-    if (_selectionMenu && !_selectionMenu.contains(event.target)) {
+    pointerDown = true;
+    pointerType = event.pointerType || 'mouse';
+    // The annotation bubble belongs to a mark, not to a selection: any tap
+    // elsewhere closes it. The selection menu stays while a finger adjusts
+    // the selection handles; it closes when the selection goes away.
+    if (_annotationMenu && !_annotationMenu.hidden && !_annotationMenu.contains(event.target)
+        && !event.target?.closest?.('.br-highlight-box')) {
+      closeAnnotationMenu();
+    }
+    if (_selectionMenu && !_selectionMenu.hidden && !_selectionMenu.contains(event.target) && pointerType === 'mouse') {
       closeSelectionMenu({ clearSelection: false });
     }
   }, true);
+  const release = () => { pointerDown = false; };
+  document.addEventListener('pointerup', release, true);
+  document.addEventListener('pointercancel', release, true);
+
+  let settleTimer = null;
+  document.addEventListener('selectionchange', () => {
+    clearTimeout(settleTimer);
+    settleTimer = setTimeout(() => {
+      if (pointerDown && pointerType === 'mouse') return;
+      const selection = window.getSelection?.();
+      if (!selection || selection.isCollapsed) {
+        if (_activeSelectionSession) closeSelectionMenu({ clearSelection: false, restoreFocus: false });
+        return;
+      }
+      if (!selectionInsideReader(selection)) return;
+      const session = captureSelectionSession(selection);
+      if (session) openSelectionMenu(session);
+    }, 250);
+  });
+
   document.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape' && _annotationMenu && !_annotationMenu.hidden) {
+      event.preventDefault();
+      event.stopPropagation();
+      closeAnnotationMenu();
+      return;
+    }
     if (event.key === 'Escape' && _activeSelectionSession) {
       event.preventDefault();
       event.stopPropagation();
       closeSelectionMenu();
     }
   });
-  window.addEventListener('resize', () => closeSelectionMenu({ clearSelection: false }));
-  window.addEventListener('scroll', () => closeSelectionMenu({ clearSelection: false }), true);
+  // Scrolling and resizing (the phone's address bar collapsing) move the
+  // selection: keep the menu next to it instead of closing it.
+  let followFrame = 0;
+  const follow = () => {
+    cancelAnimationFrame(followFrame);
+    followFrame = requestAnimationFrame(() => {
+      if (_activeSelectionSession && _selectionMenu && !_selectionMenu.hidden) {
+        const anchor = liveSelectionAnchor(_activeSelectionSession);
+        if (anchor) placeFloatingMenu(_selectionMenu, anchor);
+      }
+      if (_activeAnnotationId && _annotationMenu && !_annotationMenu.hidden) {
+        const anchor = annotationAnchor(_activeAnnotationId);
+        if (anchor) placeFloatingMenu(_annotationMenu, anchor);
+        else closeAnnotationMenu();
+      }
+    });
+  };
+  window.addEventListener('resize', follow);
+  window.visualViewport?.addEventListener('resize', follow);
+  window.addEventListener('scroll', follow, true);
 
   const inspectPdfSelection = (event) => {
     if (state.contentType !== 'pdf' || !event.target?.closest?.('.pdf-page-text-layer')) return;
@@ -380,6 +620,9 @@ function setupSelectionMenu() {
 // directly through the browser global lexical scope.
 window.__zhenshuSelectionMenuApi = {
   captureSelectionSession,
+  openAnnotationMenu,
+  closeAnnotationMenu,
+  selectionMenuRecentlyDismissed,
   openSelectionMenu,
   setupSelectionMenu,
   showSelectionMenuForCurrentSelection,
