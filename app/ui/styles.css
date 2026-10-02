@@ -2079,7 +2079,11 @@ body.is-library.theme-sepia .topbar {
    floating toolbar. */
 /* The theme toggle lives in the top bar on every page (it left the reader's
    rail in the 2026-10 shell unification). */
-.library-theme-toggle { display: inline-flex; }
+.library-theme-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
 
 .library-view {
   width: min(1280px, 100%);

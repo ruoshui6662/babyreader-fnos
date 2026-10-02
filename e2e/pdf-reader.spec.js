@@ -1464,7 +1464,11 @@ test('PDF reading page persists across refresh and return-to-library reopen', as
   await expect(page.locator('#pdfReaderSurface')).toBeVisible();
   await expect(page.locator('#pdfPageNumber')).toHaveValue('3');
 
+  // Wait for the page-1 save before reloading; otherwise the reload races it.
+  const firstPageSave = page.waitForResponse((response) => response.request().method() === 'PUT'
+    && /\/api\/books\/[a-f0-9]{64}\/progress$/.test(new URL(response.url()).pathname));
   await page.evaluate(() => window.pdfReaderController.goToPdfPage(0));
+  expect((await firstPageSave).status()).toBe(200);
   await page.reload();
   await expect(page.locator('#pdfReaderSurface')).toBeVisible();
   await expect(page.locator('#pdfReaderStatus')).toContainText('4 页');
