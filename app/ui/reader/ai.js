@@ -33,14 +33,12 @@ const AI_BOOK_PROMPTS = [
   '作者提出了哪些关键概念？'
 ];
 const AI_PDF_PROMPTS = [
-  '当前页的主要观点是什么？',
-  '请解释当前页出现的关键概念。',
-  '哪些可检索片段支持这个观点？'
+  '这一页主要讲了什么？',
+  '这份文档的核心观点是什么？',
+  '请解释这一页出现的关键概念。'
 ];
 
 let _aiSelection = null;
-let _aiIndex = null;
-let _aiIndexBookId = null;
 let _aiBusy = false;
 let _aiRequestId = 0;
 let _aiSetup = false;
@@ -1385,32 +1383,6 @@ function syncReaderLayoutAfterAiToggle() {
   requestAnimationFrame(() => measurePagination({ preserveLocator: true }));
 }
 
-async function buildCurrentBookIndex() {
-  if (_aiIndex && _aiIndexBookId === state.currentBookId) return _aiIndex;
-  if (state.contentType !== 'epub' || !state.epubArchive?.spine?.length) throw new Error('AI 仅支持 EPUB 书本');
-  const chapters = [];
-  const total = state.epubArchive.spine.length;
-  for (let index = 0; index < total; index += 1) {
-    setAiStatus(`正在思考并读取本书内容（${index + 1}/${total}）…`, 'busy');
-    const chapter = await loadEpubChapterText(state.epubArchive, index);
-    chapters.push({ ...chapter, label: aiChapterLabel(index) });
-  }
-  _aiIndex = buildBookSearchIndex(chapters);
-  _aiIndexBookId = state.currentBookId;
-  return _aiIndex;
-}
-
-function normalizeAiSearchMatches(matches) {
-  return (Array.isArray(matches) ? matches : [])
-    .map((item) => ({
-      ...item,
-      chapterLabel: Number.isInteger(item?.chapterIndex)
-        ? aiChapterLabel(item.chapterIndex)
-        : String(item?.chapterLabel || '当前章节')
-    }))
-    .filter((item) => item.text);
-}
-
 function assessAiRetrievalConfidence(matches, { query = '', selectedText = '' } = {}) {
   const items = Array.isArray(matches) ? matches : [];
   if (!items.length) {
@@ -1449,71 +1421,6 @@ function assessAiRetrievalConfidence(matches, { query = '', selectedText = '' } 
     message: highConfidence
       ? '书本检索依据充分。'
       : '检索到的书本依据与问题匹配度有限，回答将严格限于可确认内容。'
-  };
-}
-
-async function retrieveAiMatches(question, selectedText, chapter) {
-  if (typeof browserHost.searchAiBook === 'function') {
-    try {
-      const remote = await Promise.race([
-        browserHost.searchAiBook(state.currentBookId, {
-          question,
-          selectedText,
-          chapter
-        }),
-        new Promise((_, reject) => window.setTimeout(
-          () => reject(new Error('远程检索超时')),
-          AI_REMOTE_SEARCH_TIMEOUT_MS
-        ))
-      ]);
-      const matches = normalizeAiSearchMatches(remote?.matches);
-      if (remote?.scope === 'chapter' || remote?.scope === 'section'
-        || remote?.retrievalStatus === 'insufficient_scope') {
-        return {
-          matches,
-          confidence: remote?.confidence || assessAiRetrievalConfidence(matches, { query: question, selectedText }),
-          chapterResolution: remote?.chapterResolution || null,
-          retrievalStatus: remote?.retrievalStatus || (matches.length ? 'ok' : 'no_matches'),
-          intent: remote?.intent || 'chapter_lookup',
-          scope: remote.scope
-        };
-      }
-      if (remote?.intent === 'book_summary') {
-        return {
-          matches,
-          confidence: remote?.confidence || { level: 'low', message: '将按目录抽取代表性章节原文。' },
-          chapterResolution: null,
-          retrievalStatus: 'ok',
-          intent: 'book_summary',
-          scope: 'book'
-        };
-      }
-      if (matches.length) {
-        return {
-          matches,
-          confidence: remote?.confidence || assessAiRetrievalConfidence(matches, { query: question, selectedText }),
-          chapterResolution: remote?.chapterResolution || null,
-          retrievalStatus: remote?.retrievalStatus || 'ok',
-          intent: remote?.intent || 'lookup',
-          scope: remote?.scope || 'book'
-        };
-      }
-    } catch {
-      // The server-side FTS index is an optimization. Keep the existing local
-      // index as a transparent fallback when the runtime lacks SQLite/FTS5 or
-      // an index build/search fails.
-    }
-  }
-  const index = await buildCurrentBookIndex();
-  const matches = searchBookIndex(index, {
-    query: question,
-    selectedText,
-    currentChapterIndex: chapter.index
-  });
-  return {
-    matches,
-    confidence: assessAiRetrievalConfidence(matches, { query: question, selectedText }),
-    chapterResolution: null
   };
 }
 
@@ -1831,15 +1738,12 @@ async function askAiQuestion() {
     // The server routes the question and reads the book itself; the browser
     // only says what was asked, what is selected and where the reader is.
     const matches = [];
-    const confidence = null;
     const conversationId = await ensureAiConversation();
     _aiStreamController = new AbortController();
     let partialAnswer = '';
     let streamSources = matches;
     let streamError = null;
     let persistenceWarning = false;
-    let summaryCacheHit = false;
-    let summaryCoverage = null;
     let answerRenderScheduled = false;
     const scheduleAnswerRender = () => {
       if (answerRenderScheduled) return;
@@ -1865,19 +1769,6 @@ async function askAiQuestion() {
         if (requestId !== _aiRequestId) return;
         streamSources = meta?.sources || matches;
         if (meta?.plan?.scopeLabel) renderAiScopeNote(meta.plan, assistant.notice);
-        if (meta?.scope === 'book' && meta?.coverage) summaryCoverage = meta.coverage;
-        if (Number.isSafeInteger(meta?.estimatedInputTokens) && meta.estimatedInputTokens > 0) {
-          const statusScope = meta?.scope === 'book' ? '代表性章节' : '本章';
-          setAiStatus(`正在整理${statusScope}证据 · 输入约 ${meta.estimatedInputTokens.toLocaleString()} tokens（粗估，实际随模型而异）…`, 'busy');
-        }
-        const serverResolution = meta?.chapterResolution;
-        if (meta?.scope !== 'book' && serverResolution
-          && (serverResolution.status !== 'resolved' || serverResolution.mappingQuality !== 'exact')) {
-          renderAiConfidenceNotice({
-            ...confidence,
-            message: `${confidence?.message || ''} 服务端未能精确确认当前目录章节；请在后续提问中补充章节信息。`.trim()
-          }, assistant.notice);
-        }
       },
       onDelta: (delta) => {
         if (requestId !== _aiRequestId) return;
@@ -1892,11 +1783,6 @@ async function askAiQuestion() {
         renderAiSources(streamSources, null, partialAnswer);
         renderAiAnswer(partialAnswer, null, streamSources);
         persistenceWarning = done?.persisted === false;
-        summaryCacheHit = done?.summaryCacheHit === true;
-        if (done?.scope === 'book' && done?.coverage) summaryCoverage = done.coverage;
-        if (done?.summaryConfidence?.level === 'low') {
-          renderAiConfidenceNotice({ level: 'low', message: done.summaryConfidence.message }, assistant.notice);
-        }
       },
       onError: (error) => {
         streamError = new Error(error?.message || 'AI 回答失败，请稍后重试。');
@@ -1909,14 +1795,7 @@ async function askAiQuestion() {
     renderAiAnswer(answer, null, result?.sources || streamSources || matches);
     renderAiSources(result?.sources || streamSources || matches, null, answer);
     _aiConversation.push({ role: 'user', content: question }, { role: 'assistant', content: answer });
-    setAiStatus(
-      persistenceWarning
-        ? '回答已生成，但本轮未保存。'
-        : summaryCoverage && summaryCoverage.ratio < 1
-          ? `全书概述抽取 ${summaryCoverage.selectedChapters}/${summaryCoverage.totalChapters} 章，结果为代表性概述。`
-          : summaryCacheHit ? '已复用本地摘要缓存。' : '',
-      persistenceWarning ? 'warning' : 'ready'
-    );
+    setAiStatus(persistenceWarning ? '回答已生成，但本轮未保存。' : '', persistenceWarning ? 'warning' : 'ready');
     return true;
   } catch (error) {
     if (requestId === _aiRequestId) {

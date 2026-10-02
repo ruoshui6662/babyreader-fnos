@@ -204,8 +204,8 @@ function renderBookmarkButtonState() {
   button.dataset.bookmarkActive = active ? 'true' : 'false';
   button.setAttribute('aria-pressed', active ? 'true' : 'false');
   const label = active ? '取消当前书签' : '添加当前书签';
-  button.setAttribute('aria-label', available ? label : '书签仅支持 EPUB 和 PDF');
-  button.setAttribute('title', available ? label : '书签仅支持 EPUB 和 PDF');
+  button.setAttribute('aria-label', available ? label : '纯文本书暂不支持书签');
+  button.setAttribute('title', available ? label : '纯文本书暂不支持书签');
   return active;
 }
 
