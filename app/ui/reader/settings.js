@@ -502,6 +502,9 @@ function syncSettingsPanel() {
     const labels = phone ? { scroll: '上下滚动', double: '左右翻页' } : { scroll: '连续滚动', double: '双页分页' };
     [...readingMode.options].forEach((option) => { option.textContent = labels[option.value] || option.textContent; });
     readingMode.value = state.readingMode;
+    document.querySelectorAll('[data-reading-mode-choice]').forEach((button) => {
+      button.setAttribute('aria-checked', String(button.dataset.readingModeChoice === state.readingMode));
+    });
   }
   if (pdfLayoutMode) pdfLayoutMode.value = state.pdfLayoutMode;
   if (fontFamily) fontFamily.value = state.fontFamily;

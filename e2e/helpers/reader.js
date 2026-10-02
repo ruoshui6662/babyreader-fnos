@@ -261,6 +261,7 @@ async function readHighlightState(page) {
 
 // Phones show the reading chrome by tapping the middle of the page.
 async function showMobileReaderChrome(page) {
+  if (await page.locator('#mobileReaderToolbar').isVisible()) return;
   const viewport = page.viewportSize();
   await page.mouse.click(Math.round(viewport.width / 2), Math.round(viewport.height / 2));
   await page.locator('#mobileReaderToolbar').waitFor({ state: 'visible' });

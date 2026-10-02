@@ -7,7 +7,7 @@
   <link rel="icon" type="image/svg+xml" href="images/logo.svg">
   <link rel="icon" type="image/png" sizes="64x64" href="images/icon_64.png">
   <link rel="apple-touch-icon" href="images/icon_256.png">
-  <link rel="stylesheet" href="styles.css?v=86">
+  <link rel="stylesheet" href="styles.css?v=87">
 </head>
 <body class="is-welcome">
   <!-- Reader Shell: low-distraction navigation with stable legacy IDs -->
@@ -132,7 +132,11 @@
       <section class="settings-group" data-settings-group="reading">
         <h3 class="settings-group-title">阅读</h3>
         <div class="settings-group-card">
-          <label class="settings-field" data-pdf-inapplicable>
+          <div class="settings-mode-segments" role="radiogroup" aria-label="翻页方式" data-pdf-inapplicable>
+            <button type="button" role="radio" data-reading-mode-choice="double" aria-checked="false">左右翻页</button>
+            <button type="button" role="radio" data-reading-mode-choice="scroll" aria-checked="false">上下滚动</button>
+          </div>
+          <label class="settings-field settings-reading-mode-field" data-pdf-inapplicable>
             <span>阅读模式</span>
             <select id="settingReadingMode">
               <option value="scroll">连续滚动</option>
@@ -150,12 +154,13 @@
           <p class="settings-field-description" id="settingsPdfLayoutHint" data-pdf-only hidden>
             PDF 是固定版面；模式切换只调整页面排列，缩放和适宽只改变显示大小，不会重排文字。
           </p>
-          <label class="settings-field settings-checkbox">
+          <label class="settings-field settings-checkbox settings-toc-open-field">
             <input id="settingTocOpen" type="checkbox" checked>
             <span>默认展开目录</span>
           </label>
         </div>
       </section>
+      <button type="button" class="settings-more-toggle" id="btnSettingsMore" aria-expanded="false" aria-controls="readerSettingsSheet">更多设置</button>
       <section class="settings-group" data-settings-group="highlight">
         <h3 class="settings-group-title">划线</h3>
         <div class="settings-group-card">
@@ -331,7 +336,16 @@
         <button type="button" class="ai-icon-button ai-conversations-button" id="btnAiConversations" aria-label="会话列表" title="会话列表">会话</button>
         <button type="button" class="ai-icon-button ai-new-conversation" id="btnAiNewConversation" aria-label="新建对话" title="新建对话">新对话</button>
         <button type="button" class="ai-icon-button" id="btnAiSettings" aria-label="AI 设置" title="AI 设置">设置</button>
+        <button type="button" class="ai-icon-button ai-more-button" id="btnAiMore" aria-haspopup="menu" aria-expanded="false" aria-controls="aiMoreMenu" aria-label="更多" title="更多">
+          <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="5.5" cy="12" r="1"></circle><circle cx="12" cy="12" r="1"></circle><circle cx="18.5" cy="12" r="1"></circle></svg>
+        </button>
         <button type="button" class="ai-icon-button ai-surface-close ui-close" id="btnCloseAiModal" aria-label="关闭 AI 问书" title="关闭">×</button>
+        <div class="ai-more-menu" id="aiMoreMenu" role="menu" hidden>
+          <button type="button" role="menuitem" data-ai-proxy="btnAiBookMap">本书导读</button>
+          <button type="button" role="menuitem" data-ai-proxy="btnAiConversations">会话列表</button>
+          <button type="button" role="menuitem" data-ai-proxy="btnAiNewConversation">新对话</button>
+          <button type="button" role="menuitem" data-ai-proxy="btnAiSettings">AI 设置</button>
+        </div>
       </div>
     </header>
     <div class="ai-modal-body">
@@ -629,7 +643,7 @@
   <script src="core/reader-route.js?v=1"></script>
   <script src="core/user-state.js?v=38"></script>
   <script src="reader/annotations.js?v=2"></script>
-  <script src="reader/device-profile.js?v=33"></script>
+  <script src="reader/device-profile.js?v=34"></script>
   <script src="reader/epub.js?v=32"></script>
   <script src="reader/document.js?v=28"></script>
   <script src="reader/editor.js?v=28"></script>
@@ -643,16 +657,16 @@
   <script src="reader/progress.js?v=36"></script>
   <script src="reader/bookmarks.js?v=4"></script>
   <script src="reader/pagination.js?v=36"></script>
-  <script src="reader/settings.js?v=33"></script>
+  <script src="reader/settings.js?v=34"></script>
   <script src="reader/jump-back.js?v=1"></script>
-  <script src="reader/navigation.js?v=30"></script>
+  <script src="reader/navigation.js?v=31"></script>
   <script src="reader/pdf-annotation-geometry.js?v=1"></script>
   <script src="reader/pdf-annotations.js?v=1"></script>
   <script src="reader/pdf-render-scheduler.js?v=1"></script>
   <script src="reader/pdf.js?v=15"></script>
   <script src="reader/lifecycle.js?v=33"></script>
   <script src="reader/search.js?v=4"></script>
-  <script src="shell/drawer.js?v=32"></script>
+  <script src="shell/drawer.js?v=33"></script>
   <script src="library/reorder.js?v=1"></script>
   <script src="library/pdf-covers.js?v=1"></script>
   <script src="library/import.js?v=1"></script>

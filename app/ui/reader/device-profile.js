@@ -333,11 +333,142 @@ function applyReaderDeviceProfile(profile) {
   return profile;
 }
 
+// Settings on a phone: a short sheet (appearance + 翻页方式), with 更多设置
+// expanding it to every option.
+function setupMobileSettingsSheet() {
+  const sheet = document.getElementById('readerSettingsSheet');
+  const more = document.getElementById('btnSettingsMore');
+  if (more && !more.dataset.bound) {
+    more.dataset.bound = 'true';
+    more.addEventListener('click', () => {
+      const expanded = !sheet?.classList.contains('is-expanded');
+      sheet?.classList.toggle('is-expanded', expanded);
+      more.setAttribute('aria-expanded', String(expanded));
+      more.textContent = expanded ? '收起' : '更多设置';
+    });
+  }
+  document.querySelectorAll('[data-reading-mode-choice]').forEach((button) => {
+    if (button.dataset.bound) return;
+    button.dataset.bound = 'true';
+    button.addEventListener('click', () => {
+      const select = document.getElementById('settingReadingMode');
+      if (!select || select.value === button.dataset.readingModeChoice) return;
+      select.value = button.dataset.readingModeChoice;
+      select.dispatchEvent(new Event('change', { bubbles: true }));
+    });
+  });
+}
+
+// Every bottom sheet on a phone gets a grip; dragging the grip or header
+// down closes the sheet, a short drag springs back.
+const MOBILE_SHEETS = [
+  ['readerDrawer', () => closeReaderPanel()],
+  ['readerSettingsSheet', () => closeReaderPanel()],
+  ['readerSearchSheet', () => closeReaderPanel()],
+  ['aiModal', () => closeAiModal()]
+];
+
+function setupMobileSheetGestures() {
+  for (const [id, close] of MOBILE_SHEETS) {
+    const sheet = document.getElementById(id);
+    if (!sheet || sheet.dataset.sheetGesture) continue;
+    sheet.dataset.sheetGesture = 'true';
+    const grip = document.createElement('div');
+    grip.className = 'sheet-grip';
+    grip.setAttribute('aria-hidden', 'true');
+    sheet.prepend(grip);
+    let startY = null;
+    let dragging = false;
+    let pointerId = null;
+    const reset = () => {
+      sheet.style.transform = '';
+      sheet.style.transition = '';
+      sheet.classList.remove('is-dragging');
+      startY = null;
+      dragging = false;
+      pointerId = null;
+    };
+    sheet.addEventListener('pointerdown', (event) => {
+      if (!isMobileReaderSurface() || event.pointerType === 'mouse') return;
+      const handle = event.target.closest?.('.sheet-grip, .reader-drawer-header, .ai-modal-header');
+      if (!handle || event.target.closest('button, a, input, select, textarea')) return;
+      startY = event.clientY;
+      pointerId = event.pointerId;
+    });
+    sheet.addEventListener('pointermove', (event) => {
+      if (startY === null || event.pointerId !== pointerId) return;
+      const delta = event.clientY - startY;
+      if (!dragging && delta < 8) return;
+      dragging = true;
+      sheet.classList.add('is-dragging');
+      sheet.style.transition = 'none';
+      sheet.style.transform = `translateY(${Math.max(0, delta)}px)`;
+    });
+    const finish = (event) => {
+      if (startY === null || event.pointerId !== pointerId) return;
+      const delta = event.clientY - startY;
+      const wasDragging = dragging;
+      reset();
+      if (wasDragging && delta > Math.min(120, sheet.offsetHeight * 0.25)) close();
+    };
+    sheet.addEventListener('pointerup', finish);
+    sheet.addEventListener('pointercancel', reset);
+  }
+}
+
+// AI on a phone: the header keeps the title, ⋯ and close; 导读 / 会话 /
+// 新对话 / 设置 move into the ⋯ menu. The composer rides above the keyboard.
+function setupMobileAiPanel() {
+  const more = document.getElementById('btnAiMore');
+  const menu = document.getElementById('aiMoreMenu');
+  if (more && menu && !more.dataset.bound) {
+    more.dataset.bound = 'true';
+    const closeMenu = () => {
+      menu.hidden = true;
+      more.setAttribute('aria-expanded', 'false');
+    };
+    more.addEventListener('click', (event) => {
+      event.stopPropagation();
+      const open = menu.hidden;
+      menu.hidden = !open;
+      more.setAttribute('aria-expanded', String(open));
+    });
+    menu.addEventListener('click', (event) => {
+      const item = event.target.closest('[data-ai-proxy]');
+      if (!item) return;
+      closeMenu();
+      document.getElementById(item.dataset.aiProxy)?.click();
+    });
+    document.addEventListener('pointerdown', (event) => {
+      if (!menu.hidden && !menu.contains(event.target) && !more.contains(event.target)) closeMenu();
+    }, true);
+    const modal = document.getElementById('aiModal');
+    if (modal) {
+      new MutationObserver(() => { if (modal.hidden) closeMenu(); })
+        .observe(modal, { attributes: true, attributeFilter: ['hidden'] });
+    }
+  }
+  const viewport = window.visualViewport;
+  if (viewport && !window.__zhenshuKeyboardInsetBound) {
+    window.__zhenshuKeyboardInsetBound = true;
+    const update = () => {
+      const inset = Math.max(0, Math.round(window.innerHeight - viewport.height - viewport.offsetTop));
+      document.documentElement.style.setProperty('--keyboard-inset', `${inset}px`);
+    };
+    viewport.addEventListener('resize', update, { passive: true });
+    viewport.addEventListener('scroll', update, { passive: true });
+    update();
+  }
+}
+
 function setupReaderDeviceProfile() {
   const update = () => applyReaderDeviceProfile(getReaderDeviceProfile());
   update();
   setupMobileReadingBar();
   setupMobileHistory();
+  setupMobileSettingsSheet();
+  setupMobileSheetGestures();
+  setupMobileAiPanel();
   window.addEventListener('resize', update, { passive: true });
   window.visualViewport?.addEventListener('resize', update, { passive: true });
   window.screen?.orientation?.addEventListener?.('change', update, { passive: true });

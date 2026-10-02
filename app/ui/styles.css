@@ -8330,3 +8330,165 @@ html[data-reader-surface="mobile"] body.mobile-reading .mobile-reader-actions bu
 @media (prefers-reduced-motion: reduce) {
   html[data-reader-surface="mobile"] body.mobile-reading .reader-shell-nav { transition: none; }
 }
+
+
+/* ============================================================
+   Phone panels (M2): one bottom-sheet look. A grip on top (drag down to
+   close), the settings sheet opens short and 更多设置 expands it, contents
+   and AI nearly fill the screen, AI's header actions sit behind ⋯.
+   ============================================================ */
+.sheet-grip,
+.settings-mode-segments,
+.settings-more-toggle,
+.ai-more-button,
+.ai-more-menu { display: none; }
+.ai-more-menu[hidden] { display: none !important; }
+
+html[data-reader-surface="mobile"] .sheet-grip {
+  display: block;
+  flex: 0 0 auto;
+  width: 36px;
+  height: 5px;
+  margin: -6px auto 6px;
+  background: color-mix(in srgb, var(--text-dim, #888) 55%, transparent);
+  border-radius: 3px;
+}
+html[data-reader-surface="mobile"] .reader-sheet.is-dragging,
+html[data-reader-surface="mobile"] .ai-modal.is-dragging { will-change: transform; }
+
+html[data-reader-surface="mobile"] .reader-sheet {
+  padding-top: 14px;
+  padding-left: calc(16px + env(safe-area-inset-left, 0px));
+  padding-right: calc(16px + env(safe-area-inset-right, 0px));
+}
+html[data-reader-surface="mobile"] #readerDrawer {
+  height: min(88dvh, 760px);
+  max-height: min(88dvh, 760px);
+}
+html[data-reader-surface="mobile"] #readerSettingsSheet {
+  height: auto;
+  max-height: min(62dvh, 560px);
+  transition: max-height var(--dur-fast) var(--ease-out);
+}
+html[data-reader-surface="mobile"] #readerSettingsSheet.is-expanded {
+  height: min(88dvh, 760px);
+  max-height: min(88dvh, 760px);
+}
+/* Short sheet: appearance and 翻页方式 only; the rest waits behind 更多设置. */
+html[data-reader-surface="mobile"] #readerSettingsSheet:not(.is-expanded) [data-settings-group="highlight"],
+html[data-reader-surface="mobile"] #readerSettingsSheet:not(.is-expanded) [data-settings-group="typography"],
+html[data-reader-surface="mobile"] #readerSettingsSheet:not(.is-expanded) .settings-user,
+html[data-reader-surface="mobile"] #readerSettingsSheet .settings-reading-mode-field,
+html[data-reader-surface="mobile"] #readerSettingsSheet .settings-toc-open-field { display: none !important; }
+html[data-reader-surface="mobile"] #readerSettingsSheet .settings-mode-segments:not([hidden]) {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px;
+  padding: 3px;
+  background: var(--surface-alt, rgba(127, 127, 127, .12));
+  border-radius: 11px;
+}
+html[data-reader-surface="mobile"] .settings-mode-segments button {
+  min-height: 40px;
+  color: var(--text);
+  font-size: 14px;
+  background: transparent;
+  border: 0;
+  border-radius: 9px;
+}
+html[data-reader-surface="mobile"] .settings-mode-segments button[aria-checked="true"] {
+  color: var(--button-text, #fff);
+  background: var(--accent);
+}
+html[data-reader-surface="mobile"] .settings-more-toggle {
+  display: block;
+  width: 100%;
+  min-height: 44px;
+  margin: 4px 0 12px;
+  color: var(--accent);
+  font-size: 15px;
+  background: transparent;
+  border: 0;
+}
+/* Fonts scroll sideways in one row instead of stacking two. */
+html[data-reader-surface="mobile"] #readerSettingsSheet .settings-font-cards {
+  display: flex;
+  gap: 8px;
+  margin: 0 -4px;
+  padding: 2px 4px 4px;
+  overflow-x: auto;
+  scroll-snap-type: x proximity;
+  scrollbar-width: none;
+}
+html[data-reader-surface="mobile"] #readerSettingsSheet .settings-font-cards::-webkit-scrollbar { display: none; }
+html[data-reader-surface="mobile"] #readerSettingsSheet .settings-font-cards button {
+  flex: 0 0 96px;
+  scroll-snap-align: start;
+}
+
+/* AI: nearly full screen, header actions behind ⋯, composer above the keyboard. */
+@media (max-width: 800px) {
+  html[data-reader-surface="mobile"] .ai-modal {
+    top: auto;
+    right: 0;
+    bottom: var(--keyboard-inset, 0px);
+    left: 0;
+    width: 100%;
+    max-width: none;
+    height: min(calc(92dvh - var(--keyboard-inset, 0px)), 860px);
+    max-height: calc(100dvh - var(--keyboard-inset, 0px) - env(safe-area-inset-top, 0px));
+    padding-top: 8px;
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+    border-right: 0;
+    border-bottom: 0;
+    border-left: 0;
+    border-radius: 20px 20px 0 0;
+    transform: none;
+  }
+  html[data-reader-surface="mobile"] .ai-modal .sheet-grip { margin: 0 auto 2px; }
+  html[data-reader-surface="mobile"] .ai-modal .ai-modal-header { padding: 6px 12px 10px 20px; }
+  html[data-reader-surface="mobile"] .ai-modal .ai-modal-heading p { display: none; }
+  html[data-reader-surface="mobile"] .ai-modal .ai-modal-actions { position: relative; }
+  html[data-reader-surface="mobile"] .ai-modal .ai-modal-actions > #btnAiBookMap,
+  html[data-reader-surface="mobile"] .ai-modal .ai-modal-actions > #btnAiConversations,
+  html[data-reader-surface="mobile"] .ai-modal .ai-modal-actions > #btnAiNewConversation,
+  html[data-reader-surface="mobile"] .ai-modal .ai-modal-actions > #btnAiSettings { display: none; }
+  html[data-reader-surface="mobile"] .ai-modal .ai-more-button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 44px;
+    height: 44px;
+    padding: 0;
+    color: var(--color-text-2);
+    background: transparent;
+    border: 0;
+  }
+  html[data-reader-surface="mobile"] .ai-modal .ai-more-button svg { width: 22px; height: 22px; }
+  html[data-reader-surface="mobile"] .ai-modal .ai-more-menu {
+    position: absolute;
+    top: calc(100% + 4px);
+    right: 0;
+    z-index: 5;
+    display: flex;
+    flex-direction: column;
+    min-width: 160px;
+    padding: 6px;
+    background: var(--color-elevated);
+    border: 1px solid var(--color-separator);
+    border-radius: 12px;
+    box-shadow: 0 12px 32px rgba(0, 0, 0, .28);
+  }
+  html[data-reader-surface="mobile"] .ai-modal .ai-more-menu button {
+    min-height: 44px;
+    padding: 0 14px;
+    color: var(--color-text);
+    font-size: 15px;
+    text-align: left;
+    background: transparent;
+    border: 0;
+    border-radius: 8px;
+  }
+  html[data-reader-surface="mobile"] .ai-modal .ai-more-menu button:active { background: var(--color-fill); }
+}
+html[data-reader-surface="mobile"] #readerSettingsSheet .settings-group { min-width: 0; }
