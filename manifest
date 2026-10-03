@@ -1,5 +1,5 @@
 appname=zhenshu
-version=0.0.12
+version=0.0.13
 display_name=枕书
 desc=枕书：飞牛 fnOS 上的私人书房。阅读 EPUB、PDF、MOBI/AZW3、Markdown 和 TXT，支持划线笔记、全文搜索与 AI 问书，阅读进度多端同步。
 source=thirdparty
@@ -13,4 +13,4 @@ desktop_applaunchname=zhenshu.main
 ctl_stop=true
 checkport=false
 disable_authorization_path=false
-changelog=液态玻璃在阅读页完整生效：纸张四周铺上正在读的这本书的背景光，工具条、顶栏和翻页胶囊透出这本书的色调；设置、目录、书签、笔记、搜索面板，AI 面板，写想法编辑框与手机“⋯”菜单变成带模糊的玻璃；纸张与正文不变。
+changelog=全书搜索：同一章里重复出现的短语，点击结果会定位到准确的那一处，不再只打开章节；含生僻扩展汉字时不再重复列出同一结果。书库拖拽排序：书多时预览不再卡顿。内部整理：样式表按页面拆分，界面不变。
