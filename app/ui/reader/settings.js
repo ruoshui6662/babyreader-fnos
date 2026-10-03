@@ -242,6 +242,7 @@ function positionCustomSelectMenu(instance) {
 }
 
 function openCustomSelect(instance) {
+  pruneCustomSelects();
   if (!isCustomSelectVisible(instance)) {
     closeAllCustomSelects();
     return false;
@@ -278,7 +279,9 @@ function setupCustomSelectGlobalEvents() {
   }, true);
 }
 
-// Pages that rebuild their controls (书库 pages) leave old menus behind.
+// Pages that rebuild their controls (书库 pages) leave old menus behind. Pruned
+// when a menu opens: by then every select on screen is in the document, while
+// at setup time a page may still be assembling its cards off-document.
 function pruneCustomSelects() {
   customSelectInstances.forEach((instance) => {
     if (instance.wrapper.isConnected) return;
@@ -289,7 +292,6 @@ function pruneCustomSelects() {
 
 function setupCustomSelect(select) {
   if (!select || select._customSelect) return select?._customSelect;
-  pruneCustomSelects();
   const wrapper = document.createElement('div');
   wrapper.className = 'custom-select';
   wrapper.dataset.customSelectFor = select.id;

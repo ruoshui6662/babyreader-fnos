@@ -709,6 +709,7 @@ function libraryOrganizationBookGrid(books, { library, scope, order } = {}) {
     }
     const select = document.createElement('select');
     select.className = 'library-book-collection-select';
+    select.id = `libraryCollectionSelect-${grid.children.length}`;
     select.setAttribute('aria-label', `分类：${book.title || '书籍'}`);
     for (const collection of [{ id: '', name: '未分类' }, ...library.organization.collections]) {
       const option = document.createElement('option');
@@ -719,6 +720,7 @@ function libraryOrganizationBookGrid(books, { library, scope, order } = {}) {
     select.value = library.organization.bookAssignments?.[book.id] || '';
     select.addEventListener('change', async () => {
       select.disabled = true;
+      if (typeof syncCustomSelectValue === 'function') syncCustomSelectValue(select);
       try {
         const next = await window.browserHost.placeLibraryBook(book.id, select.value || null, null, library.organization.revision);
         renderLibraryOrganization({ ...library, organization: next });
@@ -726,6 +728,7 @@ function libraryOrganizationBookGrid(books, { library, scope, order } = {}) {
         showHighlightHint(error.message || '分类保存失败，请重试');
         select.value = library.organization.bookAssignments?.[book.id] || '';
         select.disabled = false;
+        if (typeof syncCustomSelectValue === 'function') syncCustomSelectValue(select);
         try {
           const fresh = await window.browserHost.getLibraryOrganization();
           renderLibraryOrganization({ ...library, organization: fresh });
@@ -741,6 +744,8 @@ function libraryOrganizationBookGrid(books, { library, scope, order } = {}) {
     rename.title = '重命名';
     rename.addEventListener('click', () => showLibraryBookRenameDialog(library, book, rename));
     controls.append(select, rename);
+    // The app's own menu, not the operating system's popover.
+    if (typeof setupCustomSelect === 'function') setupCustomSelect(select);
     item.appendChild(controls);
     grid.appendChild(item);
   }

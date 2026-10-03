@@ -9553,3 +9553,21 @@ li:first-child .stats-rank-no { color: var(--library-on-accent, #fff); backgroun
   border-radius: 10px;
 }
 #custom-options-notesPageSort .custom-select-option { padding: 7px 12px; text-align: left; }
+
+/* 整理模式：分类选择用应用内下拉 */
+.library-book-manage-controls .custom-select { flex: 1 1 auto; width: auto; min-width: 0; max-width: none; }
+.library-book-manage-controls .custom-select-trigger {
+  min-height: 36px;
+  padding: 0 26px 0 10px;
+  overflow: hidden;
+  color: var(--library-text, var(--color-text));
+  font: 12px var(--font-ui);
+  text-align: left;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  background: var(--library-surface, var(--color-fill));
+  border: 1px solid var(--library-separator, var(--color-separator));
+  border-radius: 10px;
+}
+.library-book-manage-controls .custom-select-trigger::after { right: 11px; }
+.custom-select-menu[id^="custom-options-libraryCollectionSelect-"] .custom-select-option { padding: 7px 12px; text-align: left; }
