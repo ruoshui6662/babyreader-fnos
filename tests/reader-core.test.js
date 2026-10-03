@@ -651,6 +651,14 @@ test('settings validation clamps font size and normalizes supported values', asy
   });
   assert.equal(valid.textIndent, 2);
   assert.equal(valid.paragraphSpacing, 1.5);
+
+  // First-line indent: 原书 or whole characters; old half steps round.
+  assert.equal((await storage.updateSettings('reader_1', { textIndent: 'book' })).textIndent, 'book');
+  assert.equal((await storage.updateSettings('reader_1', { textIndent: 'wide' })).textIndent, 'book');
+  assert.equal((await storage.updateSettings('reader_1', { textIndent: 1.5 })).textIndent, 2);
+  assert.equal((await storage.updateSettings('reader_1', { textIndent: 2.5 })).textIndent, 3);
+  assert.equal((await storage.updateSettings('reader_1', { textIndent: 0 })).textIndent, 0);
+  assert.equal((await storage.updateSettings('reader_1', { textIndent: -3 })).textIndent, 0);
   assert.equal(valid.readerFont, 'wenkai');
   assert.equal(valid.theme, 'sepia');
 });
@@ -1308,7 +1316,7 @@ test('frontend restores server state and wires library, settings, EPUB TOC, and 
   assert.match(source, /--reader-text-indent/);
   assert.match(source, /--reader-para-spacing/);
   assert.match(source, /--reader-font-family/);
-  assert.match(css, /text-indent: var\(--reader-text-indent/);
+  assert.match(css, /text-indent: calc\(var\(--reader-text-indent, 2em\) - var\(--zs-lead, 0em\)\) !important/);
   assert.match(css, /margin-bottom: var\(--reader-para-spacing/);
   assert.match(css, /font-family: var\(--reader-font-family/);
   assert.match(css, /body\.theme-sepia \{/);

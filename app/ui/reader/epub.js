@@ -638,7 +638,7 @@ function getEpubThemeCss() {
     p, li {
       text-align: justify !important;
       /* Same P0 typography controls as the single-DOM renderer. */
-      text-indent: ${state.textIndent}em !important;
+      ${state.textIndent === 'book' ? '' : `text-indent: ${Number(state.textIndent) || 0}em !important;`}
       margin-top: 0 !important;
       margin-bottom: ${state.paragraphSpacing}em !important;
     }
@@ -796,6 +796,7 @@ function toggleTheme() {
 function destroyEpub() {
   dismissHighlightPill();
   if (typeof invalidateEpubChapterRender === 'function') invalidateEpubChapterRender();
+  if (typeof applyBookLayoutCss === 'function') applyBookLayoutCss('');
   const archive = state.epubArchive;
   if (archive?.resourceManager) {
     if (archive.activeChapterLease) archive.resourceManager.release(archive.activeChapterLease);
@@ -953,6 +954,100 @@ async function openEpubArchive(data) {
   };
 }
 
+/*
+ * The reader keeps only a chapter's <body>; the book's stylesheets would fight
+ * the reader theme (fonts, colours, margins). Paragraph layout is the one
+ * thing worth keeping from them: which paragraphs the book indents, centres,
+ * or hangs. Extract just text-indent / text-align (and the left margin or
+ * padding of rules that also set text-indent, i.e. hanging indents), scoped
+ * to the chapter. The first-line indent setting builds on this (paragraphs.js).
+ */
+const BOOK_LAYOUT_PROPERTIES = ['text-indent', 'text-align'];
+const BOOK_HANGING_PROPERTIES = ['margin-left', 'padding-left'];
+
+function scopeBookSelector(selector) {
+  const trimmed = selector.trim();
+  if (!trimmed || /^[>+~]/.test(trimmed) || /::?(?:before|after|first-letter|first-line|selection|marker)\b/i.test(trimmed)) return null;
+  // html/body/:root address the chapter itself.
+  const rest = trimmed.replace(/^(?::root|html)\b[^\s>+~]*\s*[>]?\s*/i, '').replace(/^body\b[^\s>+~]*\s*[>]?\s*/i, '');
+  // :where() adds no specificity: each rule keeps the book's own weight.
+  return rest ? `:where(#article .epub-chapter) ${rest}` : null;
+}
+
+function bookLayoutRulesFromCss(css) {
+  if (typeof CSSStyleSheet !== 'function') return '';
+  const sheet = new CSSStyleSheet();
+  try {
+    sheet.replaceSync(String(css || '').replace(/@import[^;]*;/gi, ''));
+  } catch {
+    return '';
+  }
+  const output = [];
+  const visit = (rules) => {
+    for (const rule of rules) {
+      if (rule.cssRules && !rule.selectorText) {
+        // @media / @supports: their conditions are about the page, not the
+        // book's paragraph intent; read the rules inside.
+        visit(rule.cssRules);
+        continue;
+      }
+      if (!rule.selectorText || !rule.style) continue;
+      const declarations = [];
+      // Keep !important: it decides between the book's own rules.
+      const declaration = (property) => {
+        const value = rule.style.getPropertyValue(property);
+        if (!value) return null;
+        return `${property}: ${value}${rule.style.getPropertyPriority(property) ? ' !important' : ''}`;
+      };
+      for (const property of BOOK_LAYOUT_PROPERTIES) {
+        const value = declaration(property);
+        if (value) declarations.push(value);
+      }
+      if (!rule.style.getPropertyValue('text-indent') || !declarations.length) {
+        if (!declarations.length) continue;
+      } else {
+        for (const property of BOOK_HANGING_PROPERTIES) {
+          const value = declaration(property);
+          if (value) declarations.push(value);
+        }
+      }
+      const selectors = rule.selectorText.split(',').map(scopeBookSelector).filter(Boolean);
+      if (!selectors.length) continue;
+      const text = `${selectors.join(', ')} { ${declarations.join('; ')}; }`;
+      try {
+        // Drop anything the browser cannot parse once scoped.
+        const probe = new CSSStyleSheet();
+        probe.replaceSync(text);
+        if (probe.cssRules.length) output.push(text);
+      } catch { /* skip */ }
+    }
+  };
+  visit(sheet.cssRules);
+  return output.join('\n');
+}
+
+async function bookLayoutCssForChapter(xhtml, chapterPath, archive) {
+  const head = xhtml.match(/<head\b[^>]*>([\s\S]*?)<\/head>/i)?.[1] || '';
+  if (!head) return '';
+  const cache = archive.bookLayoutCss || (archive.bookLayoutCss = new Map());
+  const parts = [];
+  for (const match of head.matchAll(/<link\b[^>]*>/gi)) {
+    const rel = getXmlAttribute(match[0], 'rel') || '';
+    const href = getXmlAttribute(match[0], 'href');
+    if (!/\bstylesheet\b/i.test(rel) || !href || /^(?:data:|blob:|https?:|file:|javascript:)/i.test(href)) continue;
+    const cssPath = resolveZipPath(getDirPath(chapterPath), href);
+    if (!cache.has(cssPath)) {
+      const file = getZipFile(archive.zip, cssPath);
+      cache.set(cssPath, file ? bookLayoutRulesFromCss(await file.async('text')) : '');
+    }
+    parts.push(cache.get(cssPath));
+  }
+  for (const match of head.matchAll(/<style\b[^>]*>([\s\S]*?)<\/style>/gi)) {
+    parts.push(bookLayoutRulesFromCss(match[1]));
+  }
+  return parts.filter(Boolean).join('\n');
+}
+
 async function loadEpubChapter(archive, index) {
   if (!archive || !Array.isArray(archive.spine)) throw new Error('EPUB 章节档案无效');
   if (!Number.isInteger(index) || index < 0 || index >= archive.spine.length) {
@@ -967,11 +1062,17 @@ async function loadEpubChapter(archive, index) {
   const resourceLease = resourceManager.createLease();
 
   let cleaned;
+  let layoutCss = '';
   try {
     await yieldToBrowser();
     const xhtml = await file.async('text');
     const bodyMatch = xhtml.match(/<body[^>]*>([\s\S]*?)<\/body>/i);
     const bodyContent = bodyMatch ? bodyMatch[1] : xhtml;
+    try {
+      layoutCss = await bookLayoutCssForChapter(xhtml, chapter.fullPath, archive);
+    } catch {
+      layoutCss = '';
+    }
     cleaned = (await inlineResourceRefs(
       sanitizeEpubHtml(bodyContent),
       chapter.fullPath,
@@ -997,6 +1098,9 @@ async function loadEpubChapter(archive, index) {
     index,
     href: chapter.fullPath,
     resourceLease,
+    // Lives in <head>, never inside the section: highlights are stored as
+    // node paths and text offsets within it.
+    layoutCss,
     html: `<section class="epub-chapter" id="br-chapter-${index + 1}" data-source-path="${escapeHtmlAttribute(chapter.fullPath)}">${cleaned}</section>`
   };
 }

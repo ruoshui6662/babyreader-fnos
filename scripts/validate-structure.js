@@ -19,6 +19,7 @@ const uiScriptFiles = [
   'app/ui/core/user-state.js',
   'app/ui/reader/annotations.js',
   'app/ui/reader/epub.js',
+  'app/ui/reader/paragraphs.js',
   'app/ui/reader/document.js',
   'app/ui/reader/editor.js',
   'app/ui/reader/highlights.js',

@@ -14,7 +14,7 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="枕书">
-  <link rel="stylesheet" href="styles.css?v=89">
+  <link rel="stylesheet" href="styles.css?v=90">
 </head>
 <body class="is-welcome">
   <!-- Reader Shell: low-distraction navigation with stable legacy IDs -->
@@ -193,17 +193,22 @@
             <button type="button" data-layout-preset="standard" aria-pressed="false">标准</button>
             <button type="button" data-layout-preset="loose" aria-pressed="false">宽松</button>
           </div>
+          <!-- 原书 keeps the book's own indents; 无 aligns the first line; 1-4
+               indent body paragraphs by that many characters, whatever the
+               book used (CSS, full-width spaces or &nbsp;). -->
+          <div class="settings-field settings-indent-field">
+            <span class="settings-field-label" id="settingTextIndentLabel">首行缩进</span>
+            <div class="settings-indent-segments" id="settingTextIndent" role="radiogroup" aria-labelledby="settingTextIndentLabel">
+              <button type="button" role="radio" data-text-indent="book" aria-checked="false">原书</button>
+              <button type="button" role="radio" data-text-indent="0" aria-checked="false">无</button>
+              <button type="button" role="radio" data-text-indent="1" aria-checked="false" aria-label="1 字">1</button>
+              <button type="button" role="radio" data-text-indent="2" aria-checked="false" aria-label="2 字">2</button>
+              <button type="button" role="radio" data-text-indent="3" aria-checked="false" aria-label="3 字">3</button>
+              <button type="button" role="radio" data-text-indent="4" aria-checked="false" aria-label="4 字">4</button>
+            </div>
+          </div>
           <details class="settings-advanced" id="settingsTypographyAdvanced">
             <summary>自定义</summary>
-          <label class="settings-field settings-range-field">
-            <span class="settings-field-label">首行缩进</span>
-            <span class="settings-range-track">
-              <span class="settings-range-endpoint" data-range-end="min">无</span>
-              <input id="settingTextIndent" data-typography-slider="textIndent" data-min-label="无" data-max-label="4字" aria-label="首行缩进" type="range" min="0" max="4" step="0.5" value="2">
-              <span class="settings-range-endpoint" data-range-end="max">4字</span>
-              <output id="settingTextIndentValue" class="settings-range-tooltip" hidden aria-live="polite">2字</output>
-            </span>
-          </label>
           <label class="settings-field settings-range-field">
             <span class="settings-field-label">段间距</span>
             <span class="settings-range-track">
@@ -648,11 +653,12 @@
   <script src="core/utils.js?v=28"></script>
   <script src="core/api.js?v=30"></script>
   <script src="core/reader-route.js?v=1"></script>
-  <script src="core/user-state.js?v=38"></script>
+  <script src="core/user-state.js?v=39"></script>
   <script src="reader/annotations.js?v=2"></script>
   <script src="reader/device-profile.js?v=34"></script>
-  <script src="reader/epub.js?v=33"></script>
-  <script src="reader/document.js?v=29"></script>
+  <script src="reader/epub.js?v=35"></script>
+  <script src="reader/paragraphs.js?v=1"></script>
+  <script src="reader/document.js?v=30"></script>
   <script src="reader/editor.js?v=28"></script>
   <script src="reader/highlights.js?v=38"></script>
   <script src="reader/ai.js?v=4"></script>
@@ -664,7 +670,7 @@
   <script src="reader/progress.js?v=36"></script>
   <script src="reader/bookmarks.js?v=4"></script>
   <script src="reader/pagination.js?v=37"></script>
-  <script src="reader/settings.js?v=34"></script>
+  <script src="reader/settings.js?v=36"></script>
   <script src="reader/jump-back.js?v=1"></script>
   <script src="reader/navigation.js?v=31"></script>
   <script src="reader/pdf-annotation-geometry.js?v=1"></script>

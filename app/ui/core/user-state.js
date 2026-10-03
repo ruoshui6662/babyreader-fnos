@@ -2,6 +2,15 @@
 
 'use strict';
 
+// First-line indent: 'book' (the book's own layout) or 0-4 characters.
+// Older settings stored half steps (1.5, 2.5); they round to the nearest.
+function normalizeTextIndent(value, fallback = 2) {
+  if (value === 'book') return 'book';
+  const number = Number(value);
+  if (value === null || value === '' || !Number.isFinite(number)) return fallback;
+  return Math.max(0, Math.min(4, Math.round(number)));
+}
+
 function currentUserSettings() {
   const savedSettings = state.userState.settings || {};
   const savedMode = savedSettings.readingMode === 'single' ? 'double' : savedSettings.readingMode;
@@ -78,9 +87,7 @@ function applyUserState(userState) {
   state.tocOpen = settings.tocAutoOpen === true;
   // P0 typography: clamped exactly like the server does, so a hand-edited
   // settings file can never push the layout out of range.
-  state.textIndent = Number.isFinite(settings.textIndent)
-    ? Math.max(0, Math.min(4, Math.round(settings.textIndent * 2) / 2))
-    : 2;
+  state.textIndent = normalizeTextIndent(settings.textIndent);
   state.paragraphSpacing = Number.isFinite(settings.paragraphSpacing)
     ? Math.max(0.4, Math.min(3, Math.round(settings.paragraphSpacing * 10) / 10))
     : 1.1;

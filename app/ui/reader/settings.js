@@ -2,12 +2,9 @@
 
 'use strict';
 
+const DEFAULT_TEXT_INDENT = 2;
+
 const TYPOGRAPHY_SLIDER_CONFIG = Object.freeze({
-  textIndent: Object.freeze({
-    presets: Object.freeze([0, 1, 1.5, 2, 2.5, 3, 4]),
-    defaultValue: 2,
-    format: (value) => Number(value) === 0 ? '无' : `${Number(value)}字`
-  }),
   paragraphSpacing: Object.freeze({
     presets: Object.freeze([0.4, 0.5, 0.75, 1, 1.25, 1.5, 2, 2.5, 3]),
     defaultValue: 1.1,
@@ -50,7 +47,7 @@ function resetTypographySettings() {
   zoomLevel = TYPOGRAPHY_SLIDER_CONFIG.fontSize.defaultValue;
   state.lineHeight = TYPOGRAPHY_SLIDER_CONFIG.lineHeight.defaultValue;
   state.pageMargin = TYPOGRAPHY_SLIDER_CONFIG.pageMargin.defaultValue;
-  state.textIndent = TYPOGRAPHY_SLIDER_CONFIG.textIndent.defaultValue;
+  state.textIndent = DEFAULT_TEXT_INDENT;
   state.paragraphSpacing = TYPOGRAPHY_SLIDER_CONFIG.paragraphSpacing.defaultValue;
   applyZoom();
   applyTypography();
@@ -145,11 +142,21 @@ function ensureReaderFontStylesheets(fontFamily) {
 
 /* P0 typography: text indent, paragraph spacing, font family */
 function applyTypography() {
-  document.documentElement.style.setProperty('--reader-text-indent', `${state.textIndent}em`);
+  // 原书 leaves every paragraph to the book; a number sets body paragraphs.
+  const indent = normalizeTextIndent(state.textIndent);
+  document.documentElement.dataset.textIndent = String(indent);
+  document.documentElement.style.setProperty('--reader-text-indent', indent === 'book' ? '0em' : `${indent}em`);
   document.documentElement.style.setProperty('--reader-para-spacing', `${state.paragraphSpacing}em`);
   const stack = FONT_STACKS[state.fontFamily] || FONT_STACKS[DEFAULT_READER_FONT];
   ensureReaderFontStylesheets(state.fontFamily);
   document.documentElement.style.setProperty('--reader-font-family', stack);
+  // A new font changes how wide leading spaces are: measure the body
+  // paragraphs again (the setting itself is pure CSS).
+  const article = document.getElementById('article');
+  if (article && typeof classifyParagraphIndents === 'function'
+      && (state.contentType === 'epub' ? article.querySelector('.epub-chapter') : article.dataset.textKind === 'txt')) {
+    classifyParagraphIndents(article);
+  }
   // Update EPUB inner frames as well
   applyEpubTheme();
   applyThemeToEpubFrames();
@@ -509,9 +516,11 @@ function syncSettingsPanel() {
   if (pdfLayoutMode) pdfLayoutMode.value = state.pdfLayoutMode;
   if (fontFamily) fontFamily.value = state.fontFamily;
   if (textIndent) {
-    textIndent.value = String(state.textIndent);
-    syncTypographySliderAccessibility('textIndent', state.textIndent);
-    updateTypographySliderHint('textIndent', state.textIndent, false);
+    const current = String(normalizeTextIndent(state.textIndent));
+    textIndent.dataset.value = current;
+    textIndent.querySelectorAll('[data-text-indent]').forEach((button) => {
+      button.setAttribute('aria-checked', String(button.dataset.textIndent === current));
+    });
   }
   if (paragraphSpacing) {
     paragraphSpacing.value = String(state.paragraphSpacing);
@@ -648,9 +657,15 @@ function setupSettingsPanel() {
     syncSettingsPanel();
     persistUserSettings();
   });
-  setupTypographySlider('textIndent', textIndent, (value) => {
-    state.textIndent = Math.max(0, Math.min(4, Number(value) || 2));
+  textIndent?.addEventListener('click', (event) => {
+    const choice = event.target.closest?.('[data-text-indent]');
+    if (!choice) return;
+    const next = normalizeTextIndent(choice.dataset.textIndent);
+    if (next === state.textIndent) return;
+    state.textIndent = next;
     applyTypography();
+    syncSettingsPanel();
+    persistUserSettings();
   });
   setupTypographySlider('paragraphSpacing', paragraphSpacing, (value) => {
     state.paragraphSpacing = Math.max(0.4, Math.min(3, Number(value) || 1.1));
