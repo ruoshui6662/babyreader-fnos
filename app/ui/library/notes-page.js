@@ -210,6 +210,7 @@ async function renderNotesList() {
   search.setAttribute('aria-label', '搜索笔记、想法或书名');
   search.value = notesPageState.query;
   const sort = notesElement('select', 'notes-sort');
+  sort.id = 'notesPageSort';
   sort.setAttribute('aria-label', '排序方式');
   for (const [value, label] of [['updated', '最近更新'], ['count', '笔记最多'], ['title', '书名']]) {
     const option = notesElement('option', '', label);
@@ -218,6 +219,9 @@ async function renderNotesList() {
   }
   sort.value = notesPageState.sort;
   toolbar.append(search, sort);
+  // The app's own menu, not the operating system's popover.
+  if (typeof setupCustomSelect === 'function') setupCustomSelect(sort);
+  const sortControl = sort._customSelect?.wrapper || sort;
   const content = notesElement('div', 'notes-content');
   shell.append(toolbar, content);
 
@@ -230,7 +234,7 @@ async function renderNotesList() {
   let timer = null;
   const update = () => {
     notesPageState.query = search.value.trim();
-    sort.hidden = Boolean(notesPageState.query);
+    sortControl.hidden = Boolean(notesPageState.query);
     if (notesPageState.query) void renderNotesSearch(content, notesPageState.query);
     else renderGrid();
   };

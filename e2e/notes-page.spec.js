@@ -51,11 +51,23 @@ test.describe('笔记', () => {
     await expect(page.locator('.notes-all-card')).toContainText('全部笔记汇总');
     // Most recently updated first.
     await expect(page.locator('.notes-book-card:not(.notes-all-card) .notes-book-title')).toHaveText(['E2E Indent EPUB', 'E2E EPUB']);
-    await page.locator('.notes-sort').selectOption('count');
+    // The app's own menu: rounded panel under the trigger, the current choice marked.
+    const trigger = page.locator('.notes-toolbar .custom-select-trigger');
+    await expect(trigger).toHaveText('最近更新');
+    await trigger.click();
+    const menu = page.locator('#custom-options-notesPageSort');
+    await expect(menu).toBeVisible();
+    await expect(menu.locator('[aria-selected="true"]')).toHaveText('最近更新');
+    if (SCREENSHOT_DIR) await page.screenshot({ path: `${SCREENSHOT_DIR}/notes-sort-menu.png`, clip: { x: 0, y: 0, width: 1280, height: 420 } });
+    await menu.locator('[data-value="count"]').click();
+    await expect(menu).toBeHidden();
+    await expect(trigger).toHaveText('笔记最多');
     await expect(page.locator('.notes-book-card:not(.notes-all-card) .notes-book-title')).toHaveText(['E2E EPUB', 'E2E Indent EPUB']);
     if (SCREENSHOT_DIR) await page.screenshot({ path: `${SCREENSHOT_DIR}/notes-list-desktop.png`, fullPage: true });
 
     await page.locator('.notes-search').fill('值得记下');
+    // Sorting does not apply to search results, so the menu steps aside.
+    await expect(trigger).toBeHidden();
     await expect(page.locator('.notes-search-results .notes-note')).toHaveCount(1);
     await expect(page.locator('.notes-search-results mark')).toHaveText('值得记下');
     await page.locator('.notes-note-book').click();

@@ -278,8 +278,18 @@ function setupCustomSelectGlobalEvents() {
   }, true);
 }
 
+// Pages that rebuild their controls (书库 pages) leave old menus behind.
+function pruneCustomSelects() {
+  customSelectInstances.forEach((instance) => {
+    if (instance.wrapper.isConnected) return;
+    instance.menu.remove();
+    customSelectInstances.delete(instance);
+  });
+}
+
 function setupCustomSelect(select) {
   if (!select || select._customSelect) return select?._customSelect;
+  pruneCustomSelects();
   const wrapper = document.createElement('div');
   wrapper.className = 'custom-select';
   wrapper.dataset.customSelectFor = select.id;
@@ -291,7 +301,7 @@ function setupCustomSelect(select) {
   trigger.className = 'custom-select-trigger';
   trigger.setAttribute('aria-haspopup', 'listbox');
   trigger.setAttribute('aria-expanded', 'false');
-  trigger.setAttribute('aria-label', wrapper.previousElementSibling?.textContent?.trim() || select.id);
+  trigger.setAttribute('aria-label', select.getAttribute('aria-label') || wrapper.previousElementSibling?.textContent?.trim() || select.id);
   wrapper.insertBefore(trigger, select);
 
   const menu = document.createElement('div');
