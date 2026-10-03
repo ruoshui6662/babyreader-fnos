@@ -1521,6 +1521,13 @@ async function handleApi(request, response, pathname, searchParams = new URLSear
       scanHealthy: isHealthyLibraryIndex(index)
     }));
   }
+  if (request.method === 'POST' && pathname === `${APP_PREFIX}/api/reading-time`) {
+    const body = await readJsonBody(request);
+    return sendJson(response, 200, await storage.addReadingTime(user.uid, body));
+  }
+  if (request.method === 'GET' && pathname === `${APP_PREFIX}/api/reading-time`) {
+    return sendJson(response, 200, await storage.getReadingTime(user.uid, searchParams.get('from'), searchParams.get('to')));
+  }
   if (request.method === 'GET' && pathname === `${APP_PREFIX}/api/session`) {
     return sendJson(response, 200, { uid: user.uid, username: user.username, isAdmin: user.isAdmin });
   }

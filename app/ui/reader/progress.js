@@ -321,7 +321,14 @@ async function flushPdfProgressSave({ keepalive = false } = {}) {
       || state.currentBookId !== pending.bookId
       || pdfReaderController.getCurrentBookId() !== pending.bookId
       || pdfReaderController.getGeneration() !== pending.generation) return;
-  return savePosition({ version: 1, type: 'pdf', pageIndex: pending.pageIndex }, { keepalive });
+  const pageCount = pdfReaderController.getPageCount?.() || 0;
+  const percentage = pageCount > 1 ? Math.min(1, pending.pageIndex / (pageCount - 1)) : null;
+  return savePosition({
+    version: 1,
+    type: 'pdf',
+    pageIndex: pending.pageIndex,
+    ...(percentage === null ? {} : { percentage })
+  }, { keepalive });
 }
 
 window.addEventListener('pagehide', () => {

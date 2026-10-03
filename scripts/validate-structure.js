@@ -20,6 +20,7 @@ const uiScriptFiles = [
   'app/ui/reader/annotations.js',
   'app/ui/reader/epub.js',
   'app/ui/reader/paragraphs.js',
+  'app/ui/reader/reading-timer.js',
   'app/ui/reader/document.js',
   'app/ui/reader/editor.js',
   'app/ui/reader/highlights.js',

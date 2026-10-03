@@ -16,6 +16,15 @@ const {
   annotationPayload
 } = require('./pdf-annotation-contract');
 
+const {
+  addReadingTime,
+  normalizeReadingStats,
+  normalizeReadingTimeReport,
+  readingTimeBetween
+} = require('./reading-time');
+
+// A book counts as read through once progress reaches this share.
+const FINISHED_PROGRESS = 0.98;
 const MAX_BOOKMARKS_PER_BOOK = 200;
 const MAX_BOOKMARK_LABEL_LENGTH = 120;
 const MAX_BOOKMARK_LOCATOR_TEXT_LENGTH = 240;
@@ -211,6 +220,36 @@ class UserStorage {
     return operation;
   }
 
+  // Reading time lives in its own file and queue: frequent small increments
+  // never rewrite reading-state.json (which holds every highlight).
+  async addReadingTime(uid, report, now = new Date()) {
+    const entries = normalizeReadingTimeReport(report, now);
+    const normalizedUid = normalizeUserId(uid);
+    this.readingTimeQueues ||= new Map();
+    const previous = this.readingTimeQueues.get(normalizedUid) || Promise.resolve();
+    const operation = previous.catch(() => {}).then(async () => {
+      const file = path.join(this.userDirectory(normalizedUid), 'reading-stats.json');
+      const stats = normalizeReadingStats(await readJson(file, null));
+      addReadingTime(stats, entries, now);
+      await writeJsonAtomic(file, stats);
+      return { accepted: entries.length, seconds: entries.reduce((sum, entry) => sum + entry.seconds, 0) };
+    });
+    this.readingTimeQueues.set(normalizedUid, operation);
+    operation.finally(() => {
+      if (this.readingTimeQueues.get(normalizedUid) === operation) this.readingTimeQueues.delete(normalizedUid);
+    }).catch(() => {});
+    return operation;
+  }
+
+  async getReadingTime(uid, from, to) {
+    const normalizedUid = normalizeUserId(uid);
+    await this.readingTimeQueues?.get(normalizedUid)?.catch(() => {});
+    const stats = normalizeReadingStats(await readJson(
+      path.join(this.userDirectory(normalizedUid), 'reading-stats.json'), null
+    ));
+    return { days: readingTimeBetween(stats, from, to), updatedAt: stats.updatedAt || null };
+  }
+
   async initialize() {
     await ensureDirectory(path.join(this.dataRoot, 'users'));
     await ensureDirectory(path.join(this.dataRoot, 'index'));
@@ -320,14 +359,18 @@ class UserStorage {
 
     return this.mutateUserState(uid, async (state) => {
       const previous = state.books[bookId] || { highlights: [] };
+      const percentage = Number.isFinite(progress.percentage)
+        ? Math.max(0, Math.min(1, progress.percentage))
+        : null;
+      const now = new Date().toISOString();
       state.books[bookId] = {
         ...previous,
+        // The first time a book reaches the end is when it was finished.
+        ...(!previous.finishedAt && percentage !== null && percentage >= FINISHED_PROGRESS ? { finishedAt: now } : {}),
         progress: {
           locator: String(progress.locator || '').slice(0, 4096),
-          percentage: Number.isFinite(progress.percentage)
-            ? Math.max(0, Math.min(1, progress.percentage))
-            : null,
-          updatedAt: new Date().toISOString()
+          percentage,
+          updatedAt: now
         }
       };
       return state.books[bookId].progress;

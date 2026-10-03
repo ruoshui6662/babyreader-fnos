@@ -49,6 +49,7 @@ async function loadReaderSession() {
       window.browserHost.getSession(), window.browserHost.getUserState(), window.browserHost.getLibrary()
     ]);
     state.session = session;
+    if (typeof setupReadingTimer === 'function') setupReadingTimer();
     syncAiIndexManagerAccess();
     applyUserState(userState);
     applyContinuousScroll();

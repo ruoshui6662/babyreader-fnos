@@ -113,6 +113,18 @@ window.browserHost = {
     return (await apiRequest('/session')).json();
   },
 
+  async saveReadingTime(entries, { keepalive = false } = {}) {
+    return (await apiRequest('/reading-time', {
+      method: 'POST',
+      body: JSON.stringify({ entries }),
+      ...(keepalive ? { keepalive: true } : {})
+    })).json();
+  },
+
+  async getReadingTime(from, to) {
+    return (await apiRequest(`/reading-time?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`)).json();
+  },
+
   async getLibrary() {
     return (await apiRequest('/library')).json();
   },
