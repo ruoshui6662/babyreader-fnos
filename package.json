@@ -1,6 +1,6 @@
 {
   "name": "zhenshu",
-  "version": "0.0.9",
+  "version": "0.0.10",
   "description": "枕书 EPUB, Markdown and TXT reader for fnOS",
   "main": "app/server/index.js",
   "directories": {
