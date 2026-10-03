@@ -1,6 +1,6 @@
 # Working Change Log
 
-## 液态玻璃主题（未发布）2026-10-03
+## 枕书 v0.0.11 2026-10-03 — 液态玻璃主题
 
 记录见 `docs/superpowers/plans/2026-10-03-liquid-glass-theme.md`，演示见 `docs/demos/liquid-glass/index.html`。
 
