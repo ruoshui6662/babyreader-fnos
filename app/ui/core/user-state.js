@@ -36,6 +36,8 @@ function currentUserSettings() {
     pdfLayoutMode: ['continuous', 'single', 'double'].includes(state.pdfLayoutMode)
       ? state.pdfLayoutMode : 'continuous',
     pdfPageColors: state.pdfPageColors === 'original' ? 'original' : 'theme',
+    liquidGlass: state.liquidGlass === true,
+    glassAmbient: state.glassAmbient === 'uniform' ? 'uniform' : 'cover',
     continuousScroll: readingMode === 'scroll',
     tocAutoOpen: state.tocOpen,
     highlightColor: state.highlightColor,
@@ -84,6 +86,8 @@ function applyUserState(userState) {
   state.pdfLayoutMode = ['continuous', 'single', 'double'].includes(settings.pdfLayoutMode)
     ? settings.pdfLayoutMode : 'continuous';
   state.pdfPageColors = settings.pdfPageColors === 'original' ? 'original' : 'theme';
+  state.liquidGlass = settings.liquidGlass === true;
+  state.glassAmbient = settings.glassAmbient === 'uniform' ? 'uniform' : 'cover';
   state.continuousScroll = state.readingMode === 'scroll';
   state.effectiveReadingMode = state.readingMode;
   state.tocOpen = settings.tocAutoOpen === true;
@@ -96,6 +100,7 @@ function applyUserState(userState) {
   state.fontFamily = FONT_STACKS[settings.readerFont] ? settings.readerFont : DEFAULT_READER_FONT;
 
   applyTheme(state.theme, false);
+  if (typeof applyGlass === 'function') applyGlass();
   applyZoom();
   applyTypography();
   updateTopbarState();

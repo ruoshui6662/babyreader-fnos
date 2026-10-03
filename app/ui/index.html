@@ -14,9 +14,16 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="枕书">
-  <link rel="stylesheet" href="styles.css?v=107">
+  <link rel="stylesheet" href="styles.css?v=114">
 </head>
 <body class="is-welcome">
+  <svg class="zs-glass-defs" width="0" height="0" aria-hidden="true" focusable="false">
+    <filter id="zsGlassLens" x="0" y="0" width="100%" height="100%" color-interpolation-filters="sRGB">
+      <feTurbulence type="fractalNoise" baseFrequency="0.003 0.005" numOctaves="1" seed="7" result="noise"></feTurbulence>
+      <feGaussianBlur in="noise" stdDeviation="2" result="soft"></feGaussianBlur>
+      <feDisplacementMap in="SourceGraphic" in2="soft" scale="7" xChannelSelector="R" yChannelSelector="G"></feDisplacementMap>
+    </filter>
+  </svg>
   <!-- Reader Shell: low-distraction navigation with stable legacy IDs -->
   <header class="topbar reader-shell-nav" id="topbar">
     <div class="topbar-left">
@@ -39,6 +46,9 @@
       </button>
     </div>
     <div class="topbar-right">
+      <button class="reader-nav-button library-appearance-toggle" id="btnLibraryAppearance" type="button" aria-haspopup="dialog" aria-expanded="false" aria-controls="libraryAppearanceMenu" aria-label="外观" title="外观">
+        <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3a9 9 0 1 0 0 18c1.1 0 1.7-.8 1.7-1.7 0-.5-.2-.9-.5-1.2-.3-.3-.5-.7-.5-1.2 0-.9.8-1.7 1.7-1.7H16a5 5 0 0 0 5-5c0-4-4-7.2-9-7.2z"></path><circle cx="7.5" cy="11" r="1"></circle><circle cx="10" cy="7" r="1"></circle><circle cx="14.5" cy="7" r="1"></circle></svg>
+      </button>
       <button class="reader-nav-button library-theme-toggle" id="btnLibraryTheme" type="button" data-reader-action="toggleTheme" aria-label="切换浅色模式" title="切换浅色模式"></button>
       <button class="reader-nav-button mobile-topbar-action" id="btnMobileTopSearch" type="button" data-reader-action="openSearch" data-reader-panel="search" aria-controls="readerSearchSheet" aria-expanded="false" aria-label="搜索本书" title="搜索本书">
         <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="10.5" cy="10.5" r="6.5"></circle><path d="m15.5 15.5 5 5"></path></svg>
@@ -108,6 +118,18 @@
             <button type="button" data-theme-choice="light" aria-pressed="false"><span class="settings-swatch" aria-hidden="true"></span>浅色</button>
             <button type="button" data-theme-choice="sepia" aria-pressed="false"><span class="settings-swatch" aria-hidden="true"></span>护眼</button>
             <button type="button" data-theme-choice="dark" aria-pressed="false"><span class="settings-swatch" aria-hidden="true"></span>深色</button>
+          </div>
+          <label class="settings-field settings-checkbox settings-glass-field">
+            <input id="settingLiquidGlass" type="checkbox" role="switch">
+            <span>液态玻璃</span>
+          </label>
+          <div class="settings-field settings-indent-field settings-glass-ambient-field" id="settingGlassAmbientField" hidden>
+            <span class="settings-field-label" id="settingGlassAmbientLabel">背景光</span>
+            <div class="settings-indent-segments" id="settingGlassAmbient" role="radiogroup" aria-labelledby="settingGlassAmbientLabel">
+              <button type="button" role="radio" data-glass-ambient="cover" aria-checked="true">取自封面</button>
+              <button type="button" role="radio" data-glass-ambient="uniform" aria-checked="false">淡蓝</button>
+            </div>
+            <p class="settings-field-description">侧边栏、工具条和菜单变成半透明的玻璃；背景光取自“继续阅读”的封面，或用很淡的蓝色。</p>
           </div>
           <div class="settings-font-cards" role="group" aria-label="正文字体" data-pdf-inapplicable>
             <button type="button" data-font-choice="source-serif" aria-pressed="false"><span class="settings-font-sample" aria-hidden="true">Aa 永</span><span class="settings-font-name">思源宋体</span></button>
@@ -658,14 +680,15 @@
   <script src="lib/jszip.min.js"></script>
   <script src="lib/epub.min.js"></script>
   <script src="lib/marked.min.js"></script>
-  <script src="core/state.js?v=36"></script>
+  <script src="core/state.js?v=37"></script>
   <script src="core/utils.js?v=28"></script>
   <script src="core/api.js?v=33"></script>
   <script src="core/reader-route.js?v=1"></script>
-  <script src="core/user-state.js?v=40"></script>
+  <script src="core/glass.js?v=2"></script>
+  <script src="core/user-state.js?v=41"></script>
   <script src="reader/annotations.js?v=2"></script>
   <script src="reader/device-profile.js?v=34"></script>
-  <script src="reader/epub.js?v=36"></script>
+  <script src="reader/epub.js?v=37"></script>
   <script src="reader/paragraphs.js?v=1"></script>
   <script src="reader/document.js?v=30"></script>
   <script src="reader/editor.js?v=28"></script>
@@ -679,7 +702,7 @@
   <script src="reader/progress.js?v=37"></script>
   <script src="reader/bookmarks.js?v=4"></script>
   <script src="reader/pagination.js?v=37"></script>
-  <script src="reader/settings.js?v=39"></script>
+  <script src="reader/settings.js?v=40"></script>
   <script src="reader/jump-back.js?v=1"></script>
   <script src="reader/navigation.js?v=31"></script>
   <script src="reader/pdf-annotation-geometry.js?v=1"></script>
@@ -699,8 +722,8 @@
   <script src="library/note-card.js?v=3"></script>
   <script src="library/notes-export.js?v=1"></script>
   <script src="library/notes-page.js?v=7"></script>
-  <script src="library/view.js?v=40"></script>
+  <script src="library/view.js?v=41"></script>
   <script src="reader/reading-timer.js?v=1"></script>
-  <script src="app.js?v=41"></script>
+  <script src="app.js?v=42"></script>
 </body>
 </html>

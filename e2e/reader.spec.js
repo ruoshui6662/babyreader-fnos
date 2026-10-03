@@ -764,7 +764,8 @@ test('settings drawer presents grouped controls and a selected segmented tab', a
   await expect(page.locator('.settings-group-card').first()).toHaveCSS('border-radius', '16px');
   await expect(page.locator('#settingTocOpen')).toHaveCSS('width', '44px');
   await expect(page.locator('#settingTocOpen')).toHaveCSS('height', '26px');
-  await expect(page.locator('.settings-checkbox span')).toHaveText('默认展开目录');
+  await expect(page.locator('.settings-toc-open-field span')).toHaveText('默认展开目录');
+  await expect(page.locator('.settings-glass-field span')).toHaveText('液态玻璃');
 
   // Theme and font are swatches/cards now; the remaining dropdowns keep
   // the shared select styling.

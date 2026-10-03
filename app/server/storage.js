@@ -322,6 +322,14 @@ class UserStorage {
         pdfPageColors: ['theme', 'original'].includes(settings.pdfPageColors)
           ? settings.pdfPageColors
           : ['theme', 'original'].includes(state.settings.pdfPageColors) ? state.settings.pdfPageColors : 'theme',
+        // 液态玻璃: optional theme, off unless chosen; its ambient light comes
+        // from the 继续阅读 cover or is a pale blue.
+        liquidGlass: typeof settings.liquidGlass === 'boolean'
+          ? settings.liquidGlass
+          : state.settings.liquidGlass === true,
+        glassAmbient: ['cover', 'uniform'].includes(settings.glassAmbient)
+          ? settings.glassAmbient
+          : ['cover', 'uniform'].includes(state.settings.glassAmbient) ? state.settings.glassAmbient : 'cover',
         // Opt-in: opening a book shows the text, not the contents panel.
         // Replaces tocOpen, which every save wrote as true.
         tocAutoOpen: settings.tocAutoOpen === true,
