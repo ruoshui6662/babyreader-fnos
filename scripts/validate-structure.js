@@ -39,6 +39,7 @@ const uiScriptFiles = [
   'app/ui/shell/drawer.js',
   'app/ui/library/pdf-covers.js',
   'app/ui/library/import.js',
+  'app/ui/library/shelf-nav.js',
   'app/ui/library/view.js',
   'app/ui/app.js'
 ];

@@ -44,6 +44,7 @@ async function createReaderDom() {
     '../app/ui/library/reorder.js',
     '../app/ui/library/import.js',
     '../app/ui/library/organization.js',
+    '../app/ui/library/shelf-nav.js',
     '../app/ui/library/view.js',
     '../app/ui/app.js'
   ];
