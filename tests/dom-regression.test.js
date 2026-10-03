@@ -5904,3 +5904,21 @@ test('book cards show the author only; a book without one shows no format in its
   assert.equal(detail(epub.id).textContent, '烽火戏诸侯');
   await window.happyDOM.close();
 });
+
+test('identical repeated phrases: the search occurrence picks the right one; a count mismatch falls back to position', async () => {
+  const { window } = await createReaderDom();
+  const article = window.document.getElementById('article');
+  // Same sentence three times: context cannot tell them apart, and the
+  // index offset (code points) does not match the DOM (UTF-16) here.
+  article.innerHTML = '<p>𠀀第一章测试段落。</p><p>𠀀第一章测试段落。</p><p>𠀀第一章测试段落。</p>';
+  const pick = (locator) => window.readerSearchApi.findSearchTextRange(article, '测试段落', { snippet: '…第一章测试段落。…', offset: 4, ...locator });
+  const paragraphOf = (target) => [...article.querySelectorAll('p')].indexOf(target.range.startContainer.parentElement);
+
+  assert.equal(pick({}), null, 'without help the repeats stay ambiguous');
+  assert.equal(paragraphOf(pick({ occurrence: 2, occurrences: 3 })), 2);
+  assert.equal(paragraphOf(pick({ occurrence: 1, occurrences: 3 })), 1);
+  // The page has an extra occurrence the index does not (a caption): the
+  // count no longer lines up, the relative position still finds the hit.
+  article.insertAdjacentHTML('afterbegin', '<p>图注：测试段落</p>');
+  assert.equal(paragraphOf(pick({ occurrence: 2, occurrences: 3, position: 0.85 })), 3);
+});
