@@ -643,6 +643,21 @@ test('double-page navigation places previous and next controls at the lower corn
   await expect(previous).toHaveCSS('height', '32px');
   await expect(next).toHaveCSS('width', '72px');
   await expect(next).toHaveCSS('height', '32px');
+  // Label and chevron centred in the pill: equal space on both sides.
+  for (const pill of [previous, next]) {
+    await expect(pill).toHaveCSS('justify-content', 'center');
+    const gaps = await pill.evaluate((button) => {
+      const box = button.getBoundingClientRect();
+      const range = document.createRange();
+      range.selectNodeContents(button);
+      const icon = button.querySelector('svg').getBoundingClientRect();
+      const label = parseFloat(getComputedStyle(button, button.id === 'btnPreviousPage' ? '::after' : '::before').width) || 0;
+      const content = icon.width + 2 + label;
+      const start = button.id === 'btnPreviousPage' ? icon.left : icon.right - content;
+      return [start - box.left, box.right - (start + content)];
+    });
+    expect(Math.abs(gaps[0] - gaps[1])).toBeLessThanOrEqual(2);
+  }
   await expect(previous).not.toHaveCSS('left', 'auto');
   await expect(next).not.toHaveCSS('right', 'auto');
 

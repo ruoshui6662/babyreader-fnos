@@ -7184,11 +7184,20 @@ html:not([data-reader-surface="mobile"]) .reader-floating-toolbar button:disable
     border: 0;
     box-shadow: none;
   }
+  /* Both pills stay 72px wide; label and chevron sit centred in them. */
+  .reader .reader-page-nav-btn:not([hidden]) {
+    justify-content: center;
+    gap: 2px;
+    padding: 0;
+    line-height: 1;
+  }
   .reader #btnPreviousPage:not([hidden]) {
     left: calc(var(--reader-inset-left, 0px) + 16px);
+    justify-content: center;
   }
   .reader #btnNextPage:not([hidden]) {
     right: calc(var(--reader-inset-right, 0px) + 16px);
+    justify-content: center;
   }
   .reader .reader-page-nav-btn:not([hidden]):hover,
   .reader .reader-page-nav-btn:not([hidden]):focus-visible {

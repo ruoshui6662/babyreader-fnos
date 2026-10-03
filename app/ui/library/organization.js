@@ -106,7 +106,9 @@ function createLibraryBookCard(book, { open = true } = {}) {
   const name = document.createElement('strong');
   name.textContent = libraryBookTitle(book);
   metadata.appendChild(name);
-  const detail = book.author || libraryBookFormatLabel(book);
+  // Only the author: a format in its place appeared just for books without
+  // one (mostly PDFs) and said nothing the cover does not.
+  const detail = book.author || '';
   const percent = libraryBookProgressPercent(book);
   if (detail || percent !== null) {
     const line = document.createElement('span');
