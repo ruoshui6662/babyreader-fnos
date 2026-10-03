@@ -121,6 +121,18 @@ window.browserHost = {
     })).json();
   },
 
+  async getNotesSummary() {
+    return (await apiRequest('/notes')).json();
+  },
+
+  async getBookNotes(bookId) {
+    return (await apiRequest(`/notes/${encodeURIComponent(bookId)}`)).json();
+  },
+
+  async searchNotes(query) {
+    return (await apiRequest(`/notes/search?q=${encodeURIComponent(query)}`)).json();
+  },
+
   async getReadingStats(range, anchor) {
     const query = new URLSearchParams({ range, anchor, tz: String(new Date().getTimezoneOffset()) });
     return (await apiRequest(`/stats?${query}`)).json();

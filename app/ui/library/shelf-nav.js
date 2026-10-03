@@ -38,13 +38,27 @@ function shelfViewFromLocation(href = window.location.href) {
   }
 }
 
-function shelfViewUrl(view, href = window.location.href) {
+function shelfViewUrl(view, href = window.location.href, { doc = null } = {}) {
   const url = new URL(href);
   if (view === 'library') url.searchParams.delete('view');
   else url.searchParams.set('view', view);
   url.searchParams.delete('book');
+  if (doc) url.searchParams.set('doc', doc);
+  else url.searchParams.delete('doc');
   return `${url.pathname}${url.search}${url.hash}`;
 }
+
+// A page inside a shelf page (the notes document being read).
+function shelfDocFromLocation(href = window.location.href) {
+  try {
+    const doc = new URL(href).searchParams.get('doc');
+    return /^(?:all|[a-f0-9]{64})$/.test(doc || '') ? doc : null;
+  } catch {
+    return null;
+  }
+}
+
+let currentShelfDoc = null;
 
 function ensureShelfNav() {
   let nav = document.getElementById('shelfNav');
@@ -61,8 +75,8 @@ function ensureShelfNav() {
     button.title = label;
     button.innerHTML = `${icon}<span class="shelf-nav-label">${label}</span>`;
     button.addEventListener('click', () => {
-      if (view === currentShelfView && document.body.classList.contains('is-library')) return;
-      void showShelfView(view, { push: true });
+      if (view === currentShelfView && !currentShelfDoc && document.body.classList.contains('is-library')) return;
+      void showShelfView(view, { push: true, doc: null });
     });
     nav.appendChild(button);
   }
@@ -122,18 +136,23 @@ function renderShelfPlaceholder(view) {
 }
 
 // Shows one shelf page. `library` (already loaded) avoids a second fetch.
-async function showShelfView(view, { push = false, library = null } = {}) {
+async function showShelfView(view, { push = false, library = null, doc = undefined } = {}) {
   const next = Object.hasOwn(SHELF_VIEWS, view) ? view : 'library';
+  // Without an explicit document, keep the one in the URL (refresh, return
+  // from a book) when staying on the same page.
+  const nextDoc = doc !== undefined ? doc : (shelfViewFromLocation() === next ? shelfDocFromLocation() : null);
   if (push && window.history?.pushState) {
-    window.history.pushState({ ...(window.history.state || {}), shelfView: next }, '', shelfViewUrl(next));
-  } else if (window.history?.replaceState && shelfViewFromLocation() !== next) {
-    window.history.replaceState({ ...(window.history.state || {}), shelfView: next }, '', shelfViewUrl(next));
+    window.history.pushState({ ...(window.history.state || {}), shelfView: next }, '', shelfViewUrl(next, window.location.href, { doc: nextDoc }));
+  } else if (window.history?.replaceState
+      && (shelfViewFromLocation() !== next || shelfDocFromLocation() !== nextDoc)) {
+    window.history.replaceState({ ...(window.history.state || {}), shelfView: next }, '', shelfViewUrl(next, window.location.href, { doc: nextDoc }));
   }
+  currentShelfDoc = nextDoc;
   syncShelfNav(next);
   if (next === 'library') {
     renderLibrary(await loadShelfLibrary(library));
   } else if (typeof SHELF_PAGE_RENDERERS[next] === 'function') {
-    await SHELF_PAGE_RENDERERS[next]({ library });
+    await SHELF_PAGE_RENDERERS[next]({ library, doc: nextDoc });
   } else {
     renderShelfPlaceholder(next);
   }
@@ -151,7 +170,8 @@ function setupShelfNav() {
   window.addEventListener('popstate', () => {
     if (!document.body.classList.contains('is-library')) return;
     const view = shelfViewFromLocation();
-    if (view === currentShelfView) return;
-    void showShelfView(view);
+    const doc = shelfDocFromLocation();
+    if (view === currentShelfView && doc === currentShelfDoc) return;
+    void showShelfView(view, { doc });
   });
 }

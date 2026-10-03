@@ -75,6 +75,7 @@ function notesOf(bookState) {
       thought: item.thought || item.note || '',
       color: item.color || 'yellow',
       createdAt: item.createdAt || null,
+      updatedAt: item.updatedAt || null,
       chapterHref: item.chapterHref || '',
       locator: item.locator || ''
     });
@@ -87,6 +88,7 @@ function notesOf(bookState) {
       thought: item.thought || item.note || '',
       color: item.color || 'yellow',
       createdAt: item.createdAt || null,
+      updatedAt: item.updatedAt || null,
       pageIndex: Number.isInteger(item.targets?.[0]?.pageIndex) ? item.targets[0].pageIndex : null
     });
   }
@@ -181,4 +183,4 @@ function buildReadingStats({ days = {}, readingState = { books: {} }, bookInfo =
   };
 }
 
-module.exports = { buildReadingStats, periodFor, previousPeriodFor, localDateOf };
+module.exports = { buildReadingStats, notesOf, periodFor, previousPeriodFor, localDateOf };
