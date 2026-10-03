@@ -76,7 +76,12 @@ test('time that could not be sent waits and is sent after a reload', async ({ pa
   const start = await secondsToday(page, bookId);
   await page.route('**/api/reading-time', (route) => (route.request().method() === 'POST' ? route.abort() : route.continue()));
   await keepReading(page, 3000);
-  const pending = await page.evaluate(() => [...window.__zhenshuReadingTimer.state.pending.values()].reduce((sum, ms) => sum + ms, 0));
+  // A report in flight holds its whole seconds until it fails; wait for it.
+  const pending = await page.evaluate(async () => {
+    const timer = window.__zhenshuReadingTimer.state;
+    while (timer.sending) await timer.sending;
+    return [...timer.pending.values()].reduce((sum, ms) => sum + ms, 0);
+  });
   expect(pending).toBeGreaterThanOrEqual(2000);
   expect(await page.evaluate((uid) => localStorage.getItem(`zhenshu-reading-time:${uid}`), await page.evaluate(() => state.session.uid))).not.toBeNull();
   await page.unroute('**/api/reading-time');
