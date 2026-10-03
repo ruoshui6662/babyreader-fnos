@@ -73,7 +73,9 @@ test('with MOBI disabled the scan is identical to a library without Kindle files
   // Different temp roots only change path-derived identifiers.
   const comparable = ({ id, root, path: p, fingerprint, sourceRootId, ...book }) => book;
   assert.deepEqual(indexed.books.map(comparable), reference.books.map(comparable));
-  assert.deepEqual(indexed.scan, reference.scan);
+  // Folder summaries differ only in the temp root path.
+  const scanWithoutRoots = ({ roots, ...scan }) => ({ ...scan, roots: roots.map(({ root, ...summary }) => summary) });
+  assert.deepEqual(scanWithoutRoots(indexed.scan), scanWithoutRoots(reference.scan));
 });
 
 test('with MOBI enabled Kindle files are indexed; DRM is counted but never an error', async (t) => {

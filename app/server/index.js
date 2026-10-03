@@ -100,6 +100,30 @@ function isBookVisible(book, switches = readerFormatSwitches()) {
   return true;
 }
 
+// The library as one user sees it. Admins also get where the books are read
+// from: each library folder with its book count and anything it could not
+// read, and folders fnOS named that cannot be opened at all. Other users see
+// no paths.
+function libraryResponse(index, user, switches, bookTitles) {
+  const { roots = [], ...scan } = index.scan || {};
+  return {
+    ...index,
+    scan,
+    features: libraryFeatures(index, switches, { canImport: user.isAdmin }),
+    configured: authorizedRoots.length > 0,
+    authorizedRootCount: authorizedRoots.length,
+    scanState: currentScanState(),
+    ...(user.isAdmin ? {
+      folders: {
+        scanned: roots,
+        unavailable: rootDiagnostics.rejectedRoots.map(({ root, code, error }) => ({ root, code, error }))
+      }
+    } : {}),
+    books: index.books.filter((book) => isBookVisible(book, switches))
+      .map((book) => publicBook(book, bookTitles))
+  };
+}
+
 function libraryFeatures(index, switches = readerFormatSwitches(), { canImport = false } = {}) {
   const books = Array.isArray(index?.books) ? index.books : [];
   const indexedMobi = books.filter((book) => book.type === 'mobi' && !book.error).length;
@@ -1537,30 +1561,14 @@ async function handleApi(request, response, pathname, searchParams = new URLSear
     const index = await storage.getLibraryIndex();
     const bookTitles = await userBookTitles(user.uid);
     const switches = readerFormatSwitches();
-    return sendJson(response, 200, {
-      ...index,
-      features: libraryFeatures(index, switches, { canImport: user.isAdmin }),
-      configured: authorizedRoots.length > 0,
-      authorizedRootCount: authorizedRoots.length,
-      scanState: currentScanState(),
-      books: index.books.filter((book) => isBookVisible(book, switches))
-        .map((book) => publicBook(book, bookTitles))
-    });
+    return sendJson(response, 200, libraryResponse(index, user, switches, bookTitles));
   }
   if (request.method === 'POST' && pathname === `${APP_PREFIX}/api/library/scan`) {
     if (!user.isAdmin) return sendError(response, 403, 'Administrator access is required');
     const index = await runLibraryScan();
     const switches = readerFormatSwitches();
     const bookTitles = await userBookTitles(user.uid);
-    return sendJson(response, 200, {
-      ...index,
-      features: libraryFeatures(index, switches, { canImport: user.isAdmin }),
-      configured: authorizedRoots.length > 0,
-      authorizedRootCount: authorizedRoots.length,
-      scanState: currentScanState(),
-      books: index.books.filter((book) => isBookVisible(book, switches))
-        .map((book) => publicBook(book, bookTitles))
-    });
+    return sendJson(response, 200, libraryResponse(index, user, switches, bookTitles));
   }
 
   const organizationCollectionMatch = pathname.match(new RegExp(`^${APP_PREFIX}/api/library/collections/([^/]+)$`));

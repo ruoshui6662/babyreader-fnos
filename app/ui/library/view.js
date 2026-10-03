@@ -15,7 +15,103 @@ function formatLibraryScanStatus(scan) {
   const reused = count(scan.reusedCount);
   const errors = count(scan.errorCount);
   const errorSummary = errors ? '，' + errors + ' 项未能读取' : '';
-  return '扫描完成：发现 ' + discovered + ' 项，新增 ' + indexed + ' 本，复用 ' + reused + ' 本' + errorSummary + '。';
+  const skipped = count(scan.skippedCount);
+  const skippedSummary = skipped ? '，' + skipped + ' 个子文件夹或文件无法读取（已跳过）' : '';
+  return '扫描完成：发现 ' + discovered + ' 项，新增 ' + indexed + ' 本，复用 ' + reused + ' 本' + errorSummary + skippedSummary + '。';
+}
+
+// Why a reason code stopped a folder or file from being read, in words.
+function libraryReadFailure(code, fallback = '') {
+  const reasons = {
+    EACCES: '没有读取权限',
+    EPERM: '没有读取权限',
+    ENOENT: '文件夹不存在',
+    ENOTDIR: '不是文件夹',
+    ELOOP: '链接层级过多',
+    EIO: '磁盘读取出错'
+  };
+  return reasons[code] || fallback || '无法读取';
+}
+
+// Where the books are read from (admins only). Shown when the library is
+// empty, or when a folder or some of its contents could not be read, so the
+// cause is on the page instead of behind SSH.
+function createLibraryFoldersPanel(library, { empty = false } = {}) {
+  const folders = library?.folders;
+  if (!folders) return null;
+  const scanned = Array.isArray(folders.scanned) ? folders.scanned : [];
+  const unavailable = Array.isArray(folders.unavailable) ? folders.unavailable : [];
+  const skippedTotal = scanned.reduce((sum, folder) => sum + (Number(folder.skippedCount) || 0), 0);
+  if (!empty && !unavailable.length && !skippedTotal) return null;
+
+  const panel = document.createElement('section');
+  panel.className = 'library-folders';
+  panel.setAttribute('aria-label', '书库文件夹');
+  const title = document.createElement('h2');
+  title.className = 'library-folders-title';
+  title.textContent = '书库文件夹';
+  panel.appendChild(title);
+
+  if (!scanned.length && !unavailable.length) {
+    const none = document.createElement('p');
+    none.className = 'library-folders-hint';
+    none.textContent = '还没有可读取的书库文件夹：请在 fnOS 应用设置中为枕书授权文件夹，或把书放进共享文件夹 zhenshu/library。';
+    panel.appendChild(none);
+    return panel;
+  }
+
+  const list = document.createElement('ul');
+  list.className = 'library-folders-list';
+  for (const folder of scanned) {
+    const item = document.createElement('li');
+    const where = document.createElement('code');
+    where.textContent = folder.root;
+    const count = document.createElement('span');
+    count.className = 'library-folders-count';
+    const skipped = Number(folder.skippedCount) || 0;
+    count.textContent = `${Number(folder.bookCount) || 0} 本${skipped ? `，${skipped} 项无法读取` : ''}`;
+    if (skipped) count.classList.add('is-warning');
+    item.append(where, count);
+    list.appendChild(item);
+  }
+  for (const folder of unavailable) {
+    const item = document.createElement('li');
+    const where = document.createElement('code');
+    where.textContent = folder.root;
+    const reason = document.createElement('span');
+    reason.className = 'library-folders-count is-warning';
+    reason.textContent = `无法打开：${libraryReadFailure(folder.code, folder.error)}`;
+    item.append(where, reason);
+    list.appendChild(item);
+  }
+  panel.appendChild(list);
+
+  const skippedItems = scanned.flatMap((folder) => (folder.skipped || [])
+    .map((entry) => ({ root: folder.root, ...entry })));
+  if (skippedItems.length) {
+    const details = document.createElement('details');
+    details.className = 'library-folders-skipped';
+    const summary = document.createElement('summary');
+    summary.textContent = `无法读取的子文件夹或文件（${skippedTotal}）`;
+    const skippedList = document.createElement('ul');
+    for (const entry of skippedItems) {
+      const item = document.createElement('li');
+      const where = document.createElement('code');
+      where.textContent = entry.path;
+      item.append(where, document.createTextNode(` — ${libraryReadFailure(entry.code)}`));
+      skippedList.appendChild(item);
+    }
+    details.append(summary, skippedList);
+    panel.appendChild(details);
+  }
+
+  const hint = document.createElement('p');
+  hint.className = 'library-folders-hint';
+  hint.textContent = empty
+    ? '把 EPUB、PDF、MOBI/AZW3、TXT 或 Markdown 放进上面的文件夹，然后点“重新扫描”。'
+    : '其余的书已正常读取。无法读取的项目通常是权限问题：请让枕书应用用户可以读取它们后重新扫描。';
+  panel.appendChild(hint);
+  return panel;
 }
 
 const libraryFilterQueries = new Map();
@@ -32,7 +128,8 @@ function createLibraryScanStatus(scan) {
   status.setAttribute('aria-live', 'polite');
   status.textContent = formatLibraryScanStatus(scan);
   status.hidden = !status.textContent || !(showNextLibraryScanResult
-    || scan?.status === 'running' || scan?.status === 'failed' || Number(scan?.errorCount) > 0);
+    || scan?.status === 'running' || scan?.status === 'failed' || Number(scan?.errorCount) > 0
+    || Number(scan?.skippedCount) > 0);
   showNextLibraryScanResult = false;
   return status;
 }
@@ -287,6 +384,8 @@ function renderFlatLibrary(library, { organizationEnabled = false } = {}) {
   shell.appendChild(header);
   if (typeof setupLibraryPhoneMenu === 'function') setupLibraryPhoneMenu(actions);
   shell.appendChild(scanStatus);
+  const foldersPanel = createLibraryFoldersPanel(library, { empty: !validBooks.length });
+  if (foldersPanel) shell.appendChild(foldersPanel);
   const recentCard = createLibraryRecentCard(validBooks);
   if (recentCard) shell.appendChild(recentCard);
 
