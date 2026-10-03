@@ -1,6 +1,6 @@
 # Working Change Log
 
-## PDF 页面颜色跟随主题（未发布）2026-10-02
+## 枕书 v0.0.6 2026-10-02 — PDF 页面颜色跟随主题
 
 方案与记录见 `docs/superpowers/plans/2026-10-02-pdf-page-colors.md`。
 
