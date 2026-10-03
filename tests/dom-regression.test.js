@@ -5892,3 +5892,14 @@ test('admins see which library folders were read, with counts and unreadable ite
   // No folder at all: say how to add one.
   assert.match(api.createLibraryFoldersPanel({ folders: { scanned: [], unavailable: [] } }, { empty: true }).textContent, /zhenshu\/library/);
 });
+
+test('book cards show the author only; a book without one shows no format in its place', async () => {
+  const { window, api } = await createReaderDom();
+  const pdf = { id: 'c'.repeat(64), title: '论文', type: 'pdf' };
+  const epub = { id: 'd'.repeat(64), title: '剑来', author: '烽火戏诸侯', type: 'epub' };
+  api.renderLibrary({ books: [pdf, epub], features: { libraryOrganization: false } });
+  const detail = (id) => window.document.querySelector(`.library-book[data-book-id="${id}"] .library-book-detail`);
+  assert.equal(detail(pdf.id), null);
+  assert.equal(detail(epub.id).textContent, '烽火戏诸侯');
+  await window.happyDOM.close();
+});
