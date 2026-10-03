@@ -1,5 +1,5 @@
 appname=zhenshu
-version=0.0.8
+version=0.0.9
 display_name=枕书
 desc=枕书：飞牛 fnOS 上的私人书房。阅读 EPUB、PDF、MOBI/AZW3、Markdown 和 TXT，支持划线笔记、全文搜索与 AI 问书，阅读进度多端同步。
 source=thirdparty
@@ -13,4 +13,4 @@ desktop_applaunchname=zhenshu.main
 ctl_stop=true
 checkport=false
 disable_authorization_path=false
-changelog=新增阅读统计与笔记：书库左侧导航（手机为底部标签栏）可进入“阅读统计”（本周/本月阅读时长、每日柱状图、书籍排行、最近笔记）和“笔记”（按书汇总划线与想法，按章节排列，可搜索、跳到原文）；任意笔记可生成书摘卡片（书页/素笺/墨夜三种风格、三种字体、3:4/1:1/16:9），多条或整本可生成长图，笔记可导出 Markdown 或 PDF。另外：TXT 自动识别 GBK/Big5/UTF-16 编码；书库个别文件夹读不了时不再影响其他书；深色 PDF 更清晰。
+changelog=界面统一：书库、阅读统计、笔记和书摘卡片的按钮统一为三种样式（主要、普通、文字），选中状态统一为浅蓝；进入分类后不再显示“返回书库”，点“我的书籍”即可返回；笔记排序和整理模式的分类选择改用应用内下拉菜单；米黄主题下卡片面板与笔记不再混入阅读器配色；手机“⋯”菜单不再被分类标签遮挡。
