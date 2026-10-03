@@ -9,7 +9,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const test = require('node:test');
 
-const css = fs.readFileSync(path.resolve(__dirname, '../app/ui/styles.css'), 'utf8');
+const css = require('./helpers/styles').readAllStylesSync();
 const transitions = css.split(/\r?\n/).filter((line) => /\btransition(-duration)?\s*:/.test(line));
 
 test('transitions use only the motion duration tokens', () => {

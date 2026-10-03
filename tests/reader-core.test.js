@@ -1,5 +1,7 @@
 'use strict';
 
+const { readAllStyles } = require('./helpers/styles');
+
 const assert = require('node:assert/strict');
 const fs = require('node:fs/promises');
 const os = require('node:os');
@@ -1287,7 +1289,7 @@ test('frontend restores server state and wires library, settings, EPUB TOC, and 
     sourceFiles.map((relative) => fs.readFile(path.resolve(__dirname, relative), 'utf8'))
   )).join('\n');
   const html = await fs.readFile(path.resolve(__dirname, '../app/ui/index.html'), 'utf8');
-  const css = await fs.readFile(path.resolve(__dirname, '../app/ui/styles.css'), 'utf8');
+  const css = await readAllStyles();
 
   assert.match(source, /getUserState\(\)/);
   assert.match(source, /applyUserState\(userState\)/);
@@ -1337,7 +1339,7 @@ test('frontend restores server state and wires library, settings, EPUB TOC, and 
 test('typography settings use semantic range metadata and transient values', async () => {
   const settingsSource = await fs.readFile(path.resolve(__dirname, '../app/ui/reader/settings.js'), 'utf8');
   const html = await fs.readFile(path.resolve(__dirname, '../app/ui/index.html'), 'utf8');
-  const css = await fs.readFile(path.resolve(__dirname, '../app/ui/styles.css'), 'utf8');
+  const css = await readAllStyles();
 
   assert.match(settingsSource, /const TYPOGRAPHY_SLIDER_CONFIG = Object\.freeze\(/);
   assert.match(settingsSource, /function nearestTypographyPreset\(/);
@@ -1359,7 +1361,7 @@ test('typography settings use semantic range metadata and transient values', asy
 });
 
 test('AI modal follows application theme tokens instead of a fixed light palette', async () => {
-  const css = await fs.readFile(path.resolve(__dirname, '../app/ui/styles.css'), 'utf8');
+  const css = await readAllStyles();
   const modalStart = css.indexOf('.ai-modal {');
   const modalEnd = css.indexOf('.ai-modal[hidden]', modalStart);
   const modal = css.slice(modalStart, modalEnd);

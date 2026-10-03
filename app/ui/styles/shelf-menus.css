@@ -1,0 +1,91 @@
+/* 书库各页的小控件：选择长图浮条、笔记排序与整理分类的下拉、分段滑块。
+   Split from styles.css; linked after it in index.html, in this order. */
+
+/* 选择书摘（生成长图） */
+.notes-select {
+  align-self: flex-start;
+  width: 20px;
+  height: 20px;
+  margin: 0;
+  accent-color: var(--library-accent, var(--color-accent));
+  cursor: pointer;
+}
+.library-view.is-selecting .notes-note { cursor: pointer; }
+.library-view.is-selecting .notes-note-actions { display: none; }
+.library-view.is-selecting .notes-note:not(.is-selected) { opacity: .55; }
+.library-view.is-selecting .notes-note.is-selected { box-shadow: 0 0 0 2px var(--library-accent, var(--color-accent)); }
+.library-view.is-selecting .notes-doc-body { padding-bottom: 88px; }
+.notes-select-bar {
+  position: sticky;
+  bottom: 16px;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  max-width: 820px;
+  margin-top: 16px;
+  padding: 10px 12px 10px 16px;
+  color: var(--library-text, var(--color-text));
+  font: 14px var(--font-ui);
+  background: var(--library-surface, var(--color-elevated));
+  border-radius: 14px;
+  box-shadow: 0 8px 28px rgba(0, 0, 0, .22);
+}
+.notes-select-count { margin-right: auto; font-weight: 600; }
+.note-card-dialog.is-long .note-card-preview {
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 14px;
+  max-height: min(72vh, 680px);
+  overflow-y: auto;
+}
+.note-card-dialog.is-long .note-card-canvas {
+  width: min(100%, 420px);
+  max-height: none;
+}
+@media (max-width: 639px) {
+  .notes-select-bar { bottom: 8px; gap: 4px; padding: 8px 8px 8px 12px; }
+  .notes-select-count { font-size: 13px; }
+}
+@media (max-width: 760px) {
+  .note-card-dialog.is-long .note-card-preview { max-height: 50dvh; }
+}
+
+/* 笔记排序：与搜索框同高的应用内下拉 */
+.notes-toolbar .custom-select { width: 128px; min-width: 128px; max-width: 128px; }
+.notes-toolbar .custom-select[hidden] { display: none; }
+.notes-toolbar .custom-select-trigger {
+  min-height: 38px;
+  padding: 0 30px 0 14px;
+  color: var(--library-text, var(--color-text));
+  font: 500 14px var(--font-ui);
+  text-align: left;
+  background: var(--library-fill, var(--color-fill));
+  border-radius: 10px;
+}
+#custom-options-notesPageSort .custom-select-option { padding: 7px 12px; text-align: left; }
+
+/* 整理模式：分类选择用应用内下拉 */
+.library-book-manage-controls .custom-select { flex: 1 1 auto; width: auto; min-width: 0; max-width: none; }
+.library-book-manage-controls .custom-select-trigger {
+  min-height: 36px;
+  padding: 0 26px 0 10px;
+  overflow: hidden;
+  color: var(--library-text, var(--color-text));
+  font: 12px var(--font-ui);
+  text-align: left;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  background: var(--library-surface, var(--color-fill));
+  border: 1px solid var(--library-separator, var(--color-separator));
+  border-radius: 10px;
+}
+.library-book-manage-controls .custom-select-trigger::after { right: 11px; }
+.custom-select-menu[id^="custom-options-libraryCollectionSelect-"] .custom-select-option { padding: 7px 12px; text-align: left; }
+
+/* Segmented thumb: a touch lighter than the surface so it reads in dark themes too. */
+.stats-range button[aria-checked="true"],
+.note-card-option[aria-checked="true"] {
+  background: color-mix(in srgb, var(--library-surface, var(--color-elevated)) 86%, #fff);
+}

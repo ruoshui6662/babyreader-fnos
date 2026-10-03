@@ -10,7 +10,7 @@ const path = require('node:path');
 const test = require('node:test');
 
 const ROOT = path.resolve(__dirname, '..');
-const css = fs.readFileSync(path.join(ROOT, 'app/ui/styles.css'), 'utf8');
+const css = require('./helpers/styles').readAllStylesSync();
 const SHELF_SCRIPTS = fs.readdirSync(path.join(ROOT, 'app/ui/library'))
   .filter((name) => name.endsWith('.js'))
   .map((name) => ({ name, source: fs.readFileSync(path.join(ROOT, 'app/ui/library', name), 'utf8') }));

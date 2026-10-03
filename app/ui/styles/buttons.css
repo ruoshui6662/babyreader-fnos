@@ -1,0 +1,71 @@
+/* 共用按钮（zs-btn）：主要 / 普通 / 文字三种角色。
+   Split from styles.css; linked after it in index.html, in this order. */
+
+/* ============================================================
+   按钮（书库 / 阅读统计 / 笔记 / 卡片面板共用）
+   - zs-btn-primary   主要：实心强调色。一个区域最多一个：完成、继续阅读、继续、
+                      生成长图、保存图片、保存。
+   - zs-btn-secondary 普通：灰色填充。其余操作：新建分类、导入、导出……
+   - zs-btn-plain     文字：强调色文字、无底。导航与轻量操作：‹ 全部笔记、全部笔记 ›。
+                      加 zs-btn-quiet 变为灰色文字（条目里的小工具：跳到原文、复制）。
+   - zs-btn-small / zs-btn-icon 只改尺寸。
+   颜色只来自书库的颜色变量（在阅读页打开时退回到阅读器的变量）；
+   不要在按钮规则里写死颜色——tests/ui-buttons.test.js 会检查。
+   ============================================================ */
+.zs-btn {
+  --zs-btn-accent: var(--library-accent, var(--color-accent));
+  --zs-btn-fg: var(--library-text, var(--color-text));
+  --zs-btn-bg: var(--library-fill, var(--color-fill));
+  --zs-btn-bg-hover: var(--library-fill-strong, var(--color-fill));
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 36px;
+  padding: 0 14px;
+  color: var(--zs-btn-fg);
+  font: 500 14px/1.2 var(--font-ui);
+  white-space: nowrap;
+  text-decoration: none;
+  background: var(--zs-btn-bg);
+  border: 0;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: background-color var(--dur-fast) var(--ease-out), opacity var(--dur-fast) var(--ease-out), transform var(--dur-fast) var(--ease-out);
+}
+.zs-btn:hover:not(:disabled) { background: var(--zs-btn-bg-hover); }
+.zs-btn:active:not(:disabled) { transform: scale(.97); }
+.zs-btn:focus-visible {
+  outline: 3px solid color-mix(in srgb, var(--zs-btn-accent) 55%, transparent);
+  outline-offset: 2px;
+}
+.zs-btn:disabled { opacity: .45; cursor: default; }
+
+.zs-btn-primary {
+  --zs-btn-fg: var(--library-on-accent, var(--color-on-accent, #fff));
+  --zs-btn-bg: var(--zs-btn-accent);
+  --zs-btn-bg-hover: color-mix(in srgb, var(--zs-btn-accent) 88%, var(--zs-btn-fg));
+  font-weight: 600;
+}
+.zs-btn-secondary { /* the defaults above */ }
+.zs-btn-plain {
+  --zs-btn-fg: var(--zs-btn-accent);
+  --zs-btn-bg: transparent;
+  --zs-btn-bg-hover: transparent;
+  padding-inline: 6px;
+}
+.zs-btn-plain:hover:not(:disabled) { opacity: .72; }
+.zs-btn-quiet {
+  --zs-btn-fg: var(--library-text-muted, var(--color-text-2));
+  --zs-btn-bg-hover: var(--library-fill, var(--color-fill));
+}
+.zs-btn-quiet:hover:not(:disabled) { color: var(--library-text, var(--color-text)); opacity: 1; }
+
+.zs-btn-small { min-height: 30px; padding: 0 10px; font-size: 13px; border-radius: 8px; }
+.zs-btn-plain.zs-btn-small { padding-inline: 6px; }
+.library-recent-action.zs-btn-small { border-radius: 999px; padding-inline: 14px; }
+.zs-btn-icon { width: 34px; min-height: 34px; height: 34px; padding: 0; border-radius: 50%; }
+
+/* Buttons that share a row stretch evenly. */
+.note-card-actions .zs-btn { flex: 1; }
