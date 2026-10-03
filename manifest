@@ -1,5 +1,5 @@
 appname=zhenshu
-version=0.0.4
+version=0.0.5
 display_name=枕书
 desc=枕书：飞牛 fnOS 上的私人书房。阅读 EPUB、PDF、MOBI/AZW3、Markdown 和 TXT，支持划线笔记、全文搜索与 AI 问书，阅读进度多端同步。
 source=thirdparty
@@ -13,4 +13,4 @@ desktop_applaunchname=zhenshu.main
 ctl_stop=true
 checkport=false
 disable_authorization_path=false
-changelog=手机阅读全面适配：手机上长按选字可以正常划线，划线后可改颜色和样式；轻点页面中间呼出工具栏，左右轻点翻页，底栏可拖动进度条跳章；默认左右翻页（手机和电脑分别记住阅读方式）；手机返回键先关面板再回书架；设置、目录、AI 面板改为底部抽屉，可下拉关闭；书库长按书籍可重命名、移动分类、查看信息；支持添加到主屏幕全屏阅读；PDF 支持双指缩放。另：主题切换图标更饱满，刷新不再闪过欢迎页。
+changelog=首行缩进改为“原书 · 无 · 1 · 2 · 3 · 4 字”：正文首字准确落在所选位置，“无”时与其他行对齐，不论书本身用样式还是空格缩进；书自带的段落版式（居中、注释悬挂缩进等）现在会正确显示，注释、简介、落款、诗句保持原样；TXT 每行一段并识别章节标题；已有划线不受影响。

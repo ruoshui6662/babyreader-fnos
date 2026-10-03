@@ -1,6 +1,6 @@
 # Working Change Log
 
-## 首行缩进按书统一（未发布）2026-10-02
+## 枕书 v0.0.5 2026-10-02 — 首行缩进按书统一
 
 调研与记录见 `docs/superpowers/plans/2026-10-02-paragraph-indent.md`。
 
