@@ -1,5 +1,5 @@
 appname=zhenshu
-version=0.0.11
+version=0.0.12
 display_name=枕书
 desc=枕书：飞牛 fnOS 上的私人书房。阅读 EPUB、PDF、MOBI/AZW3、Markdown 和 TXT，支持划线笔记、全文搜索与 AI 问书，阅读进度多端同步。
 source=thirdparty
@@ -13,4 +13,4 @@ desktop_applaunchname=zhenshu.main
 ctl_stop=true
 checkport=false
 disable_authorization_path=false
-changelog=新增可选主题“液态玻璃”（默认关闭，在书库右上角“外观”或阅读设置中打开）：侧边栏、工具条、标签栏、菜单与选区菜单变成半透明的玻璃，正文与纸张不变；背景光可选“取自封面”（随“继续阅读”那本书的封面变色）或“淡蓝”；手机上标签栏与阅读工具条悬浮。系统开启“减少透明度”时玻璃变为不透明。
+changelog=液态玻璃在阅读页完整生效：纸张四周铺上正在读的这本书的背景光，工具条、顶栏和翻页胶囊透出这本书的色调；设置、目录、书签、笔记、搜索面板，AI 面板，写想法编辑框与手机“⋯”菜单变成带模糊的玻璃；纸张与正文不变。
