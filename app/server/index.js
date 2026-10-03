@@ -42,6 +42,7 @@ const { createPdfAiProfileStore } = require('./pdf-ai-profile-store');
 const { parseBookSearchParams, searchBookText } = require('./book-search');
 const { parsePathList, resolveLibraryRoots } = require('./library-roots');
 const { decodeBookText } = require('./text-encoding');
+const { buildReadingStats } = require('./reading-stats-summary');
 const { readFnOSAuthorizedRoots, fnOSAuthorizationRevision } = require('./fnos-roots-config');
 const { createDirectAccess } = require('./direct-access');
 const { buildAnswerPayload, gatherEvidence, planQuestion, MAP_ROOT_ID, TYPE_LABELS } = require('./ai-answer-pipeline');
@@ -1524,6 +1525,27 @@ async function handleApi(request, response, pathname, searchParams = new URLSear
   if (request.method === 'POST' && pathname === `${APP_PREFIX}/api/reading-time`) {
     const body = await readJsonBody(request);
     return sendJson(response, 200, await storage.addReadingTime(user.uid, body));
+  }
+  if (request.method === 'GET' && pathname === `${APP_PREFIX}/api/stats`) {
+    // 阅读统计: one week or month (with the one before it) for this user.
+    const [{ days }, readingState, index, bookTitles] = await Promise.all([
+      storage.getReadingTime(user.uid, '2000-01-01', '9999-12-31'),
+      storage.getState(user.uid),
+      storage.getLibraryIndex(),
+      userBookTitles(user.uid)
+    ]);
+    const switches = readerFormatSwitches();
+    const books = new Map(index.books
+      .filter((book) => book?.id && !book.error && isBookVisible(book, switches))
+      .map((book) => [book.id, publicBook(book, bookTitles)]));
+    return sendJson(response, 200, buildReadingStats({
+      days,
+      readingState,
+      bookInfo: (bookId) => books.get(bookId) || null,
+      range: searchParams.get('range') || 'week',
+      anchor: searchParams.get('anchor'),
+      timezoneOffset: Number(searchParams.get('tz') || 0)
+    }));
   }
   if (request.method === 'GET' && pathname === `${APP_PREFIX}/api/reading-time`) {
     return sendJson(response, 200, await storage.getReadingTime(user.uid, searchParams.get('from'), searchParams.get('to')));

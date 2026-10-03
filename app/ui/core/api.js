@@ -121,6 +121,11 @@ window.browserHost = {
     })).json();
   },
 
+  async getReadingStats(range, anchor) {
+    const query = new URLSearchParams({ range, anchor, tz: String(new Date().getTimezoneOffset()) });
+    return (await apiRequest(`/stats?${query}`)).json();
+  },
+
   async getReadingTime(from, to) {
     return (await apiRequest(`/reading-time?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`)).json();
   },
