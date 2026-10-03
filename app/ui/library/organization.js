@@ -1016,16 +1016,8 @@ function renderLibraryOrganization(library) {
   actions.dataset.librarySlot = 'header-actions';
 
   if (isDetail) {
-    const back = document.createElement('button');
-    back.type = 'button';
-    back.className = 'mode-btn library-back-button';
-    back.textContent = '返回书库';
-    back.addEventListener('click', () => {
-      setLibraryOrganizationManageMode(false);
-      setLibraryOrganizationHistory({ mode: 'root', collectionId: null }, { replace: true });
-      renderLibraryOrganization(library);
-    });
-    actions.append(back, createLibraryScanButton());
+    // No “返回书库”: the 我的书籍 chip below, and the browser's back, go there.
+    actions.append(createLibraryScanButton());
     if (collection) {
         const addBooks = document.createElement('button');
         addBooks.type = 'button';
@@ -1186,8 +1178,7 @@ function setupLibraryPhoneMenu(actions) {
   if (!actions || !isPhoneLibrary() || actions.querySelector('.library-more-button')) return;
   const header = actions.closest('.library-header');
   const sources = () => [...actions.querySelectorAll(':scope > button')]
-    .filter((button) => !button.classList.contains('library-back-button')
-      && !button.classList.contains('library-more-button'));
+    .filter((button) => !button.classList.contains('library-more-button'));
   if (!sources().length) return;
   actions.classList.add('has-phone-menu');
   const more = document.createElement('button');

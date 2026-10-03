@@ -5648,7 +5648,7 @@ test('the import button appears only for admins with import enabled, in the agre
     books: [book], features: { libraryOrganization: true, bookImport: true },
     organization: importOrganization([book], [{ id: collectionId, name: '小说' }])
   });
-  assert.deepEqual(labels(), ['返回书库', '重新扫描', '添加书籍', '导入', '整理']);
+  assert.deepEqual(labels(), ['重新扫描', '添加书籍', '导入', '整理']);
 
   window.history.replaceState({}, '');
   api.renderLibrary({ books: [book], features: { libraryOrganization: false, bookImport: true } });
