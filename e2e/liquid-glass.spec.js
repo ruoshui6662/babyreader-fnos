@@ -211,5 +211,67 @@ test.describe('液态玻璃', () => {
     expect(box.x).toBeGreaterThanOrEqual(12);
     expect(844 - (box.y + box.height)).toBeGreaterThanOrEqual(12);
   });
+
+  test('G4 reduce transparency: the same shapes, solid, no blur', async ({ page }) => {
+    await page.setViewportSize({ width: 1280, height: 860 });
+    const cdp = await page.context().newCDPSession(page);
+    await cdp.send('Emulation.setEmulatedMedia', { features: [{ name: 'prefers-reduced-transparency', value: 'reduce' }] });
+    await page.goto(APP_PATH);
+    await resetEpubFixtureState(page);
+    await setSettings(page, { theme: 'light', liquidGlass: true });
+    await page.goto(APP_PATH);
+    expect(await page.evaluate(() => matchMedia('(prefers-reduced-transparency: reduce)').matches)).toBe(true);
+    const dense = await page.evaluate(() => {
+      const probe = document.createElement('div');
+      probe.style.background = 'var(--glass-tint-dense)';
+      document.body.appendChild(probe);
+      const colour = getComputedStyle(probe).backgroundColor;
+      probe.remove();
+      return colour;
+    });
+    for (const selector of ['#shelfNav', '.library-header-actions', '.topbar']) {
+      const looks = await page.locator(selector).first().evaluate((element) => [getComputedStyle(element).backgroundColor, getComputedStyle(element).backdropFilter]);
+      expect(looks, selector).toEqual([dense, 'none']);
+    }
+    await page.locator('#btnLibraryAppearance').click();
+    await expect(page.locator('#libraryAppearanceMenu')).toHaveCSS('backdrop-filter', 'none');
+  });
+
+  test('G4 reduce motion: a new ambient light appears at once instead of gliding', async ({ page }) => {
+    await page.setViewportSize({ width: 1280, height: 860 });
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    await page.goto(APP_PATH);
+    await resetEpubFixtureState(page);
+    await setSettings(page, { theme: 'dark', liquidGlass: true, glassAmbient: 'uniform' });
+    await page.goto(APP_PATH);
+    await page.waitForTimeout(1200);
+    // Dark → light changes the pale blue a lot; without reduce motion the
+    // first frames still show the dark colour (it glides for ~0.8 s).
+    const [now, later] = await page.evaluate(async () => {
+      applyTheme('light', false);
+      const read = () => getComputedStyle(document.documentElement).getPropertyValue('--amb-1').trim();
+      await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+      const first = read();
+      await new Promise((resolve) => setTimeout(resolve, 1200));
+      return [first, read()];
+    });
+    expect(now).toBe(later);
+    expect(now).toBe('rgba(209, 231, 255, 0.7)');
+  });
+
+  test('G4 Safari: no lens, plain frosted glass', async ({ page }) => {
+    await page.addInitScript(() => {
+      Object.defineProperty(navigator, 'userAgent', { configurable: true, get: () => 'Mozilla/5.0 (Macintosh; Intel Mac OS X 14_6) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Safari/605.1.15' });
+    });
+    await page.goto(APP_PATH);
+    await resetEpubFixtureState(page);
+    await setSettings(page, { liquidGlass: true });
+    await page.goto(APP_PATH);
+    await expect(page.locator('html')).toHaveAttribute('data-glass-lens', 'off');
+    await page.locator('#btnLibraryAppearance').click();
+    const filter = await page.locator('#libraryAppearanceMenu').evaluate((menu) => getComputedStyle(menu).backdropFilter);
+    expect(filter).toContain('blur(16px)');
+    expect(filter).not.toContain('url(');
+  });
 });
 
