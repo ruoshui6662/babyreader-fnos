@@ -120,7 +120,7 @@ function createNoteCard(note, { query = '', showBook = false } = {}) {
   const card = notesElement('article', 'notes-note');
   card.dataset.noteId = note.id;
   if (showBook) {
-    const book = notesElement('button', 'notes-note-book', note.title || '已移除的书');
+    const book = notesElement('button', 'zs-btn zs-btn-plain zs-btn-small notes-note-book', note.title || '已移除的书');
     book.type = 'button';
     book.addEventListener('click', () => openNotesDocument(note.bookId, { focusNoteId: note.id }));
     card.appendChild(book);
@@ -136,11 +136,11 @@ function createNoteCard(note, { query = '', showBook = false } = {}) {
   const footer = notesElement('div', 'notes-note-footer');
   footer.appendChild(notesElement('span', 'notes-note-date', formatNotesDate(note.createdAt, { withTime: true })));
   const actions = notesElement('span', 'notes-note-actions');
-  const jump = notesElement('button', 'notes-action', '跳到原文');
+  const jump = notesElement('button', 'zs-btn zs-btn-plain zs-btn-quiet zs-btn-small notes-action', '跳到原文');
   jump.type = 'button';
   jump.disabled = !note.available && note.available !== undefined;
   jump.addEventListener('click', () => { void openShelfBook(note.bookId, { annotationId: note.id }); });
-  const copy = notesElement('button', 'notes-action', '复制');
+  const copy = notesElement('button', 'zs-btn zs-btn-plain zs-btn-quiet zs-btn-small notes-action', '复制');
   copy.type = 'button';
   copy.addEventListener('click', async () => {
     const text = [note.text, note.thought ? `想法：${note.thought}` : '', note.title ? `——《${note.title}》` : ''].filter(Boolean).join('\n');
@@ -151,7 +151,7 @@ function createNoteCard(note, { query = '', showBook = false } = {}) {
       showHighlightHint('复制失败，请手动选择文字复制');
     }
   });
-  const makeCard = notesElement('button', 'notes-action', '卡片');
+  const makeCard = notesElement('button', 'zs-btn zs-btn-plain zs-btn-quiet zs-btn-small notes-action', '卡片');
   makeCard.type = 'button';
   makeCard.setAttribute('aria-label', '生成书摘卡片');
   makeCard.addEventListener('click', () => {
@@ -268,7 +268,7 @@ function appendChapterGroups(container, notes, { headingTag = 'h2' } = {}) {
 
 function notesDocumentHeader(shell, { back, cover = null, title, meta, actions = [] }) {
   const header = notesElement('div', 'notes-doc-header');
-  const backButton = notesElement('button', 'notes-back', '‹ 全部笔记');
+  const backButton = notesElement('button', 'zs-btn zs-btn-plain notes-back', '‹ 全部笔记');
   backButton.type = 'button';
   backButton.addEventListener('click', back);
   const info = notesElement('div', 'notes-doc-info');
@@ -296,11 +296,11 @@ function enterNotesSelection(shell, body, book, notes) {
   bar.setAttribute('role', 'region');
   bar.setAttribute('aria-label', '选择书摘');
   const count = notesElement('span', 'notes-select-count');
-  const toggleAll = notesElement('button', 'notes-action notes-select-all');
+  const toggleAll = notesElement('button', 'zs-btn zs-btn-plain zs-btn-quiet notes-action notes-select-all');
   toggleAll.type = 'button';
-  const cancel = notesElement('button', 'notes-action notes-select-cancel', '取消');
+  const cancel = notesElement('button', 'zs-btn zs-btn-plain zs-btn-quiet notes-action notes-select-cancel', '取消');
   cancel.type = 'button';
-  const generate = notesElement('button', 'notes-primary notes-select-generate', '生成长图');
+  const generate = notesElement('button', 'zs-btn zs-btn-primary notes-primary notes-select-generate', '生成长图');
   generate.type = 'button';
   bar.append(count, toggleAll, cancel, generate);
 
@@ -360,9 +360,9 @@ function enterNotesSelection(shell, body, book, notes) {
 
 // 导出 Markdown / 导出 PDF; `documents()` gives what is on screen once loaded.
 function notesExportButtons(documents, { all = false } = {}) {
-  const markdown = notesElement('button', 'notes-secondary notes-export-md', '导出 Markdown');
+  const markdown = notesElement('button', 'zs-btn zs-btn-secondary notes-secondary notes-export-md', '导出 Markdown');
   markdown.type = 'button';
-  const pdf = notesElement('button', 'notes-secondary notes-export-pdf', '导出 PDF');
+  const pdf = notesElement('button', 'zs-btn zs-btn-secondary notes-secondary notes-export-pdf', '导出 PDF');
   pdf.type = 'button';
   markdown.addEventListener('click', () => {
     const docs = documents();
@@ -445,11 +445,11 @@ async function renderNotesDocument(doc) {
   }
   if (!shell.isConnected) return null;
   const { book, notes } = bookDoc;
-  const continueReading = notesElement('button', 'notes-primary', '继续阅读');
+  const continueReading = notesElement('button', 'zs-btn zs-btn-primary notes-primary', '继续阅读');
   continueReading.type = 'button';
   continueReading.disabled = !book.available;
   continueReading.addEventListener('click', () => { void openShelfBook(book.bookId); });
-  const longImage = notesElement('button', 'notes-secondary notes-long-image', '生成长图');
+  const longImage = notesElement('button', 'zs-btn zs-btn-secondary notes-secondary notes-long-image', '生成长图');
   longImage.type = 'button';
   longImage.disabled = !notes.length;
   const meta = [

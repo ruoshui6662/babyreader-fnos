@@ -617,3 +617,32 @@ test.describe('phone library with organization', () => {
     await expect(page.locator('.library-manage-bar')).toHaveCount(0);
   });
 });
+
+test('button language: header actions, the new-category form, the book picker and 完成 take the shared roles', async ({ page }) => {
+  const roleOf = (locator) => locator.evaluate((button) => {
+    const roles = ['zs-btn-primary', 'zs-btn-secondary', 'zs-btn-plain'].filter((role) => button.classList.contains(role));
+    return button.classList.contains('zs-btn') && roles.length === 1 ? roles[0] : `unruled: ${button.className}`;
+  });
+  const header = page.locator('.library-header-actions');
+  for (const name of ['新建分类', '重新扫描', '整理']) {
+    expect(await roleOf(header.getByRole('button', { name, exact: true }))).toBe('zs-btn-secondary');
+  }
+  await header.getByRole('button', { name: '整理', exact: true }).click();
+  expect(await roleOf(header.getByRole('button', { name: '完成', exact: true }))).toBe('zs-btn-primary');
+  await header.getByRole('button', { name: '完成', exact: true }).click();
+
+  await header.getByRole('button', { name: '新建分类', exact: true }).click();
+  const form = page.locator('.library-collection-create-form');
+  expect(await roleOf(form.getByRole('button', { name: '保存', exact: true }))).toBe('zs-btn-primary');
+  expect(await roleOf(form.getByRole('button', { name: '取消', exact: true }))).toBe('zs-btn-plain');
+  await page.getByRole('textbox', { name: '分类名称' }).fill(`按钮-${Date.now()}`);
+  await form.getByRole('button', { name: '保存', exact: true }).click();
+
+  // Inside a collection there is no 返回书库: the 我的书籍 chip goes back.
+  await expect(header.getByRole('button', { name: '返回书库' })).toHaveCount(0);
+  await header.getByRole('button', { name: '添加书籍', exact: true }).click();
+  expect(await roleOf(page.locator('.library-book-picker-add').first())).toBe('zs-btn-secondary');
+  await page.locator('.library-book-picker-close').click();
+  await page.getByRole('button', { name: /^我的书籍，/ }).click();
+  await expect(page.locator('.library-heading h1')).toHaveText('书库');
+});

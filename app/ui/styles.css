@@ -1618,7 +1618,6 @@ body:not(.toc-open) .toc {
   border-radius: 1px 3px 3px 1px;
   border-left: 0;
 }
-}
 
 /* Quote block: EN + ZH stay close together */
 .welcome-quote-en {
@@ -2124,24 +2123,8 @@ body.is-library.theme-sepia .topbar {
   line-height: 1.45;
 }
 
-.library-scan-button {
-  min-height: 36px;
-  padding: 7px 14px;
-  color: var(--library-text, var(--color-text));
-  background: var(--library-fill, var(--color-fill));
-  border: 0;
-  border-radius: 10px;
-  box-shadow: none;
-  font: 500 14px/1.35 var(--font-ui);
-}
 
-.library-scan-button:hover:not(:disabled) {
-  background: var(--library-fill-strong, var(--color-fill));
-}
 
-.library-scan-button:disabled {
-  opacity: .55;
-}
 
 .article.is-library .library-scan-status {
   margin: -16px 0 20px;
@@ -2243,12 +2226,6 @@ body.is-library.theme-sepia .topbar {
 .library-recent-progress small { font-size: 11px; font-variant-numeric: tabular-nums; }
 .library-recent-action {
   align-self: center;
-  padding: 5px 14px;
-  border-radius: 999px;
-  color: var(--library-on-accent, #fff);
-  background: var(--library-accent, var(--color-accent));
-  font: 600 13px/1.3 var(--font-ui);
-  white-space: nowrap;
 }
 
 /* Toolbar: search field + compact gray buttons in one row. */
@@ -2296,23 +2273,7 @@ body.is-library.theme-sepia .topbar {
   box-shadow: 0 1px 3px rgb(0 0 0 / .12);
 }
 
-.library-mode-button,
-.library-create-button {
-  min-height: 36px;
-  padding: 7px 14px;
-  color: var(--library-text, var(--color-text));
-  background: var(--library-fill, var(--color-fill));
-  border: 0;
-  font-size: 14px;
-}
 
-/* "完成" follows the iOS Done convention: the only filled button. */
-.library-mode-button[aria-pressed="true"] {
-  color: var(--library-on-accent, #fff);
-  background: var(--library-accent, var(--color-accent));
-  border-color: transparent;
-  font-weight: 600;
-}
 
 .library-organization-grid {
   display: grid;
@@ -2572,8 +2533,7 @@ body.is-library.theme-sepia .topbar {
   font-size: 15px;
 }
 
-.library-book-picker-close,
-.library-book-picker-add {
+.library-book-picker-close {
   flex: 0 0 auto;
   min-height: 32px;
   padding: 6px 11px;
@@ -2614,19 +2574,9 @@ body.is-library.theme-sepia .topbar {
 }
 
 .library-book-picker-move-selected {
-  min-height: 36px;
   margin-bottom: 6px;
-  color: #fff;
-  background: var(--color-accent);
-  border-color: var(--color-accent);
 }
 
-.library-book-picker-move-selected:disabled {
-  color: var(--library-text-muted, var(--color-text-2));
-  background: var(--library-stage, var(--color-fill));
-  border-color: var(--library-separator, var(--color-separator));
-  cursor: default;
-}
 
 .library-book-picker-row input[type="checkbox"] {
   flex: 0 0 18px;
@@ -2874,26 +2824,8 @@ body.is-library.theme-sepia .topbar {
   font: 500 14px/1.3 var(--font-ui);
   outline: none;
 }
-.library-category-navigation .library-collection-create-form .mode-btn {
-  min-height: 36px;
-  padding: 0 14px;
-  border: 0;
-  border-radius: 999px;
-  color: var(--library-text-muted, var(--color-text-2));
-  background: transparent;
-  font: 500 14px/1 var(--font-ui);
-}
-.library-category-navigation .library-collection-create-form .mode-btn[type="submit"] {
-  color: var(--library-on-accent, #fff);
-  background: var(--library-accent, var(--color-accent));
-}
-.library-category-navigation .library-collection-create-form .mode-btn:disabled { opacity: .5; }
-.library-category-navigation .library-collection-create-form .mode-btn:focus-visible {
-  box-shadow: inset 0 0 0 2px var(--library-accent, var(--color-accent));
-}
-.library-category-navigation .library-collection-create-form .mode-btn[type="submit"]:focus-visible {
-  box-shadow: inset 0 0 0 2px var(--library-on-accent, #fff);
-}
+/* Save / cancel sit in the chip row, so they take the chip's pill shape. */
+.library-category-navigation .library-collection-form .zs-btn { min-height: 36px; border-radius: 999px; }
 
 .library-category-navigation .library-reorder-handle {
   position: static;
@@ -2934,38 +2866,10 @@ body.is-library.theme-sepia .topbar {
   }
 }
 
-.library-organization-view .library-header-actions > button {
-  min-height: 36px;
-  padding: 7px 14px;
-  font: 500 14px/1.35 var(--font-ui);
-  border: 0;
-  border-radius: 10px;
-  color: var(--library-text, var(--color-text));
-  background: var(--library-fill, var(--color-fill));
-  box-shadow: none;
-  white-space: nowrap;
-  transition: background-color var(--dur-fast) var(--ease-out), transform var(--dur-fast) var(--ease-out);
-}
 
-.library-organization-view .library-header-actions > button:hover:not(:disabled) {
-  background: var(--library-fill-strong, var(--color-fill));
-}
 
-.library-organization-view .library-header-actions > button:active:not(:disabled) {
-  transform: scale(.97);
-}
 
-.library-organization-view .library-header-actions > button:focus-visible {
-  outline: 3px solid color-mix(in srgb, var(--library-accent, var(--color-accent)) 55%, transparent);
-  outline-offset: 2px;
-}
 
-.library-organization-view .library-header-actions > .library-mode-button[aria-pressed="true"],
-.library-organization-view .library-header-actions > .library-mode-button[aria-pressed="true"]:hover:not(:disabled) {
-  color: var(--library-on-accent, #fff);
-  background: var(--library-accent, var(--color-accent));
-  font-weight: 600;
-}
 
 
 /* Shelf grid: book-sized covers (~130px, 32px apart; eight per row on the
@@ -7833,30 +7737,8 @@ button.ui-close,
   gap: 8px;
   justify-content: flex-end;
 }
-.library-rename-actions button {
-  min-height: 36px;
-  padding: 0 16px;
-  font: inherit;
-  font-size: 14px;
-  color: inherit;
-  border: 1px solid var(--library-separator, var(--color-separator));
-  border-radius: 10px;
-  background: transparent;
-  cursor: pointer;
-}
 .library-rename-actions .library-rename-reset {
   margin-right: auto;
-  color: var(--library-text-muted, var(--color-text-2));
-}
-.library-rename-actions .is-primary {
-  color: #fff;
-  border-color: transparent;
-  background: var(--library-accent, var(--color-accent));
-  font-weight: 600;
-}
-.library-rename-actions button:disabled {
-  opacity: .55;
-  cursor: default;
 }
 
 /* AI 设置：可选的语义检索分组 */
@@ -8469,7 +8351,7 @@ html[data-reader-surface="mobile"] #readerSettingsSheet .settings-group { min-wi
 .library-manage-bar { display: none; }
 .library-more-menu[hidden] { display: none !important; }
 
-html[data-reader-surface="mobile"] .library-header { position: relative; }
+html[data-reader-surface="mobile"] .library-header { position: relative; z-index: 30; }
 html[data-reader-surface="mobile"] .library-heading { padding-right: 52px; }
 html[data-reader-surface="mobile"] .library-header-actions.has-phone-menu > button { display: none; }
 html[data-reader-surface="mobile"] .library-more-button {
@@ -8497,22 +8379,23 @@ html[data-reader-surface="mobile"] .library-more-menu:not([hidden]) {
   flex-direction: column;
   min-width: 168px;
   padding: 6px;
-  background: var(--color-bar, var(--surface));
-  border: 1px solid var(--color-separator, var(--border));
+  background: var(--library-surface, var(--color-elevated));
+  border: 1px solid var(--library-separator, var(--color-separator));
   border-radius: 12px;
   box-shadow: var(--shadow-float, 0 12px 32px rgba(0, 0, 0, 0.28));
 }
 html[data-reader-surface="mobile"] .library-more-menu button {
   min-height: 44px;
   padding: 0 14px;
-  color: var(--text);
+  color: var(--library-text, var(--text));
   font-size: 15px;
   text-align: left;
   background: transparent;
   border: 0;
   border-radius: 8px;
 }
-html[data-reader-surface="mobile"] .library-more-menu button:active { background: var(--surface-alt); }
+html[data-reader-surface="mobile"] .library-more-menu button:active,
+html[data-reader-surface="mobile"] .library-more-menu button:focus-visible { background: var(--library-fill, var(--surface-alt)); outline: none; }
 html[data-reader-surface="mobile"] .library-more-menu button:disabled { opacity: .45; }
 
 /* Long press opens the sheet; the browser's own callout never shows. */
@@ -8603,20 +8486,17 @@ html[data-reader-surface="mobile"] .library-manage-bar {
   justify-content: space-between;
   gap: 12px;
   padding: 8px calc(16px + env(safe-area-inset-right, 0px)) calc(8px + env(safe-area-inset-bottom, 0px)) calc(16px + env(safe-area-inset-left, 0px));
-  color: var(--text-dim);
+  color: var(--library-text-muted, var(--text-dim));
   font-size: 13px;
-  background: color-mix(in srgb, var(--color-bar, var(--surface)) 94%, transparent);
-  border-top: 1px solid color-mix(in srgb, var(--border) 60%, transparent);
+  background: color-mix(in srgb, var(--library-surface, var(--color-bar, var(--surface))) 94%, transparent);
+  border-top: 1px solid var(--library-separator, color-mix(in srgb, var(--border) 60%, transparent));
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
 }
 html[data-reader-surface="mobile"] .library-manage-done {
   min-width: 88px;
   min-height: 44px;
-  color: var(--button-text, #fff);
   font-size: 15px;
-  background: var(--accent);
-  border: 0;
   border-radius: 22px;
 }
 html[data-reader-surface="mobile"] .library-view:has(.library-manage-bar) { padding-bottom: 72px; }
@@ -8960,14 +8840,8 @@ html[data-reader-surface="mobile"] body.is-library .library-manage-bar { bottom:
 .stats-period { display: inline-flex; align-items: center; gap: 6px; }
 .stats-period-label { min-width: 150px; color: var(--library-text, var(--color-text)); font: 600 14px/1 var(--font-ui); text-align: center; }
 .stats-period-step {
-  width: 34px;
-  height: 34px;
-  color: var(--library-text, var(--color-text));
   font-size: 20px;
   line-height: 1;
-  background: var(--library-fill, var(--color-fill));
-  border: 0;
-  border-radius: 50%;
   cursor: pointer;
 }
 .stats-period-step:disabled { opacity: .35; cursor: default; }
@@ -8993,7 +8867,6 @@ html[data-reader-surface="mobile"] body.is-library .library-manage-bar { bottom:
 .stats-chart-total { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; }
 .stats-chart-total strong { font-size: 18px; }
 .stats-chart-total span { color: var(--library-text-muted, var(--color-text-2)); font-size: 12px; }
-.stats-link { color: var(--library-accent, var(--color-accent)); font-size: 13px; background: none; border: 0; cursor: pointer; }
 
 .stats-chart { display: grid; grid-template-columns: 40px minmax(0, 1fr); gap: 8px; height: 220px; margin-top: 16px; }
 .stats-chart-axis {
@@ -9212,10 +9085,11 @@ li:first-child .stats-rank-no { color: var(--library-on-accent, #fff); backgroun
   box-shadow: var(--library-card-shadow, none);
 }
 .notes-note.is-focused { box-shadow: 0 0 0 2px var(--library-accent, var(--color-accent)); }
-.notes-note-book { align-self: flex-start; padding: 0; color: var(--library-accent, var(--color-accent)); font: 600 13px var(--font-ui); background: none; border: 0; cursor: pointer; }
+.notes-note-book { align-self: flex-start; }
 .article .notes-quote,
 .notes-quote {
   margin: 0;
+  background: color-mix(in srgb, var(--library-fill, var(--color-fill)) 55%, transparent);
   padding: 2px 0 2px 12px;
   color: var(--library-text, var(--color-text));
   font: 15px/1.75 var(--reader-font-family, var(--font-ui));
@@ -9238,21 +9112,9 @@ li:first-child .stats-rank-no { color: var(--library-on-accent, #fff); backgroun
 .notes-note-footer { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .notes-note-date { color: var(--library-text-tertiary, var(--color-text-3)); font-size: 12px; }
 .notes-note-actions { display: flex; gap: 4px; }
-.notes-action {
-  min-height: 30px;
-  padding: 0 10px;
-  color: var(--library-text-muted, var(--color-text-2));
-  font: 13px var(--font-ui);
-  background: transparent;
-  border: 0;
-  border-radius: 8px;
-  cursor: pointer;
-}
-.notes-action:hover { color: var(--library-text, var(--color-text)); background: var(--library-fill, var(--color-fill)); }
-.notes-action:disabled { opacity: .4; cursor: default; }
 
 .notes-doc-header { display: flex; flex-direction: column; gap: 14px; margin: 0 0 22px; }
-.notes-back { align-self: flex-start; padding: 0; color: var(--library-accent, var(--color-accent)); font: 500 14px var(--font-ui); background: none; border: 0; cursor: pointer; }
+.notes-back { align-self: flex-start; padding-inline: 0; }
 .notes-doc-info { display: flex; gap: 18px; align-items: flex-start; }
 .notes-doc-info .notes-cover.library-book-cover { width: 84px; height: 114px; }
 .notes-doc-text { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
@@ -9261,18 +9123,6 @@ li:first-child .stats-rank-no { color: var(--library-on-accent, #fff); backgroun
 .article .notes-doc-meta,
 .notes-doc-meta { margin: 0; color: var(--library-text-muted, var(--color-text-2)); font: 13px/1.6 var(--font-ui); text-indent: 0; }
 .notes-doc-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 6px; }
-.notes-primary,
-.notes-secondary {
-  min-height: 36px;
-  padding: 0 14px;
-  font: 500 14px var(--font-ui);
-  border: 0;
-  border-radius: 10px;
-  cursor: pointer;
-}
-.notes-primary { color: var(--library-on-accent, #fff); font-weight: 600; background: var(--library-accent, var(--color-accent)); }
-.notes-secondary { color: var(--library-text, var(--color-text)); background: var(--library-fill, var(--color-fill)); }
-.notes-primary:disabled { opacity: .45; cursor: default; }
 .library-view.is-document .library-header { display: none; }
 .notes-doc-body { display: flex; flex-direction: column; gap: 22px; max-width: 820px; }
 .notes-chapter { display: flex; flex-direction: column; gap: 10px; }
@@ -9332,9 +9182,9 @@ li:first-child .stats-rank-no { color: var(--library-on-accent, #fff); backgroun
   max-height: calc(100vh - 32px);
   padding: 0;
   overflow: hidden;
-  color: var(--color-text);
+  color: var(--library-text, var(--color-text));
   font-family: var(--font-ui);
-  background: var(--color-bg);
+  background: var(--library-stage, var(--color-bg));
   border: 0;
   border-radius: var(--radius-sheet);
   box-shadow: 0 24px 80px rgba(0, 0, 0, .35);
@@ -9361,7 +9211,7 @@ li:first-child .stats-rank-no { color: var(--library-on-accent, #fff); backgroun
   justify-content: center;
   min-height: 360px;
   padding: 16px;
-  background: var(--color-fill);
+  background: var(--library-fill, var(--color-fill));
   border-radius: var(--radius-card);
 }
 .note-card-preview[aria-busy="true"] .note-card-canvas { opacity: .55; }
@@ -9378,20 +9228,20 @@ li:first-child .stats-rank-no { color: var(--library-on-accent, #fff); backgroun
 .note-card-side { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
 .note-card-controls { display: flex; flex-direction: column; gap: 14px; }
 .note-card-group { display: flex; flex-direction: column; gap: 6px; }
-.note-card-group-label { color: var(--color-text-2); font-size: 12px; }
+.note-card-group-label { color: var(--library-text-muted, var(--color-text-2)); font-size: 12px; }
 .note-card-segment {
   display: grid;
   grid-auto-columns: 1fr;
   grid-auto-flow: column;
   gap: 2px;
   padding: 2px;
-  background: var(--color-fill);
+  background: var(--library-fill, var(--color-fill));
   border-radius: var(--radius-control);
 }
 .note-card-option {
   min-height: 32px;
   padding: 0 8px;
-  color: var(--color-text);
+  color: var(--library-text, var(--color-text));
   font: 13px var(--font-ui);
   white-space: nowrap;
   background: transparent;
@@ -9401,39 +9251,26 @@ li:first-child .stats-rank-no { color: var(--library-on-accent, #fff); backgroun
 }
 .note-card-option[aria-checked="true"] {
   font-weight: 600;
-  background: var(--color-elevated);
+  background: var(--library-surface, var(--color-elevated));
   box-shadow: 0 1px 3px rgba(0, 0, 0, .14);
 }
 .note-card-toggles { display: flex; flex-wrap: wrap; gap: 6px; }
 .note-card-toggle {
   min-height: 30px;
   padding: 0 12px;
-  color: var(--color-text-2);
+  color: var(--library-text-muted, var(--color-text-2));
   font: 13px var(--font-ui);
   background: transparent;
-  border: 1px solid var(--color-separator);
+  border: 1px solid var(--library-separator, var(--color-separator));
   border-radius: var(--radius-pill);
   cursor: pointer;
 }
 .note-card-toggle[aria-pressed="true"] {
-  color: var(--color-accent);
-  border-color: var(--color-accent);
+  color: var(--library-accent, var(--color-accent));
+  border-color: var(--library-accent, var(--color-accent));
 }
-.note-card-status { min-height: 1.5em; margin: 0; color: var(--color-text-2); font-size: 12px; line-height: 1.5; }
+.note-card-status { min-height: 1.5em; margin: 0; color: var(--library-text-muted, var(--color-text-2)); font-size: 12px; line-height: 1.5; }
 .note-card-actions { display: flex; gap: 8px; margin-top: auto; }
-.note-card-primary,
-.note-card-secondary {
-  flex: 1;
-  min-height: 40px;
-  padding: 0 14px;
-  font: 600 14px var(--font-ui);
-  border: 0;
-  border-radius: var(--radius-control);
-  cursor: pointer;
-}
-.note-card-primary { color: #fff; background: var(--color-accent); }
-.note-card-secondary { color: var(--color-text); background: var(--color-fill); }
-.note-card-primary:disabled { opacity: .5; cursor: default; }
 .highlight-editor-actions .highlight-card-button { margin-right: 4px; }
 
 @media (max-width: 760px) {
@@ -9504,7 +9341,6 @@ li:first-child .stats-rank-no { color: var(--library-on-accent, #fff); backgroun
 @media (max-width: 760px) {
   .note-card-dialog.is-long .note-card-preview { max-height: 50dvh; }
 }
-.notes-secondary:disabled { opacity: .45; cursor: default; }
 
 /* 笔记排序：与搜索框同高的应用内下拉 */
 .notes-toolbar .custom-select { width: 128px; min-width: 128px; max-width: 128px; }
@@ -9538,24 +9374,77 @@ li:first-child .stats-rank-no { color: var(--library-on-accent, #fff); backgroun
 .library-book-manage-controls .custom-select-trigger::after { right: 11px; }
 .custom-select-menu[id^="custom-options-libraryCollectionSelect-"] .custom-select-option { padding: 7px 12px; text-align: left; }
 
-/* ============================================================
-   按钮语言（书库 / 阅读统计 / 笔记 / 卡片）
-   主要：实心强调色，每个区域最多一个（完成、继续阅读、继续、生成长图、保存图片）。
-   次要：灰色填充（其余所有操作）。
-   文字：强调色文字、无底（‹ 全部笔记、全部笔记 › 等导航）。
-   选中：强调色浅底 + 强调色文字（侧边栏、分类标签）；分段控件用浮起的白色滑块。
-   ============================================================ */
-.library-header-actions > button,
-.notes-doc-actions > button,
-.note-card-actions > button { flex-shrink: 0; white-space: nowrap; }
-.notes-secondary:hover:not(:disabled),
-.note-card-secondary:hover:not(:disabled) { background: var(--library-fill-strong, var(--color-fill)); }
-.notes-primary:hover:not(:disabled),
-.note-card-primary:hover:not(:disabled) { filter: brightness(1.08); }
-.note-card-primary { font-weight: 600; }
-.note-card-secondary { font-weight: 500; }
 /* Segmented thumb: a touch lighter than the surface so it reads in dark themes too. */
 .stats-range button[aria-checked="true"],
 .note-card-option[aria-checked="true"] {
   background: color-mix(in srgb, var(--library-surface, var(--color-elevated)) 86%, #fff);
 }
+
+/* ============================================================
+   按钮（书库 / 阅读统计 / 笔记 / 卡片面板共用）
+   - zs-btn-primary   主要：实心强调色。一个区域最多一个：完成、继续阅读、继续、
+                      生成长图、保存图片、保存。
+   - zs-btn-secondary 普通：灰色填充。其余操作：新建分类、导入、导出……
+   - zs-btn-plain     文字：强调色文字、无底。导航与轻量操作：‹ 全部笔记、全部笔记 ›。
+                      加 zs-btn-quiet 变为灰色文字（条目里的小工具：跳到原文、复制）。
+   - zs-btn-small / zs-btn-icon 只改尺寸。
+   颜色只来自书库的颜色变量（在阅读页打开时退回到阅读器的变量）；
+   不要在按钮规则里写死颜色——tests/ui-buttons.test.js 会检查。
+   ============================================================ */
+.zs-btn {
+  --zs-btn-accent: var(--library-accent, var(--color-accent));
+  --zs-btn-fg: var(--library-text, var(--color-text));
+  --zs-btn-bg: var(--library-fill, var(--color-fill));
+  --zs-btn-bg-hover: var(--library-fill-strong, var(--color-fill));
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 36px;
+  padding: 0 14px;
+  color: var(--zs-btn-fg);
+  font: 500 14px/1.2 var(--font-ui);
+  white-space: nowrap;
+  text-decoration: none;
+  background: var(--zs-btn-bg);
+  border: 0;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: background-color var(--dur-fast) var(--ease-out), opacity var(--dur-fast) var(--ease-out), transform var(--dur-fast) var(--ease-out);
+}
+.zs-btn:hover:not(:disabled) { background: var(--zs-btn-bg-hover); }
+.zs-btn:active:not(:disabled) { transform: scale(.97); }
+.zs-btn:focus-visible {
+  outline: 3px solid color-mix(in srgb, var(--zs-btn-accent) 55%, transparent);
+  outline-offset: 2px;
+}
+.zs-btn:disabled { opacity: .45; cursor: default; }
+
+.zs-btn-primary {
+  --zs-btn-fg: var(--library-on-accent, var(--color-on-accent, #fff));
+  --zs-btn-bg: var(--zs-btn-accent);
+  --zs-btn-bg-hover: color-mix(in srgb, var(--zs-btn-accent) 88%, var(--zs-btn-fg));
+  font-weight: 600;
+}
+.zs-btn-secondary { /* the defaults above */ }
+.zs-btn-plain {
+  --zs-btn-fg: var(--zs-btn-accent);
+  --zs-btn-bg: transparent;
+  --zs-btn-bg-hover: transparent;
+  padding-inline: 6px;
+}
+.zs-btn-plain:hover:not(:disabled) { opacity: .72; }
+.zs-btn-quiet {
+  --zs-btn-fg: var(--library-text-muted, var(--color-text-2));
+  --zs-btn-bg-hover: var(--library-fill, var(--color-fill));
+}
+.zs-btn-quiet:hover:not(:disabled) { color: var(--library-text, var(--color-text)); opacity: 1; }
+
+.zs-btn-small { min-height: 30px; padding: 0 10px; font-size: 13px; border-radius: 8px; }
+.zs-btn-plain.zs-btn-small { padding-inline: 6px; }
+.library-recent-action.zs-btn-small { border-radius: 999px; padding-inline: 14px; }
+.zs-btn-icon { width: 34px; min-height: 34px; height: 34px; padding: 0; border-radius: 50%; }
+
+/* Buttons that share a row stretch evenly. */
+.note-card-actions .zs-btn { flex: 1; }
