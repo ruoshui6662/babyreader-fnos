@@ -79,6 +79,20 @@ test.describe('PDF page colours', () => {
     await expect(page.locator('body')).toHaveAttribute('data-pdf-page-colors', 'original');
   });
 
+  test('dark pages render at a higher pixel density, and drop back when leaving dark', async ({ page }) => {
+    await openMixedPdf(page);
+    const density = () => page.locator('.pdf-page[data-page-index="0"] .pdf-page-canvas')
+      .evaluate((canvas) => Math.round((canvas.width / canvas.getBoundingClientRect().width) * 100) / 100);
+    await chooseTheme(page, 'light');
+    await expect.poll(density).toBe(1);
+    await chooseTheme(page, 'dark');
+    // A 1x screen draws dark pages at 2x (the old bitmap stays until then).
+    await expect.poll(density).toBe(2);
+    await expect(page.locator('.pdf-page[data-page-index="0"] .pdf-image-restore')).toHaveCount(2);
+    await chooseTheme(page, 'sepia');
+    await expect.poll(density).toBe(1);
+  });
+
   test('the colour choice only appears for PDFs', async ({ page }) => {
     await page.goto(APP_PATH);
     await page.locator('.library-book').filter({ hasText: 'E2E Markdown' }).click();

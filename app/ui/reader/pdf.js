@@ -508,7 +508,7 @@ function createPdfReaderController({
     }
   }
 
-  function commitPdfPageFrame({ pageIndex, page, viewport, viewportScale, canvas, textLayer },
+  function commitPdfPageFrame({ pageIndex, page, viewport, viewportScale, canvas, textLayer, outputTarget = null },
     expectedGeneration, expectedScale) {
     return new Promise((resolve) => {
       const commit = () => {
@@ -531,6 +531,7 @@ function createPdfReaderController({
         renderedPages.set(pageIndex, {
           page,
           scale: expectedScale,
+          outputTarget,
           viewportScale,
           viewport,
           rotation: Number(viewport.rotation) || 0,
@@ -597,6 +598,29 @@ function createPdfReaderController({
     return button;
   }
 
+  // Canvas pixels per CSS pixel. Light text on a dark page shows every
+  // missing pixel, so dark pages render denser: 1x screens at 2x, 2x at 3x;
+  // phones stop at 2.5x to stay within mobile canvas memory. The per-page
+  // pixel budget below still caps all of it.
+  function targetOutputScale() {
+    const dpr = Math.max(1, Number(win.devicePixelRatio) || 1);
+    const base = Math.min(2, dpr);
+    if (doc.body?.dataset.pdfPageColors !== 'dark') return base;
+    const phone = doc.documentElement?.dataset.readerSurface === 'mobile';
+    return phone ? Math.min(2.5, Math.max(base, dpr * 1.25)) : Math.min(3, Math.max(2, dpr * 1.5));
+  }
+
+  // Pages drawn at another density are drawn again (the old bitmap stays
+  // until the new one is ready); called when the page colours change.
+  function refreshOutputScale() {
+    if (!pdfDocument || destroyed) return false;
+    const target = targetOutputScale();
+    if (![...renderedPages.values()].some((record) => record.outputTarget !== target)) return false;
+    renderRevision += 1;
+    renderVisiblePdfPages();
+    return true;
+  }
+
   function renderQueueGeneration() {
     return `${generation}:${renderRevision}`;
   }
@@ -610,7 +634,8 @@ function createPdfReaderController({
     const canvas = frameElements?.canvas;
     if (!canvas) return 'stale';
     const cached = renderedPages.get(pageIndex);
-    if (cached?.scale === expectedScale) return 'ready';
+    const outputTarget = targetOutputScale();
+    if (cached?.scale === expectedScale && cached?.outputTarget === outputTarget) return 'ready';
     if (cached && selectionIntersectsTextLayer(wrapper.querySelector('.pdf-page-text-layer'))) return 'deferred';
     let page;
     pendingPages.set(pageIndex, expectedGeneration);
@@ -652,10 +677,9 @@ function createPdfReaderController({
         layer.style.transform = `scale(${scaleX}, ${scaleY})`;
       }
     }
-    const targetOutputScale = Math.max(1, Math.min(2, Number(win.devicePixelRatio) || 1));
     const pixelBudgetScale = Math.sqrt(MAX_CANVAS_PIXELS / (viewport.width * viewport.height));
     const edgeBudgetScale = Math.min(MAX_CANVAS_EDGE / viewport.width, MAX_CANVAS_EDGE / viewport.height);
-    const outputScale = Math.max(0.1, Math.min(targetOutputScale, pixelBudgetScale, edgeBudgetScale));
+    const outputScale = Math.max(0.1, Math.min(outputTarget, pixelBudgetScale, edgeBudgetScale));
     if (!enforceSelectionBudget(pageIndex, Math.ceil(viewport.width * outputScale)
         * Math.ceil(viewport.height * outputScale))) {
       scheduleSelectionCleanup();
@@ -673,7 +697,7 @@ function createPdfReaderController({
     if (!context) {
       const textLayerFrame = await renderPdfTextLayer(page, wrapper, viewport, expectedGeneration, renderScale);
       if (await commitPdfPageFrame({
-        pageIndex, page, viewport, viewportScale: pageScale, canvas: stagingCanvas, textLayer: textLayerFrame
+        pageIndex, page, viewport, viewportScale: pageScale, canvas: stagingCanvas, textLayer: textLayerFrame, outputTarget
       }, expectedGeneration, renderScale)) {
         return 'ready';
       }
@@ -694,7 +718,7 @@ function createPdfReaderController({
         if (!destroyed && expectedGeneration === generation && renderScale === scale && textLayerFrame
             && wrapper.querySelector('canvas') === canvas) {
           const committed = await commitPdfPageFrame({
-            pageIndex, page, viewport, viewportScale: pageScale, canvas: stagingCanvas, textLayer: textLayerFrame
+            pageIndex, page, viewport, viewportScale: pageScale, canvas: stagingCanvas, textLayer: textLayerFrame, outputTarget
           }, expectedGeneration, renderScale);
           return committed ? 'ready' : 'stale';
         }
@@ -1251,6 +1275,8 @@ function createPdfReaderController({
     renderVisiblePdfPages,
     setLayoutMode,
     setPdfScale,
+    refreshOutputScale,
+    getOutputScaleTarget: targetOutputScale,
     getScale: () => scale,
     zoomBy: (delta) => setPdfScale(scale + delta)
   };

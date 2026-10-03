@@ -178,7 +178,12 @@ function onPdfPageColorsFrameCommitted(context) {
 function syncPdfPageColors() {
   const mode = pdfPageColorMode();
   if (mode === 'dark') ensurePdfDarkFilter();
+  const previous = document.body.dataset.pdfPageColors;
   document.body.dataset.pdfPageColors = mode;
+  // Dark pages render at a higher density (pdf.js targetOutputScale).
+  if (previous !== mode && (previous === 'dark' || mode === 'dark') && state.contentType === 'pdf') {
+    window.pdfReaderController?.refreshOutputScale?.();
+  }
   if (mode !== 'dark' || state.contentType !== 'pdf') return mode;
   for (const context of pdfCommittedFrames.values()) {
     if (context.pageElement?.isConnected && !context.pageElement.querySelector('.pdf-image-restore-layer')) {
