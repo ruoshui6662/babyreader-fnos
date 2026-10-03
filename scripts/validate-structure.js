@@ -32,6 +32,7 @@ const uiScriptFiles = [
   'app/ui/reader/pdf-annotation-geometry.js',
   'app/ui/reader/pdf-annotations.js',
   'app/ui/reader/pdf-render-scheduler.js',
+  'app/ui/reader/pdf-colors.js',
   'app/ui/reader/pdf.js',
   'app/ui/reader/lifecycle.js',
   'app/ui/shell/drawer.js',

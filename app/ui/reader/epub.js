@@ -780,6 +780,7 @@ function applyTheme(theme, persist = true) {
     localStorage.setItem('zhenshu-theme', state.theme);
   }
   if (typeof syncMobileReadingBar === 'function') syncMobileReadingBar();
+  if (typeof syncPdfPageColors === 'function') syncPdfPageColors();
   const themeColor = document.querySelector('meta[name="theme-color"]');
   if (themeColor) themeColor.content = { light: '#F2F3F5', sepia: '#E9E0CC', dark: '#141416' }[state.theme] || '#141416';
 

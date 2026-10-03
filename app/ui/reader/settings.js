@@ -514,6 +514,10 @@ function syncSettingsPanel() {
     });
   }
   if (pdfLayoutMode) pdfLayoutMode.value = state.pdfLayoutMode;
+  const pdfPageColors = String(state.pdfPageColors === 'original' ? 'original' : 'theme');
+  document.querySelectorAll('[data-pdf-page-colors]').forEach((button) => {
+    button.setAttribute('aria-checked', String(button.dataset.pdfPageColors === pdfPageColors));
+  });
   if (fontFamily) fontFamily.value = state.fontFamily;
   if (textIndent) {
     const current = String(normalizeTextIndent(state.textIndent));
@@ -636,6 +640,16 @@ function setupSettingsPanel() {
   });
   readingMode?.addEventListener('change', () => {
     setReadingMode(readingMode.value);
+  });
+  document.getElementById('settingPdfPageColors')?.addEventListener('click', (event) => {
+    const choice = event.target.closest?.('[data-pdf-page-colors]');
+    if (!choice) return;
+    const next = choice.dataset.pdfPageColors === 'original' ? 'original' : 'theme';
+    if (next === state.pdfPageColors) return;
+    state.pdfPageColors = next;
+    if (typeof syncPdfPageColors === 'function') syncPdfPageColors();
+    syncSettingsPanel();
+    persistUserSettings();
   });
   pdfLayoutMode?.addEventListener('change', () => {
     if (state.contentType !== 'pdf'

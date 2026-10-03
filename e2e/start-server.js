@@ -5,7 +5,7 @@ const path = require('node:path');
 const { strToU8, zipSync, unzipSync } = require('fflate');
 const { randomBytes } = require('node:crypto');
 const { FIXTURE_TEXT } = require('./fixtures/reader-fixtures');
-const { createCorruptPdfFixture, createImageOnlyPdfFixture, createPdfFixture } = require('../tests/fixtures/pdf-fixtures');
+const { createCorruptPdfFixture, createImageOnlyPdfFixture, createMixedImagePdfFixture, createPdfFixture } = require('../tests/fixtures/pdf-fixtures');
 
 const root = path.resolve(__dirname, '..');
 const runtimeRoot = path.resolve(process.env.ZHENSHU_E2E_RUNTIME_ROOT || path.join(root, '.runtime', 'e2e'));
@@ -77,6 +77,7 @@ fs.writeFileSync(path.join(libraryRoot, 'e2e-columns.pdf'), createPdfFixture({
 }));
 fs.writeFileSync(path.join(libraryRoot, 'e2e-image-only.pdf'), createImageOnlyPdfFixture());
 fs.writeFileSync(path.join(libraryRoot, 'e2e-corrupt.pdf'), createCorruptPdfFixture());
+fs.writeFileSync(path.join(libraryRoot, 'e2e-mixed-images.pdf'), createMixedImagePdfFixture());
 
 // Deterministic long paragraph builder. Each chapter repeats the same body
 // text so highlight tests can assert that deleting one identical-text

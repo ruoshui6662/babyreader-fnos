@@ -161,6 +161,7 @@ function createPdfReaderController({
 
   async function destroyPdfReader() {
     generation += 1;
+    if (typeof win.resetPdfPageColors === 'function') win.resetPdfPageColors();
     destroyed = true;
     currentBookId = null;
     const task = loadingTask;
@@ -552,6 +553,7 @@ function createPdfReaderController({
           bookId: currentBookId,
           generation: expectedGeneration,
           pageIndex,
+          page,
           scale: viewportScale,
           rotation: Number(viewport.rotation) || 0,
           viewport,
@@ -916,6 +918,8 @@ function createPdfReaderController({
     try {
       pdfJsApi = getDocument ? null : await import(`${PDFJS_ASSET_ROOT}build/pdf.mjs`);
       if (pdfJsApi) pdfJsApi.GlobalWorkerOptions.workerSrc = `${PDFJS_ASSET_ROOT}build/pdf.worker.mjs`;
+      // Operator codes for locating images (reader/pdf-colors.js).
+      if (pdfJsApi?.OPS) win.pdfjsOps = pdfJsApi.OPS;
       if (destroyed || currentGeneration !== generation) return;
       const resolved = new URL(contentUrl, win.location.href);
       if (resolved.origin !== win.location.origin || !resolved.pathname.startsWith(`${API_PREFIX}/books/`)) {

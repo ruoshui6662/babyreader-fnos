@@ -14,7 +14,7 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="枕书">
-  <link rel="stylesheet" href="styles.css?v=90">
+  <link rel="stylesheet" href="styles.css?v=91">
 </head>
 <body class="is-welcome">
   <!-- Reader Shell: low-distraction navigation with stable legacy IDs -->
@@ -161,6 +161,14 @@
           <p class="settings-field-description" id="settingsPdfLayoutHint" data-pdf-only hidden>
             PDF 是固定版面；模式切换只调整页面排列，缩放和适宽只改变显示大小，不会重排文字。
           </p>
+          <div class="settings-field settings-indent-field settings-pdf-colors-field" data-pdf-only hidden>
+            <span class="settings-field-label" id="settingPdfPageColorsLabel">PDF 页面颜色</span>
+            <div class="settings-indent-segments settings-pdf-colors" id="settingPdfPageColors" role="radiogroup" aria-labelledby="settingPdfPageColorsLabel">
+              <button type="button" role="radio" data-pdf-page-colors="theme" aria-checked="false">跟随主题</button>
+              <button type="button" role="radio" data-pdf-page-colors="original" aria-checked="false">原样</button>
+            </div>
+            <p class="settings-field-description">跟随主题时，深色把页面变成深底浅字（图片保持原色），护眼把纸色变成米黄；只改变显示，不修改文件。</p>
+          </div>
           <label class="settings-field settings-checkbox settings-toc-open-field">
             <input id="settingTocOpen" type="checkbox" checked>
             <span>默认展开目录</span>
@@ -649,14 +657,14 @@
   <script src="lib/jszip.min.js"></script>
   <script src="lib/epub.min.js"></script>
   <script src="lib/marked.min.js"></script>
-  <script src="core/state.js?v=35"></script>
+  <script src="core/state.js?v=36"></script>
   <script src="core/utils.js?v=28"></script>
   <script src="core/api.js?v=30"></script>
   <script src="core/reader-route.js?v=1"></script>
-  <script src="core/user-state.js?v=39"></script>
+  <script src="core/user-state.js?v=40"></script>
   <script src="reader/annotations.js?v=2"></script>
   <script src="reader/device-profile.js?v=34"></script>
-  <script src="reader/epub.js?v=35"></script>
+  <script src="reader/epub.js?v=36"></script>
   <script src="reader/paragraphs.js?v=1"></script>
   <script src="reader/document.js?v=30"></script>
   <script src="reader/editor.js?v=28"></script>
@@ -670,13 +678,14 @@
   <script src="reader/progress.js?v=36"></script>
   <script src="reader/bookmarks.js?v=4"></script>
   <script src="reader/pagination.js?v=37"></script>
-  <script src="reader/settings.js?v=36"></script>
+  <script src="reader/settings.js?v=37"></script>
   <script src="reader/jump-back.js?v=1"></script>
   <script src="reader/navigation.js?v=31"></script>
   <script src="reader/pdf-annotation-geometry.js?v=1"></script>
   <script src="reader/pdf-annotations.js?v=1"></script>
   <script src="reader/pdf-render-scheduler.js?v=1"></script>
-  <script src="reader/pdf.js?v=16"></script>
+  <script src="reader/pdf-colors.js?v=1"></script>
+  <script src="reader/pdf.js?v=17"></script>
   <script src="reader/lifecycle.js?v=33"></script>
   <script src="reader/search.js?v=4"></script>
   <script src="shell/drawer.js?v=33"></script>

@@ -279,6 +279,10 @@ class UserStorage {
           ? settings.pdfLayoutMode
           : allowedPdfLayoutModes.has(state.settings.pdfLayoutMode)
             ? state.settings.pdfLayoutMode : 'continuous',
+        // PDF pages follow the reading theme unless kept as printed.
+        pdfPageColors: ['theme', 'original'].includes(settings.pdfPageColors)
+          ? settings.pdfPageColors
+          : ['theme', 'original'].includes(state.settings.pdfPageColors) ? state.settings.pdfPageColors : 'theme',
         // Opt-in: opening a book shows the text, not the contents panel.
         // Replaces tocOpen, which every save wrote as true.
         tocAutoOpen: settings.tocAutoOpen === true,

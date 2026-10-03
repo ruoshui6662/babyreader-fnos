@@ -35,6 +35,7 @@ function currentUserSettings() {
     mobileReadingMode,
     pdfLayoutMode: ['continuous', 'single', 'double'].includes(state.pdfLayoutMode)
       ? state.pdfLayoutMode : 'continuous',
+    pdfPageColors: state.pdfPageColors === 'original' ? 'original' : 'theme',
     continuousScroll: readingMode === 'scroll',
     tocAutoOpen: state.tocOpen,
     highlightColor: state.highlightColor,
@@ -82,6 +83,7 @@ function applyUserState(userState) {
     : restoredMode;
   state.pdfLayoutMode = ['continuous', 'single', 'double'].includes(settings.pdfLayoutMode)
     ? settings.pdfLayoutMode : 'continuous';
+  state.pdfPageColors = settings.pdfPageColors === 'original' ? 'original' : 'theme';
   state.continuousScroll = state.readingMode === 'scroll';
   state.effectiveReadingMode = state.readingMode;
   state.tocOpen = settings.tocAutoOpen === true;
