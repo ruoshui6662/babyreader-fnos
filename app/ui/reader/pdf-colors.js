@@ -10,9 +10,11 @@
  *   light  as printed
  *   sepia  the white canvas is multiplied onto a warm paper colour: paper
  *          turns sepia, black text stays black
- *   dark   invert(1) hue-rotate(180deg) contrast(.76): lightness flips while
- *          hues stay (a blue heading stays blue), paper becomes #1f1f1f and
- *          text #e0e0e0 rather than pure black and white
+ *   dark   an SVG filter: invert, hue-rotate(180deg), then a gamma curve.
+ *          Lightness flips while hues stay (a blue heading stays blue);
+ *          paper becomes #1f1f1f and text #f2f2f2. The gamma lifts the grey
+ *          anti-aliased edges of thin glyphs, which a linear map leaves dim
+ *          and soft-looking on a dark page.
  *
  * Inverting turns photos into negatives. Images are located from the page's
  * operator list, and their pixels are copied from the page canvas (a CSS
@@ -24,6 +26,20 @@
 
 const PDF_SCANNED_PAGE_SHARE = 0.5;
 const pdfImageRegionCache = new Map();
+
+const PDF_DARK_FILTER_ID = 'zsPdfDarkFilter';
+
+function ensurePdfDarkFilter() {
+  if (document.getElementById(PDF_DARK_FILTER_ID)) return;
+  const channels = (attributes) => ['R', 'G', 'B'].map((channel) => `<feFunc${channel} ${attributes}/>`).join('');
+  document.body.insertAdjacentHTML('beforeend', `<svg class="pdf-color-filters" width="0" height="0" aria-hidden="true" focusable="false">
+  <filter id="${PDF_DARK_FILTER_ID}" color-interpolation-filters="sRGB" x="0" y="0" width="100%" height="100%">
+    <feComponentTransfer>${channels('type="linear" slope="-1" intercept="1"')}</feComponentTransfer>
+    <feColorMatrix type="hueRotate" values="180"/>
+    <feComponentTransfer>${channels('type="gamma" amplitude="0.83" exponent="0.7" offset="0.12"')}</feComponentTransfer>
+  </filter>
+</svg>`);
+}
 
 function pdfPageColorMode() {
   if (state.pdfPageColors === 'original') return 'original';
@@ -161,6 +177,7 @@ function onPdfPageColorsFrameCommitted(context) {
 
 function syncPdfPageColors() {
   const mode = pdfPageColorMode();
+  if (mode === 'dark') ensurePdfDarkFilter();
   document.body.dataset.pdfPageColors = mode;
   if (mode !== 'dark' || state.contentType !== 'pdf') return mode;
   for (const context of pdfCommittedFrames.values()) {
