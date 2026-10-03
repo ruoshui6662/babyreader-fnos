@@ -354,6 +354,32 @@ function enterNotesSelection(shell, body, book, notes) {
   sync();
 }
 
+// 导出 Markdown / 导出 PDF; `documents()` gives what is on screen once loaded.
+function notesExportButtons(documents, { all = false } = {}) {
+  const markdown = notesElement('button', 'notes-secondary notes-export-md', '导出 Markdown');
+  markdown.type = 'button';
+  const pdf = notesElement('button', 'notes-secondary notes-export-pdf', '导出 PDF');
+  pdf.type = 'button';
+  markdown.addEventListener('click', () => {
+    const docs = documents();
+    if (!docs?.length || typeof exportNotesMarkdown !== 'function') return;
+    exportNotesMarkdown(docs, { all });
+  });
+  pdf.addEventListener('click', async () => {
+    const docs = documents();
+    if (!docs?.length || typeof printNotesPdf !== 'function') return;
+    pdf.disabled = true;
+    try {
+      await printNotesPdf(docs, { all });
+    } catch {
+      showHighlightHint('打印失败，请重试');
+    } finally {
+      pdf.disabled = false;
+    }
+  });
+  return [markdown, pdf];
+}
+
 function backToNotesList() {
   // Came here from the list: step back to it; arrived directly: show it.
   if (notesPageState.cameFromList) window.history.back();
@@ -370,10 +396,14 @@ async function renderNotesDocument(doc) {
   if (doc === 'all') {
     const summary = await window.browserHost.getNotesSummary().catch(() => null);
     if (!shell.isConnected) return null;
+    let loadedDocuments = null;
+    const exportButtons = notesExportButtons(() => loadedDocuments, { all: true });
+    exportButtons.forEach((button) => { button.disabled = true; });
     notesDocumentHeader(shell, {
       back: backToNotesList,
       title: '全部笔记汇总',
-      meta: summary ? `${summary.totals.books} 本书 · ${summary.totals.notes} 条笔记 · ${summary.totals.thoughts} 条想法` : ''
+      meta: summary ? `${summary.totals.books} 本书 · ${summary.totals.notes} 条笔记 · ${summary.totals.thoughts} 条想法` : '',
+      actions: summary?.totals.notes ? exportButtons : []
     });
     shell.appendChild(body);
     if (!summary?.books.length) {
@@ -386,6 +416,8 @@ async function renderNotesDocument(doc) {
         .map((book) => window.browserHost.getBookNotes(book.bookId).catch(() => null))));
       if (!shell.isConnected) return null;
     }
+    loadedDocuments = documents.filter(Boolean);
+    exportButtons.forEach((button) => { button.disabled = !loadedDocuments.length; });
     body.replaceChildren();
     for (const bookDoc of documents.filter(Boolean)) {
       const section = notesElement('section', 'notes-book-section');
@@ -427,7 +459,7 @@ async function renderNotesDocument(doc) {
     cover: notesCover(book),
     title: book.title || '已移除的书',
     meta: book.author ? `${book.author} · ${meta}` : meta,
-    actions: [continueReading, longImage]
+    actions: [continueReading, longImage, ...(notes.length ? notesExportButtons(() => [{ book, notes }]) : [])]
   });
   longImage.addEventListener('click', () => enterNotesSelection(shell, body, book, notes));
   shell.appendChild(body);

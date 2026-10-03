@@ -9538,3 +9538,4 @@ li:first-child .stats-rank-no { color: var(--library-on-accent, #fff); backgroun
 @media (max-width: 760px) {
   .note-card-dialog.is-long .note-card-preview { max-height: 50dvh; }
 }
+.notes-secondary:disabled { opacity: .45; cursor: default; }

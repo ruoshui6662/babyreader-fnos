@@ -68,7 +68,10 @@ test.describe('PDF page colours', () => {
 
     await chooseTheme(page, 'dark');
     await expect(page.locator('#settingPdfPageColors [data-pdf-page-colors="theme"]')).toHaveAttribute('aria-checked', 'true');
-    const saved = page.waitForResponse((response) => response.url().endsWith('/api/settings') && response.request().method() === 'PUT');
+    // Choosing the dark theme saves settings too; wait for the save carrying 原样.
+    const saved = page.waitForResponse((response) => response.url().endsWith('/api/settings')
+      && response.request().method() === 'PUT'
+      && response.request().postDataJSON()?.pdfPageColors === 'original');
     await page.locator('#settingPdfPageColors [data-pdf-page-colors="original"]').click();
     expect((await (await saved).json()).pdfPageColors).toBe('original');
     await expect(page.locator('body')).toHaveAttribute('data-pdf-page-colors', 'original');

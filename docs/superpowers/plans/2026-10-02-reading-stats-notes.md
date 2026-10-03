@@ -141,6 +141,13 @@
 - 对话框与单条卡片共用（`openNoteCardShell`）；长图不显示比例；多张图手机一次分享、桌面依次下载（`枕书-书名-书摘长图-日期-时间-序号.png`）。
 - 测试：`e2e/note-card.spec.js` 新增 4 项（选择与生成、100 条长书摘 5 秒内完成且每页不超过 8000 像素、手机无溢出、样图）。样图 `docs/screenshots/cards/long-*.png`。
 
+### S4c Markdown 与 PDF 导出（完成）
+
+- `library/notes-export.js`：单本书与“全部笔记汇总”文档页头新增“导出 Markdown”“导出 PDF”。
+- Markdown：标题、作者与条数、导出日期；按原书章节（汇总时书为二级、章节为三级标题），引文为引用块，想法加粗前缀，日期与划线颜色用 `<sub>`；行首会被当成 Markdown 语法的字符转义。文件名 `书名-读书笔记-YYYYMMDD.md` / `全部读书笔记-YYYYMMDD.md`。
+- PDF：生成打印版页面（A4、思源宋体 / Literata、标题页、章节居中带短线、引文左侧划线色、想法浅底、条目不跨页；汇总有书目目录、每本书另起一页），在隐藏 iframe 里等字体加载完成后调用浏览器打印，用户选“另存为 PDF”。不引入 PDF 库。
+- 测试：`tests/notes-export.test.js`（格式、章节顺序、汇总、转义、文件名）；`e2e/notes-export.spec.js`（单本与汇总的 Markdown 下载内容、打印页结构与字体、手机按钮换行无溢出、样例 PDF）。截图与样例在 `docs/screenshots/notes-export/`。
+
 ## 9. S4 导出与图片卡片：调研与方案（已确认）
 
 ### 9.1 参考

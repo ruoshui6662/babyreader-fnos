@@ -42,6 +42,7 @@ const uiScriptFiles = [
   'app/ui/library/shelf-nav.js',
   'app/ui/library/stats-page.js',
   'app/ui/library/note-card.js',
+  'app/ui/library/notes-export.js',
   'app/ui/library/notes-page.js',
   'app/ui/library/view.js',
   'app/ui/app.js'
