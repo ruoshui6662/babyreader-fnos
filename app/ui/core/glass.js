@@ -145,6 +145,11 @@ async function glassCoverPixels(book, cover) {
     source = image;
   }
   if (source instanceof HTMLImageElement) source = await loadedGlassImage(source);
+  // A generated cover's colours come from CSS, readable only once the cover
+  // is on the page; the shelf attaches it right after creating it.
+  for (let frame = 0; !source && cover && !cover.isConnected && frame < 10; frame += 1) {
+    await new Promise((resolve) => requestAnimationFrame(resolve));
+  }
   if (source) {
     ctx.drawImage(source, 0, 0, 40, 60);
   } else if (cover) {

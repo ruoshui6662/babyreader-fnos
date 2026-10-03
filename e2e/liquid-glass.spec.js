@@ -30,6 +30,12 @@ async function readRecently(page) {
 const ambient = (page) => page.evaluate(() => [1, 2, 3].map((index) => getComputedStyle(document.documentElement).getPropertyValue(`--amb-${index}`).trim()));
 
 test.describe('液态玻璃', () => {
+  // Settings live on the server: leave them off for the specs that follow.
+  test.afterEach(async ({ page }) => {
+    await page.goto(APP_PATH);
+    await setSettings(page, { liquidGlass: false, glassAmbient: 'cover' });
+  });
+
   test('off by default; the shelf 外观 menu turns it on, it is saved and survives a reload', async ({ page }) => {
     await page.setViewportSize({ width: 1280, height: 860 });
     await page.goto(APP_PATH);
@@ -57,6 +63,10 @@ test.describe('液态玻璃', () => {
     await expect.poll(async () => (await ambient(page))[0]).toMatch(/^(hsl|rgba?|color)\(/);
     expect(await page.evaluate(() => getComputedStyle(document.body).backgroundImage)).toContain('radial-gradient');
     await expect.poll(() => page.evaluate(() => JSON.parse(localStorage.getItem('zhenshu-glass-ambient') || '{}').last?.palette?.length || 0)).toBe(3);
+    // E2E EPUB's generated cover is indigo: the light's hue follows it, not the pale-blue fallback (211).
+    const hues = await page.evaluate(() => JSON.parse(localStorage.getItem('zhenshu-glass-ambient')).last.palette.map((colour) => colour[0]));
+    expect(hues[0]).toBeGreaterThan(220);
+    expect(hues[0]).toBeLessThan(245);
     if (SCREENSHOT_DIR) {
       await page.waitForTimeout(900);
       await page.screenshot({ path: `${SCREENSHOT_DIR}/g1-library-light-cover.png` });
@@ -103,4 +113,61 @@ test.describe('液态玻璃', () => {
     await openEpubFixture(page);
     await expect(page.locator('#btnLibraryAppearance')).toBeHidden();
   });
+
+  test('G2 shelf chrome: floating sidebar and capsules on desktop; all back when off', async ({ page }) => {
+    await page.setViewportSize({ width: 1280, height: 860 });
+    await page.goto(APP_PATH);
+    await resetEpubFixtureState(page);
+    await setSettings(page, { theme: 'dark', liquidGlass: true, glassAmbient: 'cover' });
+    await page.goto(APP_PATH);
+    const nav = page.locator('#shelfNav');
+    await expect(nav).toHaveCSS('border-radius', '22px');
+    await expect(nav).toHaveCSS('left', '12px');
+    await expect(page.locator('.library-header-actions')).toHaveCSS('border-radius', '999px');
+    // Nothing scrolls under the desktop chrome: tint and rim, no live blur.
+    await expect(nav).toHaveCSS('backdrop-filter', 'none');
+    // The page itself stays opaque (cheap scrolling); the light is on top of it.
+    expect(await page.evaluate(() => getComputedStyle(document.querySelector('.reader')).backgroundColor)).not.toBe('rgba(0, 0, 0, 0)');
+    expect(await page.evaluate(() => getComputedStyle(document.querySelector('.article.is-library'), '::before').backgroundImage)).toContain('radial-gradient');
+
+    await page.evaluate(() => setLiquidGlass(false));
+    await expect(nav).toHaveCSS('border-radius', '0px');
+    await expect(nav).toHaveCSS('left', '0px');
+    await expect(page.locator('.library-header-actions')).toHaveCSS('border-radius', '0px');
+  });
+
+  test('G2 phones: a floating tab bar the shelf scrolls under; the choose bar sits above it', async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.addInitScript(() => {
+      Object.defineProperty(navigator, 'userAgent', { configurable: true, get: () => 'Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 Chrome/120 Mobile Safari/537.36' });
+    });
+    await page.goto(APP_PATH);
+    await resetEpubFixtureState(page);
+    await setSettings(page, { theme: 'light', liquidGlass: true, glassAmbient: 'cover' });
+    const bookId = await page.evaluate(async () => {
+      const library = await window.browserHost.getLibrary();
+      const epub = library.books.find((book) => book.title === 'E2E EPUB');
+      await fetch(`/app/zhenshu/api/books/${epub.id}/highlights`, {
+        method: 'PUT', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ highlights: [{ id: 'g2', locator: JSON.stringify({ version: 1, type: 'dom-range', startTextOffset: 5 }), chapterHref: 'OEBPS/chapter1.xhtml', text: '玻璃下的一句话。', color: 'yellow', createdAt: new Date().toISOString() }] })
+      });
+      return epub.id;
+    });
+    await page.goto(APP_PATH);
+    const nav = page.locator('#shelfNav');
+    await expect(nav).toHaveCSS('border-radius', '31px');
+    const navBox = await nav.boundingBox();
+    expect(navBox.x).toBeGreaterThanOrEqual(16);
+    expect(844 - (navBox.y + navBox.height)).toBeGreaterThanOrEqual(12);
+    // The shelf runs to the bottom edge, under the bar.
+    const reader = await page.locator('.reader').boundingBox();
+    expect(reader.y + reader.height).toBeGreaterThan(navBox.y + navBox.height);
+
+    await page.goto(`${APP_PATH}?view=notes&doc=${bookId}`);
+    await page.locator('.notes-long-image').click();
+    const bar = await page.locator('.notes-select-bar').boundingBox();
+    const tabs = await nav.boundingBox();
+    expect(bar.y + bar.height).toBeLessThanOrEqual(tabs.y);
+  });
 });
+
