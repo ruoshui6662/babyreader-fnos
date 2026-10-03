@@ -28,6 +28,7 @@ const state = {
   userState: { version: 2, books: {}, settings: {} },
   readingMode: 'scroll',       // user preference: 'scroll' | 'double' ('single' is only the narrow-window fallback)
   pdfLayoutMode: 'continuous', // independent PDF preference: continuous | single | double
+  pdfPageColors: 'theme', // PDF pages follow the reading theme, or stay 'original'
   readingModeAutoApplied: false, // mobile default is temporary until the user chooses a mode
   effectiveReadingMode: 'scroll', // responsive mode after width-based fallback
   continuousScroll: true,     // legacy mirror retained for settings migration

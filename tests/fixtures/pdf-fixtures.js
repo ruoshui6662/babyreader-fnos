@@ -108,4 +108,40 @@ function createImageOnlyPdfFixture() {
   return Buffer.from(pdf, 'ascii');
 }
 
-module.exports = { createCorruptPdfFixture, createImageOnlyPdfFixture, createInvalidPdfFixture, createPdfFixture };
+// Page 1: text, a colour picture drawn directly and another inside a form
+// XObject (its own matrix). Page 2: one image filling the page, like a scan.
+function createMixedImagePdfFixture() {
+  const page1 = [
+    'BT /F1 18 Tf 72 720 Td (Dark mode text stays readable) Tj ET',
+    'q 160 0 0 120 72 520 cm /Im1 Do Q',
+    'q /Fm1 Do Q'
+  ].join('\n');
+  const page2 = 'q 612 0 0 792 0 0 cm /Im1 Do Q BT /F1 18 Tf 72 720 Td (Scanned page) Tj ET';
+  const form = 'q 120 0 0 90 0 0 cm /Im1 Do Q';
+  // 2x2 RGB: red, green / blue, white.
+  const pixels = 'FF0000 00FF00 0000FF FFFFFF>';
+  const objects = [
+    '<< /Type /Catalog /Pages 2 0 R >>',
+    '<< /Type /Pages /Kids [3 0 R 4 0 R] /Count 2 >>',
+    '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 7 0 R >> /XObject << /Im1 8 0 R /Fm1 9 0 R >> >> /Contents 5 0 R >>',
+    '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 7 0 R >> /XObject << /Im1 8 0 R >> >> /Contents 6 0 R >>',
+    `<< /Length ${Buffer.byteLength(page1)} >>\nstream\n${page1}\nendstream`,
+    `<< /Length ${Buffer.byteLength(page2)} >>\nstream\n${page2}\nendstream`,
+    '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>',
+    `<< /Type /XObject /Subtype /Image /Width 2 /Height 2 /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /ASCIIHexDecode /Length ${pixels.length} >>\nstream\n${pixels}\nendstream`,
+    `<< /Type /XObject /Subtype /Form /BBox [0 0 120 90] /Matrix [1 0 0 1 340 520] /Resources << /XObject << /Im1 8 0 R >> >> /Length ${Buffer.byteLength(form)} >>\nstream\n${form}\nendstream`
+  ];
+  let pdf = '%PDF-1.7\n% 枕书 mixed image fixture\n';
+  const offsets = [0];
+  objects.forEach((object, index) => {
+    offsets.push(Buffer.byteLength(pdf, 'utf8'));
+    pdf += `${index + 1} 0 obj\n${object}\nendobj\n`;
+  });
+  const xrefOffset = Buffer.byteLength(pdf, 'utf8');
+  pdf += `xref\n0 ${objects.length + 1}\n0000000000 65535 f \n`;
+  pdf += offsets.slice(1).map((offset) => `${String(offset).padStart(10, '0')} 00000 n \n`).join('');
+  pdf += `trailer\n<< /Size ${objects.length + 1} /Root 1 0 R >>\nstartxref\n${xrefOffset}\n%%EOF\n`;
+  return Buffer.from(pdf, 'utf8');
+}
+
+module.exports = { createCorruptPdfFixture, createImageOnlyPdfFixture, createInvalidPdfFixture, createMixedImagePdfFixture, createPdfFixture };

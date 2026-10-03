@@ -679,6 +679,12 @@ test('PDF layout settings are whitelisted and isolated per user without changing
   assert.equal(oldUser.pdfLayoutMode, 'continuous');
   const single = await storage.updateSettings('reader_b', { pdfLayoutMode: 'single' });
   assert.equal(single.pdfLayoutMode, 'single');
+
+  // PDF pages follow the theme unless kept as printed.
+  assert.equal(single.pdfPageColors, 'theme');
+  assert.equal((await storage.updateSettings('reader_b', { pdfPageColors: 'original' })).pdfPageColors, 'original');
+  assert.equal((await storage.updateSettings('reader_b', { pdfPageColors: 'neon' })).pdfPageColors, 'original');
+  assert.equal((await storage.getState('reader_a')).settings.pdfPageColors ?? 'theme', 'theme');
 });
 
 test('server exposes health, diagnostics, scan status, error log, and shared scan control', async () => {

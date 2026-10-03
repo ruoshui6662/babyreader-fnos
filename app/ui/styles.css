@@ -8734,3 +8734,56 @@ html[data-reader-surface="mobile"] body.is-epub.mobile-reading:not(.paged-readin
   box-shadow: 0 1px 3px rgba(0, 0, 0, .12);
 }
 .settings-indent-segments button:focus-visible { outline: 2px solid var(--color-focus, var(--color-accent)); outline-offset: 1px; }
+
+/* ============================================================
+   PDF page colours (reader/pdf-colors.js): pages follow the reading theme.
+   Display only: the file, text selection, search and notes are unchanged.
+   ============================================================ */
+.settings-pdf-colors { grid-template-columns: 1fr 1fr; }
+.settings-pdf-colors-field .settings-field-description { margin: 0; }
+.pdf-image-restore-layer { display: none; }
+
+/* 护眼: the white canvas multiplies onto warm paper; black text stays black. */
+body.is-pdf-reader[data-pdf-page-colors="sepia"] .pdf-page {
+  isolation: isolate;
+  background: #f3e8cf;
+}
+body.is-pdf-reader[data-pdf-page-colors="sepia"] .pdf-page-canvas {
+  mix-blend-mode: multiply;
+}
+
+/* 深色: lightness flips, hues stay; paper #1f1f1f, text #e0e0e0. */
+body.is-pdf-reader[data-pdf-page-colors="dark"] .pdf-page {
+  isolation: isolate;
+  background: #1f1f1f;
+}
+body.is-pdf-reader[data-pdf-page-colors="dark"] .pdf-page-canvas {
+  filter: invert(1) hue-rotate(180deg) contrast(0.76);
+}
+/* Pictures keep their own colours: copies of their pixels sit on top,
+   dimmed a little for the dark page. */
+body.is-pdf-reader[data-pdf-page-colors="dark"] .pdf-image-restore-layer {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  display: block;
+  pointer-events: none;
+}
+.pdf-image-restore {
+  position: absolute;
+  display: block;
+  max-width: none;
+  filter: brightness(0.86);
+}
+/* Selection and marks were multiplied onto white paper; on dark paper they
+   lighten it instead. */
+body.is-pdf-reader[data-pdf-page-colors="dark"] .pdf-page-text-layer {
+  mix-blend-mode: screen;
+}
+body.is-pdf-reader[data-pdf-page-colors="dark"] .pdf-page-text-layer ::selection {
+  background: color-mix(in srgb, var(--selection-bg) 55%, #000);
+}
+body.is-pdf-reader[data-pdf-page-colors="dark"] .pdf-annotation-layer,
+body.is-pdf-reader[data-pdf-page-colors="dark"] .pdf-search-hit-layer {
+  mix-blend-mode: screen;
+}
