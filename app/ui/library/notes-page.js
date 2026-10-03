@@ -151,7 +151,14 @@ function createNoteCard(note, { query = '', showBook = false } = {}) {
       showHighlightHint('复制失败，请手动选择文字复制');
     }
   });
-  actions.append(jump, copy);
+  const makeCard = notesElement('button', 'notes-action', '卡片');
+  makeCard.type = 'button';
+  makeCard.setAttribute('aria-label', '生成书摘卡片');
+  makeCard.addEventListener('click', () => {
+    if (typeof openNoteCardDialog !== 'function') return;
+    openNoteCardDialog({ ...note, book: note.book || { title: note.title, author: note.author, coverUrl: note.coverUrl } });
+  });
+  actions.append(jump, copy, makeCard);
   footer.appendChild(actions);
   card.appendChild(footer);
   return card;
@@ -313,7 +320,7 @@ async function renderNotesDocument(doc) {
       heading.append(notesCover(bookDoc.book), notesElement('span', 'notes-book-heading-title', bookDoc.book.title || '已移除的书'));
       heading.addEventListener('click', () => openNotesDocument(bookDoc.book.bookId));
       section.appendChild(heading);
-      appendChapterGroups(section, bookDoc.notes.map((note) => ({ ...note, bookId: bookDoc.book.bookId, title: bookDoc.book.title, available: bookDoc.book.available })), { headingTag: 'h3' });
+      appendChapterGroups(section, bookDoc.notes.map((note) => ({ ...note, bookId: bookDoc.book.bookId, title: bookDoc.book.title, available: bookDoc.book.available, book: bookDoc.book })), { headingTag: 'h3' });
       body.appendChild(section);
     }
     return shell;
@@ -351,7 +358,7 @@ async function renderNotesDocument(doc) {
     body.appendChild(notesElement('p', 'notes-empty', '这本书还没有笔记。'));
     return shell;
   }
-  appendChapterGroups(body, notes.map((note) => ({ ...note, bookId: book.bookId, title: book.title, available: book.available })));
+  appendChapterGroups(body, notes.map((note) => ({ ...note, bookId: book.bookId, title: book.title, available: book.available, book })));
   if (notesPageState.focusNoteId) {
     const target = body.querySelector(`[data-note-id="${CSS.escape(notesPageState.focusNoteId)}"]`);
     notesPageState.focusNoteId = null;

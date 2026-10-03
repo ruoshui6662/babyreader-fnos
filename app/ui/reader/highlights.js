@@ -611,6 +611,8 @@ function openHighlightEditor(id) {
   thought.value = String(highlight.thought || highlight.note || '');
   _highlightEditorBaseline = highlightEditorSnapshot();
   if (deleteButton) deleteButton.hidden = false;
+  const cardButton = document.getElementById('btnHighlightCard');
+  if (cardButton) cardButton.hidden = typeof openNoteCardForAnnotation !== 'function';
   editor.hidden = false;
   requestAnimationFrame(() => thought.focus());
   return true;
@@ -645,6 +647,8 @@ function openThoughtComposer(session) {
   thought.value = '';
   _highlightEditorBaseline = highlightEditorSnapshot();
   if (deleteButton) deleteButton.hidden = true;
+  const cardButton = document.getElementById('btnHighlightCard');
+  if (cardButton) cardButton.hidden = true;
   editor.hidden = false;
   requestAnimationFrame(() => thought.focus());
   return true;
@@ -841,6 +845,15 @@ function setupHighlightEditor() {
   document.getElementById('btnCloseHighlightEditor')?.addEventListener('click', () => closeHighlightEditor());
   document.getElementById('btnSaveHighlight')?.addEventListener('click', saveActiveHighlightEdits);
   document.getElementById('btnDeleteHighlight')?.addEventListener('click', deleteActiveHighlight);
+  document.getElementById('btnHighlightCard')?.addEventListener('click', () => {
+    const id = _activeHighlightEditorId;
+    const bookId = _activeHighlightEditorBookId;
+    if (!id || !bookId || typeof openNoteCardForAnnotation !== 'function') return;
+    const record = currentAnnotationAdapter(state.contentType).list().find((item) => item.id === id);
+    // The card shows the thought as typed, even before it is saved.
+    const thought = String(document.getElementById('highlightEditorThought')?.value || '').trim();
+    void openNoteCardForAnnotation(bookId, id, { ...record, thought }, { thought });
+  });
   editor.addEventListener('keydown', (event) => {
     if (event.key === 'Escape') {
       event.preventDefault();

@@ -444,7 +444,7 @@ function ensureAnnotationMenu() {
   }
   const actions = document.createElement('div');
   actions.className = 'annotation-menu-actions';
-  for (const [action, label] of [['thought', '写想法'], ['copy', '复制'], ['ai', '问 AI'], ['delete', '删除']]) {
+  for (const [action, label] of [['thought', '写想法'], ['copy', '复制'], ['card', '卡片'], ['ai', '问 AI'], ['delete', '删除']]) {
     const button = document.createElement('button');
     button.type = 'button';
     button.dataset.annotationAction = action;
@@ -519,6 +519,7 @@ async function handleAnnotationMenu(button) {
   closeAnnotationMenu();
   if (action === 'thought') openHighlightEditor(id);
   else if (action === 'copy') await copySelectionText(text);
+  else if (action === 'card' && typeof openNoteCardForAnnotation === 'function') await openNoteCardForAnnotation(state.currentBookId, id, { ...record, text });
   else if (action === 'ai' && typeof openAiForSelection === 'function') openAiForSelection({ text });
   else if (action === 'delete') await deleteHighlightById(id);
 }

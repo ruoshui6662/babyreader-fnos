@@ -9351,3 +9351,139 @@ li:first-child .stats-rank-no { color: var(--library-on-accent, #fff); backgroun
 .reader .article .notes-doc-meta,
 .reader .article .notes-search-count { font-size: 13px; line-height: 1.6; }
 .reader .article .notes-empty { font-size: 14px; line-height: 1.6; }
+
+
+/* ============================================================
+   书摘卡片 (library/note-card.js)
+   ============================================================ */
+.note-card-dialog {
+  position: fixed;
+  inset: 0;
+  margin: auto;
+  height: fit-content;
+  width: min(980px, calc(100vw - 32px));
+  max-width: none;
+  max-height: calc(100vh - 32px);
+  padding: 0;
+  overflow: hidden;
+  color: var(--color-text);
+  font-family: var(--font-ui);
+  background: var(--color-bg);
+  border: 0;
+  border-radius: var(--radius-sheet);
+  box-shadow: 0 24px 80px rgba(0, 0, 0, .35);
+}
+.note-card-dialog::backdrop { background: rgba(0, 0, 0, .45); }
+.note-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 18px 10px;
+}
+.note-card-title { margin: 0; font-size: 17px; font-weight: 650; }
+.note-card-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 300px;
+  gap: 20px;
+  max-height: calc(100vh - 92px);
+  padding: 0 18px 18px;
+  overflow: auto;
+}
+.note-card-preview {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 360px;
+  padding: 16px;
+  background: var(--color-fill);
+  border-radius: var(--radius-card);
+}
+.note-card-preview[aria-busy="true"] .note-card-canvas { opacity: .55; }
+.note-card-canvas {
+  display: block;
+  max-width: 100%;
+  max-height: min(68vh, 620px);
+  width: auto;
+  height: auto;
+  border-radius: 6px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, .22);
+  transition: opacity var(--dur-fast) var(--ease-out);
+}
+.note-card-side { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+.note-card-controls { display: flex; flex-direction: column; gap: 14px; }
+.note-card-group { display: flex; flex-direction: column; gap: 6px; }
+.note-card-group-label { color: var(--color-text-2); font-size: 12px; }
+.note-card-segment {
+  display: grid;
+  grid-auto-columns: 1fr;
+  grid-auto-flow: column;
+  gap: 2px;
+  padding: 2px;
+  background: var(--color-fill);
+  border-radius: var(--radius-control);
+}
+.note-card-option {
+  min-height: 32px;
+  padding: 0 8px;
+  color: var(--color-text);
+  font: 13px var(--font-ui);
+  white-space: nowrap;
+  background: transparent;
+  border: 0;
+  border-radius: 8px;
+  cursor: pointer;
+}
+.note-card-option[aria-checked="true"] {
+  font-weight: 600;
+  background: var(--color-elevated);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, .14);
+}
+.note-card-toggles { display: flex; flex-wrap: wrap; gap: 6px; }
+.note-card-toggle {
+  min-height: 30px;
+  padding: 0 12px;
+  color: var(--color-text-2);
+  font: 13px var(--font-ui);
+  background: transparent;
+  border: 1px solid var(--color-separator);
+  border-radius: var(--radius-pill);
+  cursor: pointer;
+}
+.note-card-toggle[aria-pressed="true"] {
+  color: var(--color-accent);
+  border-color: var(--color-accent);
+}
+.note-card-status { min-height: 1.5em; margin: 0; color: var(--color-text-2); font-size: 12px; line-height: 1.5; }
+.note-card-actions { display: flex; gap: 8px; margin-top: auto; }
+.note-card-primary,
+.note-card-secondary {
+  flex: 1;
+  min-height: 40px;
+  padding: 0 14px;
+  font: 600 14px var(--font-ui);
+  border: 0;
+  border-radius: var(--radius-control);
+  cursor: pointer;
+}
+.note-card-primary { color: #fff; background: var(--color-accent); }
+.note-card-secondary { color: var(--color-text); background: var(--color-fill); }
+.note-card-primary:disabled { opacity: .5; cursor: default; }
+.highlight-editor-actions .highlight-card-button { margin-right: 4px; }
+
+@media (max-width: 760px) {
+  .note-card-dialog {
+    width: 100vw;
+    max-height: 100dvh;
+    height: 100dvh;
+    margin: 0;
+    border-radius: 0;
+  }
+  .note-card-layout {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 14px;
+    max-height: calc(100dvh - 56px);
+    padding: 0 16px calc(16px + env(safe-area-inset-bottom));
+  }
+  .note-card-preview { min-height: 0; padding: 12px; }
+  .note-card-canvas { max-height: 46dvh; }
+}
