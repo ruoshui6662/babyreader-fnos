@@ -2245,8 +2245,8 @@ body.is-library.theme-sepia .topbar {
   align-self: center;
   padding: 5px 14px;
   border-radius: 999px;
-  color: var(--library-accent, var(--color-accent));
-  background: color-mix(in srgb, var(--library-accent, var(--color-accent)) 14%, transparent);
+  color: var(--library-on-accent, #fff);
+  background: var(--library-accent, var(--color-accent));
   font: 600 13px/1.3 var(--font-ui);
   white-space: nowrap;
 }
@@ -2297,25 +2297,13 @@ body.is-library.theme-sepia .topbar {
 }
 
 .library-mode-button,
-.library-create-button,
-.library-back-button {
+.library-create-button {
   min-height: 36px;
   padding: 7px 14px;
   color: var(--library-text, var(--color-text));
   background: var(--library-fill, var(--color-fill));
   border: 0;
   font-size: 14px;
-}
-
-.library-create-button {
-  color: var(--library-accent, var(--color-accent));
-  background: color-mix(in srgb, var(--library-accent, var(--color-accent)) 14%, transparent);
-}
-
-.library-create-button:hover:not(:disabled),
-.library-create-button:focus-visible {
-  color: var(--library-accent, var(--color-accent));
-  background: color-mix(in srgb, var(--library-accent, var(--color-accent)) 22%, transparent);
 }
 
 /* "完成" follows the iOS Done convention: the only filled button. */
@@ -2851,12 +2839,13 @@ body.is-library.theme-sepia .topbar {
 }
 
 .library-category-navigation .library-organization-card-main[aria-current="page"] {
-  color: var(--library-stage, var(--color-bg));
-  background: var(--library-text, var(--color-text));
+  color: var(--library-accent, var(--color-accent));
+  background: color-mix(in srgb, var(--library-accent, var(--color-accent)) 14%, transparent);
+  font-weight: 600;
 }
 
 .library-category-navigation .library-organization-card-main[aria-current="page"] .library-organization-card-count {
-  color: color-mix(in srgb, var(--library-stage, var(--color-bg)) 70%, transparent);
+  color: color-mix(in srgb, var(--library-accent, var(--color-accent)) 70%, transparent);
 }
 
 /* Inset ring: the chip row scrolls horizontally, so an outset outline on the
@@ -2971,16 +2960,6 @@ body.is-library.theme-sepia .topbar {
   outline-offset: 2px;
 }
 
-.library-organization-view .library-header-actions > .library-create-button {
-  color: var(--library-accent, var(--color-accent));
-  background: color-mix(in srgb, var(--library-accent, var(--color-accent)) 14%, transparent);
-}
-
-.library-organization-view .library-header-actions > .library-create-button:hover:not(:disabled) {
-  color: var(--library-accent, var(--color-accent));
-  background: color-mix(in srgb, var(--library-accent, var(--color-accent)) 22%, transparent);
-}
-
 .library-organization-view .library-header-actions > .library-mode-button[aria-pressed="true"],
 .library-organization-view .library-header-actions > .library-mode-button[aria-pressed="true"]:hover:not(:disabled) {
   color: var(--library-on-accent, #fff);
@@ -2988,23 +2967,6 @@ body.is-library.theme-sepia .topbar {
   font-weight: 600;
 }
 
-.library-organization-view .library-header-actions > .library-back-button {
-  color: var(--library-accent, var(--color-accent));
-  background: transparent;
-  padding-inline: 8px 12px;
-}
-/* Border-drawn chevron: decorative only, so the accessible name stays
-   exactly “返回书库”. */
-.library-organization-view .library-header-actions > .library-back-button::before {
-  display: inline-block;
-  width: 7px;
-  height: 7px;
-  margin: 0 7px 1px 2px;
-  border-bottom: 2px solid currentColor;
-  border-left: 2px solid currentColor;
-  transform: rotate(45deg);
-  content: '';
-}
 
 /* Shelf grid: book-sized covers (~130px, 32px apart; eight per row on the
    1280px shelf), as many per row as fit; tracks stretch a little to stay flush. */
@@ -8509,7 +8471,7 @@ html[data-reader-surface="mobile"] #readerSettingsSheet .settings-group { min-wi
 
 html[data-reader-surface="mobile"] .library-header { position: relative; }
 html[data-reader-surface="mobile"] .library-heading { padding-right: 52px; }
-html[data-reader-surface="mobile"] .library-header-actions.has-phone-menu > button:not(.library-back-button) { display: none; }
+html[data-reader-surface="mobile"] .library-header-actions.has-phone-menu > button { display: none; }
 html[data-reader-surface="mobile"] .library-more-button {
   position: absolute;
   top: 0;
@@ -8990,7 +8952,11 @@ html[data-reader-surface="mobile"] body.is-library .library-manage-bar { bottom:
   border-radius: 999px;
   cursor: pointer;
 }
-.stats-range button[aria-checked="true"] { color: var(--library-on-accent, #fff); background: var(--library-accent, var(--color-accent)); }
+.stats-range button[aria-checked="true"] {
+  color: var(--library-text, var(--color-text));
+  background: var(--library-surface, var(--color-elevated));
+  box-shadow: 0 1px 3px rgba(0, 0, 0, .14);
+}
 .stats-period { display: inline-flex; align-items: center; gap: 6px; }
 .stats-period-label { min-width: 150px; color: var(--library-text, var(--color-text)); font: 600 14px/1 var(--font-ui); text-align: center; }
 .stats-period-step {
@@ -9299,12 +9265,12 @@ li:first-child .stats-rank-no { color: var(--library-on-accent, #fff); backgroun
 .notes-secondary {
   min-height: 36px;
   padding: 0 14px;
-  font: 600 14px var(--font-ui);
+  font: 500 14px var(--font-ui);
   border: 0;
   border-radius: 10px;
   cursor: pointer;
 }
-.notes-primary { color: var(--library-on-accent, #fff); background: var(--library-accent, var(--color-accent)); }
+.notes-primary { color: var(--library-on-accent, #fff); font-weight: 600; background: var(--library-accent, var(--color-accent)); }
 .notes-secondary { color: var(--library-text, var(--color-text)); background: var(--library-fill, var(--color-fill)); }
 .notes-primary:disabled { opacity: .45; cursor: default; }
 .library-view.is-document .library-header { display: none; }
@@ -9571,3 +9537,25 @@ li:first-child .stats-rank-no { color: var(--library-on-accent, #fff); backgroun
 }
 .library-book-manage-controls .custom-select-trigger::after { right: 11px; }
 .custom-select-menu[id^="custom-options-libraryCollectionSelect-"] .custom-select-option { padding: 7px 12px; text-align: left; }
+
+/* ============================================================
+   按钮语言（书库 / 阅读统计 / 笔记 / 卡片）
+   主要：实心强调色，每个区域最多一个（完成、继续阅读、继续、生成长图、保存图片）。
+   次要：灰色填充（其余所有操作）。
+   文字：强调色文字、无底（‹ 全部笔记、全部笔记 › 等导航）。
+   选中：强调色浅底 + 强调色文字（侧边栏、分类标签）；分段控件用浮起的白色滑块。
+   ============================================================ */
+.library-header-actions > button,
+.notes-doc-actions > button,
+.note-card-actions > button { flex-shrink: 0; white-space: nowrap; }
+.notes-secondary:hover:not(:disabled),
+.note-card-secondary:hover:not(:disabled) { background: var(--library-fill-strong, var(--color-fill)); }
+.notes-primary:hover:not(:disabled),
+.note-card-primary:hover:not(:disabled) { filter: brightness(1.08); }
+.note-card-primary { font-weight: 600; }
+.note-card-secondary { font-weight: 500; }
+/* Segmented thumb: a touch lighter than the surface so it reads in dark themes too. */
+.stats-range button[aria-checked="true"],
+.note-card-option[aria-checked="true"] {
+  background: color-mix(in srgb, var(--library-surface, var(--color-elevated)) 86%, #fff);
+}

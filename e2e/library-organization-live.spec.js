@@ -389,7 +389,7 @@ test('real API: create a collection, add consecutive books, reopen and reorder',
   await page.reload();
   await expect(page.locator('.library-heading h1')).toHaveText(title);
   await expect(page.locator('.library-book').first()).toHaveAttribute('data-book-id', secondId);
-  await page.getByRole('button', { name: '返回书库', exact: true }).click();
+  await page.getByRole('button', { name: /^我的书籍，/ }).click();
   await expect(page.getByRole('button', { name: `${title}，2 本`, exact: true })).toBeVisible();
 });
 
@@ -404,7 +404,7 @@ test('real API: unassigned order saves and a book can move into a collection fro
   const secondId = await cards.nth(1).getAttribute('data-reorder-id');
   await drag(page, cards.first().locator('.library-book-cover'), cards.nth(1));
   await expect(cards.first()).toHaveAttribute('data-reorder-id', secondId);
-  await page.getByRole('button', { name: '返回书库', exact: true }).click();
+  await page.getByRole('button', { name: /^我的书籍，/ }).click();
   await page.getByRole('button', { name: '整理', exact: true }).click();
   const book = page.locator(`[data-reorder-id="${secondId}"]`);
   const select = book.locator('select');
