@@ -1074,6 +1074,10 @@ function renderLibraryOrganization(library) {
   setupLibraryPhoneMenu(actions);
   const scanStatus = createLibraryScanStatus(library.scan);
   shell.appendChild(scanStatus);
+  if (typeof createLibraryFoldersPanel === 'function' && !isDetail) {
+    const foldersPanel = createLibraryFoldersPanel(library, { empty: !organization.books.length });
+    if (foldersPanel) shell.appendChild(foldersPanel);
+  }
   const activeManageButton = actions.querySelector('.library-mode-button');
   if (manage && activeManageButton && isPhoneLibrary()) shell.appendChild(createLibraryManageBar(activeManageButton));
 

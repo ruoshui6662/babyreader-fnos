@@ -5,6 +5,7 @@ const fs = require('node:fs/promises');
 const path = require('node:path');
 const { resolveAuthorizedPath, isPathInside } = require('./security');
 const { safeUnzip } = require('./zip');
+const { decodeBookText } = require('./text-encoding');
 const { MOBI_EXTENSIONS, readMobiMetadata } = require('./mobi-format');
 
 const SUPPORTED_EXTENSIONS = new Set(['.epub', '.md', '.markdown', '.txt', '.pdf']);
@@ -165,21 +166,53 @@ function extractEpubMetadata(buffer) {
   };
 }
 
+// NAS housekeeping folders (thumbnails, recycle bins, metadata) never hold
+// books, and the app user often may not open them.
+const SYSTEM_DIRECTORY = /^(?:[.@#].*|\$RECYCLE\.BIN|System Volume Information|lost\+found)$/i;
+const MAX_SKIPPED_REPORTED = 20;
+
 // Kindle files are only parsed when the MOBI switch is on; otherwise they are
 // counted by extension so the UI can say how many are hidden, and the scan is
 // otherwise identical to a library without them.
+//
+// One unreadable folder or file is skipped and reported; it no longer drops
+// every book in the library folder. Only the folder itself being unreadable
+// fails the folder.
 async function collectFiles(root, { mobiEnabled = false } = {}) {
   const realRoot = await fs.realpath(root);
   const output = [];
+  const skipped = [];
+  let skippedCount = 0;
   let hiddenMobiCount = 0;
+  const skip = (candidate, error) => {
+    skippedCount += 1;
+    if (skipped.length < MAX_SKIPPED_REPORTED) {
+      skipped.push({ path: path.relative(realRoot, candidate) || '.', code: error?.code ? String(error.code) : null });
+    }
+  };
 
-  async function walk(directory) {
-    for (const entry of await fs.readdir(directory, { withFileTypes: true })) {
+  async function walk(directory, isRoot = false) {
+    let entries;
+    try {
+      entries = await fs.readdir(directory, { withFileTypes: true });
+    } catch (error) {
+      if (isRoot) throw error;
+      skip(directory, error);
+      return;
+    }
+    for (const entry of entries) {
       const candidate = path.join(directory, entry.name);
-      const stat = await fs.lstat(candidate);
-      if (stat.isSymbolicLink()) continue;
-
-      const realCandidate = await fs.realpath(candidate);
+      if (entry.isDirectory() && SYSTEM_DIRECTORY.test(entry.name)) continue;
+      let stat;
+      let realCandidate;
+      try {
+        stat = await fs.lstat(candidate);
+        if (stat.isSymbolicLink()) continue;
+        realCandidate = await fs.realpath(candidate);
+      } catch (error) {
+        skip(candidate, error);
+        continue;
+      }
       if (!isPathInside(realRoot, realCandidate)) continue;
       if (stat.isDirectory()) {
         await walk(realCandidate);
@@ -192,8 +225,8 @@ async function collectFiles(root, { mobiEnabled = false } = {}) {
     }
   }
 
-  await walk(realRoot);
-  return { realRoot, files: output, hiddenMobiCount };
+  await walk(realRoot, true);
+  return { realRoot, files: output, hiddenMobiCount, skipped, skippedCount };
 }
 
 function bookType(extension) {
@@ -268,7 +301,7 @@ async function indexBookFile({ filePath, realRoot, validRoots, coverDirectory = 
       if (coverDirectory) coverUrl = await writeCover(coverDirectory, id, metadata.cover);
     } else {
       if (stat.size > MAX_TEXT_BYTES) throw new Error('Text document exceeds size limit');
-      metadata = extractTextMetadata(safePath, await fs.readFile(safePath, 'utf8'));
+      metadata = extractTextMetadata(safePath, decodeBookText(await fs.readFile(safePath)).text);
     }
 
     return {
@@ -322,7 +355,10 @@ async function scanLibrary(authorizedRoots, options = {}) {
   let reusedCount = 0;
   let indexedCount = 0;
   let hiddenMobiCount = 0;
+  let skippedCount = 0;
   const drmProtected = [];
+  // Per library folder: where it is, how many books it holds, what it skipped.
+  const roots = [];
 
   for (const configuredRoot of authorizedRoots) {
     try {
@@ -344,6 +380,14 @@ async function scanLibrary(authorizedRoots, options = {}) {
 
     discoveredCount += discovered.files.length;
     hiddenMobiCount += discovered.hiddenMobiCount;
+    skippedCount += discovered.skippedCount;
+    const rootSummary = {
+      root: discovered.realRoot,
+      bookCount: 0,
+      skippedCount: discovered.skippedCount,
+      skipped: discovered.skipped
+    };
+    roots.push(rootSummary);
     for (const filePath of discovered.files) {
       const outcome = await indexBookFile({
         filePath, realRoot: discovered.realRoot, validRoots, coverDirectory, previousById
@@ -353,6 +397,7 @@ async function scanLibrary(authorizedRoots, options = {}) {
         continue;
       }
       books.push(outcome.book);
+      if (!outcome.book?.error) rootSummary.bookCount += 1;
       if (outcome.kind === 'reused') reusedCount += 1;
       if (outcome.kind === 'indexed') indexedCount += 1;
     }
@@ -379,6 +424,8 @@ async function scanLibrary(authorizedRoots, options = {}) {
       reusedCount,
       errorCount,
       rootErrors,
+      roots,
+      skippedCount,
       ...(hiddenMobiCount || mobiEnabled ? { hiddenMobiCount } : {}),
       ...(drmProtected.length ? { drmProtectedCount: drmProtected.length, drmProtected: drmProtected.slice(0, 50) } : {})
     }

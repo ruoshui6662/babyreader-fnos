@@ -49,6 +49,8 @@ async function loadReaderSession() {
       window.browserHost.getSession(), window.browserHost.getUserState(), window.browserHost.getLibrary()
     ]);
     state.session = session;
+    if (typeof setupReadingTimer === 'function') setupReadingTimer();
+    if (typeof setupShelfNav === 'function') setupShelfNav();
     syncAiIndexManagerAccess();
     applyUserState(userState);
     applyContinuousScroll();
@@ -120,7 +122,8 @@ async function restoreReaderFromLocation(library) {
     ? getReaderBookId(window.location.href)
     : null;
   if (!bookId) {
-    await renderLibraryWithOrganization(library);
+    if (typeof showShelfView === 'function') await showShelfView(shelfViewFromLocation(), { library });
+    else await renderLibraryWithOrganization(library);
     return false;
   }
 

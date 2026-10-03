@@ -44,7 +44,9 @@ async function performReturnToLibrary() {
     if (typeof destroyPdfReader === 'function') await destroyPdfReader();
     if (typeof resetReaderSearch === 'function') resetReaderSearch();
     _lastLibraryFocusBookId = bookId;
-    renderLibrary(library);
+    // Back to the shelf page the book was opened from.
+    if (typeof showShelfView === 'function') await showShelfView(shelfViewFromLocation(), { library });
+    else renderLibrary(library);
     const card = [...document.querySelectorAll('[data-book-id]')].find((item) => item.dataset.bookId === bookId);
     (card?.matches('button') ? card : card?.querySelector('button'))?.focus({ preventScroll: true });
   } catch (error) {

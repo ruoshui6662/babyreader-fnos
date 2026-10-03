@@ -10,6 +10,7 @@ const fs = require('node:fs/promises');
 const nodeFs = require('node:fs');
 const path = require('node:path');
 const { extractEpubMetadata, MAX_TEXT_BYTES } = require('./library');
+const { decodeBookText } = require('./text-encoding');
 const { readMobiMetadata, MobiFormatError } = require('./mobi-format');
 
 const MiB = 1024 * 1024;
@@ -108,10 +109,9 @@ async function validateContent(filePath, format, size) {
     if (metadata.drm) throw importError('IMPORT_DRM', 415, '这本书受 DRM 保护，无法导入。');
     return {};
   }
-  try {
-    new TextDecoder('utf-8', { fatal: true }).decode(await fs.readFile(filePath));
-  } catch {
-    throw importError('IMPORT_INVALID_FILE', 422, '文本文件必须是 UTF-8 编码。');
+  // UTF-8, GBK/GB18030, Big5 and UTF-16 are all read; anything else is not text.
+  if (!decodeBookText(await fs.readFile(filePath)).encoding) {
+    throw importError('IMPORT_INVALID_FILE', 422, '无法识别文本编码（支持 UTF-8、GBK、Big5、UTF-16）。');
   }
   return {};
 }

@@ -44,6 +44,11 @@ async function createReaderDom() {
     '../app/ui/library/reorder.js',
     '../app/ui/library/import.js',
     '../app/ui/library/organization.js',
+    '../app/ui/library/shelf-nav.js',
+    '../app/ui/library/stats-page.js',
+    '../app/ui/library/note-card.js',
+    '../app/ui/library/notes-export.js',
+    '../app/ui/library/notes-page.js',
     '../app/ui/library/view.js',
     '../app/ui/app.js'
   ];
@@ -90,7 +95,7 @@ async function createReaderDom() {
   window.JSZip = {};
   window.confirm = () => true;
 
-  window.eval(`${source}\nwindow.__zhenshuTest = {\n    state,\n    serializeDomRange,\n    rangeFromHighlight,\n    loadHighlights,\n    openHighlightEditor,\n    deleteActiveHighlight,\n    saveActiveHighlightEdits,\n    currentUserSettings,\n    applyZoom,\n    getEpubThemeCss,\n    debounce,\n    navigateChapter,\n    navigatePageGroup,\n    pageGroupForPage,\n    clampPageGroup,\n    pageLeftForGroup,\n    setPageGroup,\n    snapPaginationToNearestGroup,\n    pageNumberForElement,\n    navigateToSemanticTarget,\n    resolveEffectiveReadingMode,\n    createPaginationGeometry,\n    measurePagination,\n    setReadingMode,\n    currentReadingLocator,\n    restoreReadingLocator,\n    readerActions,\n    readerPanels,\n    openReaderPanel,\n    closeReaderPanel,\n    setupReaderActionMapping,\n    renderLibrary,\n    renderToc,\n    returnToLibrary\n  };`);
+  window.eval(`${source}\nwindow.__zhenshuTest = {\n    state,\n    serializeDomRange,\n    rangeFromHighlight,\n    loadHighlights,\n    openHighlightEditor,\n    deleteActiveHighlight,\n    saveActiveHighlightEdits,\n    currentUserSettings,\n    applyZoom,\n    getEpubThemeCss,\n    debounce,\n    navigateChapter,\n    navigatePageGroup,\n    pageGroupForPage,\n    clampPageGroup,\n    pageLeftForGroup,\n    setPageGroup,\n    snapPaginationToNearestGroup,\n    pageNumberForElement,\n    navigateToSemanticTarget,\n    resolveEffectiveReadingMode,\n    createPaginationGeometry,\n    measurePagination,\n    setReadingMode,\n    currentReadingLocator,\n    restoreReadingLocator,\n    readerActions,\n    readerPanels,\n    openReaderPanel,\n    closeReaderPanel,\n    setupReaderActionMapping,\n    renderLibrary,\n    renderToc,\n    returnToLibrary,\n    createLibraryFoldersPanel\n  };`);
 
   window.__zhenshuTest.savePdfProgress = window.__pdfProgressTestHooks.savePdfProgress;
   window.__zhenshuTest.flushPdfProgressSave = window.__pdfProgressTestHooks.flushPdfProgressSave;
@@ -5859,4 +5864,31 @@ test('phone pagination runs edge to edge with a text inset from the margin slide
     readerWidth: 390, readerHeight: 780, mode: 'single', pageMargin: 40, devicePixelRatio: 3
   });
   assert.ok(desktop.insetLeft > 0);
+});
+
+test('admins see which library folders were read, with counts and unreadable items', async () => {
+  const { api } = await createReaderDom();
+  const panel = api.createLibraryFoldersPanel({
+    folders: {
+      scanned: [
+        { root: '/vol1/@appshare/zhenshu/library', bookCount: 0, skippedCount: 0, skipped: [] },
+        { root: '/vol1/书', bookCount: 12, skippedCount: 2, skipped: [{ path: '私密', code: 'EACCES' }, { path: '旧/坏.txt', code: 'EIO' }] }
+      ],
+      unavailable: [{ root: '/vol2/不在了', code: 'ENOENT', error: 'ENOENT: no such file or directory' }]
+    }
+  }, { empty: true });
+  const text = panel.textContent;
+  assert.match(text, /\/vol1\/@appshare\/zhenshu\/library0 本/);
+  assert.match(text, /12 本，2 项无法读取/);
+  assert.match(text, /无法打开：文件夹不存在/);
+  assert.match(text, /无法读取的子文件夹或文件（2）/);
+  assert.match(text, /私密 — 没有读取权限/);
+  assert.match(text, /旧\/坏\.txt — 磁盘读取出错/);
+  assert.match(text, /然后点“重新扫描”/);
+
+  // A healthy library shows nothing; non-admins never get folder data.
+  assert.equal(api.createLibraryFoldersPanel({ folders: { scanned: [{ root: '/a', bookCount: 3, skippedCount: 0, skipped: [] }], unavailable: [] } }), null);
+  assert.equal(api.createLibraryFoldersPanel({ books: [] }, { empty: true }), null);
+  // No folder at all: say how to add one.
+  assert.match(api.createLibraryFoldersPanel({ folders: { scanned: [], unavailable: [] } }, { empty: true }).textContent, /zhenshu\/library/);
 });

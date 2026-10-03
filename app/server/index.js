@@ -41,6 +41,10 @@ const { createAiConversationStorage } = require('./ai-conversation-storage');
 const { createPdfAiProfileStore } = require('./pdf-ai-profile-store');
 const { parseBookSearchParams, searchBookText } = require('./book-search');
 const { parsePathList, resolveLibraryRoots } = require('./library-roots');
+const { decodeBookText } = require('./text-encoding');
+const { buildReadingStats } = require('./reading-stats-summary');
+const { buildBookNotes, buildNotesSummary, searchNotes } = require('./notes');
+const { epubTocForBook } = require('./epub-toc');
 const { readFnOSAuthorizedRoots, fnOSAuthorizationRevision } = require('./fnos-roots-config');
 const { createDirectAccess } = require('./direct-access');
 const { buildAnswerPayload, gatherEvidence, planQuestion, MAP_ROOT_ID, TYPE_LABELS } = require('./ai-answer-pipeline');
@@ -97,6 +101,46 @@ function isBookVisible(book, switches = readerFormatSwitches()) {
   if (book?.type === 'pdf') return switches.pdf;
   if (book?.type === 'mobi') return switches.mobi;
   return true;
+}
+
+// The library as one user sees it. Admins also get where the books are read
+// from: each library folder with its book count and anything it could not
+// read, and folders fnOS named that cannot be opened at all. Other users see
+// no paths.
+function libraryResponse(index, user, switches, bookTitles) {
+  const { roots = [], ...scan } = index.scan || {};
+  return {
+    ...index,
+    scan,
+    features: libraryFeatures(index, switches, { canImport: user.isAdmin }),
+    configured: authorizedRoots.length > 0,
+    authorizedRootCount: authorizedRoots.length,
+    scanState: currentScanState(),
+    ...(user.isAdmin ? {
+      folders: {
+        scanned: roots,
+        unavailable: rootDiagnostics.rejectedRoots.map(({ root, code, error }) => ({ root, code, error }))
+      }
+    } : {}),
+    books: index.books.filter((book) => isBookVisible(book, switches))
+      .map((book) => publicBook(book, bookTitles))
+  };
+}
+
+// What 阅读统计 and 笔记 read for one user: reading time, reading state, and
+// the books as this user sees them (renamed titles, covers, visible formats).
+async function readerDataFor(user) {
+  const [{ days }, readingState, index, bookTitles] = await Promise.all([
+    storage.getReadingTime(user.uid, '2000-01-01', '9999-12-31'),
+    storage.getState(user.uid),
+    storage.getLibraryIndex(),
+    userBookTitles(user.uid)
+  ]);
+  const switches = readerFormatSwitches();
+  const books = new Map(index.books
+    .filter((book) => book?.id && !book.error && isBookVisible(book, switches))
+    .map((book) => [book.id, publicBook(book, bookTitles)]));
+  return { days, readingState, bookInfo: (bookId) => books.get(bookId) || null };
 }
 
 function libraryFeatures(index, switches = readerFormatSwitches(), { canImport = false } = {}) {
@@ -1496,6 +1540,48 @@ async function handleApi(request, response, pathname, searchParams = new URLSear
       scanHealthy: isHealthyLibraryIndex(index)
     }));
   }
+  if (request.method === 'POST' && pathname === `${APP_PREFIX}/api/reading-time`) {
+    const body = await readJsonBody(request);
+    return sendJson(response, 200, await storage.addReadingTime(user.uid, body));
+  }
+  if (request.method === 'GET' && pathname === `${APP_PREFIX}/api/stats`) {
+    // 阅读统计: one week or month (with the one before it) for this user.
+    const { days, readingState, bookInfo } = await readerDataFor(user);
+    return sendJson(response, 200, buildReadingStats({
+      days,
+      readingState,
+      bookInfo,
+      range: searchParams.get('range') || 'week',
+      anchor: searchParams.get('anchor'),
+      timezoneOffset: Number(searchParams.get('tz') || 0)
+    }));
+  }
+  if (request.method === 'GET' && pathname === `${APP_PREFIX}/api/notes`) {
+    const { days, readingState, bookInfo } = await readerDataFor(user);
+    return sendJson(response, 200, buildNotesSummary({ readingState, bookInfo, readingDays: days }));
+  }
+  if (request.method === 'GET' && pathname === `${APP_PREFIX}/api/notes/search`) {
+    const { readingState, bookInfo } = await readerDataFor(user);
+    return sendJson(response, 200, searchNotes({ readingState, bookInfo, query: String(searchParams.get('q') || '').slice(0, 200) }));
+  }
+  const notesBookMatch = pathname.match(new RegExp(`^${APP_PREFIX}/api/notes/([a-f0-9]{64})$`));
+  if (request.method === 'GET' && notesBookMatch) {
+    const bookId = notesBookMatch[1];
+    const { days, readingState, bookInfo } = await readerDataFor(user);
+    let toc = null;
+    if (bookInfo(bookId)?.type === 'epub') {
+      // Chapter names; a book that can no longer be read keeps its notes.
+      try {
+        toc = await epubTocForBook(await findBook(bookId));
+      } catch {
+        toc = null;
+      }
+    }
+    return sendJson(response, 200, buildBookNotes({ bookId, readingState, bookInfo, toc, readingDays: days }));
+  }
+  if (request.method === 'GET' && pathname === `${APP_PREFIX}/api/reading-time`) {
+    return sendJson(response, 200, await storage.getReadingTime(user.uid, searchParams.get('from'), searchParams.get('to')));
+  }
   if (request.method === 'GET' && pathname === `${APP_PREFIX}/api/session`) {
     return sendJson(response, 200, { uid: user.uid, username: user.username, isAdmin: user.isAdmin });
   }
@@ -1536,30 +1622,14 @@ async function handleApi(request, response, pathname, searchParams = new URLSear
     const index = await storage.getLibraryIndex();
     const bookTitles = await userBookTitles(user.uid);
     const switches = readerFormatSwitches();
-    return sendJson(response, 200, {
-      ...index,
-      features: libraryFeatures(index, switches, { canImport: user.isAdmin }),
-      configured: authorizedRoots.length > 0,
-      authorizedRootCount: authorizedRoots.length,
-      scanState: currentScanState(),
-      books: index.books.filter((book) => isBookVisible(book, switches))
-        .map((book) => publicBook(book, bookTitles))
-    });
+    return sendJson(response, 200, libraryResponse(index, user, switches, bookTitles));
   }
   if (request.method === 'POST' && pathname === `${APP_PREFIX}/api/library/scan`) {
     if (!user.isAdmin) return sendError(response, 403, 'Administrator access is required');
     const index = await runLibraryScan();
     const switches = readerFormatSwitches();
     const bookTitles = await userBookTitles(user.uid);
-    return sendJson(response, 200, {
-      ...index,
-      features: libraryFeatures(index, switches, { canImport: user.isAdmin }),
-      configured: authorizedRoots.length > 0,
-      authorizedRootCount: authorizedRoots.length,
-      scanState: currentScanState(),
-      books: index.books.filter((book) => isBookVisible(book, switches))
-        .map((book) => publicBook(book, bookTitles))
-    });
+    return sendJson(response, 200, libraryResponse(index, user, switches, bookTitles));
   }
 
   const organizationCollectionMatch = pathname.match(new RegExp(`^${APP_PREFIX}/api/library/collections/([^/]+)$`));
@@ -2402,7 +2472,9 @@ async function handleApi(request, response, pathname, searchParams = new URLSear
       return servePdfContent(request, response, book);
     }
     if (request.method === 'HEAD') return sendError(response, 405, 'Method not allowed');
-    const data = await fs.readFile(book.path);
+    const raw = await fs.readFile(book.path);
+    // Text books are sent as UTF-8 whatever encoding the file uses.
+    const data = book.type === 'epub' ? raw : Buffer.from(decodeBookText(raw).text, 'utf8');
     const type = book.type === 'epub' ? 'application/epub+zip' : 'text/plain; charset=utf-8';
     response.writeHead(200, {
       'Content-Type': type,

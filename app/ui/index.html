@@ -14,7 +14,7 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="枕书">
-  <link rel="stylesheet" href="styles.css?v=92">
+  <link rel="stylesheet" href="styles.css?v=102">
 </head>
 <body class="is-welcome">
   <!-- Reader Shell: low-distraction navigation with stable legacy IDs -->
@@ -559,6 +559,7 @@
     </label>
     <div class="highlight-editor-actions">
       <button type="button" id="btnDeleteHighlight" class="danger-button">删除批注</button>
+      <button type="button" id="btnHighlightCard" class="highlight-card-button">生成卡片</button>
       <button type="button" id="btnSaveHighlight">保存</button>
     </div>
   </section>
@@ -659,7 +660,7 @@
   <script src="lib/marked.min.js"></script>
   <script src="core/state.js?v=36"></script>
   <script src="core/utils.js?v=28"></script>
-  <script src="core/api.js?v=30"></script>
+  <script src="core/api.js?v=33"></script>
   <script src="core/reader-route.js?v=1"></script>
   <script src="core/user-state.js?v=40"></script>
   <script src="reader/annotations.js?v=2"></script>
@@ -668,14 +669,14 @@
   <script src="reader/paragraphs.js?v=1"></script>
   <script src="reader/document.js?v=30"></script>
   <script src="reader/editor.js?v=28"></script>
-  <script src="reader/highlights.js?v=38"></script>
+  <script src="reader/highlights.js?v=39"></script>
   <script src="reader/ai.js?v=4"></script>
   <script src="reader/ai-index-manager.js?v=1"></script>
-  <script src="reader/selection-menu.js?v=6"></script>
+  <script src="reader/selection-menu.js?v=7"></script>
   <script src="reader/pdf-notes-export.js?v=1"></script>
   <script src="reader/actions.js?v=28"></script>
   <script src="reader/notes-panel.js?v=4"></script>
-  <script src="reader/progress.js?v=36"></script>
+  <script src="reader/progress.js?v=37"></script>
   <script src="reader/bookmarks.js?v=4"></script>
   <script src="reader/pagination.js?v=37"></script>
   <script src="reader/settings.js?v=37"></script>
@@ -684,16 +685,22 @@
   <script src="reader/pdf-annotation-geometry.js?v=1"></script>
   <script src="reader/pdf-annotations.js?v=1"></script>
   <script src="reader/pdf-render-scheduler.js?v=1"></script>
-  <script src="reader/pdf-colors.js?v=2"></script>
-  <script src="reader/pdf.js?v=17"></script>
-  <script src="reader/lifecycle.js?v=33"></script>
+  <script src="reader/pdf-colors.js?v=3"></script>
+  <script src="reader/pdf.js?v=18"></script>
+  <script src="reader/lifecycle.js?v=34"></script>
   <script src="reader/search.js?v=4"></script>
   <script src="shell/drawer.js?v=33"></script>
   <script src="library/reorder.js?v=1"></script>
   <script src="library/pdf-covers.js?v=1"></script>
   <script src="library/import.js?v=1"></script>
-  <script src="library/organization.js?v=14"></script>
-  <script src="library/view.js?v=37"></script>
-  <script src="app.js?v=39"></script>
+  <script src="library/organization.js?v=16"></script>
+  <script src="library/shelf-nav.js?v=2"></script>
+  <script src="library/stats-page.js?v=2"></script>
+  <script src="library/note-card.js?v=2"></script>
+  <script src="library/notes-export.js?v=1"></script>
+  <script src="library/notes-page.js?v=5"></script>
+  <script src="library/view.js?v=39"></script>
+  <script src="reader/reading-timer.js?v=1"></script>
+  <script src="app.js?v=41"></script>
 </body>
 </html>

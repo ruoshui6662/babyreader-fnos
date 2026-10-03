@@ -258,6 +258,9 @@ p.sign { text-align: right; text-indent: 0; }
   ...Object.fromEntries(indentChapters.map(([id, title, head, body]) => [`OEBPS/text/${id}.xhtml`, strToU8(indentChapter(title, head, body))]))
 });
 fs.writeFileSync(path.join(libraryRoot, 'e2e-indent.epub'), Buffer.from(indentEpub));
+// A GBK-encoded novel (most Chinese web-novel TXT files): read in its own
+// encoding by the reader, search and AI (e2e/text-encoding.spec.js).
+fs.writeFileSync(path.join(libraryRoot, 'e2e-gbk-novel.txt'), Buffer.from('b5dad2bbd5c220b1e0c2eb0aa1a1a1a1d5e2cac7d2bbb1bed3c347424bb1e0c2ebb1a3b4e6b5c4d0a1cbb5a3accbd1cbf7b9d8bcfcb4cacac7c7e0caafb0e5c2b7a1a30aa1a1a1a1b5dab6feb6ced2b2d2aad5fdb3a3cfd4cabea3acb2bbc4dcb1e4b3c9c2d2c2eba1a30a', 'hex'));
 fs.writeFileSync(path.join(libraryRoot, 'e2e-indent-novel.txt'), [
   '第一章 山居',
   ...Array.from({ length: 6 }, (_, index) => `　　第${index + 1}段。${INDENT_BODY}`),

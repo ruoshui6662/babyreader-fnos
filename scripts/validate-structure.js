@@ -20,6 +20,7 @@ const uiScriptFiles = [
   'app/ui/reader/annotations.js',
   'app/ui/reader/epub.js',
   'app/ui/reader/paragraphs.js',
+  'app/ui/reader/reading-timer.js',
   'app/ui/reader/document.js',
   'app/ui/reader/editor.js',
   'app/ui/reader/highlights.js',
@@ -38,6 +39,11 @@ const uiScriptFiles = [
   'app/ui/shell/drawer.js',
   'app/ui/library/pdf-covers.js',
   'app/ui/library/import.js',
+  'app/ui/library/shelf-nav.js',
+  'app/ui/library/stats-page.js',
+  'app/ui/library/note-card.js',
+  'app/ui/library/notes-export.js',
+  'app/ui/library/notes-page.js',
   'app/ui/library/view.js',
   'app/ui/app.js'
 ];

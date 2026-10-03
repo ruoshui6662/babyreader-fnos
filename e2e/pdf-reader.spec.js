@@ -228,6 +228,8 @@ test('PDF library card renders the first page as its cover', async ({ page }) =>
   await page.goto(APP_PATH);
   const card = page.locator('.library-book').filter({ hasText: 'e2e-reader' });
   await expect(card).toBeVisible();
+  // Covers are drawn when a card comes near the viewport.
+  await card.scrollIntoViewIfNeeded();
   const cover = card.locator('img.library-book-cover');
   await expect(cover).toBeVisible();
   await expect.poll(() => cover.evaluate((image) => image.naturalWidth)).toBeGreaterThan(0);
@@ -252,7 +254,9 @@ test('PDF library card renders the first page as its cover', async ({ page }) =>
   await card.click();
   await expect(page.locator('#pdfReaderSurface')).toBeVisible();
   await page.locator('#btnBackToLibrary').click();
-  const returnedCover = page.locator('.library-book').filter({ hasText: 'e2e-reader' }).locator('img.library-book-cover');
+  const returnedCard = page.locator('.library-book').filter({ hasText: 'e2e-reader' });
+  await returnedCard.scrollIntoViewIfNeeded();
+  const returnedCover = returnedCard.locator('img.library-book-cover');
   await expect(returnedCover).toBeVisible();
   await expect.poll(() => returnedCover.evaluate((image) => image.naturalWidth)).toBeGreaterThan(0);
 });
@@ -261,8 +265,11 @@ test('A broken PDF keeps its placeholder without blocking other PDF covers', asy
   await page.goto(APP_PATH);
   const broken = page.locator('.library-book').filter({ hasText: 'e2e-corrupt' });
   await expect(broken).toBeVisible();
-  await expect(page.locator('.library-book').filter({ hasText: 'e2e-reader' }).locator('img.library-book-cover'))
-    .toBeVisible();
+  await broken.scrollIntoViewIfNeeded();
+  const reader = page.locator('.library-book').filter({ hasText: 'e2e-reader' });
+  await reader.scrollIntoViewIfNeeded();
+  await expect(reader.locator('img.library-book-cover')).toBeVisible();
+  await broken.scrollIntoViewIfNeeded();
   await expect(broken.locator('span.library-book-cover')).toBeVisible();
   await expect(broken.locator('img.library-book-cover')).toHaveCount(0);
 });

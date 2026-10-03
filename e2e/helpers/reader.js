@@ -99,6 +99,7 @@ async function resetReaderSettings(page) {
         pageMargin: 40,
         readingMode: 'scroll',
         mobileReadingMode: 'paged',
+        pdfPageColors: 'theme',
         continuousScroll: true,
         tocAutoOpen: true,
         highlightColor: 'yellow',

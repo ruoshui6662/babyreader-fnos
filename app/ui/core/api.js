@@ -113,6 +113,35 @@ window.browserHost = {
     return (await apiRequest('/session')).json();
   },
 
+  async saveReadingTime(entries, { keepalive = false } = {}) {
+    return (await apiRequest('/reading-time', {
+      method: 'POST',
+      body: JSON.stringify({ entries }),
+      ...(keepalive ? { keepalive: true } : {})
+    })).json();
+  },
+
+  async getNotesSummary() {
+    return (await apiRequest('/notes')).json();
+  },
+
+  async getBookNotes(bookId) {
+    return (await apiRequest(`/notes/${encodeURIComponent(bookId)}`)).json();
+  },
+
+  async searchNotes(query) {
+    return (await apiRequest(`/notes/search?q=${encodeURIComponent(query)}`)).json();
+  },
+
+  async getReadingStats(range, anchor) {
+    const query = new URLSearchParams({ range, anchor, tz: String(new Date().getTimezoneOffset()) });
+    return (await apiRequest(`/stats?${query}`)).json();
+  },
+
+  async getReadingTime(from, to) {
+    return (await apiRequest(`/reading-time?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`)).json();
+  },
+
   async getLibrary() {
     return (await apiRequest('/library')).json();
   },
