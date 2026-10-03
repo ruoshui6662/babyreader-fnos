@@ -196,6 +196,75 @@ const repeatedImageEpub = zipSync({
 });
 fs.writeFileSync(path.join(libraryRoot, 'e2e-repeated-image.epub'), Buffer.from(repeatedImageEpub));
 
+// First-line indent: one chapter per way books indent body text, each with
+// the paragraphs a book deliberately sets apart (e2e/paragraph-indent.spec.js).
+const INDENT_BODY = '这一段正文用于测量首行缩进，需要足够长才能折成好几行，这样首行的位置和其余各行的位置都能看清楚，排版是否整齐也一目了然。';
+const indentChapter = (title, head, body) => `<?xml version="1.0" encoding="UTF-8"?>
+<html xmlns="http://www.w3.org/1999/xhtml"><head><title>${title}</title>${head}</head><body>
+<h2>${title}</h2>
+${body}
+</body></html>`;
+const indentParagraphs = (count, prefix = '', attrs = '') => Array.from({ length: count },
+  (_, index) => `<p${attrs}>${prefix}${index + 1}。${INDENT_BODY}</p>`).join('\n');
+const indentChapters = [
+  ['css', 'CSS 缩进', '<link rel="stylesheet" type="text/css" href="../styles/book.css"/>', [
+    indentParagraphs(6),
+    '<p class="note">注：这是一条悬挂缩进的注释，第一行顶格而后续各行向内缩进，需要足够长才能折行显示出悬挂的效果来。</p>',
+    '<p class="intro">内容简介这一段原书刻意不缩进，需要保持原样，同样写得长一些以便折行观察它的位置。</p>',
+    '<p class="sign">——作者识</p>',
+    '<p class="center">＊　＊　＊</p>',
+    '<p class="poem">清风明月枝头动<br/>疑是剑仙宝剑光</p>',
+    indentParagraphs(4)
+  ].join('\n')],
+  ['ideographic', '全角空格缩进', '', [
+    indentParagraphs(6, '　　'),
+    `<p>　　　多一个全角空格的段落。${INDENT_BODY}</p>`,
+    `<p>没有空格的段落。${INDENT_BODY}</p>`
+  ].join('\n')],
+  ['nbsp', '不换行空格缩进', '', [
+    indentParagraphs(6, '&#160;&#160;&#160;&#160;'),
+    `<p style="text-indent: 2em">　　行内样式加全角空格。${INDENT_BODY}</p>`
+  ].join('\n')],
+  ['specific', '高优先级样式', '<style type="text/css">body div.main p { text-indent: 1em !important; } div.para { text-indent: 2em; }</style>', [
+    `<div class="main">${indentParagraphs(5)}</div>`,
+    `<div class="main"><p style="text-indent: 4em">行内四字缩进。${INDENT_BODY}</p></div>`
+  ].join('\n')],
+  ['divs', 'div 段落', '<style type="text/css">div.para { text-indent: 2em; }</style>',
+    Array.from({ length: 5 }, (_, index) => `<div class="para">第${index + 1}个 div 段落。${INDENT_BODY}</div>`).join('\n')],
+  ['western', 'Western', '<style type="text/css">p { text-indent: 0; margin: 0 0 1em; }</style>',
+    Array.from({ length: 5 }, (_, index) => `<p>Paragraph ${index + 1}. This English paragraph has no first-line indent in the book and is long enough to wrap over several lines in the reader.</p>`).join('\n')]
+];
+const indentEpub = zipSync({
+  mimetype: [strToU8('application/epub+zip'), { level: 0 }],
+  'META-INF/container.xml': strToU8(`<?xml version="1.0"?>
+<container version="1.0" xmlns="urn:oasis:names:tc:opendocument:xmlns:container"><rootfiles><rootfile full-path="OEBPS/content.opf" media-type="application/oebps-package+xml"/></rootfiles></container>`),
+  'OEBPS/content.opf': strToU8(`<?xml version="1.0" encoding="UTF-8"?>
+<package xmlns="http://www.idpf.org/2007/opf" version="3.0">
+  <metadata xmlns:dc="http://purl.org/dc/elements/1.1/"><dc:title>E2E Indent EPUB</dc:title><dc:creator>Playwright</dc:creator><dc:language>zh-CN</dc:language></metadata>
+  <manifest>
+    ${indentChapters.map(([id]) => `<item id="${id}" href="text/${id}.xhtml" media-type="application/xhtml+xml"/>`).join('\n    ')}
+    <item id="book-stylesheet" href="styles/book.css" media-type="text/css"/>
+  </manifest>
+  <spine>${indentChapters.map(([id]) => `<itemref idref="${id}"/>`).join('')}</spine>
+</package>`),
+  'OEBPS/styles/book.css': strToU8(`body { font-family: serif; color: #333; }
+p { text-indent: 2em; margin: 0; line-height: 1.6; }
+p.note { text-indent: -2em; padding-left: 2em; }
+.intro { text-indent: 0; }
+p.sign { text-align: right; text-indent: 0; }
+.center { text-align: center; text-indent: 0; }
+@media screen { p.poem { text-indent: 0; text-align: center; } }`),
+  ...Object.fromEntries(indentChapters.map(([id, title, head, body]) => [`OEBPS/text/${id}.xhtml`, strToU8(indentChapter(title, head, body))]))
+});
+fs.writeFileSync(path.join(libraryRoot, 'e2e-indent.epub'), Buffer.from(indentEpub));
+fs.writeFileSync(path.join(libraryRoot, 'e2e-indent-novel.txt'), [
+  '第一章 山居',
+  ...Array.from({ length: 6 }, (_, index) => `　　第${index + 1}段。${INDENT_BODY}`),
+  `没有空格的一段。${INDENT_BODY}`,
+  '第二章 下山',
+  ...Array.from({ length: 3 }, (_, index) => `　　下山第${index + 1}段。${INDENT_BODY}`)
+].join('\n'), 'utf8');
+
 // Optional local-only investigation fixture. It never copies a user EPUB into
 // the repository; callers opt in through an absolute path environment value.
 if (sampleEpubPath) {

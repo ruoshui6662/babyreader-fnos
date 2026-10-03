@@ -711,17 +711,14 @@ test('settings drawer changes theme and typography in a real browser', async ({ 
       && response.request().method() === 'PUT'
       && response.ok()
   );
-  await page.locator('#settingTextIndent').evaluate((element) => {
-    element.value = '1.5';
-    element.dispatchEvent(new Event('input', { bubbles: true }));
-  });
+  await page.locator('#settingTextIndent [data-text-indent="1"]').click();
   await settingsSaved;
 
   await expect(page.locator('html')).toHaveCSS(
     '--reader-font-family',
     /SimSun|STSong|Songti SC|宋体|serif/
   );
-  await expect(page.locator('html')).toHaveCSS('--reader-text-indent', '1.5em');
+  await expect(page.locator('html')).toHaveCSS('--reader-text-indent', '1em');
 
   await page.locator('#btnCloseSettings').click();
   await expect(page.locator('#readerDrawer')).toBeHidden();
@@ -732,7 +729,7 @@ test('settings drawer changes theme and typography in a real browser', async ({ 
   await page.locator('#btnSettings').click();
   await expect(page.locator('#settingTheme')).toHaveValue('sepia');
   await expect(page.locator('#settingFontFamily')).toHaveValue('songti');
-  await expect(page.locator('#settingTextIndent')).toHaveValue('1.5');
+  await expect(page.locator('#settingTextIndent [data-text-indent="1"]')).toHaveAttribute('aria-checked', 'true');
   await expect(page.locator('body')).toHaveClass(/theme-sepia/);
 });
 

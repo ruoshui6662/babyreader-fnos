@@ -169,6 +169,13 @@ function storedBookmark(item) {
   }
 }
 
+function normalizeTextIndentSetting(value, fallback) {
+  if (value === 'book') return 'book';
+  const number = Number(value);
+  if (value === null || value === undefined || value === '' || typeof value === 'boolean' || !Number.isFinite(number)) return fallback;
+  return Math.max(0, Math.min(4, Math.round(number)));
+}
+
 class UserStorage {
   constructor(dataRoot) {
     if (!path.isAbsolute(dataRoot)) {
@@ -280,9 +287,10 @@ class UserStorage {
           : allowedHighlightColors.has(state.settings.highlightColor) ? state.settings.highlightColor : 'yellow',
         // Typography (P0). Same clamps as the client so a hand-crafted request
         // cannot push the reader outside the supported range.
-        textIndent: Number.isFinite(settings.textIndent)
-          ? Math.max(0, Math.min(4, Math.round(settings.textIndent * 2) / 2))
-          : Number.isFinite(state.settings.textIndent) ? state.settings.textIndent : 2,
+        // 'book' keeps the book's own indents; otherwise whole characters 0-4
+        // (older half steps round to the nearest).
+        textIndent: normalizeTextIndentSetting(settings.textIndent,
+          normalizeTextIndentSetting(state.settings.textIndent, 2)),
         paragraphSpacing: Number.isFinite(settings.paragraphSpacing)
           ? Math.max(0.4, Math.min(3, Math.round(settings.paragraphSpacing * 10) / 10))
           : Number.isFinite(state.settings.paragraphSpacing) ? state.settings.paragraphSpacing : 1.1,

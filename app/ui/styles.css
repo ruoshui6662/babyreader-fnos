@@ -1155,22 +1155,26 @@ html[data-reader-surface="mobile"] .pdf-page-canvas { max-width: 100%; }
 
 .article .epub-chapter p,
 .article .epub-chapter li {
-  text-align: justify;
-  /* Chinese book convention: every body paragraph opens with a 2-character
-     indent (user-adjustable 0~4 chars). The first paragraph after a heading is
-     indented too, matching WeChat Reading / legado. */
-  text-indent: var(--reader-text-indent, 2em);
   margin-bottom: var(--reader-para-spacing, 1.1em);
 }
+/* Body text is justified; lines the book centres or right-aligns keep that.
+   (Measuring reads the book's own alignment.) */
+html:not([data-zs-measuring]) .article [data-zs-para="body"],
+.article .epub-chapter li {
+  text-align: justify;
+}
 
-/* Keep list items / blockquotes / centered lines unindented */
-.article .epub-chapter li,
-.article .epub-chapter li p,
-.article .epub-chapter blockquote p,
-.article .epub-chapter p[style*="center"],
-.article .epub-chapter p[align="center"],
-.article .epub-chapter p.no-indent {
-  text-indent: 0;
+/* First-line indent (reader/paragraphs.js marks the body paragraphs).
+   Body text starts exactly N characters in, or flush for 无, whatever the
+   book used: --zs-lead cancels its own indent and leading spaces. Other
+   paragraphs, and every paragraph under 原书, keep the book's layout. The
+   rule stands aside while the paragraphs are being measured. */
+/* TXT keeps each line's leading spaces as --zs-book-indent (document.js). */
+html[data-text-indent="book"]:not([data-zs-measuring]) #article[data-text-kind="txt"] p {
+  text-indent: var(--zs-book-indent, 0em);
+}
+html:not([data-text-indent="book"]):not([data-zs-measuring]) #article [data-zs-para="body"] {
+  text-indent: calc(var(--reader-text-indent, 2em) - var(--zs-lead, 0em)) !important;
 }
 
 .article .epub-chapter h1,
@@ -8696,3 +8700,37 @@ html[data-reader-surface="mobile"] body.is-epub.mobile-reading:not(.paged-readin
   padding-right: clamp(12px, calc(var(--reader-page-margin, 40px) * .5), 48px);
   padding-left: clamp(12px, calc(var(--reader-page-margin, 40px) * .5), 48px);
 }
+
+/* First-line indent: 原书 · 无 · 1 · 2 · 3 · 4, styled like the layout presets. */
+.settings-indent-field {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 8px;
+  margin: 10px 16px 4px;
+}
+.settings-indent-segments {
+  display: grid;
+  grid-template-columns: 1.4fr repeat(5, 1fr);
+  gap: 4px;
+  padding: 4px;
+  border-radius: 12px;
+  background: var(--color-fill, color-mix(in srgb, var(--color-text) 6%, transparent));
+}
+.settings-indent-segments button {
+  min-height: 36px;
+  padding: 0;
+  justify-content: center;
+  color: var(--color-text-2);
+  font-size: 13px;
+  background: transparent;
+  border: 0;
+  border-radius: 9px;
+  cursor: pointer;
+}
+.settings-indent-segments button[aria-checked="true"] {
+  color: var(--color-text);
+  background: var(--color-surface, var(--color-bg));
+  box-shadow: 0 1px 3px rgba(0, 0, 0, .12);
+}
+.settings-indent-segments button:focus-visible { outline: 2px solid var(--color-focus, var(--color-accent)); outline-offset: 1px; }

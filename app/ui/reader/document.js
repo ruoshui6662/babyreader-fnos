@@ -224,6 +224,7 @@ async function renderEpubChapter(index, options = {}) {
     }
 
     const previousLease = archive.activeChapterLease || null;
+    applyBookLayoutCss(chapter.layoutCss);
     article.innerHTML = chapter.html;
     archive.activeChapterLease = chapterResourceLease;
     chapterLeaseCommitted = true;
@@ -249,6 +250,9 @@ async function renderEpubChapter(index, options = {}) {
     // otherwise leave a widely spaced short line before it); set before
     // pagination measures.
     article.dataset.textScript = chapterTextScript(article.textContent);
+    // Body paragraphs take the reader's first-line indent (before pagination
+    // measures, so the page count already reflects it).
+    if (typeof classifyParagraphIndents === 'function') classifyParagraphIndents(article);
 
     await new Promise((resolve) => requestAnimationFrame(resolve));
     if (!isCurrent()) return false;
@@ -291,6 +295,41 @@ async function renderEpubChapter(index, options = {}) {
       updateReadingProgress({ chapterIndexHint: state.epubChapterIndex });
     }
   }
+}
+
+// Chapter lines in plain-text books, as the server's AI structure reads them.
+const PLAIN_TEXT_HEADING = /^第\s*[0-9０-９零〇一二两三四五六七八九十百千万]+\s*[章回节卷部篇集](?:[\s:：、.．]|$)|^卷\s*[0-9０-９零〇一二两三四五六七八九十百千万]+(?:[\s:：、.．]|$)|^(?:序|序言|序章|自序|前言|引言|引子|楔子|导言|后记|尾声|结语|跋|附录|番外)(?:[\s:：]|$)/;
+
+function renderPlainTextHtml(content) {
+  const escape = (text) => text.replace(/[&<>"]/g, (character) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[character]);
+  const blocks = [];
+  for (const raw of String(content || '').replace(/\r\n?/g, '\n').split('\n')) {
+    const line = raw.replace(/[\s　]+$/, '');
+    const trimmed = line.trim().replace(/^　+/, '');
+    if (!trimmed) continue;
+    if (trimmed.length <= 40 && PLAIN_TEXT_HEADING.test(trimmed)) {
+      blocks.push(`<h2>${escape(trimmed)}</h2>`);
+      continue;
+    }
+    // Leading spaces become the paragraph's own (原书) indent instead of
+    // text: justified lines would stretch them. A full-width space is one
+    // character, any other space half of one.
+    const lead = line.match(/^[\s　]*/)[0];
+    const leadEm = [...lead].reduce((sum, character) => sum + (character === '　' ? 1 : 0.5), 0);
+    const indent = leadEm ? ` style="--zs-book-indent: ${Math.min(8, leadEm)}em"` : '';
+    blocks.push(`<p${indent}>${escape(line.slice(lead.length))}</p>`);
+  }
+  return blocks.join('\n');
+}
+
+function applyBookLayoutCss(css) {
+  let style = document.getElementById('zsBookLayout');
+  if (!style) {
+    style = document.createElement('style');
+    style.id = 'zsBookLayout';
+    document.head.appendChild(style);
+  }
+  style.textContent = String(css || '');
 }
 
 function chapterTextScript(text) {
@@ -354,8 +393,12 @@ function renderArticle() {
   } else {
     if (epubShell) epubShell.style.display = 'none';
     if (article) article.style.display = '';
-    // Markdown — run through preprocessor + marked
-    const html = preprocessCustomBlocks(state.content);
-    article.innerHTML = html;
+    // TXT is not Markdown: every line is a paragraph (novels rarely leave
+    // blank lines between them). Markdown runs through preprocessor + marked.
+    const isPlainText = /\.txt$/i.test(String(state.currentPath || ''));
+    article.innerHTML = isPlainText ? renderPlainTextHtml(state.content) : preprocessCustomBlocks(state.content);
+    // TXT books follow the first-line indent setting; Markdown documents do not.
+    article.dataset.textKind = isPlainText ? 'txt' : 'markdown';
+    if (isPlainText && typeof classifyParagraphIndents === 'function') classifyParagraphIndents(article);
   }
 }

@@ -30,6 +30,7 @@ async function createReaderDom() {
     '../app/ui/reader/progress.js',
     '../app/ui/reader/bookmarks.js',
     '../app/ui/reader/pagination.js',
+    '../app/ui/reader/paragraphs.js',
     '../app/ui/reader/settings.js',
     '../app/ui/reader/jump-back.js',
     '../app/ui/reader/navigation.js',
@@ -5535,7 +5536,7 @@ test('typography sliders render common preset ticks and restore recommended defa
   const document = window.document;
   api.typographyApi.setupSettingsPanel();
 
-  for (const key of ['textIndent', 'paragraphSpacing', 'fontSize', 'lineHeight', 'pageMargin']) {
+  for (const key of ['paragraphSpacing', 'fontSize', 'lineHeight', 'pageMargin']) {
     const input = document.querySelector(`[data-typography-slider="${key}"]`);
     assert.equal(
       input.closest('.settings-range-track').querySelectorAll('.settings-range-tick').length,
@@ -5543,8 +5544,8 @@ test('typography sliders render common preset ticks and restore recommended defa
     );
   }
 
-  document.getElementById('settingTextIndent').value = '3';
-  document.getElementById('settingTextIndent').dispatchEvent(new window.Event('input', { bubbles: true }));
+  document.querySelector('#settingTextIndent [data-text-indent="3"]').click();
+  assert.equal(api.state.textIndent, 3);
   document.getElementById('settingPageMargin').value = '80';
   document.getElementById('settingPageMargin').dispatchEvent(new window.Event('input', { bubbles: true }));
   document.getElementById('btnResetTypography').click();
@@ -5552,7 +5553,8 @@ test('typography sliders render common preset ticks and restore recommended defa
   assert.equal(document.getElementById('settingFontSize').value, '100');
   assert.equal(document.getElementById('settingLineHeight').value, '1.9');
   assert.equal(document.getElementById('settingPageMargin').value, '40');
-  assert.equal(document.getElementById('settingTextIndent').value, '2');
+  assert.equal(document.getElementById('settingTextIndent').dataset.value, '2');
+  assert.equal(document.querySelector('#settingTextIndent [aria-checked="true"]').dataset.textIndent, '2');
   assert.equal(document.getElementById('settingParagraphSpacing').value, '1.1');
 });
 
