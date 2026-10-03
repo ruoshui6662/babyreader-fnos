@@ -51,6 +51,7 @@ async function loadReaderSession() {
     state.session = session;
     if (typeof setupReadingTimer === 'function') setupReadingTimer();
     if (typeof setupShelfNav === 'function') setupShelfNav();
+    if (typeof setupLibraryAppearance === 'function') setupLibraryAppearance();
     syncAiIndexManagerAccess();
     applyUserState(userState);
     applyContinuousScroll();

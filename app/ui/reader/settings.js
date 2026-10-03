@@ -526,6 +526,13 @@ function syncSettingsPanel() {
     });
   }
   if (pdfLayoutMode) pdfLayoutMode.value = state.pdfLayoutMode;
+  const liquidGlass = document.getElementById('settingLiquidGlass');
+  if (liquidGlass) liquidGlass.checked = state.liquidGlass === true;
+  const glassAmbientField = document.getElementById('settingGlassAmbientField');
+  if (glassAmbientField) glassAmbientField.hidden = state.liquidGlass !== true;
+  document.querySelectorAll('#settingGlassAmbient [data-glass-ambient]').forEach((button) => {
+    button.setAttribute('aria-checked', String(button.dataset.glassAmbient === (state.glassAmbient === 'uniform' ? 'uniform' : 'cover')));
+  });
   const pdfPageColors = String(state.pdfPageColors === 'original' ? 'original' : 'theme');
   document.querySelectorAll('[data-pdf-page-colors]').forEach((button) => {
     button.setAttribute('aria-checked', String(button.dataset.pdfPageColors === pdfPageColors));
@@ -652,6 +659,13 @@ function setupSettingsPanel() {
   });
   readingMode?.addEventListener('change', () => {
     setReadingMode(readingMode.value);
+  });
+  document.getElementById('settingLiquidGlass')?.addEventListener('change', (event) => {
+    if (typeof setLiquidGlass === 'function') setLiquidGlass(event.target.checked);
+  });
+  document.getElementById('settingGlassAmbient')?.addEventListener('click', (event) => {
+    const choice = event.target.closest?.('[data-glass-ambient]');
+    if (choice && typeof setGlassAmbient === 'function') setGlassAmbient(choice.dataset.glassAmbient);
   });
   document.getElementById('settingPdfPageColors')?.addEventListener('click', (event) => {
     const choice = event.target.closest?.('[data-pdf-page-colors]');

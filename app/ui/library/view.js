@@ -198,6 +198,7 @@ function createLibraryRecentCard(books) {
     : document.createElement('span');
   cover.classList.add('library-book-cover');
   cover.draggable = false;
+  if (typeof setGlassAmbientBook === 'function') setGlassAmbientBook(recent.book, cover);
   coverFrame.appendChild(cover);
   button.appendChild(coverFrame);
   if (recent.book.type === 'pdf' && !recent.book.coverUrl && typeof window.requestPdfLibraryCover === 'function') {

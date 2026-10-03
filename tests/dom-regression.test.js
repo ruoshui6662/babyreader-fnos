@@ -14,6 +14,7 @@ async function createReaderDom() {
     '../app/ui/core/utils.js',
     '../app/ui/core/api.js',
     '../app/ui/core/reader-route.js',
+    '../app/ui/core/glass.js',
     '../app/ui/core/user-state.js',
     '../app/ui/reader/annotations.js',
     '../app/ui/reader/device-profile.js',
