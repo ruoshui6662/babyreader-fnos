@@ -101,16 +101,25 @@ body {
 .desktop { height: 820px; }
 .phone { width: 390px; height: 844px; border-radius: 44px; }
 
-/* Ambient light: glass needs colour behind it. Taken from the covers. */
+/* Ambient light: glass needs colour behind it. The script sets the three
+   colours (from the 继续阅读 cover, one uniform tint, or none); registered
+   as <color> so a change glides instead of jumping. */
+@property --amb-1 { syntax: '<color>'; inherits: true; initial-value: transparent; }
+@property --amb-2 { syntax: '<color>'; inherits: true; initial-value: transparent; }
+@property --amb-3 { syntax: '<color>'; inherits: true; initial-value: transparent; }
 .ambient {
   position: absolute; inset: 0; z-index: -1; pointer-events: none;
   background:
-    radial-gradient(40% 35% at 18% 12%, var(--ambient-1), transparent 70%),
-    radial-gradient(45% 40% at 85% 18%, var(--ambient-2), transparent 70%),
-    radial-gradient(50% 45% at 60% 95%, var(--ambient-3), transparent 70%);
+    radial-gradient(42% 38% at 16% 10%, var(--amb-1), transparent 70%),
+    radial-gradient(46% 42% at 86% 16%, var(--amb-2), transparent 70%),
+    radial-gradient(55% 48% at 55% 96%, var(--amb-3), transparent 70%);
   opacity: 0;
-  transition: opacity .3s ease;
+  transition: opacity .3s ease, --amb-1 .8s ease, --amb-2 .8s ease, --amb-3 .8s ease;
 }
+.book { cursor: pointer; }
+.book.is-reading .cover { outline: 3px solid var(--accent); outline-offset: 3px; }
+.palette { display: inline-flex; gap: 4px; vertical-align: middle; }
+.palette i { width: 14px; height: 14px; border-radius: 50%; box-shadow: 0 0 0 1px var(--separator); }
 html[data-glass="on"] .ambient { opacity: .55; }
 html[data-glass="on"][data-theme="dark"] .ambient { opacity: .9; }
 
@@ -338,6 +347,8 @@ html:not([data-glass="on"]) .toolbar { gap: 8px; }
   <strong>枕书 · 液态玻璃主题演示</strong>
   <span class="demo-seg" data-control="theme"><button data-value="light" aria-pressed="true">浅色</button><button data-value="dark">深色</button></span>
   <span class="demo-seg" data-control="glass"><button data-value="on" aria-pressed="true">液态玻璃</button><button data-value="off">现在的样式</button></span>
+  <span class="demo-seg" data-control="ambient"><button data-value="cover" aria-pressed="true">背景光：取自封面</button><button data-value="uniform">统一色</button><button data-value="none">不加光</button></span>
+  <span class="demo-note" id="paletteNote"></span>
   <span class="demo-note" id="lensNote"></span>
 </div>
 
@@ -365,8 +376,8 @@ html:not([data-glass="on"]) .toolbar { gap: 8px; }
         </div>
         <h2>继续阅读</h2>
         <div class="continue">
-          <div class="cover-sm" style="background:linear-gradient(160deg,#c0392b,#6d2119)"></div>
-          <div><b>剑来</b><span>烽火戏诸侯</span><div class="bar"><i></i></div><span>已读 28%</span></div>
+          <div class="cover-sm" data-continue-cover style="background:linear-gradient(160deg,#c0392b,#6d2119)"></div>
+          <div><b data-continue-title>剑来</b><span data-continue-author>烽火戏诸侯</span><div class="bar"><i></i></div><span>已读 28%</span></div>
           <button class="btn primary">继续</button>
         </div>
         <div class="grid" id="desktopGrid"></div>
@@ -407,8 +418,8 @@ html:not([data-glass="on"]) .toolbar { gap: 8px; }
         <div class="head"><div><h1>书库</h1><p>16 本书 · 2 个分类</p></div><div class="more glass lens">···</div></div>
         <div class="chips glass" style="margin-bottom:18px"><span class="chip is-current">我的书籍 <small>16</small></span><span class="chip">小说 <small>6</small></span><span class="chip">医学 <small>2</small></span></div>
         <div class="continue">
-          <div class="cover-sm" style="background:linear-gradient(160deg,#c0392b,#6d2119)"></div>
-          <div><b>剑来</b><span>烽火戏诸侯 · 已读 28%</span></div>
+          <div class="cover-sm" data-continue-cover style="background:linear-gradient(160deg,#c0392b,#6d2119)"></div>
+          <div><b data-continue-title>剑来</b><span data-continue-author>烽火戏诸侯</span></div>
           <button class="btn primary">继续</button>
         </div>
         <div class="grid" id="phoneGrid"></div>
@@ -446,7 +457,9 @@ function fill(id, count) {
   for (const [title, author, from, to, format] of BOOKS.slice(0, count)) {
     const book = document.createElement('div');
     book.className = 'book';
+    book.dataset.title = title;
     book.innerHTML = `<div class="cover" style="background:linear-gradient(160deg,${from},${to})">${title}<em>${format}</em></div><b>${title}</b><span>${author}</span>`;
+    book.addEventListener('click', () => setReading(title));
     grid.appendChild(book);
   }
 }
@@ -466,10 +479,115 @@ function choose(control, value) {
   document.documentElement.dataset[control] = value;
   document.querySelectorAll(`[data-control="${control}"] button`).forEach((button) => button.setAttribute('aria-pressed', String(button.dataset.value === value)));
 }
+/* ---------- Ambient light from the cover ----------
+   1. Draw the cover small (40×60) on a canvas.
+   2. Read every pixel; put similar colours in the same bucket, skipping
+      near-grey, near-white and near-black pixels.
+   3. Keep the two or three biggest buckets with clearly different hues.
+   4. Fit them to the theme: pale for light, deep for dark.
+   5. Set --amb-1/2/3; CSS glides from the old colours to the new.
+   In the app step 1 draws the real cover image; here the covers are CSS
+   gradients, so the same gradient is painted onto the canvas. */
+function coverPixels(book) {
+  const canvas = document.createElement('canvas');
+  canvas.width = 40;
+  canvas.height = 60;
+  const ctx = canvas.getContext('2d', { willReadFrequently: true });
+  const [, , from, to] = book;
+  const angle = (160 - 90) * Math.PI / 180;
+  const gradient = ctx.createLinearGradient(20 - Math.cos(angle) * 36, 30 - Math.sin(angle) * 36, 20 + Math.cos(angle) * 36, 30 + Math.sin(angle) * 36);
+  gradient.addColorStop(0, from);
+  gradient.addColorStop(1, to);
+  ctx.fillStyle = gradient;
+  ctx.fillRect(0, 0, 40, 60);
+  // A title and a light badge, as on a real cover: the filter must ignore them.
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(4, 6, 24, 5);
+  ctx.fillRect(4, 52, 10, 3);
+  return ctx.getImageData(0, 0, 40, 60).data;
+}
+
+function rgbToHsl(r, g, b) {
+  r /= 255; g /= 255; b /= 255;
+  const max = Math.max(r, g, b);
+  const min = Math.min(r, g, b);
+  const l = (max + min) / 2;
+  if (max === min) return [0, 0, l];
+  const d = max - min;
+  const s = l > .5 ? d / (2 - max - min) : d / (max + min);
+  const h = max === r ? (g - b) / d + (g < b ? 6 : 0) : max === g ? (b - r) / d + 2 : (r - g) / d + 4;
+  return [h * 60, s, l];
+}
+
+function dominantColours(pixels) {
+  const buckets = new Map();
+  for (let index = 0; index < pixels.length; index += 4) {
+    const [r, g, b] = [pixels[index], pixels[index + 1], pixels[index + 2]];
+    const [h, sat, l] = rgbToHsl(r, g, b);
+    if (sat < .18 || l < .08 || l > .92) continue;   // grey, black, white: text and badges
+    const key = `${r >> 4},${g >> 4},${b >> 4}`;
+    const bucket = buckets.get(key) || { count: 0, r: 0, g: 0, b: 0, h };
+    bucket.count += 1; bucket.r += r; bucket.g += g; bucket.b += b;
+    buckets.set(key, bucket);
+  }
+  const ranked = [...buckets.values()].sort((left, right) => right.count - left.count)
+    .map((bucket) => rgbToHsl(bucket.r / bucket.count, bucket.g / bucket.count, bucket.b / bucket.count));
+  const picked = [];
+  for (const colour of ranked) {
+    // Keep colours that differ: different hue, or clearly different lightness.
+    if (picked.every((other) => Math.min(Math.abs(other[0] - colour[0]), 360 - Math.abs(other[0] - colour[0])) > 12 || Math.abs(other[2] - colour[2]) > .14)) picked.push(colour);
+    if (picked.length === 3) break;
+  }
+  // Too few distinct colours: fill in with the main hue, softer — never an
+  // invented hue the cover does not have.
+  while (picked.length < 3 && picked.length) picked.push([picked[0][0], picked[0][1] * .7, picked[0][2]]);
+  return picked;
+}
+
+function fitToTheme([h, sat, l], theme) {
+  return theme === 'dark'
+    ? `hsl(${h.toFixed(0)} ${(Math.min(sat, .6) * 100).toFixed(0)}% ${(Math.min(Math.max(l, .2), .3) * 100).toFixed(0)}%)`
+    : `hsl(${h.toFixed(0)} ${(Math.min(sat, .7) * 100).toFixed(0)}% ${(Math.max(l, .8) * 100).toFixed(0)}%)`;
+}
+
+let reading = BOOKS[0];
+const paletteCache = new Map();
+function applyAmbient() {
+  const root = document.documentElement;
+  const theme = root.dataset.theme;
+  const mode = root.dataset.ambient;
+  let colours;
+  if (mode === 'none') colours = ['transparent', 'transparent', 'transparent'];
+  else if (mode === 'uniform') colours = Array(3).fill(theme === 'dark' ? 'hsl(215 30% 22%)' : 'hsl(35 45% 86%)');
+  else {
+    if (!paletteCache.has(reading[0])) paletteCache.set(reading[0], dominantColours(coverPixels(reading)));
+    colours = paletteCache.get(reading[0]).map((colour) => fitToTheme(colour, theme));
+  }
+  colours.forEach((colour, index) => root.style.setProperty(`--amb-${index + 1}`, colour));
+  document.getElementById('paletteNote').innerHTML = mode === 'cover'
+    ? `取自《${reading[0]}》：<span class="palette">${colours.map((colour) => `<i style="background:${colour}"></i>`).join('')}</span>`
+    : '';
+}
+
+function setReading(title) {
+  reading = BOOKS.find((book) => book[0] === title) || BOOKS[0];
+  const [name, author, from, to] = reading;
+  document.querySelectorAll('[data-continue-cover]').forEach((cover) => { cover.style.background = `linear-gradient(160deg,${from},${to})`; });
+  document.querySelectorAll('[data-continue-title]').forEach((element) => { element.textContent = name; });
+  document.querySelectorAll('[data-continue-author]').forEach((element) => { element.textContent = author; });
+  document.querySelectorAll('.book').forEach((book) => book.classList.toggle('is-reading', book.dataset.title === name));
+  applyAmbient();
+}
+
 choose('theme', params.get('theme') || 'light');
 choose('glass', params.get('glass') || 'on');
+choose('ambient', params.get('ambient') || 'cover');
+setReading(params.get('book') || BOOKS[0][0]);
 document.querySelectorAll('[data-control] button').forEach((button) => {
-  button.addEventListener('click', () => choose(button.parentElement.dataset.control, button.dataset.value));
+  button.addEventListener('click', () => {
+    choose(button.parentElement.dataset.control, button.dataset.value);
+    applyAmbient();
+  });
 });
 </script>
 </body>
