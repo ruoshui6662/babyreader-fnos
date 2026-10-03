@@ -5,6 +5,7 @@ const fs = require('node:fs/promises');
 const path = require('node:path');
 const { resolveAuthorizedPath, isPathInside } = require('./security');
 const { safeUnzip } = require('./zip');
+const { decodeBookText } = require('./text-encoding');
 const { MOBI_EXTENSIONS, readMobiMetadata } = require('./mobi-format');
 
 const SUPPORTED_EXTENSIONS = new Set(['.epub', '.md', '.markdown', '.txt', '.pdf']);
@@ -268,7 +269,7 @@ async function indexBookFile({ filePath, realRoot, validRoots, coverDirectory = 
       if (coverDirectory) coverUrl = await writeCover(coverDirectory, id, metadata.cover);
     } else {
       if (stat.size > MAX_TEXT_BYTES) throw new Error('Text document exceeds size limit');
-      metadata = extractTextMetadata(safePath, await fs.readFile(safePath, 'utf8'));
+      metadata = extractTextMetadata(safePath, decodeBookText(await fs.readFile(safePath)).text);
     }
 
     return {

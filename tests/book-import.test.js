@@ -59,6 +59,8 @@ test('valid EPUB, PDF, text and MOBI uploads are published with no temp files le
     [createPdfFixture(), 'paper.pdf', 'pdf'],
     [Buffer.from('# 标题\n\n正文'), 'notes.md', 'markdown'],
     [Buffer.from('纯文本'), 'plain.txt', 'txt'],
+    // GBK-encoded Chinese TXT is accepted and stored byte for byte.
+    [Buffer.from('b5dad2bbd5c220b1e0c2eb0aa1a1a1a1d5e2cac7d2bbb1bed3c347424bb1e0c2ebb1a3b4e6b5c4d0a1cbb5a3accbd1cbf7b9d8bcfcb4cacac7c7e0caafb0e5c2b7a1a30aa1a1a1a1b5dab6feb6ced2b2d2aad5fdb3a3cfd4cabea3acb2bbc4dcb1e4b3c9c2d2c2eba1a30a', 'hex'), 'gbk.txt', 'txt'],
     [createMobiFixture(), 'kindle.azw3', 'mobi']
   ];
   for (const [bytes, name, type] of cases) {
@@ -67,7 +69,7 @@ test('valid EPUB, PDF, text and MOBI uploads are published with no temp files le
     assert.equal(result.name, name);
     assert.deepEqual(await fs.readFile(result.path), bytes);
   }
-  assert.deepEqual(await listing(directory), ['kindle.azw3', 'notes.md', 'paper.pdf', 'plain.txt', '小说.epub'].sort());
+  assert.deepEqual(await listing(directory), ['gbk.txt', 'kindle.azw3', 'notes.md', 'paper.pdf', 'plain.txt', '小说.epub'].sort());
 });
 
 test('an existing file is never overwritten: the upload gets a numbered name', async (t) => {

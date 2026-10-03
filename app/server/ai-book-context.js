@@ -2,6 +2,7 @@
 
 const fs = require('node:fs/promises');
 const { safeUnzip } = require('./zip');
+const { decodeBookText } = require('./text-encoding');
 
 function decodeEntities(value) {
   return String(value || '')
@@ -93,7 +94,7 @@ async function loadBookSources(book, fsImpl = fs) {
   if (!book?.path) throw contextError();
   const bytes = await fsImpl.readFile(book.path);
   if (book.type !== 'epub') {
-    const text = bytes.toString('utf8');
+    const text = decodeBookText(bytes).text;
     return { all: compact(text), chapters: new Map([['', compact(text)]]) };
   }
 

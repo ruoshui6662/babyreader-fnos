@@ -41,6 +41,7 @@ const { createAiConversationStorage } = require('./ai-conversation-storage');
 const { createPdfAiProfileStore } = require('./pdf-ai-profile-store');
 const { parseBookSearchParams, searchBookText } = require('./book-search');
 const { parsePathList, resolveLibraryRoots } = require('./library-roots');
+const { decodeBookText } = require('./text-encoding');
 const { readFnOSAuthorizedRoots, fnOSAuthorizationRevision } = require('./fnos-roots-config');
 const { createDirectAccess } = require('./direct-access');
 const { buildAnswerPayload, gatherEvidence, planQuestion, MAP_ROOT_ID, TYPE_LABELS } = require('./ai-answer-pipeline');
@@ -2402,7 +2403,9 @@ async function handleApi(request, response, pathname, searchParams = new URLSear
       return servePdfContent(request, response, book);
     }
     if (request.method === 'HEAD') return sendError(response, 405, 'Method not allowed');
-    const data = await fs.readFile(book.path);
+    const raw = await fs.readFile(book.path);
+    // Text books are sent as UTF-8 whatever encoding the file uses.
+    const data = book.type === 'epub' ? raw : Buffer.from(decodeBookText(raw).text, 'utf8');
     const type = book.type === 'epub' ? 'application/epub+zip' : 'text/plain; charset=utf-8';
     response.writeHead(200, {
       'Content-Type': type,

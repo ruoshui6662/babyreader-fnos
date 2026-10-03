@@ -8,6 +8,7 @@ const { normalizeBookText } = require('./ai-book-context');
 const { PDF_TEXT_LIMITS, PDF_TEXT_PARSER_VERSION, extractPdfText } = require('./pdf-text');
 const { AI_EPUB_PARSER_VERSION, parseEpubStructure, resolveLogicalChapter } = require('./ai-epub-structure');
 const { buildTextStructure } = require('./ai-text-structure');
+const { decodeBookText } = require('./text-encoding');
 const { rankLexicalCandidates, fuseRankedMatches, assessRetrievalConfidence } = require('./ai-retrieval');
 const { createAiIndexManager } = require('./ai-index-manager');
 const {
@@ -20,7 +21,8 @@ const {
 } = require('./ai-summary-cache');
 
 const AI_FTS_SCHEMA_VERSION = 8;
-const TEXT_STRUCTURE_VERSION = 'text-structure-1';
+// 2: TXT read in its own encoding (GBK/Big5/UTF-16), not always as UTF-8.
+const TEXT_STRUCTURE_VERSION = 'text-structure-2';
 const NODE_SEGMENT_CHARS = 2400;
 const AI_FTS_CHUNK_SIZE = 900;
 const AI_FTS_CHUNK_OVERLAP = 120;
@@ -109,7 +111,7 @@ async function readBookChapters(book, { signal } = {}) {
   }
   const bytes = await fs.readFile(book.path);
   if (book.type !== 'epub') {
-    const raw = bytes.toString('utf8');
+    const raw = decodeBookText(bytes).text;
     return { chapters: [{
       index: 0,
       href: '',
