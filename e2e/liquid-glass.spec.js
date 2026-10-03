@@ -1,7 +1,7 @@
 'use strict';
 
 const { test, expect } = require('@playwright/test');
-const { resetEpubFixtureState, openEpubFixture } = require('./helpers/reader');
+const { resetEpubFixtureState, openEpubFixture, selectArticleText } = require('./helpers/reader');
 
 const APP_PATH = '/app/zhenshu/';
 const SCREENSHOT_DIR = process.env.ZHENSHU_SCREENSHOT_DIR || null;
@@ -168,6 +168,48 @@ test.describe('液态玻璃', () => {
     const bar = await page.locator('.notes-select-bar').boundingBox();
     const tabs = await nav.boundingBox();
     expect(bar.y + bar.height).toBeLessThanOrEqual(tabs.y);
+  });
+
+  test('G3 reader: glass rail and selection menu; the text is untouched; off restores', async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.goto(APP_PATH);
+    await resetEpubFixtureState(page);
+    await setSettings(page, { theme: 'light', liquidGlass: true });
+    await openEpubFixture(page);
+    if (await page.locator('#readerDrawer').isVisible()) await page.locator('#btnCloseSettings').click();
+    const rail = page.locator('#readerFloatingToolbar');
+    await expect(rail).toHaveCSS('border-radius', '20px');
+    // Text scrolls past the rail: no live blur there.
+    await expect(rail).toHaveCSS('backdrop-filter', 'none');
+    const paper = await page.locator('#article').evaluate((article) => getComputedStyle(article).backgroundColor);
+    const target = await page.evaluate(() => document.querySelector('#article .epub-chapter p').textContent.trim().slice(2, 12));
+    expect(await selectArticleText(page, target)).toBe(true);
+    const menu = page.locator('.selection-menu:not(.annotation-menu)');
+    await expect(menu).toBeVisible();
+    await expect(menu).toHaveCSS('backdrop-filter', /blur\(20px\)/);
+    await page.evaluate(() => setLiquidGlass(false));
+    await expect(menu).toHaveCSS('backdrop-filter', 'none');
+    await expect(rail).not.toHaveCSS('border-radius', '20px');
+    // The page itself never changed.
+    expect(await page.locator('#article').evaluate((article) => getComputedStyle(article).backgroundColor)).toBe(paper);
+  });
+
+  test('G3 phones: the reading tools float as a glass card', async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.addInitScript(() => {
+      Object.defineProperty(navigator, 'userAgent', { configurable: true, get: () => 'Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 Chrome/120 Mobile Safari/537.36' });
+    });
+    await page.goto(APP_PATH);
+    await resetEpubFixtureState(page);
+    await setSettings(page, { theme: 'dark', liquidGlass: true });
+    await openEpubFixture(page);
+    await page.evaluate(() => setMobileChromeOpen(true));
+    const tools = page.locator('#mobileReaderToolbar');
+    await expect(tools).toBeVisible();
+    await expect(tools).toHaveCSS('border-radius', '24px');
+    const box = await tools.boundingBox();
+    expect(box.x).toBeGreaterThanOrEqual(12);
+    expect(844 - (box.y + box.height)).toBeGreaterThanOrEqual(12);
   });
 });
 
