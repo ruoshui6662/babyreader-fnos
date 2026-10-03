@@ -318,3 +318,48 @@ test.describe('mobile search entry', () => {
     await expect(page.locator('.reader-search-result')).toContainText('E2E Reader');
   });
 });
+
+test('identical repeated phrases: the result lands on the occurrence the search reports', async ({ page }) => {
+  await openLibraryBook(page, 'E2E Markdown', 'E2E Reader');
+  await page.route('**/api/books/*/search?*', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        available: true,
+        query: '同一句话',
+        scope: 'book',
+        results: [{
+          id: 'third',
+          chapterIndex: 0,
+          chapterLabel: '当前书本',
+          snippet: '…同一句话。…',
+          matchText: '同一句话',
+          occurrence: 2,
+          occurrences: 3,
+          position: 0.8,
+          // An offset that maps to none of them (index code points vs DOM UTF-16).
+          locator: { version: 1, type: 'text-search', chapterIndex: 0, offset: 999, text: '同一句话' }
+        }],
+        hasMore: false,
+        nextCursor: null
+      })
+    });
+  });
+  await page.evaluate(() => {
+    setReadingMode('scroll', { persist: false, preserveLocator: false });
+    document.getElementById('article').innerHTML = '<p>同一句话。</p><p>同一句话。</p><p>同一句话。</p>';
+  });
+  await runSearch(page, '同一句话');
+  await page.locator('.reader-search-result').click();
+  const hitRect = page.locator('#article .reader-search-hit-rect').first();
+  await expect(hitRect).toBeVisible();
+  const paragraph = await hitRect.evaluate((element) => {
+    const painted = element.getBoundingClientRect();
+    return [...document.querySelectorAll('#article p')].findIndex((p) => {
+      const box = p.getBoundingClientRect();
+      return painted.top >= box.top - 2 && painted.top <= box.bottom;
+    });
+  });
+  expect(paragraph).toBe(2);
+});

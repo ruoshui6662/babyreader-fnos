@@ -197,6 +197,95 @@ function makeSearchSnippet(text, start, end, context = BOOK_SEARCH_SNIPPET_CONTE
   return snippet.replace(/\s+/gu, ' ').trim();
 }
 
+/*
+ * Which occurrence of the query a result is, counted through its whole
+ * chapter (PDF: page). The reader picks the same occurrence in the rendered
+ * text when the snippet context cannot tell repeated phrases apart; a count
+ * does not depend on code-point versus UTF-16 offsets.
+ *
+ * Chunks overlap and text chunks are trimmed, so the chapter is rebuilt row
+ * by row: each row's leading trimmed whitespace is read from the text the
+ * previous row already placed. Units are code points for text books (chunk
+ * starts are code-point counts) and UTF-16 code units for PDF pages.
+ */
+function rebuildChapterUnits(rows, { pdf }) {
+  const units = [];
+  const lead = new Map();
+  for (const row of rows) {
+    const start = Number(row.startOffset) || 0;
+    const chars = pdf ? String(row.bodyText || '').split('') : Array.from(String(row.bodyText || ''));
+    // A chunk's start falls inside the previous chunk's text (they overlap
+    // by AI_FTS_CHUNK_OVERLAP), so whitespace trimmed off its front is
+    // already in place there.
+    let trimmed = 0;
+    if (!pdf) {
+      while (units[start + trimmed] !== undefined && /\s/u.test(units[start + trimmed])) trimmed += 1;
+    }
+    lead.set(Number(row.rowid), trimmed);
+    chars.forEach((char, index) => { units[start + trimmed + index] = char; });
+  }
+  return { units, lead };
+}
+
+function occurrencesInUnits(units, query) {
+  const needle = normalizeSearchText(query);
+  let normalized = '';
+  const unitAt = [];
+  for (let index = 0; index < units.length; index += 1) {
+    const char = units[index];
+    if (char === undefined || /\s/u.test(char)) continue;
+    const folded = char.toLocaleLowerCase();
+    normalized += folded;
+    for (let fold = 0; fold < folded.length; fold += 1) unitAt.push(index);
+  }
+  const found = [];
+  if (!needle) return { found, length: normalized.length };
+  let cursor = 0;
+  while (cursor < normalized.length) {
+    const at = normalized.indexOf(needle, cursor);
+    if (at < 0) break;
+    found.push({ unit: unitAt[at], normalized: at });
+    cursor = at + Math.max(1, needle.length);
+  }
+  return { found, length: normalized.length };
+}
+
+/**
+ * Places each match in its chapter: the position in chapter units (the same
+ * for a match seen in two overlapping chunks) and which occurrence it is.
+ * Chapters are rebuilt lazily, once per search request.
+ */
+function chapterOccurrenceLocator(db, query, bookType) {
+  const pdf = bookType === 'pdf';
+  const chapters = new Map();
+  const select = db.prepare(`
+    SELECT ai_chunks.rowid, ai_chunks.startOffset, ai_chunk_text.bodyText
+    FROM ai_chunks INNER JOIN ai_chunk_text ON ai_chunk_text.rowid = ai_chunks.rowid
+    WHERE ai_chunks.chapterIndex = ?
+    ORDER BY ai_chunks.rowid`);
+  const chapterFor = (chapterIndex) => {
+    if (!chapters.has(chapterIndex)) {
+      const { units, lead } = rebuildChapterUnits(select.all(chapterIndex), { pdf });
+      const occurrences = occurrencesInUnits(units, query);
+      chapters.set(chapterIndex, { ...occurrences, lead, byUnit: new Map(occurrences.found.map((item, index) => [item.unit, index])) });
+    }
+    return chapters.get(chapterIndex);
+  };
+  return (row, match) => {
+    const chapter = chapterFor(Number(row.chapterIndex));
+    const inRow = pdf ? match.start : Array.from(String(row.bodyText || '').slice(0, match.start)).length;
+    const unit = (Number(row.startOffset) || 0) + (chapter.lead.get(Number(row.rowid)) || 0) + inRow;
+    const occurrence = chapter.byUnit.get(unit);
+    if (occurrence === undefined) return { unit };
+    return {
+      unit,
+      occurrence,
+      occurrences: chapter.found.length,
+      position: chapter.length ? Math.round((chapter.found[occurrence].normalized / chapter.length) * 1e6) / 1e6 : 0
+    };
+  };
+}
+
 function openSearchDatabase(filePath) {
   const Constructor = getDatabaseSync();
   if (!Constructor) return null;
@@ -211,10 +300,13 @@ function searchScopeClause(scope, chapterIndex) {
     : { sql: '', params: [] };
 }
 
-function buildSearchMatch(row, match, bookType = 'text') {
+function buildSearchMatch(row, match, bookType = 'text', placed = null) {
   const chapterIndex = Number(row.chapterIndex);
   const startOffset = Number(row.startOffset || 0);
-  const absoluteOffset = startOffset + match.start;
+  // Placed: the match's position in its rebuilt chapter, identical for a
+  // match seen in two overlapping chunks (chunk starts are code points while
+  // in-chunk offsets are UTF-16, so the plain sum was not).
+  const absoluteOffset = Number.isSafeInteger(placed?.unit) ? placed.unit : startOffset + match.start;
   const chapterHref = String(row.chapterHref || '');
   const chapterLabel = String(row.chapterLabel || '');
   const pageIndex = chapterIndex;
@@ -224,7 +316,10 @@ function buildSearchMatch(row, match, bookType = 'text') {
     chapterLabel,
     snippet: makeSearchSnippet(row.bodyText, match.start, match.end),
     matchText: match.text,
-    matchOffset: match.start
+    matchOffset: match.start,
+    ...(Number.isInteger(placed?.occurrence)
+      ? { occurrence: placed.occurrence, occurrences: placed.occurrences, position: placed.position }
+      : {})
   };
   if (bookType === 'pdf') {
     return {
@@ -349,10 +444,11 @@ async function searchBookText(book, dataRoot, options = {}) {
       || result.chapterIndex > previousKey[0]
       || (result.chapterIndex === previousKey[0]
         && (result.locator.type === 'pdf' ? result.locator.textOffset : result.locator.offset) > previousKey[1]);
+    const place = chapterOccurrenceLocator(db, normalized.query, book.type);
     for (const row of rows.slice(0, BOOK_SEARCH_MAX_CANDIDATES)) {
       lastScannedRowId = Number(row.rowid);
       for (const match of findExactMatches(row.bodyText, normalized.query)) {
-        const result = buildSearchMatch(row, match, book.type);
+        const result = buildSearchMatch(row, match, book.type, place(row, match));
         if (!isAfterKey(result) || unique.has(result.id)) continue;
         unique.add(result.id);
         page.push({ result, rowid: Number(row.rowid) });
@@ -416,6 +512,8 @@ module.exports = {
   BOOK_SEARCH_SNIPPET_CONTEXT,
   findExactMatches,
   makeSearchSnippet,
+  rebuildChapterUnits,
+  occurrencesInUnits,
   normalizeBookSearchOptions,
   parseBookSearchParams,
   searchBookText

@@ -502,7 +502,21 @@ function setupLibraryBookPointerReorder(grid, order, scope, library) {
       previewIds = next;
       const complete = reorderApi.mergeVisibleOrder(order, visibleIds, next);
       const nodes = complete.map((id) => nodesById.get(id)).filter(Boolean);
-      if (nodes.length === originalNodes.length && grid.isConnected) grid.append(...nodes);
+      if (nodes.length !== originalNodes.length || !grid.isConnected) return;
+      // A preview moves only the dragged book: put that one node in place
+      // instead of re-inserting every card (which cost O(n) per step).
+      const dragged = activeItem;
+      const current = [...grid.children];
+      const without = (list) => list.filter((node) => node !== dragged);
+      const rest = without(current);
+      const wanted = without(nodes);
+      if (dragged && rest.length === wanted.length && rest.every((node, index) => node === wanted[index])) {
+        const at = nodes.indexOf(dragged);
+        const anchor = nodes[at + 1] || null;
+        if (dragged.nextElementSibling !== anchor) grid.insertBefore(dragged, anchor);
+        return;
+      }
+      grid.append(...nodes);
     },
     onCommit: (next) => {
       const complete = reorderApi.mergeVisibleOrder(order, visibleIds, next);

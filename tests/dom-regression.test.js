@@ -1,5 +1,7 @@
 'use strict';
 
+const { readAllStyles } = require('./helpers/styles');
+
 const assert = require('node:assert/strict');
 const fs = require('node:fs/promises');
 const path = require('node:path');
@@ -1050,7 +1052,7 @@ test('UX shelf search hides an unrelated recent book without changing its saved 
 test('UX recent reading uses a compact cover card and completed scan feedback takes no layout space', async () => {
   const { window, api } = await createReaderDom();
   const style = window.document.createElement('style');
-  style.textContent = await fs.readFile(path.resolve(__dirname, '../app/ui/styles.css'), 'utf8');
+  style.textContent = await readAllStyles();
   window.document.head.appendChild(style);
   const book = { id: 'a'.repeat(64), title: '正在读的书', type: 'epub', coverUrl: '/cover.jpg' };
   api.state.userState.books[book.id] = {
@@ -1087,7 +1089,7 @@ test('library home exposes stable extension regions without changing its existin
 });
 
 test('library home styling fills rows with WeChat-Reading-sized covers at every breakpoint', async () => {
-  const css = await fs.readFile(path.resolve(__dirname, '../app/ui/styles.css'), 'utf8');
+  const css = await readAllStyles();
   assert.ok(/\.library-view\s*\{[^}]*width:\s*min\(1280px,\s*100%\)/s.test(css), 'library width should match the approved max-width');
   assert.ok(/^\.library-grid\s*\{[^}]*grid-template-columns:\s*repeat\(auto-fill,\s*minmax\(128px,\s*1fr\)\)/ms.test(css), 'desktop should fill rows with ~130px covers (eight on the 1280px shelf)');
   assert.ok(/^\.library-book-cover\s*\{[^}]*aspect-ratio:\s*1\s*\/\s*1\.45/ms.test(css), 'book covers should use the approved 1:1.45 frame');
@@ -1111,7 +1113,7 @@ test('library root actions follow create, rescan, and organize order on one tool
 });
 
 test('library headings opt out of the article accent underline and search shares the toolbar row', async () => {
-  const css = await fs.readFile(path.resolve(__dirname, '../app/ui/styles.css'), 'utf8');
+  const css = await readAllStyles();
   assert.ok(/\.article\.is-library\s+\.library-recent-reading\s+h2\s*\{[^}]*border-bottom:\s*0/s.test(css), 'library recent-reading heading should not inherit the article underline');
   assert.ok(/\.article \.library-view \.library-empty-title\s*\{[^}]*border-bottom:\s*0/s.test(css), 'empty-state heading should not inherit the article underline');
   assert.ok(/^\.library-header-actions\s*\{[^}]*display:\s*flex[^}]*flex-wrap:\s*nowrap/ms.test(css), 'desktop search and actions should share one toolbar row');
@@ -1121,7 +1123,7 @@ test('library headings opt out of the article accent underline and search shares
 test('UX reorder handles stay available without dominating the resting shelf', async () => {
   const { window, api } = await createReaderDom();
   const style = window.document.createElement('style');
-  style.textContent = await fs.readFile(path.resolve(__dirname, '../app/ui/styles.css'), 'utf8');
+  style.textContent = await readAllStyles();
   window.document.head.appendChild(style);
   const book = { id: 'a'.repeat(64), title: '安静的封面', type: 'txt' };
   const collectionId = '11111111-1111-4111-8111-111111111111';
@@ -3638,7 +3640,7 @@ test('Reader Shell retains legacy DOM IDs and exposes one responsive Drawer', as
   assert.equal(document.getElementById('btnNotes').disabled, false);
   assert.equal(document.getElementById('btnNotes').dataset.readerStatus, undefined);
 
-  const css = await fs.readFile(path.resolve(__dirname, '../app/ui/styles.css'), 'utf8');
+  const css = await readAllStyles();
   assert.match(css, /body\.is-epub \.reader \.article/);
   assert.match(css, /\.reader-floating-toolbar/);
   assert.match(css, /\.reader-sheet/);
@@ -4128,7 +4130,7 @@ test('semantic search ranges navigate by the hit rectangle in paged and continuo
 });
 
 test('search jump feedback paints only Range geometry and never a block outline', async () => {
-  const css = await fs.readFile(path.resolve(__dirname, '../app/ui/styles.css'), 'utf8');
+  const css = await readAllStyles();
   const layerRule = css.match(/\.article \.reader-search-hit-layer\s*\{([^}]*)\}/s)?.[1] || '';
   const rectRule = css.match(/\.article \.reader-search-hit-rect\s*\{([^}]*)\}/s)?.[1] || '';
   assert.match(layerRule, /pointer-events:\s*none/);
@@ -4191,7 +4193,7 @@ test('reader drawer separates fixed chrome from the scrollable panel viewport', 
   assert.equal(viewport?.querySelector('#readerPanelToc')?.parentElement, viewport);
   assert.equal(viewport?.querySelector('#readerPanelNotes')?.parentElement, viewport);
 
-  const css = await fs.readFile(path.resolve(__dirname, '../app/ui/styles.css'), 'utf8');
+  const css = await readAllStyles();
   assert.match(css, /\.reader-sheet\s*\{[\s\S]*?overflow:\s*hidden;/);
   assert.match(css, /\.reader-drawer-content\s*,[\s\S]*?overflow-y:\s*auto;/);
 });
@@ -4359,7 +4361,7 @@ test('PDF toolbar uses the shared reader navigation icons and Apple control toke
     assert.ok(button?.querySelector('svg'), `${id} should use a vector icon`);
     assert.equal(button.textContent.trim(), '', `${id} should not rely on a text glyph`);
   }
-  const css = (await fs.readFile(path.resolve(__dirname, '../app/ui/styles.css'), 'utf8'))
+  const css = (await readAllStyles())
     .replace(/\r\n/g, '\n');
   assert.match(css, /\.pdf-reader-controls button\s*\{[^}]*min-width:\s*44px;[^}]*min-height:\s*44px;/s);
   assert.match(css, /\.pdf-reader-controls button\s*\{[^}]*border-radius:\s*var\(--radius-control\);/s);
@@ -4368,7 +4370,7 @@ test('PDF toolbar uses the shared reader navigation icons and Apple control toke
 });
 
 test('PDF desktop controls share the fixed reader topbar material while mobile keeps flow layout', async () => {
-  const css = (await fs.readFile(path.resolve(__dirname, '../app/ui/styles.css'), 'utf8'))
+  const css = (await readAllStyles())
     .replace(/\r\n/g, '\n');
   assert.match(css, /body\.is-pdf-reader\s+\.pdf-reader-controls\s*\{[^}]*position:\s*fixed;[^}]*top:\s*0;[^}]*z-index:\s*101;/s);
   assert.match(css, /body\.is-pdf-reader\s+\.pdf-reader-controls\s*\{[^}]*background:\s*transparent;/s);
@@ -4381,19 +4383,19 @@ test('PDF reading exposes one deliberate position announcement and a keyboard-fo
   assert.match(html, /id="pdfReaderAnnouncement"[^>]*role="status"[^>]*aria-live="polite"/);
   assert.match(html, /id="pdfPages"[^>]*tabindex="0"/);
   assert.doesNotMatch(html, /id="pdfZoomValue"[^>]*aria-live=/);
-  const css = await fs.readFile(path.resolve(__dirname, '../app/ui/styles.css'), 'utf8');
+  const css = await readAllStyles();
   assert.match(css, /@media \(forced-colors: active\)\s*\{[^]*?\.pdf-search-hit-rect\s*\{[^}]*outline:\s*2px solid Highlight;/);
 });
 
 test('mobile topbar hiding also releases the reader into the topbar area', async () => {
-  const css = await fs.readFile(path.resolve(__dirname, '../app/ui/styles.css'), 'utf8');
+  const css = await readAllStyles();
   const normalized = css.replace(/\r\n/g, '\n');
   assert.match(normalized, /html\[data-reader-surface="mobile"\]\s+body\.is-epub\.mobile-topbar-hidden\s+\.reader-shell-nav\s*\{[^}]*transform:\s*translateY\(-100%\);[^}]*pointer-events:\s*none;/s);
   assert.match(normalized, /html\[data-reader-surface="mobile"\]\s+body\.is-epub\.mobile-topbar-hidden\s+\.reader\s*\{[^}]*top:\s*0;/s);
 });
 
 test('mobile chapter boundary buttons use a compact size rather than the desktop-width pill', async () => {
-  const css = await fs.readFile(path.resolve(__dirname, '../app/ui/styles.css'), 'utf8');
+  const css = await readAllStyles();
   const normalized = css.replace(/\r\n/g, '\n');
   assert.match(normalized, /html\[data-reader-surface="mobile"\]\s+\.scroll-chapter-btn\s*\{[^}]*width: min\(168px, 100%\);[^}]*min-height: 40px;/s);
 });
@@ -5221,7 +5223,7 @@ test('paged mode scrolls the multicol article, never its ancestor reader', async
 });
 
 test('paged CSS makes the multicol box itself the scroll container', async () => {
-  const css = await fs.readFile(path.resolve(__dirname, '../app/ui/styles.css'), 'utf8');
+  const css = await readAllStyles();
   const section = css.slice(css.indexOf('Deterministic pagination geometry'));
   const articleRule = section.match(
     /body\.is-epub\.paged-reading \.reader \.article\s*\{([^}]*)\}/
@@ -5235,7 +5237,7 @@ test('paged CSS makes the multicol box itself the scroll container', async () =>
 });
 
 test('page navigation controls use a stable surface during horizontal page turns', async () => {
-  const css = await fs.readFile(path.resolve(__dirname, '../app/ui/styles.css'), 'utf8');
+  const css = await readAllStyles();
   const pageNavRule = css.match(
     /\.reader \.reader-page-nav-btn:not\(\[hidden\]\)\s*\{([^}]*)\}/
   );
@@ -5475,7 +5477,7 @@ test('semantic targets in paged mode align to the containing complete spread', a
 });
 
 test('paged CSS uses a continuous fixed-width column track instead of limiting total column count', async () => {
-  const css = await fs.readFile(path.resolve(__dirname, '../app/ui/styles.css'), 'utf8');
+  const css = await readAllStyles();
   const deterministicSection = css.slice(css.indexOf('Deterministic pagination geometry'));
 
   assert.match(deterministicSection, /column-width: var\(--reader-column-width\)/);
@@ -5588,7 +5590,7 @@ test('AI index manager has an admin-only independent surface contract', async ()
   const drawer = await fs.readFile(path.resolve(__dirname, '../app/ui/shell/drawer.js'), 'utf8');
   const api = await fs.readFile(path.resolve(__dirname, '../app/ui/core/api.js'), 'utf8');
   const manager = await fs.readFile(path.resolve(__dirname, '../app/ui/reader/ai-index-manager.js'), 'utf8');
-  const css = await fs.readFile(path.resolve(__dirname, '../app/ui/styles.css'), 'utf8');
+  const css = await readAllStyles();
 
   assert.match(html, /btnOpenAiIndexManager/);
   assert.match(html, /aiIndexManagerSheet/);
@@ -5903,4 +5905,22 @@ test('book cards show the author only; a book without one shows no format in its
   assert.equal(detail(pdf.id), null);
   assert.equal(detail(epub.id).textContent, '烽火戏诸侯');
   await window.happyDOM.close();
+});
+
+test('identical repeated phrases: the search occurrence picks the right one; a count mismatch falls back to position', async () => {
+  const { window } = await createReaderDom();
+  const article = window.document.getElementById('article');
+  // Same sentence three times: context cannot tell them apart, and the
+  // index offset (code points) does not match the DOM (UTF-16) here.
+  article.innerHTML = '<p>𠀀第一章测试段落。</p><p>𠀀第一章测试段落。</p><p>𠀀第一章测试段落。</p>';
+  const pick = (locator) => window.readerSearchApi.findSearchTextRange(article, '测试段落', { snippet: '…第一章测试段落。…', offset: 4, ...locator });
+  const paragraphOf = (target) => [...article.querySelectorAll('p')].indexOf(target.range.startContainer.parentElement);
+
+  assert.equal(pick({}), null, 'without help the repeats stay ambiguous');
+  assert.equal(paragraphOf(pick({ occurrence: 2, occurrences: 3 })), 2);
+  assert.equal(paragraphOf(pick({ occurrence: 1, occurrences: 3 })), 1);
+  // The page has an extra occurrence the index does not (a caption): the
+  // count no longer lines up, the relative position still finds the hit.
+  article.insertAdjacentHTML('afterbegin', '<p>图注：测试段落</p>');
+  assert.equal(paragraphOf(pick({ occurrence: 2, occurrences: 3, position: 0.85 })), 3);
 });

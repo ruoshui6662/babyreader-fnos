@@ -131,17 +131,36 @@ function findSearchTextRange(root, query, locator = {}) {
     }
   }
 
-  // Source offsets are useful hints, but the current shared index stores chunk
-  // starts as Unicode code-point counts while local match offsets are UTF-16.
-  // Prefer matching bounded snippet context when it decisively disagrees with
-  // a numerically coincident DOM offset.
+  // Repeated phrases with identical context: the search says which occurrence
+  // in the chapter it found. A count does not depend on offset units, so when
+  // the page shows exactly as many occurrences as the chapter has, take the
+  // same one.
+  const occurrence = locator?.occurrence;
+  if (!selected && Number.isInteger(occurrence) && occurrence >= 0
+      && locator?.occurrences === candidates.length && occurrence < candidates.length) {
+    selected = candidates[occurrence];
+  }
+
+  // Source offsets are useful hints, but the index counts code points while
+  // DOM offsets are UTF-16. Prefer matching bounded snippet context when it
+  // decisively disagrees with a numerically coincident DOM offset.
   if (!selected && locatorOffset !== null) {
     selected = candidates.find((candidate) => candidate.sourceOffset === locatorOffset) || null;
   }
 
   // A unique exact-text occurrence is unambiguous even if source and rendered
-  // offsets differ. Repeated occurrences require a verified offset or context.
+  // offsets differ.
   if (!selected && candidates.length === 1) selected = candidates[0];
+
+  // The page holds more or fewer occurrences than the indexed text (captions,
+  // notes): take the one at the nearest relative position rather than none.
+  const position = Number(locator?.position);
+  if (!selected && Number.isFinite(position) && position >= 0 && position <= 1 && normalized.length) {
+    selected = candidates.reduce((best, candidate) => (
+      Math.abs(candidate.matchStart / normalized.length - position) < Math.abs(best.matchStart / normalized.length - position)
+        ? candidate : best
+    ));
+  }
   if (!selected) return null;
 
   const first = selected.first;
@@ -401,9 +420,22 @@ async function navigateToSearchResultDirect(result) {
   }
 
   const article = document.getElementById('article');
-  const target = findSearchTextRange(article, result?.matchText || locator.text, {
+  // Continuous scroll can hold several chapters: count occurrences in the
+  // result's own chapter.
+  let chapterRoot = article;
+  if (article && result?.chapterHref && typeof normalizeZipPath === 'function') {
+    try {
+      const href = normalizeZipPath(result.chapterHref);
+      chapterRoot = [...article.querySelectorAll('.epub-chapter')]
+        .find((chapter) => chapter.dataset.sourcePath === href) || article;
+    } catch { /* keep the whole article */ }
+  }
+  const target = findSearchTextRange(chapterRoot, result?.matchText || locator.text, {
     ...locator,
-    snippet: result?.snippet
+    snippet: result?.snippet,
+    occurrence: result?.occurrence,
+    occurrences: result?.occurrences,
+    position: result?.position
   });
   if (!target) {
     if (article && state.effectiveReadingMode === 'scroll') {
@@ -447,7 +479,10 @@ async function navigateToPdfSearchResult(result, { token, bookId }) {
   const textLayer = page.querySelector('.pdf-page-text-layer');
   const target = findSearchTextRange(textLayer, result?.matchText || locator.quote, {
     offset: locator.textOffset,
-    snippet: result?.snippet
+    snippet: result?.snippet,
+    occurrence: result?.occurrence,
+    occurrences: result?.occurrences,
+    position: result?.position
   });
   if (!target) {
     showHighlightHint(`已定位到第 ${pageIndex + 1} 页，但无法确认精确文本`);

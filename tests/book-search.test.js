@@ -537,3 +537,40 @@ test('failed PDF rebuild retains the last complete index and does not modify ano
   assert.match(meta.parserVersion, /^pdfjs-6\.3\.289-/);
   assert.equal(meta.fingerprint === undefined, false);
 });
+
+test('search results say which occurrence they are, counted through the whole chapter', async (t) => {
+  assert.equal(isFtsAvailable(), true, 'Node runtime must provide SQLite FTS5 for this test');
+  const root = await temporaryDirectory(t);
+  const bookPath = path.join(root, 'repeated.txt');
+  // The same sentence 300 times across many overlapping, trimmed chunks; line
+  // breaks land on chunk edges and a supplementary-plane character (two UTF-16
+  // units, one code point) sits in every line.
+  const line = '𠀀蛋白质很重要。\n';
+  await fs.writeFile(bookPath, line.repeat(300), 'utf8');
+  const book = createBook(BOOK_ID, bookPath, 'txt', '重复');
+  const seen = [];
+  let cursor;
+  do {
+    const page = await searchBookText(book, root, { query: '蛋白质', limit: 50, cursor });
+    for (const result of page.results) {
+      assert.equal(result.occurrences, 300);
+      seen.push(result.occurrence);
+      assert.ok(result.position >= 0 && result.position < 1);
+    }
+    cursor = page.nextCursor;
+  } while (cursor);
+  assert.deepEqual(seen, Array.from({ length: 300 }, (_, index) => index));
+});
+
+test('rebuilding a chapter from trimmed, overlapping chunks keeps every character in place', () => {
+  const { rebuildChapterUnits, occurrencesInUnits } = require('../app/server/book-search');
+  const { chunkChapter } = require('../app/server/ai-fts');
+  const text = Array.from({ length: 400 }, (_, index) => (index % 7 === 0 ? '\n\n' : '') + `第${index}句。`).join('');
+  const chunks = chunkChapter({ text, index: 0, href: '', label: '', headings: [] });
+  assert.ok(chunks.length >= 3);
+  const rows = chunks.map((chunk, index) => ({ rowid: index + 1, startOffset: chunk.start, bodyText: chunk.text }));
+  const { units } = rebuildChapterUnits(rows, { pdf: false });
+  const rebuilt = units.map((unit) => (unit === undefined ? ' ' : unit)).join('').replace(/\s+/gu, '');
+  assert.equal(rebuilt, text.replace(/\s+/gu, ''));
+  assert.equal(occurrencesInUnits(units, '句。').found.length, 400);
+});

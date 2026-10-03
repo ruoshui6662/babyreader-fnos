@@ -1,0 +1,113 @@
+/* 书库导航：左侧导航栏与手机底部标签栏（library/shelf-nav.js）。
+   Split from styles.css; linked after it in index.html, in this order. */
+
+/* ============================================================
+   Shelf navigation (library/shelf-nav.js): 书库 · 阅读统计 · 笔记.
+   Desktop: a left rail below the top bar (icons only when narrow).
+   Phone: a bottom tab bar. Only on the shelf, never while reading.
+   ============================================================ */
+.shelf-nav { display: none; }
+body.is-library .shelf-nav {
+  position: fixed;
+  z-index: 90;
+  top: var(--topbar-h);
+  bottom: 0;
+  left: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  width: 200px;
+  padding: 20px 12px;
+  background: var(--library-stage, var(--color-bg));
+  border-right: 1px solid var(--library-separator, var(--color-separator));
+}
+.shelf-nav-button {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  height: 44px;
+  padding: 0 14px;
+  color: var(--library-text-muted, var(--color-text-2));
+  font: 600 15px/1 var(--font-ui);
+  text-align: left;
+  background: transparent;
+  border: 0;
+  border-radius: 12px;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.shelf-nav-button svg { flex: none; width: 21px; height: 21px; }
+.shelf-nav-button:hover { color: var(--library-text, var(--color-text)); background: color-mix(in srgb, var(--library-text, var(--color-text)) 6%, transparent); }
+.shelf-nav-button.is-active {
+  color: var(--library-accent, var(--color-accent));
+  background: color-mix(in srgb, var(--library-accent, var(--color-accent)) 13%, transparent);
+}
+.shelf-nav-button:focus-visible { outline: 2px solid var(--library-accent, var(--color-accent)); outline-offset: 2px; }
+body.is-library .reader { left: 200px; }
+
+@media (max-width: 899px) {
+  body.is-library .shelf-nav { width: 72px; padding: 16px 10px; }
+  body.is-library .shelf-nav-button { justify-content: center; padding: 0; }
+  body.is-library .shelf-nav-label { display: none; }
+  body.is-library .reader { left: 72px; }
+}
+
+/* Phones (and very narrow windows): a bottom tab bar. */
+@media (max-width: 639px) {
+  body.is-library .shelf-nav {
+    top: auto;
+    right: 0;
+    width: auto;
+    height: calc(56px + env(safe-area-inset-bottom, 0px));
+    flex-direction: row;
+    gap: 0;
+    padding: 3px calc(8px + env(safe-area-inset-right, 0px)) env(safe-area-inset-bottom, 0px) calc(8px + env(safe-area-inset-left, 0px));
+    background: color-mix(in srgb, var(--library-stage, var(--color-bg)) 94%, transparent);
+    border-top: 1px solid var(--library-separator, var(--color-separator));
+    border-right: 0;
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+  }
+  body.is-library .shelf-nav-button {
+    flex: 1 1 0;
+    flex-direction: column;
+    justify-content: center;
+    gap: 3px;
+    height: 50px;
+    padding: 0;
+    font-size: 11px;
+    border-radius: 10px;
+  }
+  body.is-library .shelf-nav-button.is-active { background: transparent; }
+  body.is-library .shelf-nav-label { display: block; }
+  body.is-library .reader { left: 0; bottom: calc(56px + env(safe-area-inset-bottom, 0px)); }
+}
+html[data-reader-surface="mobile"] body.is-library .shelf-nav {
+  top: auto;
+  right: 0;
+  width: auto;
+  height: calc(56px + env(safe-area-inset-bottom, 0px));
+  flex-direction: row;
+  gap: 0;
+  padding: 3px calc(8px + env(safe-area-inset-right, 0px)) env(safe-area-inset-bottom, 0px) calc(8px + env(safe-area-inset-left, 0px));
+  background: color-mix(in srgb, var(--library-stage, var(--color-bg)) 94%, transparent);
+  border-top: 1px solid var(--library-separator, var(--color-separator));
+  border-right: 0;
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+}
+html[data-reader-surface="mobile"] body.is-library .shelf-nav-button {
+  flex: 1 1 0;
+  flex-direction: column;
+  justify-content: center;
+  gap: 3px;
+  height: 50px;
+  padding: 0;
+  font-size: 11px;
+  border-radius: 10px;
+}
+html[data-reader-surface="mobile"] body.is-library .shelf-nav-button.is-active { background: transparent; }
+html[data-reader-surface="mobile"] body.is-library .shelf-nav-label { display: block; }
+html[data-reader-surface="mobile"] body.is-library .reader { left: 0; bottom: calc(56px + env(safe-area-inset-bottom, 0px)); }
+/* The organize bar sits above the tab bar. */
+html[data-reader-surface="mobile"] body.is-library .library-manage-bar { bottom: calc(56px + env(safe-area-inset-bottom, 0px)); }
