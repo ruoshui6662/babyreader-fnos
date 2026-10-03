@@ -9933,3 +9933,61 @@ html[data-glass="on"][data-reader-surface="mobile"] body.mobile-reading .mobile-
   }
   html[data-glass="on"] .selection-menu { background: rgba(30, 30, 32, .96); }
 }
+
+
+/* ============================================================
+   液态玻璃 · G5：阅读页完整化
+   纸张四周（舞台）铺上这本书的背景光；纸张与正文保持实心。
+   设置 / 目录 / 笔记 / 搜索面板、AI 面板、写想法、手机“⋯”菜单为
+   浓玻璃并带真正的模糊（它们只在打开时出现，不影响滚动）。
+   ============================================================ */
+html[data-glass="on"] body:not(.is-library):not(.is-welcome) .reader,
+html[data-glass="on"] body.is-pdf-reader .pdf-reader-surface {
+  background:
+    radial-gradient(55vw 48vh at 6% 0%, var(--amb-1), transparent 72%),
+    radial-gradient(55vw 52vh at 96% 8%, var(--amb-2), transparent 72%),
+    radial-gradient(70vw 55vh at 50% 108%, var(--amb-3), transparent 72%),
+    var(--reader-stage);
+  background-attachment: local;
+}
+
+/* Top bars over the stage. */
+html[data-glass="on"] body:not(.is-library) .reader-shell-nav,
+html[data-glass="on"] body.is-pdf-reader .pdf-reader-controls {
+  background: var(--glass-tint);
+  box-shadow: inset 0 -.5px 0 var(--glass-edge);
+  -webkit-backdrop-filter: blur(20px) saturate(1.8);
+  backdrop-filter: blur(20px) saturate(1.8);
+}
+
+/* Panels over the page: dense glass with a real blur. */
+html[data-glass="on"] :is(.reader-sheet, .ai-modal, .highlight-editor, .mobile-more-menu) {
+  background: var(--glass-tint-dense);
+  border-color: transparent;
+  box-shadow: var(--glass-shadow), inset 0 0 0 .5px var(--glass-edge), inset 0 1px 0 var(--glass-rim-low);
+  -webkit-backdrop-filter: blur(28px) saturate(1.8);
+  backdrop-filter: blur(28px) saturate(1.8);
+}
+/* Their inner cards and tab strips sit on the glass, not on a slab. */
+html[data-glass="on"] .reader-sheet :is(.settings-group-card, .reader-drawer-tabs) {
+  background: color-mix(in srgb, var(--ui-label, var(--color-text)) 6%, transparent);
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  html[data-glass="on"] :is(.reader-sheet, .ai-modal, .highlight-editor, .mobile-more-menu),
+  html[data-glass="on"] body:not(.is-library) .reader-shell-nav,
+  html[data-glass="on"] body.is-pdf-reader .pdf-reader-controls {
+    background: var(--glass-tint-dense);
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+}
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  html[data-glass="on"] body:not(.is-library) .reader-shell-nav,
+  html[data-glass="on"] body.is-pdf-reader .pdf-reader-controls {
+    background: var(--glass-tint-dense);
+  }
+}
+/* 背景光 in 外观: two choices, laid out like PDF 页面颜色. */
+.settings-glass-ambient-field .settings-indent-segments { grid-template-columns: 1fr 1fr; }
+.settings-glass-ambient-field .settings-field-description { margin: 0; }
