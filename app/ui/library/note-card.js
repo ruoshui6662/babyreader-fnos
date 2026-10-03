@@ -266,7 +266,8 @@ function paintNoteCardBackground(ctx, width, height, palette, template) {
     ctx.save();
     ctx.strokeStyle = 'rgba(140, 110, 60, .07)';
     ctx.lineWidth = 1.2;
-    for (let index = 0; index < 26; index += 1) {
+    const fibres = Math.max(26, Math.round((26 * height) / 1440));
+    for (let index = 0; index < fibres; index += 1) {
       const startX = random() * width;
       const startY = random() * height;
       const length = 40 + random() * 120;
@@ -697,13 +698,289 @@ function paintNoteCardSide(ctx, box, { texts, palette, family, cover, book, show
   paintNoteCardSeal(ctx, centerX - sealSize / 2, box.y + box.height - sealSize, sealSize, palette, family);
 }
 
+/* ---------- Long image: several notes of one book ---------- */
+
+const NOTE_LONG_WIDTH = 1080;
+const NOTE_LONG_MARGIN = 128;
+// Pages are cut between notes once a picture would pass this height; phones
+// refuse to draw or share much taller canvases.
+const NOTE_LONG_PAGE_HEIGHT = 8000;
+const NOTE_LONG_MAX_QUOTE_LINES = 90;
+const NOTE_LONG_MAX_THOUGHT_LINES = 36;
+
+function paintNoteCardDivider(ctx, x, y, width, palette) {
+  ctx.save();
+  ctx.strokeStyle = palette.rule;
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(x, y);
+  ctx.lineTo(x + width / 2 - 14, y);
+  ctx.moveTo(x + width / 2 + 14, y);
+  ctx.lineTo(x + width, y);
+  ctx.stroke();
+  ctx.fillStyle = palette.rule;
+  ctx.translate(x + width / 2, y);
+  ctx.rotate(Math.PI / 4);
+  ctx.fillRect(-4, -4, 8, 8);
+  ctx.restore();
+}
+
+function noteCardCapLines(lines, max, measure, width) {
+  if (lines.length <= max) return lines;
+  const kept = lines.slice(0, max);
+  const ellipsis = { text: '……', width: measure('……') };
+  const units = kept[max - 1].units.slice();
+  while (units.length && units.reduce((sum, unit) => sum + unit.width, 0) + ellipsis.width > width) units.pop();
+  kept[max - 1] = { units: [...units, ellipsis], last: true };
+  return kept;
+}
+
+/** The pieces of a long image, each `{ height, draw(ctx, top) }`. */
+function noteLongBlocks(ctx, { book, notes }, prefs, { palette, family, cover }) {
+  const width = NOTE_LONG_WIDTH - NOTE_LONG_MARGIN * 2;
+  const x = NOTE_LONG_MARGIN;
+  const centerX = NOTE_LONG_WIDTH / 2;
+  const measureAt = (size) => {
+    ctx.font = `${size}px "${family}", serif`;
+    const cache = new Map();
+    return (text) => {
+      if (!cache.has(text)) cache.set(text, ctx.measureText(text).width);
+      return cache.get(text);
+    };
+  };
+  const centered = (ctx, text, size, color, top) => {
+    ctx.font = `${size}px "${family}", serif`;
+    ctx.fillStyle = color;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'top';
+    ctx.fillText(noteCardFit(ctx, text, width), centerX, top);
+    ctx.textAlign = 'left';
+  };
+  const blocks = [];
+
+  // Header: cover, title, author, counts.
+  const title = noteCardBookTitle(book.title) || '书摘';
+  const titleLines = noteCardCapLines(noteCardBreakLines(measureAt(52), title, width), 2, measureAt(52), width);
+  const thoughts = notes.filter((note) => String(note.thought || '').trim()).length;
+  const counts = [`${notes.length} 条书摘`, prefs.thought && thoughts ? `${thoughts} 条想法` : ''].filter(Boolean).join(' · ');
+  const showCover = prefs.cover;
+  blocks.push({
+    height: (showCover ? 280 + 56 : 0) + titleLines.length * 52 * 1.5 + (book.author ? 30 * 1.9 : 0) + 26 * 1.8 + 96,
+    draw(ctx, top) {
+      let y = top;
+      if (showCover) {
+        paintNoteCardCover(ctx, cover, book, { x: centerX - 100, y, width: 200, height: 280, family });
+        y += 280 + 56;
+      }
+      ctx.font = `${52}px "${family}", serif`;
+      drawNoteCardLines(ctx, titleLines, { x, y, width, size: 52, lineHeight: 1.5, color: palette.text, align: 'center' });
+      y += titleLines.length * 52 * 1.5;
+      if (book.author) {
+        centered(ctx, book.author, 30, palette.muted, y + 8);
+        y += 30 * 1.9;
+      }
+      centered(ctx, counts, 26, palette.faint, y + 8);
+      y += 26 * 1.8;
+      paintNoteCardDivider(ctx, x, y + 52, width, palette);
+    }
+  });
+
+  const quoteSize = 40;
+  const thoughtSize = 30;
+  const accent = (note) => (prefs.template === 'letter'
+    ? (NOTE_CARD_HIGHLIGHT_COLORS[note.color] || palette.seal)
+    : palette.rule);
+  let lastChapter = null;
+  notes.forEach((note, index) => {
+    const chapter = String(note.chapter || '').trim();
+    if (chapter && !['正文', '其他'].includes(chapter) && chapter !== lastChapter) {
+      blocks.push({
+        height: 120,
+        draw(ctx, top) {
+          ctx.font = `28px "${family}", serif`;
+          ctx.letterSpacing = '4px';
+          const label = noteCardFit(ctx, chapter, width - 160);
+          const labelWidth = ctx.measureText(label).width;
+          ctx.fillStyle = palette.muted;
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillText(label, centerX, top + 60);
+          ctx.textAlign = 'left';
+          ctx.letterSpacing = '0px';
+          ctx.strokeStyle = palette.rule;
+          ctx.lineWidth = 1;
+          ctx.beginPath();
+          ctx.moveTo(centerX - labelWidth / 2 - 72, top + 60);
+          ctx.lineTo(centerX - labelWidth / 2 - 24, top + 60);
+          ctx.moveTo(centerX + labelWidth / 2 + 24, top + 60);
+          ctx.lineTo(centerX + labelWidth / 2 + 72, top + 60);
+          ctx.stroke();
+        }
+      });
+    }
+    if (chapter) lastChapter = chapter;
+
+    const quote = String(note.text || '').trim();
+    const thought = prefs.thought ? String(note.thought || '').trim() : '';
+    const quoteLines = quote
+      ? noteCardCapLines(noteCardBreakLines(measureAt(quoteSize), quote, width), NOTE_LONG_MAX_QUOTE_LINES, measureAt(quoteSize), width)
+      : [];
+    const thoughtLines = thought
+      ? noteCardCapLines(noteCardBreakLines(measureAt(thoughtSize), thought, width), NOTE_LONG_MAX_THOUGHT_LINES, measureAt(thoughtSize), width)
+      : [];
+    const date = prefs.date ? noteCardDate(note.createdAt) : '';
+    const quoteHeight = quoteLines.length * quoteSize * 1.78;
+    const thoughtHeight = thoughtLines.length ? (quoteLines.length ? 44 : 0) + thoughtLines.length * thoughtSize * 1.72 : 0;
+    const dateHeight = date ? 52 : 0;
+    const gap = index < notes.length - 1 ? 88 : 24;
+    if (!quoteLines.length && !thoughtLines.length) return;
+    blocks.push({
+      height: 24 + quoteHeight + thoughtHeight + dateHeight + gap,
+      draw(ctx, top) {
+        let y = top + 24;
+        if (quoteLines.length) {
+          if (prefs.template === 'letter') {
+            ctx.save();
+            ctx.strokeStyle = palette.rule;
+            ctx.lineWidth = 1;
+            for (let line = 0; line < quoteLines.length; line += 1) {
+              const lineY = Math.round(y + (line + 1) * quoteSize * 1.78) - 0.5;
+              ctx.beginPath();
+              ctx.moveTo(x, lineY);
+              ctx.lineTo(x + width, lineY);
+              ctx.stroke();
+            }
+            ctx.restore();
+          } else {
+            // A short highlight-coloured stroke in the margin marks each passage.
+            ctx.fillStyle = NOTE_CARD_HIGHLIGHT_COLORS[note.color] || palette.rule;
+            ctx.globalAlpha = 0.75;
+            ctx.fillRect(x - 30, y + quoteSize * 0.5, 4, quoteSize * 1.1);
+            ctx.globalAlpha = 1;
+          }
+          ctx.font = `${quoteSize}px "${family}", serif`;
+          drawNoteCardLines(ctx, quoteLines, { x, y, width, size: quoteSize, lineHeight: 1.78, color: palette.text });
+          y += quoteHeight;
+        }
+        if (thoughtLines.length) {
+          if (quoteLines.length) {
+            y += 44;
+            ctx.fillStyle = accent(note);
+            ctx.fillRect(x, y - 14, 44, 3);
+          }
+          ctx.font = `${thoughtSize}px "${family}", serif`;
+          drawNoteCardLines(ctx, thoughtLines, { x, y, width, size: thoughtSize, lineHeight: 1.72, color: palette.muted });
+          y += thoughtLines.length * thoughtSize * 1.72;
+        }
+        if (date) {
+          ctx.font = `22px "${family}", serif`;
+          ctx.fillStyle = palette.faint;
+          ctx.textAlign = 'right';
+          ctx.textBaseline = 'top';
+          ctx.fillText(date, x + width, y + 18);
+          ctx.textAlign = 'left';
+        }
+        if (index < notes.length - 1) {
+          // Three small dots between passages.
+          ctx.fillStyle = palette.faint;
+          const dotY = top + this.height - gap / 2 + 6;
+          for (const offset of [-18, 0, 18]) {
+            ctx.beginPath();
+            ctx.arc(centerX + offset, dotY, 2.5, 0, Math.PI * 2);
+            ctx.fill();
+          }
+        }
+      }
+    });
+  });
+
+  // Foot: the seal and when the picture was made.
+  const made = noteCardDate(new Date().toISOString());
+  blocks.push({
+    height: 72 + 96 + 64,
+    draw(ctx, top) {
+      paintNoteCardDivider(ctx, x, top + 24, width, palette);
+      paintNoteCardSeal(ctx, centerX - 48, top + 72, 96, palette, family);
+      centered(ctx, `枕书 · ${made}`, 22, palette.faint, top + 72 + 96 + 24);
+    }
+  });
+  return blocks;
+}
+
+/**
+ * Draws several notes of one book as a tall picture, split into pages of at
+ * most NOTE_LONG_PAGE_HEIGHT between notes. Returns the page canvases.
+ */
+async function renderNotesLongImage({ book = {}, notes = [] }, options = {}) {
+  const prefs = { ...NOTE_CARD_DEFAULTS, ...options };
+  const palette = NOTE_CARD_PALETTES[prefs.template] || NOTE_CARD_PALETTES.paper;
+  const { family } = NOTE_CARD_FONTS[prefs.font] || NOTE_CARD_FONTS['source-serif'];
+  const texts = notes.flatMap((note) => [note.text || '', prefs.thought ? note.thought || '' : '', note.chapter || '']);
+  const [, cover] = await Promise.all([
+    loadNoteCardFont(prefs.font, [...texts, book.title || '', book.author || '', '《》枕书条书摘想法·……〇一二三四五六七八九十年月日续']),
+    prefs.cover ? loadNoteCardImage(book.coverUrl) : Promise.resolve(null)
+  ]);
+
+  const measuring = document.createElement('canvas').getContext('2d');
+  const blocks = noteLongBlocks(measuring, { book, notes }, prefs, { palette, family, cover });
+  const top = 150;
+  const continuedTop = 190;
+  const bottom = 130;
+  const pages = [];
+  let page = [];
+  let used = 0;
+  for (const block of blocks) {
+    const room = NOTE_LONG_PAGE_HEIGHT - (pages.length ? continuedTop : top) - bottom;
+    if (page.length && used + block.height > room) {
+      pages.push(page);
+      page = [];
+      used = 0;
+    }
+    page.push(block);
+    used += block.height;
+  }
+  if (page.length) pages.push(page);
+
+  const title = noteCardBookTitle(book.title) || '书摘';
+  return pages.map((blocksOnPage, index) => {
+    const pageTop = index ? continuedTop : top;
+    const height = Math.ceil(pageTop + blocksOnPage.reduce((sum, block) => sum + block.height, 0) + bottom);
+    const canvas = document.createElement('canvas');
+    canvas.width = NOTE_LONG_WIDTH;
+    canvas.height = height;
+    const ctx = canvas.getContext('2d');
+    paintNoteCardBackground(ctx, NOTE_LONG_WIDTH, height, palette, prefs.template);
+    paintNoteCardFrame(ctx, NOTE_LONG_WIDTH, height, palette, prefs.template);
+    ctx.font = `22px "${family}", serif`;
+    ctx.fillStyle = palette.faint;
+    ctx.textBaseline = 'top';
+    if (index) {
+      ctx.textAlign = 'center';
+      ctx.fillText(`${title} · 续`, NOTE_LONG_WIDTH / 2, 110);
+    }
+    if (pages.length > 1) {
+      ctx.textAlign = 'center';
+      ctx.fillText(`${index + 1} / ${pages.length}`, NOTE_LONG_WIDTH / 2, height - 100);
+    }
+    ctx.textAlign = 'left';
+    let y = pageTop;
+    for (const block of blocksOnPage) {
+      block.draw(ctx, y);
+      y += block.height;
+    }
+    canvas.noteCard = { page: index + 1, pages: pages.length, width: NOTE_LONG_WIDTH, height };
+    return canvas;
+  });
+}
+
 /* ---------- Saving ---------- */
 
-function noteCardFileName(note) {
-  const title = String(note.book?.title || '书摘').replace(/[\\/:*?"<>|\s]+/g, '').slice(0, 30) || '书摘';
+function noteCardFileName(book, { kind = '', page = 0 } = {}) {
+  const title = String(book?.title || '书摘').replace(/[\\/:*?"<>|\s]+/g, '').slice(0, 30) || '书摘';
   const now = new Date();
   const pad = (value) => String(value).padStart(2, '0');
-  return `枕书-${title}-${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}-${pad(now.getHours())}${pad(now.getMinutes())}.png`;
+  const stamp = `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}-${pad(now.getHours())}${pad(now.getMinutes())}`;
+  return `枕书-${title}${kind ? `-${kind}` : ''}-${stamp}${page ? `-${page}` : ''}.png`;
 }
 
 function noteCardBlob(canvas) {
@@ -717,20 +994,7 @@ function noteCardCanShare() {
   return phone && typeof navigator.canShare === 'function' && typeof File === 'function';
 }
 
-async function saveNoteCardImage(canvas, note) {
-  const blob = await noteCardBlob(canvas);
-  const name = noteCardFileName(note);
-  if (noteCardCanShare()) {
-    const file = new File([blob], name, { type: 'image/png' });
-    if (navigator.canShare({ files: [file] })) {
-      try {
-        await navigator.share({ files: [file] });
-        return 'shared';
-      } catch (error) {
-        if (error?.name === 'AbortError') return 'cancelled';
-      }
-    }
-  }
+function downloadNoteCardBlob(blob, name) {
   const url = URL.createObjectURL(blob);
   const link = document.createElement('a');
   link.href = url;
@@ -739,6 +1003,26 @@ async function saveNoteCardImage(canvas, note) {
   link.click();
   link.remove();
   setTimeout(() => URL.revokeObjectURL(url), 30000);
+}
+
+/** Shares (phones) or downloads the pictures; several pages keep their order. */
+async function saveNoteCardImages(canvases, names) {
+  const blobs = await Promise.all(canvases.map(noteCardBlob));
+  if (noteCardCanShare()) {
+    const files = blobs.map((blob, index) => new File([blob], names[index], { type: 'image/png' }));
+    if (navigator.canShare({ files })) {
+      try {
+        await navigator.share({ files });
+        return 'shared';
+      } catch (error) {
+        if (error?.name === 'AbortError') return 'cancelled';
+      }
+    }
+  }
+  for (let index = 0; index < blobs.length; index += 1) {
+    if (index) await new Promise((resolve) => setTimeout(resolve, 350));
+    downloadNoteCardBlob(blobs[index], names[index]);
+  }
   return 'downloaded';
 }
 
@@ -785,21 +1069,21 @@ function noteCardSegment(label, name, choices, prefs, onChange) {
 }
 
 /**
- * Opens the card dialog for one note:
- * { id, text, thought, color, chapter, createdAt, book: { title, author, coverUrl } }
+ * The shared picture dialog: preview on the left, choices on the right.
+ * `render(prefs)` returns the canvases; `names(canvases)` their file names.
  */
-function openNoteCardDialog(note) {
+function openNoteCardShell({ heading, label, ratios, toggles, render, describe, names, long = false }) {
   closeNoteCardDialog();
   const prefs = readNoteCardPrefs();
-  const dialog = noteCardElement('dialog', 'note-card-dialog');
+  const dialog = noteCardElement('dialog', `note-card-dialog${long ? ' is-long' : ''}`);
   dialog.setAttribute('aria-labelledby', 'noteCardTitle');
 
   const header = noteCardElement('header', 'note-card-header');
-  const title = noteCardElement('h2', 'note-card-title', '书摘卡片');
+  const title = noteCardElement('h2', 'note-card-title', heading);
   title.id = 'noteCardTitle';
   const close = noteCardElement('button', 'ui-close note-card-close', '关闭');
   close.type = 'button';
-  close.setAttribute('aria-label', '关闭书摘卡片');
+  close.setAttribute('aria-label', `关闭${heading}`);
   close.addEventListener('click', closeNoteCardDialog);
   header.append(title, close);
 
@@ -808,14 +1092,13 @@ function openNoteCardDialog(note) {
   const status = noteCardElement('p', 'note-card-status', '正在生成…');
   status.setAttribute('role', 'status');
 
-  const render = async () => {
+  const draw = async () => {
     saveNoteCardPrefs(prefs);
     const sequence = ++noteCardDialogState.sequence;
     preview.setAttribute('aria-busy', 'true');
-    preview.dataset.ratio = prefs.ratio;
-    let canvas;
+    let canvases;
     try {
-      canvas = await renderNoteCard(note, prefs);
+      canvases = await render(prefs);
     } catch (error) {
       if (sequence !== noteCardDialogState.sequence) return;
       status.textContent = `生成失败：${error.message || '请重试'}`;
@@ -823,50 +1106,54 @@ function openNoteCardDialog(note) {
       return;
     }
     if (sequence !== noteCardDialogState.sequence || !dialog.isConnected) return;
-    canvas.className = 'note-card-canvas';
-    canvas.setAttribute('role', 'img');
-    canvas.setAttribute('aria-label', `书摘卡片预览：${String(note.text || '').slice(0, 40)}`);
-    preview.replaceChildren(canvas);
+    canvases.forEach((canvas, index) => {
+      canvas.className = 'note-card-canvas';
+      canvas.setAttribute('role', 'img');
+      canvas.setAttribute('aria-label', canvases.length > 1 ? `${label} 第 ${index + 1} 张` : label);
+    });
+    preview.replaceChildren(...canvases);
     preview.removeAttribute('aria-busy');
-    status.textContent = canvas.noteCard.truncated
-      ? '摘录较长，卡片里只放得下前面一部分；换成 3:4 能放下更多。'
-      : '';
-    dialog.noteCardCanvas = canvas;
+    status.textContent = describe(canvases);
+    dialog.noteCardCanvases = canvases;
+    if (copy) copy.hidden = canvases.length !== 1;
   };
 
   const controls = noteCardElement('div', 'note-card-controls');
   controls.append(
-    noteCardSegment('模板', 'template', Object.entries(NOTE_CARD_TEMPLATES), prefs, render),
-    noteCardSegment('字体', 'font', Object.entries(NOTE_CARD_FONTS).map(([key, value]) => [key, value.label]), prefs, render),
-    noteCardSegment('比例', 'ratio', Object.keys(NOTE_CARD_RATIOS).map((key) => [key, key]), prefs, render)
+    noteCardSegment('模板', 'template', Object.entries(NOTE_CARD_TEMPLATES), prefs, draw),
+    noteCardSegment('字体', 'font', Object.entries(NOTE_CARD_FONTS).map(([key, value]) => [key, value.label]), prefs, draw)
   );
-  const toggles = noteCardElement('div', 'note-card-group');
-  toggles.appendChild(noteCardElement('span', 'note-card-group-label', '显示'));
-  const toggleRow = noteCardElement('div', 'note-card-toggles');
-  for (const [key, label] of Object.entries(NOTE_CARD_TOGGLES)) {
-    if (key === 'thought' && !String(note.thought || '').trim()) continue;
-    const button = noteCardElement('button', 'note-card-toggle', label);
-    button.type = 'button';
-    button.dataset.toggle = key;
-    button.setAttribute('aria-pressed', String(prefs[key]));
-    button.addEventListener('click', () => {
-      prefs[key] = !prefs[key];
+  if (ratios) controls.appendChild(noteCardSegment('比例', 'ratio', Object.keys(NOTE_CARD_RATIOS).map((key) => [key, key]), prefs, draw));
+  if (toggles.length) {
+    const group = noteCardElement('div', 'note-card-group');
+    group.appendChild(noteCardElement('span', 'note-card-group-label', '显示'));
+    const row = noteCardElement('div', 'note-card-toggles');
+    for (const key of toggles) {
+      const button = noteCardElement('button', 'note-card-toggle', NOTE_CARD_TOGGLES[key]);
+      button.type = 'button';
+      button.dataset.toggle = key;
       button.setAttribute('aria-pressed', String(prefs[key]));
-      void render();
-    });
-    toggleRow.appendChild(button);
+      button.addEventListener('click', () => {
+        prefs[key] = !prefs[key];
+        button.setAttribute('aria-pressed', String(prefs[key]));
+        void draw();
+      });
+      row.appendChild(button);
+    }
+    group.appendChild(row);
+    controls.appendChild(group);
   }
-  toggles.appendChild(toggleRow);
-  controls.appendChild(toggles);
 
   const actions = noteCardElement('div', 'note-card-actions');
+  let copy = null;
   if (typeof ClipboardItem === 'function' && navigator.clipboard?.write && !noteCardCanShare()) {
-    const copy = noteCardElement('button', 'note-card-secondary', '复制图片');
+    copy = noteCardElement('button', 'note-card-secondary', '复制图片');
     copy.type = 'button';
     copy.addEventListener('click', async () => {
-      if (!dialog.noteCardCanvas) return;
+      const [canvas] = dialog.noteCardCanvases || [];
+      if (!canvas) return;
       try {
-        await copyNoteCardImage(dialog.noteCardCanvas);
+        await copyNoteCardImage(canvas);
         noteCardHint('图片已复制');
       } catch {
         noteCardHint('复制失败，请改用保存图片');
@@ -877,11 +1164,12 @@ function openNoteCardDialog(note) {
   const save = noteCardElement('button', 'note-card-primary', noteCardCanShare() ? '分享 / 保存' : '保存图片');
   save.type = 'button';
   save.addEventListener('click', async () => {
-    if (!dialog.noteCardCanvas) return;
+    const canvases = dialog.noteCardCanvases;
+    if (!canvases?.length) return;
     save.disabled = true;
     try {
-      const result = await saveNoteCardImage(dialog.noteCardCanvas, note);
-      if (result === 'downloaded') noteCardHint('图片已保存');
+      const result = await saveNoteCardImages(canvases, names(canvases));
+      if (result === 'downloaded') noteCardHint(canvases.length > 1 ? `已保存 ${canvases.length} 张图片` : '图片已保存');
     } catch (error) {
       noteCardHint(`保存失败：${error.message || '请重试'}`);
     } finally {
@@ -906,8 +1194,47 @@ function openNoteCardDialog(note) {
   noteCardDialogState.dialog = dialog;
   if (typeof dialog.showModal === 'function') dialog.showModal();
   else dialog.setAttribute('open', '');
-  void render();
+  void draw();
   return dialog;
+}
+
+/**
+ * Opens the card dialog for one note:
+ * { id, text, thought, color, chapter, createdAt, book: { title, author, coverUrl } }
+ */
+function openNoteCardDialog(note) {
+  const hasThought = Boolean(String(note.thought || '').trim());
+  return openNoteCardShell({
+    heading: '书摘卡片',
+    label: `书摘卡片预览：${String(note.text || note.thought || '').slice(0, 40)}`,
+    ratios: true,
+    toggles: Object.keys(NOTE_CARD_TOGGLES).filter((key) => key !== 'thought' || hasThought),
+    render: async (prefs) => [await renderNoteCard(note, prefs)],
+    describe: ([canvas]) => (canvas.noteCard.truncated
+      ? '摘录较长，卡片里只放得下前面一部分；换成 3:4 能放下更多。'
+      : ''),
+    names: () => [noteCardFileName(note.book)]
+  });
+}
+
+/** Several notes of one book (in reading order) as one tall picture. */
+function openNotesLongImageDialog({ book = {}, notes = [] }) {
+  const hasThought = notes.some((note) => String(note.thought || '').trim());
+  return openNoteCardShell({
+    heading: '书摘长图',
+    label: `书摘长图预览：${book.title || ''}，${notes.length} 条`,
+    ratios: false,
+    long: true,
+    toggles: ['thought', 'date', 'cover'].filter((key) => key !== 'thought' || hasThought),
+    render: (prefs) => renderNotesLongImage({ book, notes }, prefs),
+    describe: (canvases) => (canvases.length > 1
+      ? `${notes.length} 条书摘较长，已按笔记分成 ${canvases.length} 张图片，保存时依次存下。`
+      : `${notes.length} 条书摘，一张图片。`),
+    names: (canvases) => canvases.map((canvas, index) => noteCardFileName(book, {
+      kind: '书摘长图',
+      page: canvases.length > 1 ? index + 1 : 0
+    }))
+  });
 }
 
 function closeNoteCardDialog() {
@@ -935,4 +1262,4 @@ async function openNoteCardForAnnotation(bookId, annotationId, fallback = {}, ov
   return openNoteCardDialog(note);
 }
 
-window.__zhenshuNoteCard = { renderNoteCard, noteCardBreakLines, layoutNoteCardBody, noteCardDate };
+window.__zhenshuNoteCard = { renderNoteCard, renderNotesLongImage, noteCardBreakLines, layoutNoteCardBody, noteCardDate };

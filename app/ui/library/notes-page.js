@@ -280,6 +280,80 @@ function notesDocumentHeader(shell, { back, cover = null, title, meta, actions =
   return header;
 }
 
+/**
+ * Choosing notes for a long picture: every note gets a checkbox (all ticked
+ * to start with, i.e. the whole book), and a bar counts and generates.
+ */
+function enterNotesSelection(shell, body, book, notes) {
+  if (shell.classList.contains('is-selecting')) return;
+  shell.classList.add('is-selecting');
+  const selected = new Set(notes.map((note) => note.id));
+  const bar = notesElement('div', 'notes-select-bar');
+  bar.setAttribute('role', 'region');
+  bar.setAttribute('aria-label', '选择书摘');
+  const count = notesElement('span', 'notes-select-count');
+  const toggleAll = notesElement('button', 'notes-action notes-select-all');
+  toggleAll.type = 'button';
+  const cancel = notesElement('button', 'notes-action notes-select-cancel', '取消');
+  cancel.type = 'button';
+  const generate = notesElement('button', 'notes-primary notes-select-generate', '生成长图');
+  generate.type = 'button';
+  bar.append(count, toggleAll, cancel, generate);
+
+  const cards = [...body.querySelectorAll('.notes-note')];
+  const sync = () => {
+    count.textContent = `已选 ${selected.size} / ${notes.length} 条`;
+    toggleAll.textContent = selected.size === notes.length ? '全不选' : '全选';
+    generate.disabled = !selected.size;
+    for (const card of cards) {
+      const on = selected.has(card.dataset.noteId);
+      card.classList.toggle('is-selected', on);
+      const box = card.querySelector('.notes-select');
+      if (box) box.checked = on;
+    }
+  };
+  const flip = (id) => {
+    if (selected.has(id)) selected.delete(id);
+    else selected.add(id);
+    sync();
+  };
+  const onCardClick = (event) => {
+    const card = event.target.closest?.('.notes-note');
+    if (!card || event.target.closest('.notes-select')) return;
+    event.preventDefault();
+    event.stopPropagation();
+    flip(card.dataset.noteId);
+  };
+  for (const card of cards) {
+    const box = notesElement('input', 'notes-select');
+    box.type = 'checkbox';
+    box.setAttribute('aria-label', '选入长图');
+    box.addEventListener('change', () => flip(card.dataset.noteId));
+    card.prepend(box);
+  }
+  body.addEventListener('click', onCardClick, true);
+
+  const exit = () => {
+    shell.classList.remove('is-selecting');
+    body.removeEventListener('click', onCardClick, true);
+    body.querySelectorAll('.notes-select').forEach((box) => box.remove());
+    cards.forEach((card) => card.classList.remove('is-selected'));
+    bar.remove();
+  };
+  toggleAll.addEventListener('click', () => {
+    if (selected.size === notes.length) selected.clear();
+    else notes.forEach((note) => selected.add(note.id));
+    sync();
+  });
+  cancel.addEventListener('click', exit);
+  generate.addEventListener('click', () => {
+    if (typeof openNotesLongImageDialog !== 'function') return;
+    openNotesLongImageDialog({ book, notes: notes.filter((note) => selected.has(note.id)) });
+  });
+  shell.appendChild(bar);
+  sync();
+}
+
 function backToNotesList() {
   // Came here from the list: step back to it; arrived directly: show it.
   if (notesPageState.cameFromList) window.history.back();
@@ -339,6 +413,9 @@ async function renderNotesDocument(doc) {
   continueReading.type = 'button';
   continueReading.disabled = !book.available;
   continueReading.addEventListener('click', () => { void openShelfBook(book.bookId); });
+  const longImage = notesElement('button', 'notes-secondary notes-long-image', '生成长图');
+  longImage.type = 'button';
+  longImage.disabled = !notes.length;
   const meta = [
     `${notes.length} 条笔记`,
     book.thoughtCount ? `${book.thoughtCount} 条想法` : '',
@@ -350,8 +427,9 @@ async function renderNotesDocument(doc) {
     cover: notesCover(book),
     title: book.title || '已移除的书',
     meta: book.author ? `${book.author} · ${meta}` : meta,
-    actions: [continueReading]
+    actions: [continueReading, longImage]
   });
+  longImage.addEventListener('click', () => enterNotesSelection(shell, body, book, notes));
   shell.appendChild(body);
   body.replaceChildren();
   if (!notes.length) {
