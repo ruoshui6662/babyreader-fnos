@@ -1,0 +1,476 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>枕书 · 液态玻璃主题演示</title>
+<style>
+/* ============================================================
+   枕书 · 液态玻璃（Liquid Glass）主题演示
+   只给“浮在内容之上”的控件层上玻璃：侧边栏、工具条、标签、
+   弹出菜单、对话框、阅读工具条与翻页胶囊。内容层（封面、正文、
+   卡片文字）保持实心，保证可读性。
+   ============================================================ */
+:root {
+  --font-ui: -apple-system, BlinkMacSystemFont, "SF Pro Text", "PingFang SC", "Microsoft YaHei", "Segoe UI", sans-serif;
+  --font-serif: "Noto Serif SC", "Songti SC", "SimSun", serif;
+  --accent: #007aff;
+  --stage: #f2f2f7;
+  --text: #1d1d1f;
+  --text-2: rgba(60, 60, 67, .62);
+  --text-3: rgba(60, 60, 67, .36);
+  --surface: #ffffff;
+  --fill: rgba(118, 118, 128, .12);
+  --separator: rgba(60, 60, 67, .12);
+  --paper: #ffffff;
+  /* Glass material (light) */
+  --glass-tint: rgba(255, 255, 255, .42);
+  --glass-tint-strong: rgba(255, 255, 255, .62);
+  --glass-rim: rgba(255, 255, 255, .85);
+  --glass-rim-low: rgba(255, 255, 255, .25);
+  --glass-edge: rgba(0, 0, 0, .06);
+  --glass-shadow: 0 8px 32px rgba(0, 0, 0, .10), 0 1px 3px rgba(0, 0, 0, .06);
+  --glass-blur: 16px;
+  --glass-saturate: 1.9;
+  --ambient-1: #ffd6a5;
+  --ambient-2: #a5d8ff;
+  --ambient-3: #d0bfff;
+}
+html[data-theme="dark"] {
+  --accent: #0a84ff;
+  --stage: #000000;
+  --text: #f5f5f7;
+  --text-2: rgba(235, 235, 245, .62);
+  --text-3: rgba(235, 235, 245, .34);
+  --surface: #1c1c1e;
+  --fill: rgba(118, 118, 128, .24);
+  --separator: rgba(84, 84, 88, .5);
+  --paper: #1c1c1e;
+  --glass-tint: rgba(40, 40, 46, .38);
+  --glass-tint-strong: rgba(44, 44, 50, .62);
+  --glass-rim: rgba(255, 255, 255, .32);
+  --glass-rim-low: rgba(255, 255, 255, .06);
+  --glass-edge: rgba(0, 0, 0, .5);
+  --glass-shadow: 0 10px 36px rgba(0, 0, 0, .45), 0 1px 3px rgba(0, 0, 0, .4);
+  --ambient-1: #5b3a1a;
+  --ambient-2: #12385e;
+  --ambient-3: #3b2a66;
+}
+
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+body {
+  min-height: 100vh;
+  color: var(--text);
+  font: 14px/1.45 var(--font-ui);
+  background: var(--stage);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ---------- Demo chrome (not part of the theme) ---------- */
+.demo-bar {
+  position: sticky; top: 0; z-index: 100;
+  display: flex; flex-wrap: wrap; align-items: center; gap: 12px;
+  padding: 10px 20px;
+  font-size: 13px;
+  background: color-mix(in srgb, var(--stage) 86%, transparent);
+  border-bottom: 1px solid var(--separator);
+  backdrop-filter: blur(10px);
+}
+.demo-bar strong { margin-right: auto; font-size: 14px; }
+.demo-seg { display: inline-flex; padding: 2px; background: var(--fill); border-radius: 9px; }
+.demo-seg button {
+  min-height: 28px; padding: 0 12px; color: var(--text); font: inherit;
+  background: transparent; border: 0; border-radius: 7px; cursor: pointer;
+}
+.demo-seg button[aria-pressed="true"] { background: var(--surface); box-shadow: 0 1px 3px rgba(0,0,0,.15); font-weight: 600; }
+.demo-note { color: var(--text-2); }
+.demo-wrap { display: grid; grid-template-columns: minmax(0, 1fr) 390px; gap: 28px; padding: 24px 20px 48px; align-items: start; }
+.demo-label { margin: 0 0 10px; color: var(--text-2); font-size: 12px; letter-spacing: .04em; }
+@media (max-width: 1260px) { .demo-wrap { grid-template-columns: minmax(0, 1fr); } }
+
+/* ---------- Device frames ---------- */
+.screen {
+  position: relative;
+  overflow: hidden;
+  background: var(--stage);
+  border: 1px solid var(--separator);
+  border-radius: 18px;
+  isolation: isolate;
+}
+.desktop { height: 820px; }
+.phone { width: 390px; height: 844px; border-radius: 44px; }
+
+/* Ambient light: glass needs colour behind it. Taken from the covers. */
+.ambient {
+  position: absolute; inset: 0; z-index: -1; pointer-events: none;
+  background:
+    radial-gradient(40% 35% at 18% 12%, var(--ambient-1), transparent 70%),
+    radial-gradient(45% 40% at 85% 18%, var(--ambient-2), transparent 70%),
+    radial-gradient(50% 45% at 60% 95%, var(--ambient-3), transparent 70%);
+  opacity: 0;
+  transition: opacity .3s ease;
+}
+html[data-glass="on"] .ambient { opacity: .55; }
+html[data-glass="on"][data-theme="dark"] .ambient { opacity: .9; }
+
+/* ---------- The glass material ---------- */
+.glass {
+  position: relative;
+  background: var(--surface);
+  border: 1px solid var(--separator);
+}
+html[data-glass="on"] .glass {
+  background: var(--glass-tint);
+  border-color: transparent;
+  box-shadow: var(--glass-shadow), inset 0 0 0 .5px var(--glass-edge);
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+  backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+}
+/* Lensing (Chromium only): bends what is behind the edges of the glass. */
+html[data-glass="on"][data-lens="on"] .glass.lens {
+  backdrop-filter: url(#zs-lens) blur(var(--glass-blur)) saturate(var(--glass-saturate));
+}
+/* Specular rim: bright where light hits the top-left edge, fading round. */
+html[data-glass="on"] .glass::before {
+  content: '';
+  position: absolute; inset: 0;
+  border-radius: inherit;
+  padding: 1px;
+  background: linear-gradient(140deg, var(--glass-rim) 0%, var(--glass-rim-low) 35%, transparent 55%, var(--glass-rim-low) 80%, var(--glass-rim) 100%);
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask: linear-gradient(#000 0 0) content-box exclude, linear-gradient(#000 0 0);
+  pointer-events: none;
+}
+/* Soft inner sheen across the top. */
+html[data-glass="on"] .glass::after {
+  content: '';
+  position: absolute; inset: 1px 1px auto 1px; height: 45%;
+  border-radius: inherit;
+  background: linear-gradient(to bottom, rgba(255, 255, 255, .22), transparent);
+  pointer-events: none;
+}
+html[data-glass="on"][data-theme="dark"] .glass::after { background: linear-gradient(to bottom, rgba(255, 255, 255, .07), transparent); }
+.glass > * { position: relative; z-index: 1; }
+
+/* Dense glass: controls with small labels over busy content (tab bar,
+   menus) get more tint so the words stay readable — glass adapts to what is
+   behind it rather than staying equally clear everywhere. */
+html[data-glass="on"] .glass.dense {
+  background: var(--glass-tint-strong);
+  --glass-blur: 22px;
+}
+html[data-glass="on"] .glass.dense .tab:not(.is-current),
+html[data-glass="on"] .glass.dense > div:not(.is-current) { color: var(--text); }
+
+/* Respect “reduce transparency”: the same layout, solid. */
+@media (prefers-reduced-transparency: reduce) {
+  html[data-glass="on"] .glass { background: var(--glass-tint-strong); backdrop-filter: none; -webkit-backdrop-filter: none; }
+}
+
+/* ---------- Buttons on glass ---------- */
+.btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  min-height: 34px; padding: 0 14px;
+  color: var(--text); font: 500 14px/1 var(--font-ui); white-space: nowrap;
+  background: var(--fill); border: 0; border-radius: 999px; cursor: pointer;
+}
+.btn.primary { color: #fff; font-weight: 600; background: var(--accent); }
+html[data-glass="on"] .btn { background: transparent; }
+html[data-glass="on"] .btn:hover { background: color-mix(in srgb, var(--text) 8%, transparent); }
+html[data-glass="on"] .btn.primary {
+  background: color-mix(in srgb, var(--accent) 88%, transparent);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .35), 0 4px 14px color-mix(in srgb, var(--accent) 40%, transparent);
+}
+
+/* ---------- Desktop library ---------- */
+.sidebar {
+  position: absolute; top: 14px; left: 14px; bottom: 14px; width: 196px;
+  display: flex; flex-direction: column; gap: 4px;
+  padding: 14px 10px;
+  border-radius: 22px;
+}
+.brand { display: flex; align-items: center; gap: 10px; padding: 4px 8px 16px; font-weight: 700; font-size: 16px; }
+.brand i { width: 26px; height: 26px; border-radius: 8px; background: linear-gradient(135deg, #ff9f43, #f0932b); }
+.nav-item {
+  display: flex; align-items: center; gap: 10px;
+  min-height: 38px; padding: 0 12px;
+  color: var(--text-2); font-weight: 600;
+  border-radius: 12px;
+}
+.nav-item svg { width: 18px; height: 18px; stroke: currentColor; fill: none; stroke-width: 1.8; }
+.nav-item.is-current { color: var(--accent); background: color-mix(in srgb, var(--accent) 14%, transparent); }
+html[data-glass="on"] .nav-item.is-current {
+  background: color-mix(in srgb, var(--accent) 16%, rgba(255, 255, 255, .25));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .35);
+}
+html[data-glass="on"][data-theme="dark"] .nav-item.is-current { background: color-mix(in srgb, var(--accent) 26%, transparent); }
+
+.main { position: absolute; inset: 0 0 0 224px; overflow-y: auto; padding: 26px 30px 120px 26px; }
+.main::-webkit-scrollbar { display: none; }
+.head { display: flex; align-items: center; gap: 16px; margin-bottom: 18px; }
+.head h1 { margin: 0; font-size: 32px; letter-spacing: -.01em; }
+.head p { margin: 2px 0 0; color: var(--text-2); }
+.toolbar {
+  margin-left: auto;
+  display: flex; align-items: center; gap: 2px;
+  padding: 4px;
+  border-radius: 999px;
+}
+.search {
+  display: flex; align-items: center; gap: 8px;
+  width: 210px; height: 34px; padding: 0 12px; margin-right: 4px;
+  color: var(--text-3);
+  background: var(--fill); border-radius: 999px;
+}
+html[data-glass="on"] .search { background: color-mix(in srgb, var(--text) 6%, transparent); }
+.search svg { width: 15px; height: 15px; stroke: currentColor; fill: none; stroke-width: 2.2; }
+
+.chips { display: inline-flex; gap: 4px; padding: 4px; margin-bottom: 22px; border-radius: 999px; }
+.chip { min-height: 32px; padding: 0 14px; display: inline-flex; align-items: center; gap: 6px; color: var(--text); font-weight: 500; border-radius: 999px; background: var(--fill); }
+html[data-glass="on"] .chip { background: transparent; }
+.chip small { color: var(--text-3); font-size: 12px; }
+.chip.is-current { color: var(--accent); font-weight: 600; background: color-mix(in srgb, var(--accent) 14%, transparent); }
+.chip.is-current small { color: color-mix(in srgb, var(--accent) 70%, transparent); }
+html[data-glass="on"] .chip.is-current { background: color-mix(in srgb, var(--accent) 16%, rgba(255, 255, 255, .3)); box-shadow: inset 0 1px 0 rgba(255,255,255,.4), 0 2px 8px rgba(0,0,0,.08); }
+html[data-glass="on"][data-theme="dark"] .chip.is-current { background: color-mix(in srgb, var(--accent) 28%, transparent); }
+
+h2 { margin: 0 0 12px; font-size: 18px; }
+.continue {
+  display: flex; align-items: center; gap: 16px;
+  width: 440px; padding: 14px 16px; margin-bottom: 28px;
+  background: var(--surface); border-radius: 18px;
+  box-shadow: 0 1px 2px rgba(0,0,0,.04), 0 8px 28px rgba(0,0,0,.07);
+}
+.continue .cover-sm { width: 48px; height: 66px; border-radius: 4px; flex: none; }
+.continue b { display: block; font-size: 15px; }
+.continue span { color: var(--text-2); font-size: 13px; }
+.bar { width: 160px; height: 4px; margin-top: 8px; background: var(--fill); border-radius: 2px; overflow: hidden; }
+.bar i { display: block; width: 28%; height: 100%; background: var(--accent); }
+.continue .btn { margin-left: auto; min-height: 30px; font-size: 13px; }
+
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(118px, 1fr)); gap: 26px 24px; }
+.book .cover {
+  position: relative; aspect-ratio: 2 / 3; border-radius: 4px 6px 6px 4px; overflow: hidden;
+  box-shadow: 0 0 0 .5px rgba(0,0,0,.06), 0 3px 8px rgba(0,0,0,.12);
+  color: rgba(255,255,255,.95); font: 600 15px/1.25 var(--font-serif);
+  padding: 14px 12px;
+}
+.book .cover::before { content: ''; position: absolute; inset: 0 auto 0 0; width: 7px; background: linear-gradient(90deg, rgba(0,0,0,.2), rgba(255,255,255,.08), transparent); }
+.book .cover em { position: absolute; left: 12px; bottom: 12px; font: 600 9px/1 var(--font-ui); font-style: normal; padding: 3px 6px; border: 1px solid rgba(255,255,255,.6); border-radius: 999px; }
+.book b { display: block; margin-top: 8px; font-weight: 500; font-size: 13px; }
+.book span { color: var(--text-2); font-size: 12px; }
+
+/* Popover menu (sort) */
+.menu {
+  position: absolute; top: 132px; right: 120px; z-index: 20;
+  display: grid; gap: 2px; width: 168px; padding: 6px;
+  border-radius: 16px;
+}
+.menu div { padding: 8px 12px; border-radius: 10px; color: var(--text); }
+.menu div.is-current { color: var(--accent); font-weight: 600; background: color-mix(in srgb, var(--accent) 14%, transparent); }
+.menu div.is-current::after { content: '✓'; float: right; }
+
+/* ---------- Reader snippet ---------- */
+.reader-demo { margin-top: 28px; }
+.reader-screen { height: 380px; background: var(--stage); }
+html[data-glass="on"] .reader-screen .ambient { opacity: .35; }
+.paper {
+  position: absolute; inset: 18px 40px 18px 40px;
+  padding: 34px 56px; column-count: 2; column-gap: 72px;
+  color: var(--text); font: 17px/2 var(--font-serif); text-align: justify;
+  background: var(--paper); border-radius: 14px;
+  box-shadow: 0 1px 2px rgba(0,0,0,.04), 0 8px 28px rgba(0,0,0,.06);
+}
+.paper p { margin: 0 0 1em; text-indent: 2em; }
+.reader-tools {
+  position: absolute; left: 50%; bottom: 30px; transform: translateX(-50%);
+  display: flex; gap: 2px; padding: 5px;
+  border-radius: 999px; z-index: 5;
+}
+.reader-tools .btn { width: 40px; height: 40px; min-height: 40px; padding: 0; }
+.reader-tools svg { width: 19px; height: 19px; stroke: currentColor; fill: none; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.pill {
+  position: absolute; bottom: 34px; z-index: 5;
+  display: inline-flex; align-items: center; justify-content: center; gap: 2px;
+  width: 80px; height: 34px; color: var(--text-2); font-size: 12px;
+  border-radius: 999px;
+}
+.pill.prev { left: 60px; }
+.pill.next { right: 60px; }
+
+/* ---------- Phone ---------- */
+.phone .status { height: 50px; }
+.phone .main { inset: 0; padding: 50px 16px 120px; }
+.phone .head h1 { font-size: 30px; }
+.phone .grid { grid-template-columns: repeat(3, 1fr); gap: 20px 14px; }
+.phone .continue { width: auto; }
+.phone .more { margin-left: auto; width: 38px; height: 38px; border-radius: 50%; display: grid; place-items: center; font-weight: 700; letter-spacing: 1px; }
+.tabbar {
+  position: absolute; left: 16px; right: 16px; bottom: 26px; z-index: 10;
+  display: grid; grid-template-columns: repeat(3, 1fr);
+  padding: 6px; border-radius: 999px;
+}
+.tab { display: grid; justify-items: center; gap: 2px; padding: 6px 0; color: var(--text-2); font-size: 11px; font-weight: 600; border-radius: 999px; }
+.tab svg { width: 22px; height: 22px; stroke: currentColor; fill: none; stroke-width: 1.8; }
+.tab.is-current { color: var(--accent); }
+html[data-glass="on"] .tab.is-current { background: color-mix(in srgb, var(--accent) 14%, rgba(255,255,255,.22)); }
+html[data-glass="on"][data-theme="dark"] .tab.is-current { background: color-mix(in srgb, var(--accent) 22%, transparent); }
+html:not([data-glass="on"]) .tabbar { border-radius: 0; left: 0; right: 0; bottom: 0; padding-bottom: 26px; border-width: 1px 0 0; }
+html:not([data-glass="on"]) .phone .chips { background: none; border: 0; padding: 0; }
+html:not([data-glass="on"]) .chips.glass, html:not([data-glass="on"]) .toolbar.glass { background: none; border: 0; }
+html:not([data-glass="on"]) .toolbar .btn:not(.primary) { background: var(--fill); }
+html:not([data-glass="on"]) .toolbar { gap: 8px; }
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <!-- Lens: displaces the backdrop a little, most near the edges. -->
+  <filter id="zs-lens" x="0" y="0" width="100%" height="100%" color-interpolation-filters="sRGB">
+    <feTurbulence type="fractalNoise" baseFrequency="0.003 0.005" numOctaves="1" seed="7" result="noise"/>
+    <feGaussianBlur in="noise" stdDeviation="2" result="soft"/>
+    <feDisplacementMap in="SourceGraphic" in2="soft" scale="7" xChannelSelector="R" yChannelSelector="G"/>
+  </filter>
+</svg>
+
+<div class="demo-bar">
+  <strong>枕书 · 液态玻璃主题演示</strong>
+  <span class="demo-seg" data-control="theme"><button data-value="light" aria-pressed="true">浅色</button><button data-value="dark">深色</button></span>
+  <span class="demo-seg" data-control="glass"><button data-value="on" aria-pressed="true">液态玻璃</button><button data-value="off">现在的样式</button></span>
+  <span class="demo-note" id="lensNote"></span>
+</div>
+
+<div class="demo-wrap">
+  <section>
+    <p class="demo-label">桌面 · 书库</p>
+    <div class="screen desktop">
+      <div class="ambient"></div>
+      <nav class="sidebar glass lens">
+        <div class="brand"><i></i>枕书</div>
+        <div class="nav-item is-current"><svg viewBox="0 0 24 24"><path d="M4 5v14M8 5v14M12 5l4 14M17 5l3 14"/></svg>书库</div>
+        <div class="nav-item"><svg viewBox="0 0 24 24"><path d="M4 20h16M7 16V10M12 16V6M17 16v-4"/></svg>阅读统计</div>
+        <div class="nav-item"><svg viewBox="0 0 24 24"><path d="M7 3h7l4 4v14H7zM14 3v4h4M10 12h6M10 16h6"/></svg>笔记</div>
+      </nav>
+      <div class="main">
+        <div class="head">
+          <div><h1>书库</h1><p>16 本书 · 2 个分类</p></div>
+          <div class="toolbar glass lens">
+            <div class="search"><svg viewBox="0 0 24 24"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m15.5 15.5 5 5"/></svg>查找书名或作者</div>
+            <button class="btn">新建分类</button><button class="btn">导入</button><button class="btn">重新扫描</button><button class="btn">整理</button>
+          </div>
+        </div>
+        <div class="chips glass">
+          <span class="chip is-current">我的书籍 <small>16</small></span><span class="chip">小说 <small>6</small></span><span class="chip">医学 <small>2</small></span><span class="chip">未分类 <small>8</small></span>
+        </div>
+        <h2>继续阅读</h2>
+        <div class="continue">
+          <div class="cover-sm" style="background:linear-gradient(160deg,#c0392b,#6d2119)"></div>
+          <div><b>剑来</b><span>烽火戏诸侯</span><div class="bar"><i></i></div><span>已读 28%</span></div>
+          <button class="btn primary">继续</button>
+        </div>
+        <div class="grid" id="desktopGrid"></div>
+      </div>
+      <div class="menu glass dense lens">
+        <div class="is-current">最近阅读</div><div>书名</div><div>作者</div><div>加入时间</div>
+      </div>
+    </div>
+
+    <div class="reader-demo">
+      <p class="demo-label">桌面 · 双页阅读（浮动工具条与翻页胶囊）</p>
+      <div class="screen reader-screen">
+        <div class="ambient"></div>
+        <article class="paper">
+          <p>我们读书，不是为了记住书里的每一句话，而是为了在某个平常的午后，忽然想起其中一句，觉得自己被理解了。好的句子像一盏灯，照亮的不是书页，而是我们自己走过的路。</p>
+          <p>书是安静的朋友，它不催你，也不怪你来得太迟。走得越远，越知道自己从哪里来；读得越多，越知道自己还不知道什么。</p>
+          <p>所谓成长，就是把别人的句子，慢慢读成自己的经验。灯下的人翻过一页，窗外的雨也翻过一页。</p>
+          <p>多年以后再读，书没有变，变的是读书的人。那些当年划下的句子，如今读来，像是另一个自己留下的信。</p>
+        </article>
+        <div class="pill prev glass lens"><span>‹ 上一页</span></div>
+        <div class="reader-tools glass lens">
+          <button class="btn" title="目录"><svg viewBox="0 0 24 24"><path d="M8 6h12M8 12h12M8 18h12M4 6h.01M4 12h.01M4 18h.01"/></svg></button>
+          <button class="btn" title="搜索"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m16 16 4 4"/></svg></button>
+          <button class="btn" title="笔记"><svg viewBox="0 0 24 24"><path d="M7 3h7l4 4v14H7zM14 3v4h4"/></svg></button>
+          <button class="btn" title="问 AI"><svg viewBox="0 0 24 24"><path d="M12 3l1.8 4.6L18 9.5l-4.2 1.9L12 16l-1.8-4.6L6 9.5l4.2-1.9z"/></svg></button>
+          <button class="btn" title="设置"><svg viewBox="0 0 24 24"><path d="M4 7h10M18 7h2M4 17h4M12 17h8"/><circle cx="16" cy="7" r="2"/><circle cx="10" cy="17" r="2"/></svg></button>
+        </div>
+        <div class="pill next glass lens"><span>下一页 ›</span></div>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <p class="demo-label">手机 · 书库</p>
+    <div class="screen phone">
+      <div class="ambient"></div>
+      <div class="main">
+        <div class="head"><div><h1>书库</h1><p>16 本书 · 2 个分类</p></div><div class="more glass lens">···</div></div>
+        <div class="chips glass" style="margin-bottom:18px"><span class="chip is-current">我的书籍 <small>16</small></span><span class="chip">小说 <small>6</small></span><span class="chip">医学 <small>2</small></span></div>
+        <div class="continue">
+          <div class="cover-sm" style="background:linear-gradient(160deg,#c0392b,#6d2119)"></div>
+          <div><b>剑来</b><span>烽火戏诸侯 · 已读 28%</span></div>
+          <button class="btn primary">继续</button>
+        </div>
+        <div class="grid" id="phoneGrid"></div>
+      </div>
+      <nav class="tabbar glass dense lens">
+        <div class="tab is-current"><svg viewBox="0 0 24 24"><path d="M4 5v14M8 5v14M12 5l4 14M17 5l3 14"/></svg>书库</div>
+        <div class="tab"><svg viewBox="0 0 24 24"><path d="M4 20h16M7 16V10M12 16V6M17 16v-4"/></svg>阅读统计</div>
+        <div class="tab"><svg viewBox="0 0 24 24"><path d="M7 3h7l4 4v14H7zM14 3v4h4M10 12h6M10 16h6"/></svg>笔记</div>
+      </nav>
+    </div>
+  </section>
+</div>
+
+<script>
+const BOOKS = [
+  ['剑来', '烽火戏诸侯', '#c0392b', '#6d2119', 'EPUB'],
+  ['本草纲目', '李时珍', '#2e6b4f', '#163a2a', 'EPUB'],
+  ['技术的本质', '布莱恩·阿瑟', '#d4a017', '#8a6205', 'EPUB'],
+  ['理解媒介', '麦克卢汉', '#e8590c', '#a33d06', 'PDF'],
+  ['百年孤独', '马尔克斯', '#1971c2', '#0b3d6e', 'EPUB'],
+  ['人类简史', '尤瓦尔·赫拉利', '#5f3dc4', '#2f1b70', 'EPUB'],
+  ['红楼梦', '曹雪芹', '#a61e4d', '#5c0f2a', 'TXT'],
+  ['三体', '刘慈欣', '#212529', '#495057', 'EPUB'],
+  ['瓦尔登湖', '梭罗', '#2b8a3e', '#14451f', 'EPUB'],
+  ['局外人', '加缪', '#f08c00', '#a35f00', 'EPUB'],
+  ['小王子', '圣埃克苏佩里', '#3bc9db', '#0c7a8a', 'EPUB'],
+  ['枕草子', '清少纳言', '#e64980', '#8f1c4c', 'EPUB'],
+  ['史记', '司马迁', '#862e9c', '#4a1656', 'EPUB'],
+  ['论语', '孔子', '#5c940d', '#2f4d06', 'TXT'],
+  ['追忆似水年华', '普鲁斯特', '#364fc7', '#1b2775', 'EPUB'],
+  ['我与地坛', '史铁生', '#e67700', '#8c4800', 'EPUB']
+];
+function fill(id, count) {
+  const grid = document.getElementById(id);
+  for (const [title, author, from, to, format] of BOOKS.slice(0, count)) {
+    const book = document.createElement('div');
+    book.className = 'book';
+    book.innerHTML = `<div class="cover" style="background:linear-gradient(160deg,${from},${to})">${title}<em>${format}</em></div><b>${title}</b><span>${author}</span>`;
+    grid.appendChild(book);
+  }
+}
+fill('desktopGrid', 16);
+fill('phoneGrid', 12);
+
+// Lensing needs backdrop-filter: url(), which only Chromium supports.
+const chromium = /Chrome\//.test(navigator.userAgent) && !/Edg\/|OPR\//.test(navigator.userAgent) || /Edg\//.test(navigator.userAgent);
+const safari = /Safari\//.test(navigator.userAgent) && !/Chrome\//.test(navigator.userAgent);
+document.documentElement.dataset.lens = chromium && !safari ? 'on' : 'off';
+document.getElementById('lensNote').textContent = document.documentElement.dataset.lens === 'on'
+  ? '当前浏览器支持透镜折射'
+  : '当前浏览器不支持透镜折射，显示为毛玻璃';
+
+const params = new URLSearchParams(location.search);
+function choose(control, value) {
+  document.documentElement.dataset[control] = value;
+  document.querySelectorAll(`[data-control="${control}"] button`).forEach((button) => button.setAttribute('aria-pressed', String(button.dataset.value === value)));
+}
+choose('theme', params.get('theme') || 'light');
+choose('glass', params.get('glass') || 'on');
+document.querySelectorAll('[data-control] button').forEach((button) => {
+  button.addEventListener('click', () => choose(button.parentElement.dataset.control, button.dataset.value));
+});
+</script>
+</body>
+</html>
