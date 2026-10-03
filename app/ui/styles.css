@@ -8752,13 +8752,15 @@ body.is-pdf-reader[data-pdf-page-colors="sepia"] .pdf-page-canvas {
   mix-blend-mode: multiply;
 }
 
-/* 深色: lightness flips, hues stay; paper #1f1f1f, text #e0e0e0. */
+/* 深色: lightness flips, hues stay; paper #1f1f1f, text #f2f2f2, with a
+   gamma lift for the anti-aliased edges of thin glyphs (pdf-colors.js). */
+.pdf-color-filters { position: absolute; width: 0; height: 0; overflow: hidden; pointer-events: none; }
 body.is-pdf-reader[data-pdf-page-colors="dark"] .pdf-page {
   isolation: isolate;
   background: #1f1f1f;
 }
 body.is-pdf-reader[data-pdf-page-colors="dark"] .pdf-page-canvas {
-  filter: invert(1) hue-rotate(180deg) contrast(0.76);
+  filter: url(#zsPdfDarkFilter);
 }
 /* Pictures keep their own colours: copies of their pixels sit on top,
    dimmed a little for the dark page. */

@@ -24,7 +24,7 @@ test.describe('PDF page colours', () => {
     await openMixedPdf(page);
     await chooseTheme(page, 'dark');
     const firstPage = page.locator('.pdf-page[data-page-index="0"]');
-    await expect(firstPage.locator('.pdf-page-canvas')).toHaveCSS('filter', 'invert(1) hue-rotate(180deg) contrast(0.76)');
+    await expect(firstPage.locator('.pdf-page-canvas')).toHaveCSS('filter', 'url("#zsPdfDarkFilter")');
     await expect(firstPage.locator('.pdf-image-restore')).toHaveCount(2);
 
     const pictures = await firstPage.evaluate((element) => [...element.querySelectorAll('.pdf-image-restore')].map((canvas) => {
