@@ -347,7 +347,7 @@ html:not([data-glass="on"]) .toolbar { gap: 8px; }
   <strong>枕书 · 液态玻璃主题演示</strong>
   <span class="demo-seg" data-control="theme"><button data-value="light" aria-pressed="true">浅色</button><button data-value="dark">深色</button></span>
   <span class="demo-seg" data-control="glass"><button data-value="on" aria-pressed="true">液态玻璃</button><button data-value="off">现在的样式</button></span>
-  <span class="demo-seg" data-control="ambient"><button data-value="cover" aria-pressed="true">背景光：取自封面</button><button data-value="uniform">统一色</button><button data-value="none">不加光</button></span>
+  <span class="demo-seg" data-control="ambient"><button data-value="cover" aria-pressed="true">背景光：取自封面</button><button data-value="uniform">统一色（淡蓝）</button><button data-value="none">不加光</button></span>
   <span class="demo-note" id="paletteNote"></span>
   <span class="demo-note" id="lensNote"></span>
 </div>
@@ -558,7 +558,10 @@ function applyAmbient() {
   const mode = root.dataset.ambient;
   let colours;
   if (mode === 'none') colours = ['transparent', 'transparent', 'transparent'];
-  else if (mode === 'uniform') colours = Array(3).fill(theme === 'dark' ? 'hsl(215 30% 22%)' : 'hsl(35 45% 86%)');
+  // 统一色: a very pale iOS blue (system blue #007AFF, hue 211), deepened for dark.
+  else if (mode === 'uniform') colours = theme === 'dark'
+    ? ['hsl(211 55% 20%)', 'hsl(211 45% 17%)', 'hsl(211 50% 19%)']
+    : ['hsl(211 100% 93%)', 'hsl(211 100% 95%)', 'hsl(211 90% 94%)'];
   else {
     if (!paletteCache.has(reading[0])) paletteCache.set(reading[0], dominantColours(coverPixels(reading)));
     colours = paletteCache.get(reading[0]).map((colour) => fitToTheme(colour, theme));
