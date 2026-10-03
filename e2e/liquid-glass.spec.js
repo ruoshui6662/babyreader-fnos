@@ -273,5 +273,35 @@ test.describe('液态玻璃', () => {
     expect(filter).toContain('blur(16px)');
     expect(filter).not.toContain('url(');
   });
+
+  test('G5 reader: the stage carries this book\'s light, panels are blurred glass, the paper is untouched', async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.goto(APP_PATH);
+    await resetEpubFixtureState(page);
+    await setSettings(page, { theme: 'dark', liquidGlass: true, glassAmbient: 'cover' });
+    await openEpubFixture(page);
+    if (await page.locator('#readerDrawer').isVisible()) await page.locator('#btnCloseSettings').click();
+    const bookId = await page.evaluate(() => state.currentBookId);
+    // The light comes from the open book (E2E EPUB: indigo generated cover).
+    await expect.poll(() => page.evaluate(() => JSON.parse(localStorage.getItem('zhenshu-glass-ambient') || '{}').last?.bookId)).toBe(bookId);
+    const hue = await page.evaluate(() => JSON.parse(localStorage.getItem('zhenshu-glass-ambient')).last.palette[0][0]);
+    expect(hue).toBeGreaterThan(220);
+    expect(hue).toBeLessThan(245);
+    expect(await page.locator('.reader').evaluate((reader) => getComputedStyle(reader).backgroundImage)).toContain('radial-gradient');
+    const paper = await page.locator('#article').evaluate((article) => getComputedStyle(article).backgroundColor);
+
+    await page.locator('#btnSettings').click();
+    const sheet = page.locator('#readerSettingsSheet');
+    await expect(sheet).toBeVisible();
+    await expect(sheet).toHaveCSS('backdrop-filter', /blur\(28px\)/);
+    // 背景光's two choices share the row.
+    const widths = await page.locator('#settingGlassAmbient button').evaluateAll((buttons) => buttons.map((button) => Math.round(button.getBoundingClientRect().width)));
+    expect(Math.abs(widths[0] - widths[1])).toBeLessThanOrEqual(1);
+
+    await page.locator('#settingLiquidGlass').uncheck();
+    await expect(sheet).toHaveCSS('backdrop-filter', 'none');
+    expect(await page.locator('.reader').evaluate((reader) => getComputedStyle(reader).backgroundImage)).toBe('none');
+    expect(await page.locator('#article').evaluate((article) => getComputedStyle(article).backgroundColor)).toBe(paper);
+  });
 });
 

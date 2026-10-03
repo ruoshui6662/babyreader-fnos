@@ -252,6 +252,7 @@ window.browserHost = {
   },
 
   async openBook(book) {
+    if (typeof setGlassAmbientBook === 'function') setGlassAmbientBook(book);
     if (book.type === 'pdf') {
       return window.appHost.receiveDocument({
         path: book.relativePath,

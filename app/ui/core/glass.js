@@ -1,6 +1,6 @@
 'use strict';
 
-/* global state, applyTheme, persistUserSettings, syncSettingsPanel */
+/* global state, applyTheme, persistUserSettings, syncSettingsPanel, libraryCoverTone */
 
 /*
  * 液态玻璃 (optional theme, off by default). Floating chrome turns to glass
@@ -117,9 +117,33 @@ function glassFitColour([h, s, l], tone) {
     : `hsl(${h} ${Math.round(Math.min(s, 0.7) * 100)}% ${Math.round(Math.max(l, 0.8) * 100)}% / .6)`;
 }
 
+function glassBookTone(book, cover) {
+  if (cover?.dataset?.coverTone !== undefined) return cover.dataset.coverTone;
+  return typeof libraryCoverTone === 'function' && book ? String(libraryCoverTone(book)) : '';
+}
+
 function glassCoverKey(book, cover) {
   if (book?.coverUrl) return `url:${book.coverUrl}`;
-  return `tone:${cover?.dataset?.coverTone ?? ''}`;
+  return `tone:${glassBookTone(book, cover)}`;
+}
+
+/** --cover-a / --cover-b of a generated cover, read from a hidden probe. */
+function glassToneColours(book, cover) {
+  let element = cover;
+  let probe = null;
+  if (!element || !element.isConnected) {
+    probe = document.createElement('span');
+    probe.className = 'library-book-cover is-generated';
+    probe.dataset.coverTone = glassBookTone(book, cover);
+    probe.setAttribute('aria-hidden', 'true');
+    probe.style.cssText = 'position:fixed;left:-9999px;top:0;width:1px;height:1px;visibility:hidden;';
+    document.body.appendChild(probe);
+    element = probe;
+  }
+  const style = getComputedStyle(element);
+  const colours = [style.getPropertyValue('--cover-a').trim(), style.getPropertyValue('--cover-b').trim()];
+  probe?.remove();
+  return colours;
 }
 
 function loadedGlassImage(image) {
@@ -146,16 +170,15 @@ async function glassCoverPixels(book, cover) {
   }
   if (source instanceof HTMLImageElement) source = await loadedGlassImage(source);
   // A generated cover's colours come from CSS, readable only once the cover
-  // is on the page; the shelf attaches it right after creating it.
+  // is on the page; the shelf attaches it right after creating it. In the
+  // reader there is no cover on the page: a hidden probe stands in.
   for (let frame = 0; !source && cover && !cover.isConnected && frame < 10; frame += 1) {
     await new Promise((resolve) => requestAnimationFrame(resolve));
   }
   if (source) {
     ctx.drawImage(source, 0, 0, 40, 60);
-  } else if (cover) {
-    const style = getComputedStyle(cover);
-    const from = style.getPropertyValue('--cover-a').trim();
-    const to = style.getPropertyValue('--cover-b').trim();
+  } else if (cover || book) {
+    const [from, to] = glassToneColours(book, cover);
     if (!from || !to) return null;
     const gradient = ctx.createLinearGradient(0, 0, 40, 60);
     gradient.addColorStop(0, from);
