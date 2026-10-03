@@ -242,6 +242,7 @@ function positionCustomSelectMenu(instance) {
 }
 
 function openCustomSelect(instance) {
+  pruneCustomSelects();
   if (!isCustomSelectVisible(instance)) {
     closeAllCustomSelects();
     return false;
@@ -278,6 +279,17 @@ function setupCustomSelectGlobalEvents() {
   }, true);
 }
 
+// Pages that rebuild their controls (书库 pages) leave old menus behind. Pruned
+// when a menu opens: by then every select on screen is in the document, while
+// at setup time a page may still be assembling its cards off-document.
+function pruneCustomSelects() {
+  customSelectInstances.forEach((instance) => {
+    if (instance.wrapper.isConnected) return;
+    instance.menu.remove();
+    customSelectInstances.delete(instance);
+  });
+}
+
 function setupCustomSelect(select) {
   if (!select || select._customSelect) return select?._customSelect;
   const wrapper = document.createElement('div');
@@ -291,7 +303,7 @@ function setupCustomSelect(select) {
   trigger.className = 'custom-select-trigger';
   trigger.setAttribute('aria-haspopup', 'listbox');
   trigger.setAttribute('aria-expanded', 'false');
-  trigger.setAttribute('aria-label', wrapper.previousElementSibling?.textContent?.trim() || select.id);
+  trigger.setAttribute('aria-label', select.getAttribute('aria-label') || wrapper.previousElementSibling?.textContent?.trim() || select.id);
   wrapper.insertBefore(trigger, select);
 
   const menu = document.createElement('div');

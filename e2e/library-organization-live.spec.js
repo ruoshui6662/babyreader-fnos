@@ -410,7 +410,12 @@ test('real API: unassigned order saves and a book can move into a collection fro
   const select = book.locator('select');
   const collectionId = await select.locator('option').nth(1).getAttribute('value');
   const saved = page.waitForResponse(r => r.url().includes('/placement') && r.request().method() === 'PUT');
-  await select.selectOption(collectionId);
+  // The app's own menu opens below the trigger.
+  await book.locator('.custom-select-trigger').click();
+  const menu = page.locator('.custom-select-menu:not([hidden])');
+  await expect(menu).toBeVisible();
+  if (process.env.ZHENSHU_SCREENSHOT_DIR) await page.screenshot({ path: `${process.env.ZHENSHU_SCREENSHOT_DIR}/library-collection-menu.png` });
+  await menu.locator(`[data-value="${collectionId}"]`).click();
   expect((await saved).status()).toBe(200);
   await expect(book.locator('select')).toHaveValue(collectionId);
   await page.reload();
