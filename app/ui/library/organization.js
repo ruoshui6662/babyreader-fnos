@@ -236,7 +236,7 @@ function setLibraryOrganizationManageMode(value) {
 function createLibraryScanButton() {
   const scanButton = document.createElement('button');
   scanButton.type = 'button';
-  scanButton.className = 'mode-btn library-scan-button';
+  scanButton.className = 'zs-btn zs-btn-secondary library-scan-button';
   scanButton.textContent = '重新扫描';
   scanButton.addEventListener('click', async () => {
     scanButton.disabled = true;
@@ -842,7 +842,7 @@ function showLibraryBookPicker(shell, library, collection) {
   picker.appendChild(query);
   const moveSelected = document.createElement('button');
   moveSelected.type = 'button';
-  moveSelected.className = 'mode-btn library-book-picker-move-selected';
+  moveSelected.className = 'zs-btn zs-btn-primary library-book-picker-move-selected';
   moveSelected.textContent = '移入所选';
   moveSelected.disabled = true;
   picker.appendChild(moveSelected);
@@ -936,7 +936,7 @@ function showLibraryBookPicker(shell, library, collection) {
       details.append(name, origin);
       const add = document.createElement('button');
       add.type = 'button';
-      add.className = 'mode-btn library-book-picker-add';
+      add.className = 'zs-btn zs-btn-secondary zs-btn-small library-book-picker-add';
       add.textContent = '移入';
       add.addEventListener('click', () => { void moveBooks([book.id]); });
       row.append(choice, details, add);
@@ -1021,7 +1021,7 @@ function renderLibraryOrganization(library) {
     if (collection) {
         const addBooks = document.createElement('button');
         addBooks.type = 'button';
-        addBooks.className = 'mode-btn library-create-button';
+        addBooks.className = 'zs-btn zs-btn-secondary library-create-button';
         addBooks.textContent = '添加书籍';
         addBooks.addEventListener('click', () => showLibraryBookPicker(shell, library, collection));
         actions.appendChild(addBooks);
@@ -1029,7 +1029,7 @@ function renderLibraryOrganization(library) {
     if (collection || route.mode === 'unassigned') {
       const manageButton = document.createElement('button');
       manageButton.type = 'button';
-      manageButton.className = 'mode-btn library-mode-button';
+      manageButton.className = `zs-btn ${manage ? 'zs-btn-primary' : 'zs-btn-secondary'} library-mode-button`;
       manageButton.textContent = manage ? '完成' : '整理';
       manageButton.setAttribute('aria-pressed', String(manage));
       manageButton.addEventListener('click', () => {
@@ -1041,7 +1041,7 @@ function renderLibraryOrganization(library) {
   } else {
     const manageButton = document.createElement('button');
     manageButton.type = 'button';
-    manageButton.className = 'mode-btn library-mode-button';
+    manageButton.className = `zs-btn ${manage ? 'zs-btn-primary' : 'zs-btn-secondary'} library-mode-button`;
     manageButton.textContent = manage ? '完成' : '整理';
     manageButton.setAttribute('aria-pressed', String(manage));
     manageButton.addEventListener('click', () => {
@@ -1053,7 +1053,7 @@ function renderLibraryOrganization(library) {
   if (!isDetail) {
     const createButton = document.createElement('button');
     createButton.type = 'button';
-    createButton.className = 'mode-btn library-create-button';
+    createButton.className = 'zs-btn zs-btn-secondary library-create-button';
     createButton.textContent = '新建分类';
     createButton.addEventListener('click', () => showLibraryCollectionForm(shell, library));
     actions.insertBefore(createButton, actions.querySelector('.library-scan-button'));
@@ -1414,7 +1414,7 @@ function createLibraryManageBar(manageButton) {
   hint.textContent = '长按封面拖动排序 · 铅笔改书名';
   const done = document.createElement('button');
   done.type = 'button';
-  done.className = 'library-manage-done';
+  done.className = 'zs-btn zs-btn-primary library-manage-done';
   done.textContent = '完成';
   done.addEventListener('click', () => manageButton.click());
   bar.append(hint, done);
@@ -1453,11 +1453,11 @@ function showLibraryCollectionForm(shell, library) {
   input.setAttribute('aria-label', '分类名称');
   const save = document.createElement('button');
   save.type = 'submit';
-  save.className = 'mode-btn';
+  save.className = 'zs-btn zs-btn-primary zs-btn-small';
   save.textContent = '保存';
   const cancel = document.createElement('button');
   cancel.type = 'button';
-  cancel.className = 'mode-btn';
+  cancel.className = 'zs-btn zs-btn-plain zs-btn-quiet zs-btn-small';
   cancel.textContent = '取消';
   const close = () => {
     form.remove();
@@ -1508,11 +1508,11 @@ function showLibraryCollectionRenameForm(shell, library, collection, trigger) {
   input.addEventListener('input', () => input.setCustomValidity(''));
   const save = document.createElement('button');
   save.type = 'submit';
-  save.className = 'mode-btn';
+  save.className = 'zs-btn zs-btn-primary zs-btn-small';
   save.textContent = '保存名称';
   const cancel = document.createElement('button');
   cancel.type = 'button';
-  cancel.className = 'mode-btn';
+  cancel.className = 'zs-btn zs-btn-plain zs-btn-quiet zs-btn-small';
   cancel.textContent = '取消';
   cancel.addEventListener('click', () => { form.remove(); trigger.focus(); });
   form.append(input, save, cancel);
@@ -1567,15 +1567,16 @@ function showLibraryBookRenameDialog(library, book, trigger) {
   actions.className = 'library-rename-actions';
   const reset = document.createElement('button');
   reset.type = 'button';
-  reset.className = 'library-rename-reset';
+  reset.className = 'zs-btn zs-btn-plain zs-btn-quiet library-rename-reset';
   reset.textContent = '恢复原名';
   reset.hidden = !book.originalTitle;
   const cancel = document.createElement('button');
   cancel.type = 'button';
+  cancel.className = 'zs-btn zs-btn-secondary';
   cancel.textContent = '取消';
   const save = document.createElement('button');
   save.type = 'submit';
-  save.className = 'is-primary';
+  save.className = 'zs-btn zs-btn-primary is-primary';
   save.textContent = '保存';
   actions.append(reset, cancel, save);
   form.append(heading, input, hint, actions);

@@ -1147,7 +1147,7 @@ function openNoteCardShell({ heading, label, ratios, toggles, render, describe, 
   const actions = noteCardElement('div', 'note-card-actions');
   let copy = null;
   if (typeof ClipboardItem === 'function' && navigator.clipboard?.write && !noteCardCanShare()) {
-    copy = noteCardElement('button', 'note-card-secondary', '复制图片');
+    copy = noteCardElement('button', 'zs-btn zs-btn-secondary note-card-secondary', '复制图片');
     copy.type = 'button';
     copy.addEventListener('click', async () => {
       const [canvas] = dialog.noteCardCanvases || [];
@@ -1161,7 +1161,7 @@ function openNoteCardShell({ heading, label, ratios, toggles, render, describe, 
     });
     actions.appendChild(copy);
   }
-  const save = noteCardElement('button', 'note-card-primary', noteCardCanShare() ? '分享 / 保存' : '保存图片');
+  const save = noteCardElement('button', 'zs-btn zs-btn-primary note-card-primary', noteCardCanShare() ? '分享 / 保存' : '保存图片');
   save.type = 'button';
   save.addEventListener('click', async () => {
     const canvases = dialog.noteCardCanvases;

@@ -261,7 +261,7 @@ function renderLibraryImportPanel() {
 function createLibraryImportButton(library, { collectionId = null } = {}) {
   const button = document.createElement('button');
   button.type = 'button';
-  button.className = 'mode-btn library-import-button';
+  button.className = 'zs-btn zs-btn-secondary library-import-button';
   button.textContent = '导入';
   button.title = '导入书籍（也可以把文件拖到书库）';
   button.addEventListener('click', () => {

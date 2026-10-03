@@ -233,7 +233,7 @@ function createLibraryRecentCard(books) {
   }
   button.appendChild(details);
   const action = document.createElement('span');
-  action.className = 'library-recent-action';
+  action.className = 'library-recent-action zs-btn zs-btn-primary zs-btn-small';
   action.setAttribute('aria-hidden', 'true');
   action.textContent = '继续';
   button.appendChild(action);
@@ -350,7 +350,7 @@ function renderFlatLibrary(library, { organizationEnabled = false } = {}) {
 
   const scanButton = document.createElement('button');
   scanButton.type = 'button';
-  scanButton.className = 'mode-btn library-scan-button';
+  scanButton.className = 'zs-btn zs-btn-secondary library-scan-button';
   scanButton.textContent = '重新扫描';
   const scanStatus = createLibraryScanStatus(library?.scan);
   scanButton.addEventListener('click', async () => {

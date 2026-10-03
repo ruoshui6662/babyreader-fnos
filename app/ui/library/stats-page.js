@@ -246,7 +246,7 @@ function renderStatsNotes(stats) {
   const card = statsElement('section', 'stats-card stats-notes');
   const head = statsElement('div', 'stats-card-head');
   head.appendChild(statsElement('h2', 'stats-card-title', '最近笔记'));
-  const all = statsElement('button', 'stats-link', '全部笔记 ›');
+  const all = statsElement('button', 'zs-btn zs-btn-plain zs-btn-small stats-link', '全部笔记 ›');
   all.type = 'button';
   all.addEventListener('click', () => { void showShelfView('notes', { push: true }); });
   head.appendChild(all);
@@ -298,10 +298,10 @@ function renderStatsToolbar(stats) {
     segments.appendChild(button);
   }
   const period = statsElement('div', 'stats-period');
-  const previous = statsElement('button', 'stats-period-step', '‹');
+  const previous = statsElement('button', 'zs-btn zs-btn-secondary zs-btn-icon stats-period-step', '‹');
   previous.type = 'button';
   previous.setAttribute('aria-label', stats.range === 'month' ? '上个月' : '上一周');
-  const next = statsElement('button', 'stats-period-step', '›');
+  const next = statsElement('button', 'zs-btn zs-btn-secondary zs-btn-icon stats-period-step', '›');
   next.type = 'button';
   next.setAttribute('aria-label', stats.range === 'month' ? '下个月' : '下一周');
   next.disabled = stats.to >= statsToday();
