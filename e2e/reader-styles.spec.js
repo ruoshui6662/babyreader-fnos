@@ -94,3 +94,37 @@ test('亮度 in the client: set while reading, handed back to the system otherwi
   await page.evaluate(() => returnToLibrary());
   await expect.poll(() => page.evaluate(() => window.__brightness.at(-1))).toBe(-1);
 });
+
+test('a textured own style is one paper from top to bottom, even with liquid glass on', async ({ page }) => {
+  await page.addInitScript(() => {
+    Object.defineProperty(navigator, 'userAgent', {
+      configurable: true,
+      get: () => 'Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 Chrome/120 Mobile Safari/537.36'
+    });
+  });
+  await page.goto('/app/zhenshu/');
+  await resetReaderSettings(page);
+  // Saved as dark (as from another device): the own style's light paper wins.
+  await page.evaluate(() => fetch('/app/zhenshu/api/settings', { method: 'PUT', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ theme: 'dark', liquidGlass: true, readerStyles: [{ id: 'a1', name: '竹青', bg: '#e3ede0', ink: '#2b2b2b', texture: 'linen' }], readerStyle: 'a1' }) }));
+  await openEpubFixture(page);
+  if (await page.locator('#readerDrawer').isVisible()) await page.locator('#btnCloseSettings').click();
+  const look = await page.evaluate(() => ({
+    theme: state.theme,
+    body: getComputedStyle(document.body).backgroundColor,
+    reader: getComputedStyle(document.getElementById('reader')).backgroundColor,
+    readerImage: getComputedStyle(document.getElementById('reader')).backgroundImage,
+    article: getComputedStyle(document.getElementById('article')).backgroundColor,
+    texture: getComputedStyle(document.body, '::after').backgroundImage,
+    texturePosition: getComputedStyle(document.body, '::after').position
+  }));
+  expect(look.theme).toBe('light');
+  expect(look.body).toBe('rgb(227, 237, 224)');
+  expect(look.reader).toBe('rgb(227, 237, 224)');
+  // No liquid-glass light behind the words on a phone.
+  expect(look.readerImage).toBe('none');
+  expect(['rgb(227, 237, 224)', 'rgba(0, 0, 0, 0)']).toContain(look.article);
+  // The texture is one fixed layer over the whole screen.
+  expect(look.texture).toMatch(/^url\(/);
+  expect(look.texturePosition).toBe('fixed');
+});

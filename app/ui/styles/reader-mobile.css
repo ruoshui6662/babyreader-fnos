@@ -874,20 +874,34 @@ html[data-reader-surface="mobile"] body.mobile-reading .mobile-panel .mobile-col
 }
 html[data-reader-surface="mobile"] body.mobile-reading .mobile-panel .mobile-link-button.is-destructive { color: #c0392b !important; }
 
-/* Textures: quiet, printed into the paper. */
-html[data-reader-surface="mobile"] body.mobile-reading[data-paper-texture="linen"],
-html[data-reader-surface="mobile"] body[data-paper-texture="linen"] .reader,
-.mobile-style-preview[data-texture="linen"] {
-  background-image:
-    repeating-linear-gradient(0deg, color-mix(in srgb, var(--color-text) 3%, transparent) 0 1px, transparent 1px 3px),
-    repeating-linear-gradient(90deg, color-mix(in srgb, var(--color-text) 2.5%, transparent) 0 1px, transparent 1px 4px);
+/* Textures (R4, fixed): one layer over the whole screen, so the header,
+   the page and the footer are the same paper. It lets taps through and
+   multiplies, so the text is not lightened; on dark paper it lightens
+   instead (screen) — the grain shows either way. */
+html[data-reader-surface="mobile"] body.mobile-reading:is([data-paper-texture="linen"], [data-paper-texture="paper"])::after {
+  position: fixed;
+  inset: 0;
+  z-index: 4;
+  content: '';
+  pointer-events: none;
+  mix-blend-mode: multiply;
 }
-html[data-reader-surface="mobile"] body.mobile-reading[data-paper-texture="paper"],
-html[data-reader-surface="mobile"] body[data-paper-texture="paper"] .reader,
-.mobile-style-preview[data-texture="paper"] {
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 .07 0'/%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23n)'/%3E%3C/svg%3E");
+html[data-reader-surface="mobile"] body.mobile-reading:is([data-paper-texture="linen"], [data-paper-texture="paper"]):not(.theme-light):not(.theme-sepia)::after {
+  mix-blend-mode: screen;
+  filter: invert(1);
 }
-html[data-reader-surface="mobile"] body:is([data-paper-texture="linen"], [data-paper-texture="paper"]) .reader .article { background-color: transparent; }
+html[data-reader-surface="mobile"] body.mobile-reading[data-paper-texture="linen"]::after,
+.mobile-style-preview[data-texture="linen"] { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='240' height='240'%3E%3Cfilter id='a'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9 .012' numOctaves='2' seed='3' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 .05 0'/%3E%3C/filter%3E%3Cfilter id='b'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.012 .9' numOctaves='2' seed='7' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 .035 0'/%3E%3C/filter%3E%3Crect width='240' height='240' filter='url(%23a)'/%3E%3Crect width='240' height='240' filter='url(%23b)'/%3E%3C/svg%3E"); }
+html[data-reader-surface="mobile"] body.mobile-reading[data-paper-texture="paper"]::after,
+.mobile-style-preview[data-texture="paper"] { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='240' height='240'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.75' numOctaves='3' seed='5' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 .045 0'/%3E%3C/filter%3E%3Cfilter id='f'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.03 .18' numOctaves='2' seed='11' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 .03 0'/%3E%3C/filter%3E%3Crect width='240' height='240' filter='url(%23n)'/%3E%3Crect width='240' height='240' filter='url(%23f)'/%3E%3C/svg%3E"); }
+
+/* On a phone the page is the screen: one plain paper behind the text. The
+   liquid-glass ambient light belongs to the stage around a desktop page;
+   here it would show through the words. Glass stays on the bars. */
+html[data-glass="on"][data-reader-surface="mobile"] body.mobile-reading .reader,
+html[data-glass="on"][data-reader-surface="mobile"] body.mobile-reading.is-pdf-reader .pdf-reader-surface {
+  background: var(--reader-stage);
+}
 
 .settings-weight-segments { grid-template-columns: repeat(4, 1fr); }
 
