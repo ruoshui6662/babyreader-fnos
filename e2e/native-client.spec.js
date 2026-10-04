@@ -24,6 +24,7 @@ async function openInClient(page) {
     window.ZhenshuNative = {
       version: () => '0.1.0',
       server: () => '192.168.1.10:5666',
+      battery: () => 76,
       setReading: (...args) => window.__native.push(['setReading', ...args]),
       setScreen: (...args) => window.__native.push(['setScreen', ...args]),
       changeServer: () => window.__native.push(['changeServer']),
@@ -139,23 +140,25 @@ test('immersive reading in the client: the page runs to the top, the time sits t
   if (await page.locator('#readerDrawer').isVisible()) await page.locator('#btnCloseSettings').click();
   // The shell reports the camera band's height.
   await page.evaluate(() => document.documentElement.style.setProperty('--app-safe-top', '40px'));
-  await expect(page.locator('html')).toHaveAttribute('data-reading-clock', '');
-  const clock = page.locator('#mobileReadingClock');
-  await expect(clock).toBeVisible();
+  // The 页眉 (default: time left, chapter right) takes that band.
+  await expect(page.locator('html')).toHaveAttribute('data-reading-header', '');
+  const header = page.locator('#mobileReadingHeader');
+  await expect(header).toBeVisible();
+  const clock = header.locator('[data-tip="time"]');
   await expect(clock).toHaveText(/^\d{2}:\d{2}$/);
   const layout = await page.evaluate(() => ({
-    clock: document.getElementById('mobileReadingClock').getBoundingClientRect().toJSON(),
-    readerTop: getComputedStyle(document.getElementById('reader')).top
+    header: document.getElementById('mobileReadingHeader').getBoundingClientRect().toJSON(),
+    clock: document.querySelector('#mobileReadingHeader [data-tip="time"]').getBoundingClientRect().toJSON()
   }));
-  expect(layout.clock.top).toBe(0);
-  expect(layout.clock.height).toBe(40);
+  expect(layout.header.top).toBe(0);
+  expect(layout.header.height).toBe(40);
   expect(layout.clock.left).toBeLessThan(40);
   // The reading area eases into place.
   await expect.poll(() => page.evaluate(() => getComputedStyle(document.getElementById('reader')).top)).toBe('40px');
 
-  // The chrome hides the clock; its top bar starts at the very top.
+  // The chrome hides the header; its top bar starts at the very top.
   await showMobileReaderChrome(page);
-  await expect(clock).toBeHidden();
+  await expect(header).toBeHidden();
   // It slides in from above.
   await expect.poll(async () => Math.round((await page.locator('.reader-shell-nav').boundingBox()).y)).toBe(0);
   await expect(page.locator('#btnMobileAiFloat')).toBeVisible();

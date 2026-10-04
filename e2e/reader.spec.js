@@ -1821,5 +1821,5 @@ test('phone tap zones page through the book and the progress bar jumps chapters'
     slider.dispatchEvent(new Event('change'));
   });
   await expect(page.locator('#readingProgress')).toContainText('第 3/');
-  await expect(page.locator('#mobileReadingFooterChapter')).not.toHaveText('');
+  await expect(page.locator('#mobileReadingHeader [data-tip="chapter"]')).not.toHaveText('');
 });

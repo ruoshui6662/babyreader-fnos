@@ -91,10 +91,12 @@ function setMobileChromeOpen(open) {
   if (toolbar) toolbar.hidden = !isOpen;
   const footer = document.getElementById('mobileReadingFooter');
   if (footer) footer.hidden = !reading || isOpen;
+  const header = document.getElementById('mobileReadingHeader');
+  if (header) header.hidden = !reading || isOpen || !readerTipRows().header.some((item) => item !== 'none');
   if (!isOpen) closeMobileMoreMenu();
   if (isOpen || reading) syncMobileReadingBar();
-  return isOpen;
   if (typeof syncNativeClient === 'function') syncNativeClient();
+  return isOpen;
 }
 
 function closeMobileMoreMenu() {
@@ -138,10 +140,7 @@ function syncMobileReadingBar() {
     slider.style.setProperty('--range-progress', `${position.ratio * 100}%`);
     slider.setAttribute('aria-valuetext', [position.label, percent].filter(Boolean).join(' · '));
   }
-  const chapter = document.getElementById('mobileReadingFooterChapter');
-  const footerPercent = document.getElementById('mobileReadingFooterPercent');
-  if (chapter) chapter.textContent = position.label;
-  if (footerPercent) footerPercent.textContent = percent;
+  renderReaderTips(position);
   // PDFs step by page, plain text has no chapters.
   const previous = document.getElementById('btnMobilePreviousChapter');
   const next = document.getElementById('btnMobileNextChapter');
@@ -497,21 +496,155 @@ function installNativeDownloads() {
   }, true);
 }
 
-let readingClockTimer = 0;
+// ---------------------------------------------------------------------------
+// 页眉页脚 (R2): six places, each showing one item.
+const READER_TIP_PRESETS = Object.freeze({
+  default: { header: ['time', 'none', 'chapter'], footer: ['page', 'none', 'progress'] },
+  minimal: { header: ['none', 'none', 'none'], footer: ['none', 'none', 'progress'] },
+  full: { header: ['time', 'battery', 'chapter'], footer: ['book', 'page', 'progress'] }
+});
+const READER_TIP_LABELS = Object.freeze({
+  none: '不显示', time: '时间', battery: '电量', book: '书名', chapter: '章节', page: '页码', progress: '进度'
+});
+
+function readerTipRows(tips = state.readerTips) {
+  const preset = tips?.preset in READER_TIP_PRESETS ? tips.preset : tips?.preset === 'custom' ? 'custom' : 'default';
+  if (preset !== 'custom') return READER_TIP_PRESETS[preset];
+  const row = (value) => Array.from({ length: 3 }, (_, index) => (value?.[index] in READER_TIP_LABELS ? value[index] : 'none'));
+  return { header: row(tips.header), footer: row(tips.footer) };
+}
+
+function nativeBattery() {
+  try {
+    const level = Number(nativeClient()?.battery?.());
+    return Number.isFinite(level) && level >= 0 ? Math.round(level) : null;
+  } catch {
+    return null;
+  }
+}
+
+function readerTipText(item, position) {
+  const now = new Date();
+  switch (item) {
+    case 'time': return `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+    case 'battery': {
+      const level = nativeBattery();
+      return level === null ? '' : `电量 ${level}%`;
+    }
+    case 'book': return state.currentBookInfo?.title || state.currentName || '';
+    case 'chapter': return position.label || '';
+    case 'page': {
+      if (state.contentType === 'pdf') {
+        const pdf = window.pdfReaderController;
+        const count = pdf?.getPageCount?.() || 0;
+        return count ? `${(pdf.getCurrentPageIndex?.() || 0) + 1}/${count}` : '';
+      }
+      if (state.contentType === 'epub' && state.effectiveReadingMode !== 'scroll' && state.pageGroupCount > 0) {
+        return `${(state.pageGroup || 0) + 1}/${state.pageGroupCount}`;
+      }
+      return '';
+    }
+    case 'progress': return `${Math.round((position.ratio || 0) * 100)}%`;
+    default: return '';
+  }
+}
+
+function renderReaderTips(position = typeof mobileReadingPosition === 'function' ? mobileReadingPosition() : { ratio: 0, label: '' }) {
+  const rows = readerTipRows();
+  const header = document.getElementById('mobileReadingHeader');
+  const hasHeader = rows.header.some((item) => item !== 'none');
+  document.documentElement.toggleAttribute('data-reading-header', hasHeader && isMobileReaderSurface());
+  for (const [element, items] of [[header, rows.header], [document.getElementById('mobileReadingFooter'), rows.footer]]) {
+    element?.querySelectorAll('[data-tip-slot]').forEach((slot, index) => {
+      const item = items[index] || 'none';
+      slot.dataset.tip = item;
+      slot.textContent = readerTipText(item, position);
+    });
+  }
+}
+
+// Time and battery change on their own: refresh them every half minute.
+let readerTipsTimer = 0;
 function syncReadingClock() {
-  const clock = document.getElementById('mobileReadingClock');
-  if (!clock) return;
-  const on = Boolean(nativeClient()) && nativePrefs().immersive === true && nativeReading() && isMobileReaderSurface();
-  document.documentElement.toggleAttribute('data-reading-clock', on);
-  clock.hidden = !on;
-  clearInterval(readingClockTimer);
-  if (!on) return;
-  const tick = () => {
-    const now = new Date();
-    clock.textContent = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
-  };
-  tick();
-  readingClockTimer = setInterval(tick, 15000);
+  clearInterval(readerTipsTimer);
+  if (!isMobileReaderSurface()) return;
+  renderReaderTips();
+  readerTipsTimer = setInterval(() => {
+    if (nativeReading()) renderReaderTips();
+  }, 30000);
+}
+
+// Settings › 页眉页脚: the presets, and the six places when 自定义.
+function syncReaderTipsSettings() {
+  // Phones only: desktop has its status pill instead.
+  const group = document.getElementById('settingsTipsGroup');
+  if (group) group.hidden = !isMobileReaderSurface();
+  const preset = state.readerTips?.preset in READER_TIP_PRESETS || state.readerTips?.preset === 'custom'
+    ? state.readerTips.preset : 'default';
+  document.querySelectorAll('[data-tips-preset]').forEach((button) => {
+    button.setAttribute('aria-checked', String(button.dataset.tipsPreset === preset));
+  });
+  const rows = readerTipRows();
+  const hint = document.getElementById('settingReaderTipsHint');
+  if (hint) {
+    const describe = (items) => items.filter((item) => item !== 'none').map((item) => READER_TIP_LABELS[item]).join(' · ') || '不显示';
+    hint.textContent = `页眉：${describe(rows.header)}；页脚：${describe(rows.footer)}`;
+  }
+  const custom = document.getElementById('settingReaderTipsCustom');
+  if (!custom) return;
+  custom.hidden = preset !== 'custom';
+  if (preset !== 'custom') return;
+  custom.replaceChildren();
+  for (const [row, title] of [['header', '页眉'], ['footer', '页脚']]) {
+    ['左', '中', '右'].forEach((place, index) => {
+      const field = document.createElement('div');
+      field.className = 'settings-field settings-tip-place';
+      const name = document.createElement('span');
+      name.textContent = `${title}${place}`;
+      const choices = document.createElement('div');
+      choices.className = 'settings-tip-choices';
+      choices.setAttribute('role', 'radiogroup');
+      choices.setAttribute('aria-label', `${title}${place}`);
+      for (const item of Object.keys(READER_TIP_LABELS)) {
+        if (item === 'battery' && !nativeClient()) continue;
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.setAttribute('role', 'radio');
+        button.dataset.tipItem = item;
+        button.textContent = item === 'none' ? '无' : READER_TIP_LABELS[item];
+        button.setAttribute('aria-checked', String(rows[row][index] === item));
+        button.addEventListener('click', () => {
+          const next = readerTipRows();
+          const updated = { preset: 'custom', header: [...next.header], footer: [...next.footer] };
+          updated[row][index] = item;
+          state.readerTips = updated;
+          syncReaderTipsSettings();
+          renderReaderTips();
+          persistUserSettings();
+        });
+        choices.appendChild(button);
+      }
+      field.append(name, choices);
+      custom.appendChild(field);
+    });
+  }
+}
+
+function setupReaderTipsSettings() {
+  const presets = document.getElementById('settingReaderTips');
+  if (!presets || presets.dataset.bound) return;
+  presets.dataset.bound = 'true';
+  presets.addEventListener('click', (event) => {
+    const button = event.target.closest?.('[data-tips-preset]');
+    if (!button) return;
+    const preset = button.dataset.tipsPreset;
+    // 自定义 starts from what is showing now.
+    state.readerTips = preset === 'custom' ? { preset, ...readerTipRows() } : { preset };
+    syncReaderTipsSettings();
+    renderReaderTips();
+    persistUserSettings();
+  });
+  syncReaderTipsSettings();
 }
 
 function setupNativeClient() {
@@ -1139,6 +1272,7 @@ function setupReaderDeviceProfile() {
   setupMobileSheetGestures();
   setupMobileAiPanel();
   setupMobilePanels();
+  setupReaderTipsSettings();
   setupNativeClient();
   window.addEventListener('resize', update, { passive: true });
   window.visualViewport?.addEventListener('resize', update, { passive: true });

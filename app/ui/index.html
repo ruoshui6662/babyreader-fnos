@@ -23,7 +23,7 @@
   <link rel="stylesheet" href="styles/buttons.css?v=2">
   <link rel="stylesheet" href="styles/glass.css?v=4">
   <link rel="stylesheet" href="styles/shelf-phone.css?v=1">
-  <link rel="stylesheet" href="styles/reader-mobile.css?v=13">
+  <link rel="stylesheet" href="styles/reader-mobile.css?v=16">
 </head>
 <body class="is-welcome">
   <svg class="zs-glass-defs" width="0" height="0" aria-hidden="true" focusable="false">
@@ -233,6 +233,21 @@
         </div>
       </section>
       <button type="button" class="settings-more-toggle" id="btnSettingsMore" aria-expanded="false" aria-controls="readerSettingsSheet">更多设置</button>
+      <section class="settings-group" data-settings-group="tips" id="settingsTipsGroup" hidden>
+        <h3 class="settings-group-title">页眉页脚</h3>
+        <div class="settings-group-card">
+          <div class="settings-field settings-indent-field">
+            <div class="settings-indent-segments settings-tips-presets" id="settingReaderTips" role="radiogroup" aria-label="页眉页脚">
+              <button type="button" role="radio" data-tips-preset="default" aria-checked="true">默认</button>
+              <button type="button" role="radio" data-tips-preset="minimal" aria-checked="false">极简</button>
+              <button type="button" role="radio" data-tips-preset="full" aria-checked="false">完整</button>
+              <button type="button" role="radio" data-tips-preset="custom" aria-checked="false">自定义</button>
+            </div>
+            <p class="settings-field-description" id="settingReaderTipsHint"></p>
+          </div>
+          <div class="settings-tips-custom" id="settingReaderTipsCustom" hidden></div>
+        </div>
+      </section>
       <section class="settings-group" data-settings-group="highlight">
         <h3 class="settings-group-title">划线</h3>
         <div class="settings-group-card">
@@ -719,13 +734,14 @@
       <button type="button" id="btnMobileSettings" data-mobile-panel-toggle="type" aria-controls="mobilePanelType" aria-expanded="false" aria-label="排版与设置">设置</button>
     </div>
   </nav>
-  <!-- Immersive reading in the Android client: the time, top left, where
-       the hidden status bar was. -->
-  <div class="mobile-reading-clock" id="mobileReadingClock" aria-hidden="true" hidden></div>
-  <!-- Shown while the chrome is hidden: where you are, quietly. -->
-  <div class="mobile-reading-footer" id="mobileReadingFooter" aria-hidden="true" hidden>
-    <span id="mobileReadingFooterChapter"></span>
-    <span id="mobileReadingFooterPercent"></span>
+  <!-- 页眉页脚 (phones): what the page shows at its top and bottom while
+       the chrome is hidden — time, battery, book, chapter, page, progress —
+       in three places each (settings › 页眉页脚). -->
+  <div class="mobile-reading-tips is-header" id="mobileReadingHeader" aria-hidden="true" hidden>
+    <span data-tip-slot="0"></span><span data-tip-slot="1"></span><span data-tip-slot="2"></span>
+  </div>
+  <div class="mobile-reading-footer mobile-reading-tips is-footer" id="mobileReadingFooter" aria-hidden="true" hidden>
+    <span data-tip-slot="0"></span><span data-tip-slot="1"></span><span data-tip-slot="2"></span>
   </div>
 
   <!-- Reader view -->
@@ -802,9 +818,9 @@
   <script src="core/api.js?v=35"></script>
   <script src="core/reader-route.js?v=1"></script>
   <script src="core/glass.js?v=3"></script>
-  <script src="core/user-state.js?v=43"></script>
+  <script src="core/user-state.js?v=44"></script>
   <script src="reader/annotations.js?v=2"></script>
-  <script src="reader/device-profile.js?v=45"></script>
+  <script src="reader/device-profile.js?v=47"></script>
   <script src="reader/epub.js?v=37"></script>
   <script src="reader/paragraphs.js?v=1"></script>
   <script src="reader/document.js?v=30"></script>
@@ -819,7 +835,7 @@
   <script src="reader/progress.js?v=37"></script>
   <script src="reader/bookmarks.js?v=4"></script>
   <script src="reader/pagination.js?v=38"></script>
-  <script src="reader/settings.js?v=45"></script>
+  <script src="reader/settings.js?v=46"></script>
   <script src="reader/jump-back.js?v=1"></script>
   <script src="reader/navigation.js?v=31"></script>
   <script src="reader/pdf-annotation-geometry.js?v=1"></script>

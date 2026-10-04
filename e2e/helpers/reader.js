@@ -104,6 +104,7 @@ async function resetReaderSettings(page) {
         glassAmbient: 'cover',
         pageTurnAnimation: 'slide',
         mobilePdfMode: 'paged',
+        readerTips: { preset: 'default' },
         tapToTurn: 'zones',
         swipeToTurn: true,
         continuousScroll: true,

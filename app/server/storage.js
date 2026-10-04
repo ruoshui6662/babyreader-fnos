@@ -32,6 +32,21 @@ const MAX_BOOKMARK_LOCATOR_HREF_LENGTH = 2048;
 const MAX_BOOKMARK_LOCATOR_ANCHOR_LENGTH = 512;
 const MAX_BOOKMARK_PDF_PAGE_COUNT = 10000;
 
+
+// 页眉页脚 (phone reading): a preset, or each of the six places chosen.
+const READER_TIP_ITEMS = new Set(['none', 'time', 'battery', 'book', 'chapter', 'page', 'progress']);
+const READER_TIP_PRESETS = new Set(['default', 'minimal', 'full', 'custom']);
+function normalizeReaderTipRow(row) {
+  return Array.from({ length: 3 }, (_, index) => (READER_TIP_ITEMS.has(row?.[index]) ? row[index] : 'none'));
+}
+function normalizeReaderTips(value, previous) {
+  const source = value && typeof value === 'object' ? value : previous;
+  if (!source || typeof source !== 'object') return { preset: 'default' };
+  const preset = READER_TIP_PRESETS.has(source.preset) ? source.preset : 'default';
+  if (preset !== 'custom') return { preset };
+  return { preset, header: normalizeReaderTipRow(source.header), footer: normalizeReaderTipRow(source.footer) };
+}
+
 function normalizeUserId(value) {
   const uid = String(value || '').trim();
   if (!/^[A-Za-z0-9_-]{1,64}$/.test(uid)) {
@@ -314,6 +329,8 @@ class UserStorage {
         mobileReadingMode: ['paged', 'scroll'].includes(settings.mobileReadingMode)
           ? settings.mobileReadingMode
           : ['paged', 'scroll'].includes(state.settings.mobileReadingMode) ? state.settings.mobileReadingMode : 'paged',
+        // 页眉页脚: what the phone shows at the top and bottom of the page.
+        readerTips: normalizeReaderTips(settings.readerTips, state.settings.readerTips),
         // Phones read PDFs a page at a time unless they chose to scroll.
         mobilePdfMode: ['paged', 'scroll'].includes(settings.mobilePdfMode)
           ? settings.mobilePdfMode

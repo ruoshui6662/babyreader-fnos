@@ -5,6 +5,7 @@ import android.app.DownloadManager;
 import android.content.ActivityNotFoundException;
 import android.content.Context;
 import android.content.Intent;
+import android.content.IntentFilter;
 import android.content.SharedPreferences;
 import android.content.pm.ApplicationInfo;
 import android.graphics.Color;
@@ -12,6 +13,7 @@ import android.graphics.Insets;
 import android.graphics.Typeface;
 import android.graphics.drawable.GradientDrawable;
 import android.net.Uri;
+import android.os.BatteryManager;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Environment;
@@ -65,7 +67,7 @@ public class MainActivity extends Activity {
     private static final String MODE_DIRECT = "direct";
     private static final String MODE_WEB = "web";
     private static final String APP_PATH = DirectLogin.APP_PATH;
-    private static final String VERSION = "0.2.2";
+    private static final String VERSION = "0.2.3";
     private static final int FILE_CHOOSER_REQUEST = 1;
     private static final int SETUP_BACKGROUND = 0xFF141416;
 
@@ -608,6 +610,18 @@ public class MainActivity extends Activity {
         public void setReading(boolean reading, boolean dark, boolean hideStatusBar, boolean keepOn, boolean volumeKeys) {
             String color = dark ? "#141416" : "#F2F3F5";
             setScreen(reading, color, color, hideStatusBar, keepOn, volumeKeys);
+        }
+
+        /** Battery level in percent for the page's 页眉页脚; -1 when unknown. */
+        @JavascriptInterface
+        public int battery() {
+            if (!trusted()) return -1;
+            // The sticky broadcast: no receiver, no permission.
+            Intent status = registerReceiver(null, new IntentFilter(Intent.ACTION_BATTERY_CHANGED));
+            if (status == null) return -1;
+            int level = status.getIntExtra(BatteryManager.EXTRA_LEVEL, -1);
+            int scale = status.getIntExtra(BatteryManager.EXTRA_SCALE, -1);
+            return level < 0 || scale <= 0 ? -1 : Math.round(level * 100f / scale);
         }
 
         /** Saves a file the page made (notes, pictures); returns where. */
