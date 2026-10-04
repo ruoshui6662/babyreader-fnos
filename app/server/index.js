@@ -45,7 +45,7 @@ const { decodeBookText } = require('./text-encoding');
 const { buildReadingStats } = require('./reading-stats-summary');
 const { buildBookNotes, buildNotesSummary, searchNotes } = require('./notes');
 const { epubTocForBook } = require('./epub-toc');
-const { readFnOSAuthorizedRoots, fnOSAuthorizationRevision } = require('./fnos-roots-config');
+const { readFnOSAuthorizedRoots, writeFnOSAuthorizedRoots, fnOSAuthorizationRevision } = require('./fnos-roots-config');
 const { createDirectAccess } = require('./direct-access');
 const { buildAnswerPayload, gatherEvidence, planQuestion, MAP_ROOT_ID, TYPE_LABELS } = require('./ai-answer-pipeline');
 const { createBookMapStore } = require('./ai-book-map-store');
@@ -97,7 +97,15 @@ function readerFormatSwitches() {
   return { pdf: pdfReaderEnabled(), mobi: mobiReaderEnabled() };
 }
 
+// A book shows only while its file sits inside a folder the app may read
+// now: an index from before fnOS took a folder away still lists its books
+// until the next scan, and those must not appear (opening them is refused).
+function inAuthorizedRoots(book) {
+  return typeof book?.path === 'string' && authorizedRoots.some((root) => isPathInside(root, book.path));
+}
+
 function isBookVisible(book, switches = readerFormatSwitches()) {
+  if (!inAuthorizedRoots(book)) return false;
   if (book?.type === 'pdf') return switches.pdf;
   if (book?.type === 'mobi') return switches.mobi;
   return true;
@@ -118,7 +126,11 @@ function libraryResponse(index, user, switches, bookTitles) {
     scanState: currentScanState(),
     ...(user.isAdmin ? {
       folders: {
-        scanned: roots,
+        // Only folders still authorized, each with where it came from
+        // (fnOS authorization, the app's shared folder, or app settings).
+        scanned: roots
+          .filter((folder) => authorizedRoots.includes(folder.root))
+          .map((folder) => ({ ...folder, source: rootDiagnostics.rootSources?.[folder.root] || null })),
         unavailable: rootDiagnostics.rejectedRoots.map(({ root, code, error }) => ({ root, code, error }))
       }
     } : {}),
@@ -2531,8 +2543,23 @@ async function handleRequest(request, response) {
   }
 }
 
+// fnOS hands the app its current folder authorization when it starts it.
+// That is the truth at start: rewrite the private snapshot from it, so a
+// folder taken away while a change callback was missed (or failed) does not
+// stay readable. Only when fnOS set the variable (empty means “no folders”);
+// cmd/main says so in ZHENSHU_FNOS_ACCESSIBLE_AT_START.
+function syncFnOSAuthorizationAtStart() {
+  if (process.env.ZHENSHU_FNOS_ACCESSIBLE_AT_START !== '1') return;
+  try {
+    writeFnOSAuthorizedRoots(CONFIG_ROOT, process.env.TRIM_DATA_ACCESSIBLE_PATHS || '');
+  } catch (error) {
+    recordError(error, { operation: 'sync-fnos-authorization' });
+  }
+}
+
 async function start() {
   await storage.initialize();
+  syncFnOSAuthorizationAtStart();
   await loadConfiguration();
   if (process.platform !== 'win32' && !process.env.ZHENSHU_DEV_PORT) await fs.rm(SOCKET_PATH, { force: true });
 
@@ -2582,4 +2609,4 @@ if (require.main === module) {
   });
 }
 
-module.exports = { APP_PREFIX, CSP, gatewayUser, handleRequest, loadConfiguration, parseFnOSPathList, start };
+module.exports = { APP_PREFIX, CSP, gatewayUser, handleRequest, loadConfiguration, parseFnOSPathList, start, syncFnOSAuthorizationAtStart };

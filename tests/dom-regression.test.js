@@ -5889,8 +5889,13 @@ test('admins see which library folders were read, with counts and unreadable ite
   assert.match(text, /旧\/坏\.txt — 磁盘读取出错/);
   assert.match(text, /然后点“重新扫描”/);
 
-  // A healthy library shows nothing; non-admins never get folder data.
-  assert.equal(api.createLibraryFoldersPanel({ folders: { scanned: [{ root: '/a', bookCount: 3, skippedCount: 0, skipped: [] }], unavailable: [] } }), null);
+  // A healthy library folds the panel into one line that still says where
+  // the books come from; non-admins never get folder data.
+  const quiet = api.createLibraryFoldersPanel({ folders: { scanned: [{ root: '/a', bookCount: 3, skippedCount: 0, skipped: [], source: 'accessible' }], unavailable: [] } });
+  assert.equal(quiet.tagName, 'DETAILS');
+  assert.equal(quiet.open, false);
+  assert.match(quiet.textContent, /书库文件夹（1 个）/);
+  assert.match(quiet.textContent, /fnOS 授权 · 3 本/);
   assert.equal(api.createLibraryFoldersPanel({ books: [] }, { empty: true }), null);
   // No folder at all: say how to add one.
   assert.match(api.createLibraryFoldersPanel({ folders: { scanned: [], unavailable: [] } }, { empty: true }).textContent, /zhenshu\/library/);

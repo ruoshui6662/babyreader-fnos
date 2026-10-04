@@ -235,10 +235,22 @@ function positionCustomSelectMenu(instance) {
     return;
   }
   const rect = instance.trigger.getBoundingClientRect();
-  instance.menu.style.left = `${Math.round(rect.left)}px`;
-  instance.menu.style.top = `${Math.round(rect.bottom + 6)}px`;
-  instance.menu.style.width = `${Math.max(136, Math.round(rect.width))}px`;
-  instance.menu.style.maxHeight = `${Math.max(96, Math.round(window.innerHeight - rect.bottom - 16))}px`;
+  const menu = instance.menu;
+  menu.style.left = `${Math.round(rect.left)}px`;
+  menu.style.width = `${Math.max(136, Math.round(rect.width))}px`;
+  // Open below the trigger; when the list does not fit there and there is
+  // more room above (a trigger near the bottom of the window), open above.
+  menu.style.maxHeight = '';
+  const wanted = menu.scrollHeight;
+  const below = window.innerHeight - rect.bottom - 16;
+  const above = rect.top - 16;
+  const up = wanted > below && above > below;
+  menu.classList.toggle('is-above', up);
+  const room = Math.max(96, Math.round(up ? above : below));
+  menu.style.maxHeight = `${room}px`;
+  menu.style.top = up
+    ? `${Math.round(rect.top - 6 - Math.min(wanted, room))}px`
+    : `${Math.round(rect.bottom + 6)}px`;
 }
 
 function openCustomSelect(instance) {

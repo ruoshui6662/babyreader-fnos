@@ -36,20 +36,29 @@ function libraryReadFailure(code, fallback = '') {
 // Where the books are read from (admins only). Shown when the library is
 // empty, or when a folder or some of its contents could not be read, so the
 // cause is on the page instead of behind SSH.
+const LIBRARY_FOLDER_SOURCES = Object.freeze({
+  accessible: 'fnOS 授权',
+  shared: '应用共享文件夹',
+  configured: '应用设置'
+});
+
 function createLibraryFoldersPanel(library, { empty = false } = {}) {
   const folders = library?.folders;
   if (!folders) return null;
   const scanned = Array.isArray(folders.scanned) ? folders.scanned : [];
   const unavailable = Array.isArray(folders.unavailable) ? folders.unavailable : [];
   const skippedTotal = scanned.reduce((sum, folder) => sum + (Number(folder.skippedCount) || 0), 0);
-  if (!empty && !unavailable.length && !skippedTotal) return null;
+  const problem = empty || unavailable.length || skippedTotal;
+  if (!problem && !scanned.length) return null;
 
-  const panel = document.createElement('section');
-  panel.className = 'library-folders';
+  // With nothing wrong the panel folds into one line: where the books come
+  // from stays one click away.
+  const panel = document.createElement(problem ? 'section' : 'details');
+  panel.className = problem ? 'library-folders' : 'library-folders is-quiet';
   panel.setAttribute('aria-label', '书库文件夹');
-  const title = document.createElement('h2');
+  const title = document.createElement(problem ? 'h2' : 'summary');
   title.className = 'library-folders-title';
-  title.textContent = '书库文件夹';
+  title.textContent = problem ? '书库文件夹' : `书库文件夹（${scanned.length} 个）`;
   panel.appendChild(title);
 
   if (!scanned.length && !unavailable.length) {
@@ -69,7 +78,8 @@ function createLibraryFoldersPanel(library, { empty = false } = {}) {
     const count = document.createElement('span');
     count.className = 'library-folders-count';
     const skipped = Number(folder.skippedCount) || 0;
-    count.textContent = `${Number(folder.bookCount) || 0} 本${skipped ? `，${skipped} 项无法读取` : ''}`;
+    const source = LIBRARY_FOLDER_SOURCES[folder.source] || '';
+    count.textContent = `${source ? `${source} · ` : ''}${Number(folder.bookCount) || 0} 本${skipped ? `，${skipped} 项无法读取` : ''}`;
     if (skipped) count.classList.add('is-warning');
     item.append(where, count);
     list.appendChild(item);

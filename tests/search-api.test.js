@@ -34,7 +34,8 @@ process.env.ZHENSHU_PDF_ENABLED = 'true';
 
 const { parseBookSearchParams } = require('../app/server/book-search');
 const { writeFnOSAuthorizedRoots } = require('../app/server/fnos-roots-config');
-const { handleRequest, loadConfiguration } = require('../app/server/index');
+const { handleRequest, loadConfiguration, syncFnOSAuthorizationAtStart } = require('../app/server/index');
+const { readFnOSAuthorizedRoots } = require('../app/server/fnos-roots-config');
 
 let server;
 let baseUrl;
@@ -193,6 +194,59 @@ test('library scan uses the first fnOS permission callback result without restar
   } finally {
     await fs.rm(snapshot, { force: true });
     await fs.writeFile(libraryIndexPath, previousIndex, 'utf8');
+    await loadConfiguration();
+  }
+});
+
+test("a revoked folder's books leave the library at once, before any rescan", async () => {
+  const snapshot = path.join(CONFIG_ROOT, 'fnos-authorized-roots.json');
+  const libraryIndexPath = path.join(DATA_ROOT, 'index', 'library.json');
+  const previousIndex = await fs.readFile(libraryIndexPath, 'utf8');
+  const admin = { headers: { 'x-trim-userid': 'admin', 'x-trim-isadmin': 'true' } };
+  try {
+    writeFnOSAuthorizedRoots(CONFIG_ROOT, CUSTOM_ROOT);
+    const scanned = await request('/app/zhenshu/api/library/scan', { method: 'POST', ...admin });
+    assert.ok(scanned.body.books.some((book) => book.title === 'custom-book'));
+    assert.ok(scanned.body.folders.scanned.some((folder) => folder.source === 'accessible'));
+
+    // fnOS takes the folder away; no scan has run since.
+    writeFnOSAuthorizedRoots(CONFIG_ROOT, '');
+    const listed = await request('/app/zhenshu/api/library', admin);
+    assert.equal(listed.status, 200);
+    assert.equal(listed.body.books.some((book) => book.title === 'custom-book'), false);
+    const customReal = await fs.realpath(CUSTOM_ROOT);
+    assert.equal(listed.body.folders.scanned.some((folder) => folder.root === customReal), false);
+  } finally {
+    await fs.rm(snapshot, { force: true });
+    await fs.writeFile(libraryIndexPath, previousIndex, 'utf8');
+    await loadConfiguration();
+  }
+});
+
+test("start-up takes fnOS's current authorization over a stale snapshot, only when fnOS set it", async () => {
+  const snapshot = path.join(CONFIG_ROOT, 'fnos-authorized-roots.json');
+  const previous = { flag: process.env.ZHENSHU_FNOS_ACCESSIBLE_AT_START, accessible: process.env.TRIM_DATA_ACCESSIBLE_PATHS };
+  try {
+    // A folder fnOS no longer grants is still in the snapshot.
+    writeFnOSAuthorizedRoots(CONFIG_ROOT, CUSTOM_ROOT);
+    // fnOS did not set the variable: the snapshot stays as it is.
+    process.env.ZHENSHU_FNOS_ACCESSIBLE_AT_START = '';
+    process.env.TRIM_DATA_ACCESSIBLE_PATHS = '';
+    syncFnOSAuthorizationAtStart();
+    assert.deepEqual(readFnOSAuthorizedRoots(CONFIG_ROOT, ''), [CUSTOM_ROOT]);
+    // fnOS set it (here: only the library folder): that wins.
+    process.env.ZHENSHU_FNOS_ACCESSIBLE_AT_START = '1';
+    process.env.TRIM_DATA_ACCESSIBLE_PATHS = LIBRARY_ROOT;
+    syncFnOSAuthorizationAtStart();
+    assert.deepEqual(readFnOSAuthorizedRoots(CONFIG_ROOT, ''), [LIBRARY_ROOT]);
+    // Set but empty means no folders at all.
+    process.env.TRIM_DATA_ACCESSIBLE_PATHS = '';
+    syncFnOSAuthorizationAtStart();
+    assert.deepEqual(readFnOSAuthorizedRoots(CONFIG_ROOT, 'ignored'), []);
+  } finally {
+    process.env.ZHENSHU_FNOS_ACCESSIBLE_AT_START = previous.flag || '';
+    process.env.TRIM_DATA_ACCESSIBLE_PATHS = previous.accessible || '';
+    await fs.rm(snapshot, { force: true });
     await loadConfiguration();
   }
 });
