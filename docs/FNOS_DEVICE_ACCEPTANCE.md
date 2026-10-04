@@ -135,7 +135,7 @@ ZHENSHU_ENABLE_PDF_AI_STRUCTURE=0 "$NODE_BIN" --test --test-concurrency=1 \
 6. 在同一册书上验证全文搜索、AI 问书、书签、标注和阅读进度仍可用。
 7. 撤销 A 的 fnOS 权限并保存，再次扫描；A 中书籍不得继续被读取，诊断应报告授权根不可用或数量减少。
 
-“重新扫描”会重新读取应用私有配置中的 fnOS 授权目录列表，并再次校验目录的真实路径、类型和访问权限，不会绕过 fnOS 权限。若私有快照尚不存在，服务兼容使用启动时的 `TRIM_DATA_ACCESSIBLE_PATHS`。回调将授权路径写入 `$TRIM_PKGETC/fnos-authorized-roots.json`，权限为 `0600`；配置损坏时不采用旧环境中的目录列表。
+“重新扫描”会重新读取应用私有配置中的 fnOS 授权目录列表，并再次校验目录的真实路径、类型和访问权限，不会绕过 fnOS 权限。若私有快照尚不存在，服务兼容使用启动时的 `TRIM_DATA_ACCESSIBLE_PATHS`。应用每次启动时，只要 fnOS 设置了 `TRIM_DATA_ACCESSIBLE_PATHS`（包括空值，表示没有授权），就以它重写私有快照（`cmd/main` 通过 `ZHENSHU_FNOS_ACCESSIBLE_AT_START` 告知变量是否存在），避免权限回调遗漏时旧授权一直生效。回调将授权路径写入 `$TRIM_PKGETC/fnos-authorized-roots.json`，权限为 `0600`；配置损坏时不采用旧环境中的目录列表。
 
 启动脚本会把 fnOS 注入的 TRIM_DATA_ACCESSIBLE_PATHS 和 TRIM_DATA_SHARE_PATHS 原样传给 Node 服务，不会清空、扩权或替换这些值。验收脚本在提供管理员 Gateway 会话时，会额外读取 /api/diagnostics 的 rootCounts，只输出数量和状态，不输出根目录列表。
 

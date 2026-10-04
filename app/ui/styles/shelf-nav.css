@@ -111,3 +111,12 @@ html[data-reader-surface="mobile"] body.is-library .shelf-nav-label { display: b
 html[data-reader-surface="mobile"] body.is-library .reader { left: 0; bottom: calc(56px + env(safe-area-inset-bottom, 0px)); }
 /* The organize bar sits above the tab bar. */
 html[data-reader-surface="mobile"] body.is-library .library-manage-bar { bottom: calc(56px + env(safe-area-inset-bottom, 0px)); }
+
+/* 书库文件夹 with nothing wrong: one quiet, foldable line. */
+.library-folders.is-quiet { padding: 10px 14px; }
+.library-folders.is-quiet > summary {
+  color: var(--library-text-muted, var(--color-text-2));
+  font: 13px var(--font-ui);
+  cursor: pointer;
+}
+.library-folders.is-quiet[open] > summary { margin-bottom: 8px; }

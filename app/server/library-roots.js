@@ -79,6 +79,10 @@ async function resolveLibraryRoots({
     }
   }
 
+  const rootSources = {};
+  for (const candidate of resolvedCandidates) {
+    if (!rootSources[candidate.realRoot]) rootSources[candidate.realRoot] = candidate.source;
+  }
   const authorizedRoots = resolvedCandidates
     .map((candidate, index) => ({ ...candidate, index }))
     .sort((left, right) => left.realRoot.length - right.realRoot.length || left.index - right.index)
@@ -93,12 +97,14 @@ async function resolveLibraryRoots({
     accessibleRoots: normalizedAccessible,
     sharedRoots: normalizedShared,
     authorizedRoots,
+    rootSources,
     rejectedRoots
   };
 }
 
 module.exports = {
   collectRootCandidates,
+  isPathInside,
   parsePathList,
   resolveLibraryRoots
 };

@@ -618,6 +618,7 @@ html[data-glass="on"] :is(.glass-menu, .custom-select-menu, body.is-library .lib
   animation: zs-glass-in var(--dur-fast) var(--ease-out);
 }
 html[data-glass="on"] .custom-select-menu:not([hidden]) { transform-origin: top center; }
+html[data-glass="on"] .custom-select-menu.is-above:not([hidden]) { transform-origin: bottom center; }
 @media (prefers-reduced-motion: reduce) {
   html[data-glass="on"] :is(.glass-menu, .custom-select-menu, body.is-library .library-more-menu):not([hidden]) { animation: none; }
 }
