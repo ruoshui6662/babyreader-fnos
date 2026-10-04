@@ -1743,7 +1743,9 @@ test('mobile viewport keeps the reader chrome collapsed until requested', async 
       right: style.right,
       width: style.width,
       borderTopLeftRadius: style.borderTopLeftRadius,
-      paddingBottom: style.paddingBottom,
+      // The scrolling content keeps clear of the bottom edge (paper-like
+      // settings page: the sheet itself has no bottom padding).
+      contentPaddingBottom: getComputedStyle(document.getElementById('readerSettingsContent')).paddingBottom,
       backdropInset: backdropStyle?.inset
     };
   });
@@ -1752,7 +1754,7 @@ test('mobile viewport keeps the reader chrome collapsed until requested', async 
   expect(mobileSurface.right).toBe('0px');
   expect(mobileSurface.width).toBe('390px');
   expect(mobileSurface.borderTopLeftRadius).toBe('20px');
-  expect(mobileSurface.paddingBottom).toBe('16px');
+  expect(parseFloat(mobileSurface.contentPaddingBottom)).toBeGreaterThanOrEqual(28);
   expect(mobileSurface.backdropInset).toBe('0px');
   expect(pageErrors).toEqual([]);
 });
@@ -1819,5 +1821,5 @@ test('phone tap zones page through the book and the progress bar jumps chapters'
     slider.dispatchEvent(new Event('change'));
   });
   await expect(page.locator('#readingProgress')).toContainText('第 3/');
-  await expect(page.locator('#mobileReadingFooterChapter')).not.toHaveText('');
+  await expect(page.locator('#mobileReadingHeader [data-tip="chapter"]')).not.toHaveText('');
 });

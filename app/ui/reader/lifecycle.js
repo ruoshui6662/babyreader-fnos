@@ -88,14 +88,10 @@ function setupReaderNavigation() {
     }
     const pdfPaged = state.contentType === 'pdf' && window.pdfReaderController?.isPhonePaged?.();
     const paged = pdfPaged || state.contentType === 'epub' && state.effectiveReadingMode !== 'scroll';
-    const width = window.innerWidth || reader.clientWidth || 1;
-    const side = event.clientX < width / 3 ? -1 : event.clientX > (width * 2) / 3 ? 1 : 0;
-    // 点击下一页 (one hand): either side turns forward; 左右分区: each side
-    // its own way. The middle always shows the chrome.
-    if (paged && side) {
-      const direction = state.tapToTurn === 'forward' ? 1 : side;
-      if (pdfPaged) turnPhonePdfPage(direction);
-      else navigatePageGroup(direction);
+    // 九宫格点击区: the part of the page tapped decides. Scrolling books
+    // have no pages to turn: any tap shows the chrome.
+    if (paged && typeof tapZoneActionAt === 'function') {
+      runTapZoneAction(tapZoneActionAt(event.clientX, event.clientY), pdfPaged);
       return;
     }
     setMobileChromeOpen(true);
@@ -264,20 +260,31 @@ function setupPositionTracking() {
   // why keyboard paging looked dead even though the geometry was correct.
   document.addEventListener('keydown', (event) => {
     if (event.defaultPrevented) return;
-    if (state.contentType !== 'epub' || state.effectiveReadingMode === 'scroll') return;
     if (event.ctrlKey || event.metaKey || event.altKey) return;
+    // Page turners and keyboards on a phone's PDF read a page at a time.
+    if (state.contentType === 'pdf' && window.pdfReaderController?.isPhonePaged?.() && !isTextInputTarget(event.target)) {
+      const forward = ['ArrowRight', 'ArrowDown', 'PageDown'].includes(event.key) || (event.key === ' ' && !event.shiftKey);
+      const back = ['ArrowLeft', 'ArrowUp', 'PageUp'].includes(event.key) || (event.key === ' ' && event.shiftKey);
+      if (forward || back) {
+        event.preventDefault();
+        turnPhonePdfPage(forward ? 1 : -1);
+      }
+      return;
+    }
+    if (state.contentType !== 'epub' || state.effectiveReadingMode === 'scroll') return;
     // Typing in the note box or a form field always wins.
     if (isTextInputTarget(event.target)) return;
     // An open Drawer is a focused task of its own; do not move the page under it.
     const drawerOpen = document.body.classList.contains('reader-drawer-open');
     if (drawerOpen) return;
     const key = event.key;
-    if (key === 'ArrowRight' || key === 'PageDown' || key === 'Home' || key === 'End' || key === 'ArrowLeft' || key === 'PageUp') {
+    // Up and down too: many Bluetooth page turners send them.
+    if (['ArrowRight', 'ArrowDown', 'PageDown', 'Home', 'End', 'ArrowLeft', 'ArrowUp', 'PageUp'].includes(key)) {
       // Arrows and Page keys never activate buttons, so they can page even
       // while a toolbar button still holds focus after a click.
       event.preventDefault();
-      if (key === 'ArrowRight' || key === 'PageDown') navigatePageGroup(1);
-      else if (key === 'ArrowLeft' || key === 'PageUp') navigatePageGroup(-1);
+      if (key === 'ArrowRight' || key === 'ArrowDown' || key === 'PageDown') navigatePageGroup(1);
+      else if (key === 'ArrowLeft' || key === 'ArrowUp' || key === 'PageUp') navigatePageGroup(-1);
       else if (key === 'Home') setPageGroup(0, { save: true });
       else setPageGroup(state.pageGroupCount - 1, { save: true });
       return;

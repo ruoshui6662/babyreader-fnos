@@ -40,7 +40,14 @@ function currentUserSettings() {
     glassAmbient: state.glassAmbient === 'uniform' ? 'uniform' : 'cover',
     pageTurnAnimation: ['slide', 'fade', 'none'].includes(state.pageTurnAnimation) ? state.pageTurnAnimation : 'slide',
     mobilePdfMode: state.mobilePdfMode === 'scroll' ? 'scroll' : 'paged',
-    tapToTurn: state.tapToTurn === 'forward' ? 'forward' : 'zones',
+    readerTips: state.readerTips || { preset: 'default' },
+    fontWeight: [300, 400, 500, 600].includes(state.fontWeight) ? state.fontWeight : 400,
+    readerStyles: state.readerStyles || [],
+    readerStyle: state.readerStyle || null,
+    themeAuto: state.themeAuto || { enabled: false, day: 'light', night: 'dark' },
+    tapZones: state.tapZones || { preset: 'sides' },
+    // Older pages and clients read tapToTurn.
+    tapToTurn: state.tapZones?.preset === 'forward' ? 'forward' : 'zones',
     swipeToTurn: state.swipeToTurn !== false,
     continuousScroll: readingMode === 'scroll',
     tocAutoOpen: state.tocOpen,
@@ -97,7 +104,15 @@ function applyUserState(userState) {
   state.tocOpen = settings.tocAutoOpen === true;
   state.pageTurnAnimation = ['slide', 'fade', 'none'].includes(settings.pageTurnAnimation) ? settings.pageTurnAnimation : 'slide';
   state.mobilePdfMode = settings.mobilePdfMode === 'scroll' ? 'scroll' : 'paged';
-  state.tapToTurn = settings.tapToTurn === 'forward' ? 'forward' : 'zones';
+  state.readerTips = settings.readerTips && typeof settings.readerTips === 'object' ? settings.readerTips : { preset: 'default' };
+  state.fontWeight = [300, 400, 500, 600].includes(settings.fontWeight) ? settings.fontWeight : 400;
+  state.readerStyles = Array.isArray(settings.readerStyles) ? settings.readerStyles : [];
+  state.readerStyle = state.readerStyles.some((style) => style.id === settings.readerStyle) ? settings.readerStyle : null;
+  state.themeAuto = settings.themeAuto && typeof settings.themeAuto === 'object'
+    ? settings.themeAuto : { enabled: false, day: 'light', night: 'dark' };
+  state.tapZones = settings.tapZones && typeof settings.tapZones === 'object'
+    ? settings.tapZones
+    : { preset: settings.tapToTurn === 'forward' ? 'forward' : 'sides' };
   state.swipeToTurn = settings.swipeToTurn !== false;
   // P0 typography: clamped exactly like the server does, so a hand-edited
   // settings file can never push the layout out of range.
@@ -108,6 +123,7 @@ function applyUserState(userState) {
   state.fontFamily = FONT_STACKS[settings.readerFont] ? settings.readerFont : DEFAULT_READER_FONT;
 
   applyTheme(state.theme, false);
+  if (typeof applyThemeAuto === 'function') applyThemeAuto({ persist: false });
   if (typeof applyGlass === 'function') applyGlass();
   applyZoom();
   applyTypography();

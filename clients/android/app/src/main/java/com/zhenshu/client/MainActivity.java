@@ -5,6 +5,7 @@ import android.app.DownloadManager;
 import android.content.ActivityNotFoundException;
 import android.content.Context;
 import android.content.Intent;
+import android.content.IntentFilter;
 import android.content.SharedPreferences;
 import android.content.pm.ApplicationInfo;
 import android.graphics.Color;
@@ -12,6 +13,7 @@ import android.graphics.Insets;
 import android.graphics.Typeface;
 import android.graphics.drawable.GradientDrawable;
 import android.net.Uri;
+import android.os.BatteryManager;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Environment;
@@ -65,7 +67,7 @@ public class MainActivity extends Activity {
     private static final String MODE_DIRECT = "direct";
     private static final String MODE_WEB = "web";
     private static final String APP_PATH = DirectLogin.APP_PATH;
-    private static final String VERSION = "0.2.1";
+    private static final String VERSION = "0.2.5";
     private static final int FILE_CHOOSER_REQUEST = 1;
     private static final int SETUP_BACKGROUND = 0xFF141416;
 
@@ -374,7 +376,7 @@ public class MainActivity extends Activity {
     private void openServer(String address) {
         server = address;
         destroyWeb();
-        web = new WebView(this);
+        web = new ReaderWebView(this);
         web.setBackgroundColor(SETUP_BACKGROUND);
         WebSettings settings = web.getSettings();
         settings.setJavaScriptEnabled(true);
@@ -608,6 +610,57 @@ public class MainActivity extends Activity {
         public void setReading(boolean reading, boolean dark, boolean hideStatusBar, boolean keepOn, boolean volumeKeys) {
             String color = dark ? "#141416" : "#F2F3F5";
             setScreen(reading, color, color, hideStatusBar, keepOn, volumeKeys);
+        }
+
+        /**
+         * The reading window's brightness, 0.05–1; below 0 hands it back to
+         * the system. Only this window: the system setting is not touched.
+         */
+        @JavascriptInterface
+        public void setBrightness(float level) {
+            if (!trusted()) return;
+            runOnUiThread(() -> {
+                WindowManager.LayoutParams attributes = getWindow().getAttributes();
+                attributes.screenBrightness = level < 0
+                    ? WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE
+                    : Math.max(0.05f, Math.min(1f, level));
+                getWindow().setAttributes(attributes);
+            });
+        }
+
+        /**
+         * 更多… on a selection: offer the text to the apps that process text
+         * (dictionaries, translators); with none installed, the share sheet.
+         */
+        @JavascriptInterface
+        public void processText(String text) {
+            if (!trusted() || text == null || text.isEmpty()) return;
+            runOnUiThread(() -> {
+                Intent process = new Intent(Intent.ACTION_PROCESS_TEXT)
+                    .setType("text/plain")
+                    .putExtra(Intent.EXTRA_PROCESS_TEXT, text)
+                    .putExtra(Intent.EXTRA_PROCESS_TEXT_READONLY, true);
+                Intent target = getPackageManager().queryIntentActivities(process, 0).isEmpty()
+                    ? new Intent(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_TEXT, text)
+                    : process;
+                try {
+                    startActivity(Intent.createChooser(target, "处理选中的文字"));
+                } catch (ActivityNotFoundException ignored) {
+                    Toast.makeText(MainActivity.this, "没有可以处理文字的应用", Toast.LENGTH_SHORT).show();
+                }
+            });
+        }
+
+        /** Battery level in percent for the page's 页眉页脚; -1 when unknown. */
+        @JavascriptInterface
+        public int battery() {
+            if (!trusted()) return -1;
+            // The sticky broadcast: no receiver, no permission.
+            Intent status = registerReceiver(null, new IntentFilter(Intent.ACTION_BATTERY_CHANGED));
+            if (status == null) return -1;
+            int level = status.getIntExtra(BatteryManager.EXTRA_LEVEL, -1);
+            int scale = status.getIntExtra(BatteryManager.EXTRA_SCALE, -1);
+            return level < 0 || scale <= 0 ? -1 : Math.round(level * 100f / scale);
         }
 
         /** Saves a file the page made (notes, pictures); returns where. */

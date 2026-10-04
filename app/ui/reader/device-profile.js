@@ -91,10 +91,12 @@ function setMobileChromeOpen(open) {
   if (toolbar) toolbar.hidden = !isOpen;
   const footer = document.getElementById('mobileReadingFooter');
   if (footer) footer.hidden = !reading || isOpen;
+  const header = document.getElementById('mobileReadingHeader');
+  if (header) header.hidden = !reading || isOpen || !readerTipRows().header.some((item) => item !== 'none');
   if (!isOpen) closeMobileMoreMenu();
   if (isOpen || reading) syncMobileReadingBar();
-  return isOpen;
   if (typeof syncNativeClient === 'function') syncNativeClient();
+  return isOpen;
 }
 
 function closeMobileMoreMenu() {
@@ -138,10 +140,7 @@ function syncMobileReadingBar() {
     slider.style.setProperty('--range-progress', `${position.ratio * 100}%`);
     slider.setAttribute('aria-valuetext', [position.label, percent].filter(Boolean).join(' · '));
   }
-  const chapter = document.getElementById('mobileReadingFooterChapter');
-  const footerPercent = document.getElementById('mobileReadingFooterPercent');
-  if (chapter) chapter.textContent = position.label;
-  if (footerPercent) footerPercent.textContent = percent;
+  renderReaderTips(position);
   // PDFs step by page, plain text has no chapters.
   const previous = document.getElementById('btnMobilePreviousChapter');
   const next = document.getElementById('btnMobileNextChapter');
@@ -432,6 +431,7 @@ function syncNativeClient() {
       if (native.setScreen) {
         native.setScreen(reading, screenEdgeColor(1), screenEdgeColor(window.innerHeight - 2),
           prefs.immersive === true, prefs.keepOn !== false, prefs.volumeKeys !== false);
+        native.setBrightness?.(reading && Number(prefs.brightness) > 0 ? Number(prefs.brightness) : -1);
       } else {
         // Shells before 0.2: dark or light only.
         const dark = reading ? state.theme === 'dark' : !document.body.matches('.theme-light, .theme-sepia');
@@ -497,21 +497,155 @@ function installNativeDownloads() {
   }, true);
 }
 
-let readingClockTimer = 0;
+// ---------------------------------------------------------------------------
+// 页眉页脚 (R2): six places, each showing one item.
+const READER_TIP_PRESETS = Object.freeze({
+  default: { header: ['time', 'none', 'chapter'], footer: ['page', 'none', 'progress'] },
+  minimal: { header: ['none', 'none', 'none'], footer: ['none', 'none', 'progress'] },
+  full: { header: ['time', 'battery', 'chapter'], footer: ['book', 'page', 'progress'] }
+});
+const READER_TIP_LABELS = Object.freeze({
+  none: '不显示', time: '时间', battery: '电量', book: '书名', chapter: '章节', page: '页码', progress: '进度'
+});
+
+function readerTipRows(tips = state.readerTips) {
+  const preset = tips?.preset in READER_TIP_PRESETS ? tips.preset : tips?.preset === 'custom' ? 'custom' : 'default';
+  if (preset !== 'custom') return READER_TIP_PRESETS[preset];
+  const row = (value) => Array.from({ length: 3 }, (_, index) => (value?.[index] in READER_TIP_LABELS ? value[index] : 'none'));
+  return { header: row(tips.header), footer: row(tips.footer) };
+}
+
+function nativeBattery() {
+  try {
+    const level = Number(nativeClient()?.battery?.());
+    return Number.isFinite(level) && level >= 0 ? Math.round(level) : null;
+  } catch {
+    return null;
+  }
+}
+
+function readerTipText(item, position) {
+  const now = new Date();
+  switch (item) {
+    case 'time': return `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+    case 'battery': {
+      const level = nativeBattery();
+      return level === null ? '' : `电量 ${level}%`;
+    }
+    case 'book': return state.currentBookInfo?.title || state.currentName || '';
+    case 'chapter': return position.label || '';
+    case 'page': {
+      if (state.contentType === 'pdf') {
+        const pdf = window.pdfReaderController;
+        const count = pdf?.getPageCount?.() || 0;
+        return count ? `${(pdf.getCurrentPageIndex?.() || 0) + 1}/${count}` : '';
+      }
+      if (state.contentType === 'epub' && state.effectiveReadingMode !== 'scroll' && state.pageGroupCount > 0) {
+        return `${(state.pageGroup || 0) + 1}/${state.pageGroupCount}`;
+      }
+      return '';
+    }
+    case 'progress': return `${Math.round((position.ratio || 0) * 100)}%`;
+    default: return '';
+  }
+}
+
+function renderReaderTips(position = typeof mobileReadingPosition === 'function' ? mobileReadingPosition() : { ratio: 0, label: '' }) {
+  const rows = readerTipRows();
+  const header = document.getElementById('mobileReadingHeader');
+  const hasHeader = rows.header.some((item) => item !== 'none');
+  document.documentElement.toggleAttribute('data-reading-header', hasHeader && isMobileReaderSurface());
+  for (const [element, items] of [[header, rows.header], [document.getElementById('mobileReadingFooter'), rows.footer]]) {
+    element?.querySelectorAll('[data-tip-slot]').forEach((slot, index) => {
+      const item = items[index] || 'none';
+      slot.dataset.tip = item;
+      slot.textContent = readerTipText(item, position);
+    });
+  }
+}
+
+// Time and battery change on their own: refresh them every half minute.
+let readerTipsTimer = 0;
 function syncReadingClock() {
-  const clock = document.getElementById('mobileReadingClock');
-  if (!clock) return;
-  const on = Boolean(nativeClient()) && nativePrefs().immersive === true && nativeReading() && isMobileReaderSurface();
-  document.documentElement.toggleAttribute('data-reading-clock', on);
-  clock.hidden = !on;
-  clearInterval(readingClockTimer);
-  if (!on) return;
-  const tick = () => {
-    const now = new Date();
-    clock.textContent = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
-  };
-  tick();
-  readingClockTimer = setInterval(tick, 15000);
+  clearInterval(readerTipsTimer);
+  if (!isMobileReaderSurface()) return;
+  renderReaderTips();
+  readerTipsTimer = setInterval(() => {
+    if (nativeReading()) renderReaderTips();
+  }, 30000);
+}
+
+// Settings › 页眉页脚: the presets, and the six places when 自定义.
+function syncReaderTipsSettings() {
+  // Phones only: desktop has its status pill instead.
+  const group = document.getElementById('settingsTipsGroup');
+  if (group) group.hidden = !isMobileReaderSurface();
+  const preset = state.readerTips?.preset in READER_TIP_PRESETS || state.readerTips?.preset === 'custom'
+    ? state.readerTips.preset : 'default';
+  document.querySelectorAll('[data-tips-preset]').forEach((button) => {
+    button.setAttribute('aria-checked', String(button.dataset.tipsPreset === preset));
+  });
+  const rows = readerTipRows();
+  const hint = document.getElementById('settingReaderTipsHint');
+  if (hint) {
+    const describe = (items) => items.filter((item) => item !== 'none').map((item) => READER_TIP_LABELS[item]).join(' · ') || '不显示';
+    hint.textContent = `页眉：${describe(rows.header)}；页脚：${describe(rows.footer)}`;
+  }
+  const custom = document.getElementById('settingReaderTipsCustom');
+  if (!custom) return;
+  custom.hidden = preset !== 'custom';
+  if (preset !== 'custom') return;
+  custom.replaceChildren();
+  for (const [row, title] of [['header', '页眉'], ['footer', '页脚']]) {
+    ['左', '中', '右'].forEach((place, index) => {
+      const field = document.createElement('div');
+      field.className = 'settings-field settings-tip-place';
+      const name = document.createElement('span');
+      name.textContent = `${title}${place}`;
+      const choices = document.createElement('div');
+      choices.className = 'settings-tip-choices';
+      choices.setAttribute('role', 'radiogroup');
+      choices.setAttribute('aria-label', `${title}${place}`);
+      for (const item of Object.keys(READER_TIP_LABELS)) {
+        if (item === 'battery' && !nativeClient()) continue;
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.setAttribute('role', 'radio');
+        button.dataset.tipItem = item;
+        button.textContent = item === 'none' ? '无' : READER_TIP_LABELS[item];
+        button.setAttribute('aria-checked', String(rows[row][index] === item));
+        button.addEventListener('click', () => {
+          const next = readerTipRows();
+          const updated = { preset: 'custom', header: [...next.header], footer: [...next.footer] };
+          updated[row][index] = item;
+          state.readerTips = updated;
+          syncReaderTipsSettings();
+          renderReaderTips();
+          persistUserSettings();
+        });
+        choices.appendChild(button);
+      }
+      field.append(name, choices);
+      custom.appendChild(field);
+    });
+  }
+}
+
+function setupReaderTipsSettings() {
+  const presets = document.getElementById('settingReaderTips');
+  if (!presets || presets.dataset.bound) return;
+  presets.dataset.bound = 'true';
+  presets.addEventListener('click', (event) => {
+    const button = event.target.closest?.('[data-tips-preset]');
+    if (!button) return;
+    const preset = button.dataset.tipsPreset;
+    // 自定义 starts from what is showing now.
+    state.readerTips = preset === 'custom' ? { preset, ...readerTipRows() } : { preset };
+    syncReaderTipsSettings();
+    renderReaderTips();
+    persistUserSettings();
+  });
+  syncReaderTipsSettings();
 }
 
 function setupNativeClient() {
@@ -681,9 +815,66 @@ async function syncMobileProgressPanel() {
 }
 
 function syncMobileThemePanel() {
+  const ownId = state.readerStyle;
   document.querySelectorAll('[data-mobile-theme]').forEach((button) => {
-    button.setAttribute('aria-checked', String(button.dataset.mobileTheme === state.theme));
+    button.setAttribute('aria-checked', String(!ownId && button.dataset.mobileTheme === state.theme));
   });
+  const swatches = document.querySelector('#mobilePanelTheme .mobile-swatches');
+  if (swatches) {
+    swatches.querySelectorAll('[data-mobile-own-style], .mobile-swatch-add').forEach((element) => element.remove());
+    for (const style of state.readerStyles || []) {
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.setAttribute('role', 'radio');
+      button.dataset.mobileOwnStyle = style.id;
+      button.setAttribute('aria-checked', String(ownId === style.id));
+      button.innerHTML = '<i class="mobile-swatch" aria-hidden="true"></i>';
+      const swatch = button.firstChild;
+      swatch.style.background = style.bg;
+      swatch.style.color = style.ink;
+      swatch.textContent = '文';
+      button.append(style.name);
+      // A second tap on the chosen one edits it.
+      button.addEventListener('click', () => {
+        if (state.readerStyle === style.id) openReaderStyleEditor(style.id);
+        else {
+          chooseReaderStyle(`custom:${style.id}`);
+          syncMobileThemePanel();
+        }
+      });
+      swatches.appendChild(button);
+    }
+    if ((state.readerStyles || []).length < 4) {
+      const add = document.createElement('button');
+      add.type = 'button';
+      add.className = 'mobile-swatch-add';
+      add.setAttribute('aria-label', '新建样式');
+      add.innerHTML = '<i class="mobile-swatch" aria-hidden="true">+</i>新建';
+      add.addEventListener('click', () => openReaderStyleEditor(null));
+      swatches.appendChild(add);
+    }
+  }
+  const auto = document.getElementById('mobileThemeAuto');
+  if (auto) auto.checked = state.themeAuto?.enabled === true;
+  const autoHint = document.getElementById('mobileThemeAutoHint');
+  if (autoHint) {
+    autoHint.hidden = state.themeAuto?.enabled !== true;
+    autoHint.textContent = `日间用“${styleKeyLabel(state.themeAuto?.day || 'light')}”，夜间用“${styleKeyLabel(state.themeAuto?.night || 'dark')}”；选一个样式，就设为当前时段的样式。`;
+  }
+  const brightness = document.getElementById('mobileBrightnessField');
+  if (brightness) {
+    const native = nativeClient();
+    brightness.hidden = !native?.setBrightness;
+    const prefs = nativePrefs();
+    const input = document.getElementById('mobileBrightness');
+    const system = document.getElementById('mobileBrightnessSystem');
+    if (system) system.checked = !(Number(prefs.brightness) > 0);
+    if (input) {
+      input.value = String(Math.round((Number(prefs.brightness) > 0 ? prefs.brightness : 0.6) * 100));
+      input.disabled = !(Number(prefs.brightness) > 0);
+      input.closest('.mobile-slider')?.style.setProperty('--slider-progress', String((Number(input.value) - 5) / 95));
+    }
+  }
   const glass = document.getElementById('mobileGlassSwitch');
   if (glass) glass.checked = state.liquidGlass === true;
   const ambientField = document.getElementById('mobileGlassAmbientField');
@@ -754,6 +945,7 @@ function openMobileSub(name) {
       list.appendChild(row);
     }
     body.appendChild(list);
+    body.appendChild(mobileField('字重', mobileProxySegments(document.querySelectorAll('#settingFontWeight [data-font-weight]'), rerender)));
   } else if (name === 'indent') {
     title.textContent = '首行缩进';
     body.appendChild(mobileField('每段开头空出', mobileProxySegments(document.querySelectorAll('#settingTextIndent [data-text-indent]'), rerender)));
@@ -766,7 +958,7 @@ function openMobileSub(name) {
     const pagedOnly = !document.querySelector('[data-phone-paged-only]')?.hidden;
     if (pagedOnly) {
       body.appendChild(mobileField('翻页动画', mobileProxySegments(document.querySelectorAll('[data-page-turn]'), rerender)));
-      body.appendChild(mobileField('点击翻页', mobileProxySegments(document.querySelectorAll('[data-tap-turn]'), rerender)));
+      body.appendChild(mobileField('点击区域', mobileProxySegments(document.querySelectorAll('[data-tap-preset]'), rerender)));
       const swipeSource = document.getElementById('settingSwipeToTurn');
       const swipe = document.createElement('label');
       swipe.className = 'mobile-switch-row';
@@ -793,7 +985,38 @@ function openMobileSub(name) {
   setMobilePanel('sub');
 }
 
+// 划线颜色 on the phone's settings page: four dots instead of a dropdown.
+function setupHighlightColorDots() {
+  const select = document.getElementById('settingHighlightColor');
+  const field = select?.closest('.settings-field');
+  if (!select || !field || field.querySelector('.settings-color-dots')) return;
+  const dots = document.createElement('div');
+  dots.className = 'settings-color-dots';
+  dots.setAttribute('role', 'radiogroup');
+  dots.setAttribute('aria-label', '划线颜色');
+  const sync = () => dots.querySelectorAll('button').forEach((dot) => {
+    dot.setAttribute('aria-checked', String(dot.dataset.color === select.value));
+  });
+  for (const option of select.options) {
+    const dot = document.createElement('button');
+    dot.type = 'button';
+    dot.setAttribute('role', 'radio');
+    dot.dataset.color = option.value;
+    dot.setAttribute('aria-label', option.textContent);
+    dot.addEventListener('click', () => {
+      select.value = option.value;
+      select.dispatchEvent(new Event('change', { bubbles: true }));
+      sync();
+    });
+    dots.appendChild(dot);
+  }
+  select.addEventListener('change', sync);
+  field.appendChild(dots);
+  sync();
+}
+
 function setupMobilePanels() {
+  setupHighlightColorDots();
   const toolbar = document.getElementById('mobileReaderToolbar');
   if (!toolbar || toolbar.dataset.panelsBound) return;
   toolbar.dataset.panelsBound = 'true';
@@ -808,12 +1031,18 @@ function setupMobilePanels() {
     const sub = event.target.closest?.('[data-mobile-sub]');
     if (sub) openMobileSub(sub.dataset.mobileSub);
   });
-  document.getElementById('btnMobileSubBack')?.addEventListener('click', () => setMobilePanel('type'));
+  document.getElementById('btnMobileSubBack')?.addEventListener('click', (event) => {
+    const to = event.currentTarget.dataset.returnTo || 'type';
+    delete event.currentTarget.dataset.returnTo;
+    setMobilePanel(to);
+  });
   document.getElementById('btnMobileMoreSettings')?.addEventListener('click', (event) => {
     setMobilePanel(null);
     openReaderPanel('settings', event.currentTarget);
-    // The full sheet, already expanded.
+    // The full sheet, already expanded, with 自定义 open.
     document.getElementById('readerSettingsSheet')?.classList.add('is-expanded');
+    const advanced = document.getElementById('settingsTypographyAdvanced');
+    if (advanced) advanced.open = true;
     const more = document.getElementById('btnSettingsMore');
     if (more) {
       more.setAttribute('aria-expanded', 'true');
@@ -822,9 +1051,24 @@ function setupMobilePanels() {
   });
   document.querySelectorAll('[data-mobile-theme]').forEach((button) => {
     button.addEventListener('click', () => {
-      document.querySelector(`[data-theme-choice="${button.dataset.mobileTheme}"]`)?.click();
+      chooseReaderStyle(button.dataset.mobileTheme);
       syncMobileThemePanel();
     });
+  });
+  document.getElementById('mobileThemeAuto')?.addEventListener('change', (event) => {
+    setThemeAuto(event.target.checked);
+    syncMobileThemePanel();
+  });
+  const brightness = document.getElementById('mobileBrightness');
+  brightness?.addEventListener('input', () => {
+    saveNativePrefs({ ...nativePrefs(), brightness: Math.max(0.05, Number(brightness.value) / 100) });
+    brightness.closest('.mobile-slider')?.style.setProperty('--slider-progress', String((Number(brightness.value) - 5) / 95));
+    syncNativeClient();
+  });
+  document.getElementById('mobileBrightnessSystem')?.addEventListener('change', (event) => {
+    saveNativePrefs({ ...nativePrefs(), brightness: event.target.checked ? null : 0.6 });
+    syncMobileThemePanel();
+    syncNativeClient();
   });
   document.getElementById('mobileGlassSwitch')?.addEventListener('change', (event) => {
     const source = document.getElementById('settingLiquidGlass');
@@ -865,6 +1109,321 @@ function turnPhonePdfPage(direction) {
   return pdf.turnPhonePage(direction, style);
 }
 
+// ---------------------------------------------------------------------------
+// 阅读样式 (R4): own papers — a paper colour, an ink colour and a texture —
+// beside the built-in 浅色 / 护眼 / 深色; the chrome follows the built-in
+// theme with the same lightness. Day and night can follow the system.
+const READER_STYLE_PAPERS = Object.freeze([
+  ['象牙', '#f7f1e3'], ['素白', '#fafaf7'], ['竹青', '#e3ede0'], ['雾蓝', '#e2e9ef'],
+  ['杏粉', '#f4e7e2'], ['夜墨', '#1b1d20'], ['墨绿', '#16211c'], ['深褐', '#251f19']
+]);
+const READER_STYLE_INKS = Object.freeze([
+  ['墨', '#2b2b2b'], ['褐', '#3e3226'], ['黛', '#2f3a45'], ['月白', '#ddd8cf'], ['米', '#c9c1b1'], ['青', '#bccbb8']
+]);
+const READER_STYLE_TEXTURES = Object.freeze([['none', '无'], ['linen', '细麻'], ['paper', '宣纸']]);
+
+function hexLuminance(hex) {
+  const value = /^#([0-9a-f]{6})$/i.exec(hex || '')?.[1];
+  if (!value) return 1;
+  const [r, g, b] = [0, 2, 4].map((offset) => parseInt(value.slice(offset, offset + 2), 16) / 255);
+  return 0.299 * r + 0.587 * g + 0.114 * b;
+}
+
+function activeReaderStyle() {
+  return state.readerStyle ? (state.readerStyles || []).find((style) => style.id === state.readerStyle) || null : null;
+}
+
+// Called at the end of applyTheme: paint the own style over the base theme,
+// or take it off.
+function paintReaderStyle() {
+  const style = activeReaderStyle();
+  const body = document.body;
+  const names = ['--color-bg', '--color-elevated', '--color-bar', '--color-fill', '--color-text', '--color-text-2',
+    '--color-text-3', '--color-separator', '--reader-stage', '--reader-chrome', '--surface-alt'];
+  if (!style) {
+    for (const name of names) body.style.removeProperty(name);
+    delete body.dataset.readerStyle;
+    delete body.dataset.paperTexture;
+    return;
+  }
+  const mix = (amount) => `color-mix(in srgb, ${style.ink} ${amount}%, ${style.bg})`;
+  const values = {
+    '--color-bg': style.bg,
+    '--color-elevated': mix(4),
+    '--color-bar': `color-mix(in srgb, ${style.bg} 90%, transparent)`,
+    '--color-fill': `color-mix(in srgb, ${style.ink} 10%, transparent)`,
+    '--color-text': style.ink,
+    '--color-text-2': `color-mix(in srgb, ${style.ink} 62%, transparent)`,
+    '--color-text-3': `color-mix(in srgb, ${style.ink} 36%, transparent)`,
+    '--color-separator': mix(14),
+    // A phone's page is the screen: no stage around it.
+    '--reader-stage': isMobileReaderSurface() ? style.bg : mix(5),
+    '--reader-chrome': mix(3),
+    '--surface-alt': mix(6)
+  };
+  for (const [name, value] of Object.entries(values)) body.style.setProperty(name, value);
+  body.dataset.readerStyle = style.id;
+  body.dataset.paperTexture = style.texture || 'none';
+}
+
+// Use a style: 'light' / 'sepia' / 'dark' or 'custom:<id>'. With 跟随系统
+// on, it becomes the style for the current time of day.
+function chooseReaderStyle(key, { persist = true } = {}) {
+  const own = typeof key === 'string' && key.startsWith('custom:')
+    ? (state.readerStyles || []).find((style) => `custom:${style.id}` === key) : null;
+  state.readerStyle = own ? own.id : null;
+  const base = own ? (hexLuminance(own.bg) > 0.5 ? 'light' : 'dark') : key;
+  if (state.themeAuto?.enabled) {
+    const night = window.matchMedia?.('(prefers-color-scheme: dark)').matches;
+    state.themeAuto = { ...state.themeAuto, [night ? 'night' : 'day']: own ? `custom:${own.id}` : key };
+  }
+  applyTheme(base, persist);
+  syncSettingsPanel();
+  if (persist) persistUserSettings();
+}
+
+// 跟随系统: day and night styles switch with the system's light/dark mode.
+let themeAutoQuery = null;
+function applyThemeAuto({ persist = false } = {}) {
+  if (!state.themeAuto?.enabled) return;
+  const night = window.matchMedia?.('(prefers-color-scheme: dark)').matches;
+  const key = night ? state.themeAuto.night : state.themeAuto.day;
+  const own = String(key || '').startsWith('custom:')
+    ? (state.readerStyles || []).find((style) => `custom:${style.id}` === key) : null;
+  state.readerStyle = own ? own.id : null;
+  applyTheme(own ? (hexLuminance(own.bg) > 0.5 ? 'light' : 'dark') : (key || (night ? 'dark' : 'light')), false);
+  if (persist) persistUserSettings();
+  if (!themeAutoQuery && window.matchMedia) {
+    themeAutoQuery = window.matchMedia('(prefers-color-scheme: dark)');
+    themeAutoQuery.addEventListener?.('change', () => {
+      if (!state.themeAuto?.enabled) return;
+      applyThemeAuto({ persist: false });
+      syncSettingsPanel();
+    });
+  }
+}
+
+function setThemeAuto(enabled) {
+  const night = window.matchMedia?.('(prefers-color-scheme: dark)').matches;
+  const current = state.readerStyle ? `custom:${state.readerStyle}` : state.theme;
+  const previous = state.themeAuto || { day: 'light', night: 'dark' };
+  // The style in use becomes this time of day's style.
+  state.themeAuto = { ...previous, enabled, [night ? 'night' : 'day']: current };
+  if (enabled) applyThemeAuto({ persist: false });
+  syncSettingsPanel();
+  persistUserSettings();
+}
+
+function styleKeyLabel(key) {
+  if (key === 'light') return '浅色';
+  if (key === 'sepia') return '护眼';
+  if (key === 'dark') return '深色';
+  const own = (state.readerStyles || []).find((style) => `custom:${style.id}` === key);
+  return own?.name || '自定义';
+}
+
+// The style editor (second level of 主题): paper, ink, texture, delete.
+function openReaderStyleEditor(id) {
+  let style = (state.readerStyles || []).find((item) => item.id === id);
+  if (!style) {
+    if ((state.readerStyles || []).length >= 4) return;
+    const number = (state.readerStyles || []).length + 1;
+    style = { id: `s${Date.now().toString(36).slice(-6)}`, name: `我的样式 ${number}`, bg: '#f7f1e3', ink: '#3e3226', texture: 'none' };
+    state.readerStyles = [...(state.readerStyles || []), style];
+  }
+  const update = (changes) => {
+    style = { ...style, ...changes };
+    state.readerStyles = state.readerStyles.map((item) => (item.id === style.id ? style : item));
+    chooseReaderStyle(`custom:${style.id}`);
+    render();
+  };
+  const title = document.getElementById('mobileSubTitle');
+  const body = document.getElementById('mobileSubBody');
+  const back = document.getElementById('btnMobileSubBack');
+  if (!title || !body) return;
+  if (back) back.dataset.returnTo = 'theme';
+  const dotRow = (choices, current, key) => {
+    const row = document.createElement('div');
+    row.className = 'mobile-color-row';
+    row.setAttribute('role', 'radiogroup');
+    for (const [name, value] of choices) {
+      const dot = document.createElement('button');
+      dot.type = 'button';
+      dot.setAttribute('role', 'radio');
+      dot.setAttribute('aria-label', name);
+      dot.title = name;
+      dot.style.background = value;
+      dot.setAttribute('aria-checked', String(current === value));
+      dot.addEventListener('click', () => {
+        const changes = { [key]: value };
+        // A paper and its ink stay readable: a dark paper takes a light ink.
+        if (key === 'bg' && Math.abs(hexLuminance(value) - hexLuminance(style.ink)) < 0.45) {
+          changes.ink = hexLuminance(value) > 0.5 ? '#3e3226' : '#ddd8cf';
+        }
+        update(changes);
+      });
+      row.appendChild(dot);
+    }
+    return row;
+  };
+  const render = () => {
+    title.textContent = style.name;
+    body.replaceChildren();
+    const preview = document.createElement('p');
+    preview.className = 'mobile-style-preview';
+    preview.dataset.texture = style.texture;
+    preview.style.background = style.bg;
+    preview.style.color = style.ink;
+    preview.textContent = '山中何事？松花酿酒，春水煎茶。';
+    body.appendChild(preview);
+    body.appendChild(mobileField('纸色', dotRow(READER_STYLE_PAPERS, style.bg, 'bg')));
+    body.appendChild(mobileField('字色', dotRow(READER_STYLE_INKS, style.ink, 'ink')));
+    const textures = document.createElement('div');
+    textures.className = 'mobile-segments';
+    for (const [value, name] of READER_STYLE_TEXTURES) {
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.setAttribute('role', 'radio');
+      button.textContent = name;
+      button.setAttribute('aria-checked', String(style.texture === value));
+      button.addEventListener('click', () => update({ texture: value }));
+      textures.appendChild(button);
+    }
+    body.appendChild(mobileField('纹理', textures));
+    const remove = document.createElement('button');
+    remove.type = 'button';
+    remove.className = 'mobile-link-button is-destructive';
+    remove.textContent = '删除这个样式';
+    remove.addEventListener('click', () => {
+      state.readerStyles = state.readerStyles.filter((item) => item.id !== style.id);
+      if (state.themeAuto) {
+        for (const time of ['day', 'night']) {
+          if (state.themeAuto[time] === `custom:${style.id}`) state.themeAuto = { ...state.themeAuto, [time]: time === 'day' ? 'light' : 'dark' };
+        }
+      }
+      chooseReaderStyle(hexLuminance(style.bg) > 0.5 ? 'light' : 'dark');
+      setMobilePanel('theme');
+    });
+    body.appendChild(remove);
+  };
+  render();
+  setMobilePanel('sub');
+  // The editor belongs to 主题, not 设置.
+  document.querySelectorAll('#mobileReaderToolbar [data-mobile-panel-toggle]').forEach((button) => {
+    const on = button.dataset.mobilePanelToggle === 'theme';
+    button.setAttribute('aria-expanded', String(on));
+    button.classList.toggle('is-active', on);
+  });
+}
+
+// ---------------------------------------------------------------------------
+// 九宫格点击区 (R3): the page in nine parts, each with an action.
+const TAP_ZONE_PRESETS = Object.freeze({
+  sides: ['prev', 'menu', 'next', 'prev', 'menu', 'next', 'prev', 'menu', 'next'],
+  forward: ['next', 'menu', 'next', 'next', 'menu', 'next', 'next', 'menu', 'next'],
+  rows: ['prev', 'prev', 'prev', 'prev', 'menu', 'next', 'next', 'next', 'next']
+});
+const TAP_ZONE_LABELS = Object.freeze({
+  prev: '上一页', next: '下一页', menu: '菜单', toc: '目录', bookmark: '书签', none: '无'
+});
+const TAP_ZONE_HINTS = Object.freeze({
+  sides: '点左侧上一页，点右侧下一页，点中间呼出菜单。',
+  forward: '点两侧都是下一页，适合单手；点中间呼出菜单，向右滑回到上一页。',
+  rows: '点上方上一页，点下方下一页，点正中呼出菜单。',
+  custom: '点一格，再在下面选择它的动作。'
+});
+let tapZoneEditing = 4;
+
+function tapZonePreset() {
+  const preset = state.tapZones?.preset;
+  return preset in TAP_ZONE_PRESETS || preset === 'custom' ? preset : 'sides';
+}
+
+function tapZoneActions() {
+  const preset = tapZonePreset();
+  if (preset !== 'custom') return TAP_ZONE_PRESETS[preset];
+  const zones = Array.from({ length: 9 }, (_, index) => (state.tapZones?.zones?.[index] in TAP_ZONE_LABELS ? state.tapZones.zones[index] : 'none'));
+  if (!zones.includes('menu')) zones[4] = 'menu';
+  return zones;
+}
+
+// The action for a tap at (x, y) on a phone's page.
+function tapZoneActionAt(x, y) {
+  const col = Math.min(2, Math.max(0, Math.floor((x / (window.innerWidth || 1)) * 3)));
+  const row = Math.min(2, Math.max(0, Math.floor((y / (window.innerHeight || 1)) * 3)));
+  return tapZoneActions()[row * 3 + col];
+}
+
+function runTapZoneAction(action, pdfPaged) {
+  if (action === 'prev' || action === 'next') {
+    const direction = action === 'next' ? 1 : -1;
+    if (pdfPaged) turnPhonePdfPage(direction);
+    else navigatePageGroup(direction);
+  } else if (action === 'menu') {
+    setMobileChromeOpen(true);
+  } else if (action === 'toc') {
+    openReaderPanel('toc');
+  } else if (action === 'bookmark' && typeof toggleCurrentBookmark === 'function') {
+    void toggleCurrentBookmark();
+  }
+}
+
+function setTapZonePreset(preset) {
+  if (!(preset in TAP_ZONE_PRESETS) && preset !== 'custom') return;
+  // 自定义 starts from what is set now.
+  state.tapZones = preset === 'custom' ? { preset, zones: [...tapZoneActions()] } : { preset };
+  syncTapZoneSettings();
+  persistUserSettings();
+}
+
+function syncTapZoneSettings() {
+  const preset = tapZonePreset();
+  const zones = tapZoneActions();
+  document.querySelectorAll('[data-tap-preset]').forEach((button) => {
+    button.setAttribute('aria-checked', String(button.dataset.tapPreset === preset));
+  });
+  const hint = document.getElementById('settingTapToTurnHint');
+  if (hint) hint.textContent = TAP_ZONE_HINTS[preset];
+  const grid = document.getElementById('settingTapGrid');
+  const choices = document.getElementById('settingTapChoices');
+  if (!grid || !choices) return;
+  const custom = preset === 'custom';
+  grid.classList.toggle('is-editable', custom);
+  grid.replaceChildren(...zones.map((action, index) => {
+    const cell = document.createElement('button');
+    cell.type = 'button';
+    cell.dataset.tapZone = String(index);
+    cell.dataset.action = action;
+    cell.textContent = TAP_ZONE_LABELS[action];
+    cell.disabled = !custom;
+    cell.setAttribute('aria-pressed', String(custom && index === tapZoneEditing));
+    cell.addEventListener('click', () => {
+      tapZoneEditing = index;
+      syncTapZoneSettings();
+    });
+    return cell;
+  }));
+  choices.hidden = !custom;
+  if (!custom) return;
+  choices.setAttribute('aria-label', `第 ${tapZoneEditing + 1} 格的动作`);
+  choices.replaceChildren(...Object.keys(TAP_ZONE_LABELS).map((action) => {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.setAttribute('role', 'radio');
+    button.dataset.tapAction = action;
+    button.textContent = TAP_ZONE_LABELS[action];
+    button.setAttribute('aria-checked', String(zones[tapZoneEditing] === action));
+    button.addEventListener('click', () => {
+      const next = [...tapZoneActions()];
+      next[tapZoneEditing] = action;
+      state.tapZones = { preset: 'custom', zones: next };
+      syncTapZoneSettings();
+      persistUserSettings();
+    });
+    return button;
+  }));
+}
+
 // 点击区域 guide: shown over the page the first time a phone pages a book
 // (and from 设置 › 查看点击区域). It names what each part of the page does
 // for the current 点击翻页 choice; any tap dismisses it.
@@ -872,31 +1431,30 @@ const TAP_GUIDE_SEEN_KEY = 'zhenshu.tapGuideSeen';
 
 function showTapGuide() {
   document.getElementById('tapGuide')?.remove();
-  const forward = state.tapToTurn === 'forward';
+  const zones = tapZoneActions();
   const guide = document.createElement('div');
   guide.id = 'tapGuide';
   guide.className = 'tap-guide';
   guide.setAttribute('role', 'dialog');
   guide.setAttribute('aria-label', '点击区域');
-  const zones = forward
-    ? [['下一页', ''], ['菜单', '点中间'], ['下一页', '']]
-    : [['上一页', '点左侧'], ['菜单', '点中间'], ['下一页', '点右侧']];
-  for (const [label, where] of zones) {
+  zones.forEach((action, index) => {
     const zone = document.createElement('div');
-    zone.className = 'tap-guide-zone';
-    const name = document.createElement('strong');
-    name.textContent = label;
-    zone.appendChild(name);
-    if (where) {
-      const hint = document.createElement('span');
-      hint.textContent = where;
-      zone.appendChild(hint);
+    zone.className = `tap-guide-zone is-${action}`;
+    // Neighbouring parts that do the same read as one area.
+    const col = index % 3;
+    const row = Math.floor(index / 3);
+    if (col < 2 && zones[index + 1] === action) zone.classList.add('joins-right');
+    if (row < 2 && zones[index + 3] === action) zone.classList.add('joins-below');
+    if (action !== 'none') {
+      const name = document.createElement('strong');
+      name.textContent = TAP_ZONE_LABELS[action];
+      zone.appendChild(name);
     }
     guide.appendChild(zone);
-  }
+  });
   const foot = document.createElement('p');
   foot.className = 'tap-guide-foot';
-  foot.textContent = `${state.swipeToTurn !== false ? '左右滑动也可以翻页。' : ''}可在 设置 › 阅读 中更改。点一下开始阅读`;
+  foot.textContent = `${state.swipeToTurn !== false ? '左右滑动也可以翻页。' : ''}可在 设置 › 更多设置 › 阅读 中更改。点一下开始阅读`;
   guide.appendChild(foot);
   guide.addEventListener('click', (event) => {
     event.stopPropagation();
@@ -1106,6 +1664,7 @@ function setupReaderDeviceProfile() {
   setupMobileSheetGestures();
   setupMobileAiPanel();
   setupMobilePanels();
+  setupReaderTipsSettings();
   setupNativeClient();
   window.addEventListener('resize', update, { passive: true });
   window.visualViewport?.addEventListener('resize', update, { passive: true });

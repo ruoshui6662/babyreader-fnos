@@ -32,6 +32,82 @@ const MAX_BOOKMARK_LOCATOR_HREF_LENGTH = 2048;
 const MAX_BOOKMARK_LOCATOR_ANCHOR_LENGTH = 512;
 const MAX_BOOKMARK_PDF_PAGE_COUNT = 10000;
 
+
+// 阅读样式 (phone and desktop): own paper and ink colours, at most four.
+const READER_STYLE_TEXTURES = new Set(['none', 'linen', 'paper']);
+const HEX_COLOR = /^#[0-9a-f]{6}$/i;
+function normalizeReaderStyleList(list) {
+  if (!Array.isArray(list)) return null;
+  const seen = new Set();
+  const styles = [];
+  for (const item of list) {
+    if (styles.length >= 4 || !item || typeof item !== 'object') continue;
+    const id = String(item.id || '');
+    if (!/^[a-z0-9]{1,12}$/.test(id) || seen.has(id) || !HEX_COLOR.test(item.bg) || !HEX_COLOR.test(item.ink)) continue;
+    seen.add(id);
+    styles.push({
+      id,
+      name: String(item.name || '').slice(0, 12),
+      bg: item.bg.toLowerCase(),
+      ink: item.ink.toLowerCase(),
+      texture: READER_STYLE_TEXTURES.has(item.texture) ? item.texture : 'none'
+    });
+  }
+  return styles;
+}
+function normalizeStyleKey(value, styles, fallback) {
+  if (['light', 'sepia', 'dark'].includes(value)) return value;
+  if (typeof value === 'string' && value.startsWith('custom:') && styles.some((style) => `custom:${style.id}` === value)) return value;
+  return fallback;
+}
+function normalizeReaderStyles(settings, previous) {
+  const readerStyles = normalizeReaderStyleList(settings.readerStyles)
+    ?? normalizeReaderStyleList(previous.readerStyles) ?? [];
+  const chosen = settings.readerStyle !== undefined ? settings.readerStyle : previous.readerStyle;
+  const readerStyle = typeof chosen === 'string' && readerStyles.some((style) => style.id === chosen) ? chosen : null;
+  const auto = settings.themeAuto && typeof settings.themeAuto === 'object' ? settings.themeAuto : previous.themeAuto || {};
+  return {
+    readerStyles,
+    readerStyle,
+    themeAuto: {
+      enabled: auto.enabled === true,
+      day: normalizeStyleKey(auto.day, readerStyles, 'light'),
+      night: normalizeStyleKey(auto.night, readerStyles, 'dark')
+    }
+  };
+}
+
+// 九宫格点击区 (phone reading): what a tap in each ninth of the page does.
+const TAP_ZONE_ACTIONS = new Set(['prev', 'next', 'menu', 'toc', 'bookmark', 'none']);
+const TAP_ZONE_PRESETS = new Set(['sides', 'forward', 'rows', 'custom']);
+function normalizeTapZones(value, tapToTurn, previous, previousTapToTurn) {
+  const valid = (zones) => zones && typeof zones === 'object' && TAP_ZONE_PRESETS.has(zones.preset);
+  const source = valid(value) ? value : ['zones', 'forward'].includes(tapToTurn) ? null : valid(previous) ? previous : null;
+  if (!source) {
+    const legacy = ['zones', 'forward'].includes(tapToTurn) ? tapToTurn : previousTapToTurn;
+    return { preset: legacy === 'forward' ? 'forward' : 'sides' };
+  }
+  if (source.preset !== 'custom') return { preset: source.preset };
+  const zones = Array.from({ length: 9 }, (_, index) => (TAP_ZONE_ACTIONS.has(source.zones?.[index]) ? source.zones[index] : 'none'));
+  // The menu must stay reachable somewhere.
+  if (!zones.includes('menu')) zones[4] = 'menu';
+  return { preset: 'custom', zones };
+}
+
+// 页眉页脚 (phone reading): a preset, or each of the six places chosen.
+const READER_TIP_ITEMS = new Set(['none', 'time', 'battery', 'book', 'chapter', 'page', 'progress']);
+const READER_TIP_PRESETS = new Set(['default', 'minimal', 'full', 'custom']);
+function normalizeReaderTipRow(row) {
+  return Array.from({ length: 3 }, (_, index) => (READER_TIP_ITEMS.has(row?.[index]) ? row[index] : 'none'));
+}
+function normalizeReaderTips(value, previous) {
+  const source = value && typeof value === 'object' ? value : previous;
+  if (!source || typeof source !== 'object') return { preset: 'default' };
+  const preset = READER_TIP_PRESETS.has(source.preset) ? source.preset : 'default';
+  if (preset !== 'custom') return { preset };
+  return { preset, header: normalizeReaderTipRow(source.header), footer: normalizeReaderTipRow(source.footer) };
+}
+
 function normalizeUserId(value) {
   const uid = String(value || '').trim();
   if (!/^[A-Za-z0-9_-]{1,64}$/.test(uid)) {
@@ -314,6 +390,11 @@ class UserStorage {
         mobileReadingMode: ['paged', 'scroll'].includes(settings.mobileReadingMode)
           ? settings.mobileReadingMode
           : ['paged', 'scroll'].includes(state.settings.mobileReadingMode) ? state.settings.mobileReadingMode : 'paged',
+        // 阅读样式: up to four own papers (paper, ink, texture), the one in
+        // use, and day/night following the system.
+        ...normalizeReaderStyles(settings, state.settings),
+        // 页眉页脚: what the phone shows at the top and bottom of the page.
+        readerTips: normalizeReaderTips(settings.readerTips, state.settings.readerTips),
         // Phones read PDFs a page at a time unless they chose to scroll.
         mobilePdfMode: ['paged', 'scroll'].includes(settings.mobilePdfMode)
           ? settings.mobilePdfMode
@@ -339,6 +420,9 @@ class UserStorage {
         pageTurnAnimation: ['slide', 'fade', 'none'].includes(settings.pageTurnAnimation)
           ? settings.pageTurnAnimation
           : ['slide', 'fade', 'none'].includes(state.settings.pageTurnAnimation) ? state.settings.pageTurnAnimation : 'slide',
+        // 九宫格点击区: a preset or nine actions; older clients still send
+        // tapToTurn, which picks the matching preset.
+        tapZones: normalizeTapZones(settings.tapZones, settings.tapToTurn, state.settings.tapZones, state.settings.tapToTurn),
         tapToTurn: ['zones', 'forward'].includes(settings.tapToTurn)
           ? settings.tapToTurn
           : ['zones', 'forward'].includes(state.settings.tapToTurn) ? state.settings.tapToTurn : 'zones',
@@ -357,6 +441,10 @@ class UserStorage {
         // (older half steps round to the nearest).
         textIndent: normalizeTextIndentSetting(settings.textIndent,
           normalizeTextIndentSetting(state.settings.textIndent, 2)),
+        // 字重 of the body text: 300 / 400 / 500 / 600.
+        fontWeight: [300, 400, 500, 600].includes(settings.fontWeight)
+          ? settings.fontWeight
+          : [300, 400, 500, 600].includes(state.settings.fontWeight) ? state.settings.fontWeight : 400,
         paragraphSpacing: Number.isFinite(settings.paragraphSpacing)
           ? Math.max(0.4, Math.min(3, Math.round(settings.paragraphSpacing * 10) / 10))
           : Number.isFinite(state.settings.paragraphSpacing) ? state.settings.paragraphSpacing : 1.1,

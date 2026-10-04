@@ -54,7 +54,8 @@ test.describe('Phone page turning', () => {
       await openOnPhone(page);
       const guide = page.locator('#tapGuide');
       await expect(guide).toBeVisible();
-      await expect(guide.locator('.tap-guide-zone')).toHaveText([/上一页/, /菜单/, /下一页/]);
+      // Nine parts; 左右分区: each column one action.
+      await expect(guide.locator('.tap-guide-zone')).toHaveText(['上一页', '菜单', '下一页', '上一页', '菜单', '下一页', '上一页', '菜单', '下一页']);
       await expect(guide).toContainText('左右滑动也可以翻页');
       await guide.click();
       await expect(guide).toHaveCount(0);
@@ -64,7 +65,7 @@ test.describe('Phone page turning', () => {
     });
   });
 
-  test('settings offer 翻页动画, 点击翻页 and 左右滑动翻页 for paging, and they persist', async ({ page }) => {
+  test('settings offer 翻页动画, 点击区域 and 左右滑动翻页 for paging, and they persist', async ({ page }) => {
     await openOnPhone(page);
     await openSettings(page);
     const sheet = page.locator('#readerSettingsSheet');
@@ -73,13 +74,14 @@ test.describe('Phone page turning', () => {
     await expect(sheet.locator('#settingSwipeToTurn')).toBeChecked();
 
     const saved = page.waitForResponse((r) => r.url().endsWith('/api/settings') && r.request().method() === 'PUT'
-      && JSON.parse(r.request().postData() || '{}').tapToTurn === 'forward');
+      && JSON.parse(r.request().postData() || '{}').swipeToTurn === false);
     await sheet.locator('[data-page-turn="fade"]').click();
-    await sheet.locator('[data-tap-turn="forward"]').click();
+    await sheet.locator('[data-tap-preset="forward"]').click();
     await expect(sheet.locator('#settingTapToTurnHint')).toContainText('单手');
     await sheet.locator('#settingSwipeToTurn').click();
     const body = JSON.parse((await saved).request().postData());
-    expect(body).toMatchObject({ pageTurnAnimation: 'fade', tapToTurn: 'forward', swipeToTurn: false });
+    // tapToTurn still goes along for older pages.
+    expect(body).toMatchObject({ pageTurnAnimation: 'fade', tapZones: { preset: 'forward' }, tapToTurn: 'forward', swipeToTurn: false });
 
     // Scrolling has no pages to turn: the rows go away.
     await sheet.locator('[data-reading-mode-choice="scroll"]').click();
@@ -92,11 +94,11 @@ test.describe('Phone page turning', () => {
     if (await page.locator('#readerDrawer').isVisible()) await page.locator('#btnCloseSettings').click();
     await openSettings(page);
     await expect(sheet.locator('#settingPageTurnAnimation [aria-checked="true"]')).toHaveText('淡入');
-    await expect(sheet.locator('#settingTapToTurn [aria-checked="true"]')).toHaveText('点击下一页');
+    await expect(sheet.locator('#settingTapToTurn [aria-checked="true"]')).toHaveText('单手');
     await expect(sheet.locator('#settingSwipeToTurn')).not.toBeChecked();
   });
 
-  test('左右分区 turns back on the left; 点击下一页 turns forward on either side', async ({ page }) => {
+  test('左右分区 turns back on the left; 单手 turns forward on either side', async ({ page }) => {
     await openOnPhone(page);
     await page.mouse.click(370, 420);
     await expect.poll(() => pageGroup(page)).toBe(1);
@@ -106,7 +108,7 @@ test.describe('Phone page turning', () => {
     await expect.poll(() => pageGroup(page)).toBe(1);
 
     await openSettings(page);
-    await page.locator('[data-tap-turn="forward"]').click();
+    await page.locator('[data-tap-preset="forward"]').click();
     await page.goBack();
     await expect(page.locator('#readerSettingsSheet')).toBeHidden();
     await page.mouse.click(20, 420);
@@ -116,6 +118,48 @@ test.describe('Phone page turning', () => {
     // The middle still shows the menu.
     await page.mouse.click(195, 420);
     await expect(page.locator('#mobileReaderToolbar')).toBeVisible();
+  });
+
+  test('上下分区 turns by row; 自定义 gives a corner its own action, and the guide draws nine parts', async ({ page }) => {
+    await openOnPhone(page);
+    await openSettings(page);
+    await page.locator('[data-tap-preset="rows"]').click();
+    const grid = page.locator('#settingTapGrid button');
+    await expect(grid).toHaveText(['上一页', '上一页', '上一页', '上一页', '菜单', '下一页', '下一页', '下一页', '下一页']);
+    await page.goBack();
+    await page.mouse.click(195, 760);
+    await expect.poll(() => pageGroup(page)).toBe(1);
+    await page.mouse.click(195, 80);
+    await expect.poll(() => pageGroup(page)).toBe(0);
+
+    await openSettings(page);
+    await page.locator('[data-tap-preset="custom"]').click();
+    await expect(page.locator('#settingTapChoices')).toBeVisible();
+    await grid.nth(2).click();
+    const saved = page.waitForResponse((r) => r.url().endsWith('/api/settings') && r.request().method() === 'PUT'
+      && JSON.parse(r.request().postData() || '{}').tapZones?.zones?.[2] === 'toc');
+    await page.locator('#settingTapChoices [data-tap-action="toc"]').click();
+    expect(JSON.parse((await saved).request().postData()).tapZones.zones)
+      .toEqual(['prev', 'prev', 'toc', 'prev', 'menu', 'next', 'next', 'next', 'next']);
+    await page.goBack();
+    // Top right now opens the contents.
+    await page.mouse.click(370, 80);
+    await expect(page.locator('#readerDrawer')).toBeVisible();
+    await page.goBack();
+
+    await page.evaluate(() => showTapGuide());
+    await expect(page.locator('#tapGuide .tap-guide-zone')).toHaveCount(9);
+    await expect(page.locator('#tapGuide .tap-guide-zone').nth(2)).toHaveText('目录');
+  });
+
+  test('page turner keys: up and down turn pages too', async ({ page }) => {
+    await openOnPhone(page);
+    await page.keyboard.press('ArrowDown');
+    await expect.poll(() => pageGroup(page)).toBe(1);
+    await page.keyboard.press('PageDown');
+    await expect.poll(() => pageGroup(page)).toBe(2);
+    await page.keyboard.press('ArrowUp');
+    await expect.poll(() => pageGroup(page)).toBe(1);
   });
 
   test('平移: the page follows the finger, then slides on to the next page; a short pull springs back', async ({ page }) => {

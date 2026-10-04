@@ -147,6 +147,7 @@ function applyTypography() {
   document.documentElement.dataset.textIndent = String(indent);
   document.documentElement.style.setProperty('--reader-text-indent', indent === 'book' ? '0em' : `${indent}em`);
   document.documentElement.style.setProperty('--reader-para-spacing', `${state.paragraphSpacing}em`);
+  document.documentElement.style.setProperty('--reader-font-weight', String(state.fontWeight || 400));
   const stack = FONT_STACKS[state.fontFamily] || FONT_STACKS[DEFAULT_READER_FONT];
   ensureReaderFontStylesheets(state.fontFamily);
   document.documentElement.style.setProperty('--reader-font-family', stack);
@@ -462,12 +463,15 @@ function syncVisualSettingsControls() {
     _fontPreviewsLoaded = true;
     for (const name of Object.keys(FONT_STYLESHEETS)) ensureReaderFontStylesheets(name);
     panel.querySelectorAll('[data-font-choice]').forEach((button) => {
+      const face = FONT_STACKS[button.dataset.fontChoice] || '';
       const sample = button.querySelector('.settings-font-sample');
-      if (sample) sample.style.fontFamily = FONT_STACKS[button.dataset.fontChoice] || '';
+      if (sample) sample.style.fontFamily = face;
+      const name = button.querySelector('.settings-font-name');
+      if (name) name.style.fontFamily = face;
     });
   }
   panel.querySelectorAll('[data-theme-choice]').forEach((button) => {
-    button.setAttribute('aria-pressed', String(button.dataset.themeChoice === state.theme));
+    button.setAttribute('aria-pressed', String(!state.readerStyle && button.dataset.themeChoice === state.theme));
   });
   panel.querySelectorAll('[data-font-choice]').forEach((button) => {
     button.setAttribute('aria-pressed', String(button.dataset.fontChoice === state.fontFamily));
@@ -487,6 +491,7 @@ function syncVisualSettingsControls() {
 
 function syncSettingsPanel() {
   if (typeof syncNativeClient === 'function') syncNativeClient();
+  if (typeof syncReaderTipsSettings === 'function') syncReaderTipsSettings();
   const settingsPanel = document.getElementById('readerPanelSettings');
   const format = state.contentType === 'pdf' ? 'pdf' : 'reflow';
   if (settingsPanel && settingsPanel.dataset.contentFormat !== format) {
@@ -559,16 +564,7 @@ function syncSettingsPanel() {
   document.querySelectorAll('[data-page-turn]').forEach((button) => {
     button.setAttribute('aria-checked', String(button.dataset.pageTurn === turn));
   });
-  const tap = state.tapToTurn === 'forward' ? 'forward' : 'zones';
-  document.querySelectorAll('[data-tap-turn]').forEach((button) => {
-    button.setAttribute('aria-checked', String(button.dataset.tapTurn === tap));
-  });
-  const tapHint = document.getElementById('settingTapToTurnHint');
-  if (tapHint) {
-    tapHint.textContent = tap === 'forward'
-      ? '点屏幕任意位置下一页（适合单手），点中间呼出菜单；向右滑回到上一页。'
-      : '点左侧上一页，点右侧下一页，点中间呼出菜单。';
-  }
+  if (typeof syncTapZoneSettings === 'function') syncTapZoneSettings();
   const swipe = document.getElementById('settingSwipeToTurn');
   if (swipe) swipe.checked = state.swipeToTurn !== false;
   const pdfPageColors = String(state.pdfPageColors === 'original' ? 'original' : 'theme');
@@ -583,6 +579,9 @@ function syncSettingsPanel() {
       button.setAttribute('aria-checked', String(button.dataset.textIndent === current));
     });
   }
+  document.querySelectorAll('[data-font-weight]').forEach((button) => {
+    button.setAttribute('aria-checked', String(Number(button.dataset.fontWeight) === (state.fontWeight || 400)));
+  });
   if (paragraphSpacing) {
     paragraphSpacing.value = String(state.paragraphSpacing);
     syncTypographySliderAccessibility('paragraphSpacing', state.paragraphSpacing);
@@ -668,6 +667,8 @@ function setupSettingsPanel() {
   const paragraphSpacing = document.getElementById('settingParagraphSpacing');
   const resetTypography = document.getElementById('btnResetTypography');
   theme?.addEventListener('change', () => {
+    // A built-in theme replaces an own style.
+    state.readerStyle = null;
     applyTheme(theme.value, false);
     syncSettingsPanel();
     persistUserSettings();
@@ -721,11 +722,9 @@ function setupSettingsPanel() {
     persistUserSettings();
   });
   document.getElementById('settingTapToTurn')?.addEventListener('click', (event) => {
-    const choice = event.target.closest?.('[data-tap-turn]');
-    if (!choice || choice.dataset.tapTurn === state.tapToTurn) return;
-    state.tapToTurn = choice.dataset.tapTurn === 'forward' ? 'forward' : 'zones';
-    syncSettingsPanel();
-    persistUserSettings();
+    const choice = event.target.closest?.('[data-tap-preset]');
+    if (!choice || typeof setTapZonePreset !== 'function') return;
+    setTapZonePreset(choice.dataset.tapPreset);
   });
   document.getElementById('settingSwipeToTurn')?.addEventListener('change', (event) => {
     state.swipeToTurn = event.target.checked;
@@ -780,6 +779,14 @@ function setupSettingsPanel() {
     applyTypography();
   });
   resetTypography?.addEventListener('click', resetTypographySettings);
+  document.getElementById('settingFontWeight')?.addEventListener('click', (event) => {
+    const choice = event.target.closest?.('[data-font-weight]');
+    if (!choice) return;
+    state.fontWeight = Number(choice.dataset.fontWeight) || 400;
+    applyTypography();
+    syncSettingsPanel();
+    persistUserSettings();
+  });
   document.getElementById('btnFontSmaller')?.addEventListener('click', () => stepFontSize(-1));
   document.getElementById('btnFontLarger')?.addEventListener('click', () => stepFontSize(1));
   const settingsPanel = document.getElementById('readerPanelSettings');

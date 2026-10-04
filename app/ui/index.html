@@ -14,7 +14,7 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="枕书">
-  <link rel="stylesheet" href="styles.css?v=121">
+  <link rel="stylesheet" href="styles.css?v=122">
   <link rel="stylesheet" href="styles/shelf-nav.css?v=4">
   <link rel="stylesheet" href="styles/stats.css?v=2">
   <link rel="stylesheet" href="styles/notes.css?v=1">
@@ -23,7 +23,7 @@
   <link rel="stylesheet" href="styles/buttons.css?v=2">
   <link rel="stylesheet" href="styles/glass.css?v=4">
   <link rel="stylesheet" href="styles/shelf-phone.css?v=1">
-  <link rel="stylesheet" href="styles/reader-mobile.css?v=10">
+  <link rel="stylesheet" href="styles/reader-mobile.css?v=21">
 </head>
 <body class="is-welcome">
   <svg class="zs-glass-defs" width="0" height="0" aria-hidden="true" focusable="false">
@@ -184,12 +184,18 @@
             </div>
           </div>
           <div class="settings-field settings-indent-field settings-turn-field" data-pdf-inapplicable data-phone-paged-only>
-            <span class="settings-field-label" id="settingTapToTurnLabel">点击翻页</span>
+            <span class="settings-field-label" id="settingTapToTurnLabel">点击区域</span>
             <div class="settings-indent-segments settings-turn-segments" id="settingTapToTurn" role="radiogroup" aria-labelledby="settingTapToTurnLabel">
-              <button type="button" role="radio" data-tap-turn="zones" aria-checked="true">左右分区</button>
-              <button type="button" role="radio" data-tap-turn="forward" aria-checked="false">点击下一页</button>
+              <button type="button" role="radio" data-tap-preset="sides" aria-checked="true">左右分区</button>
+              <button type="button" role="radio" data-tap-preset="forward" aria-checked="false">单手</button>
+              <button type="button" role="radio" data-tap-preset="rows" aria-checked="false">上下分区</button>
+              <button type="button" role="radio" data-tap-preset="custom" aria-checked="false">自定义</button>
             </div>
-            <p class="settings-field-description" id="settingTapToTurnHint">点左侧上一页，点右侧下一页，点中间呼出菜单。</p>
+            <!-- The page in nine: what a tap in each part does. 自定义: tap a
+                 part, then choose its action below. -->
+            <div class="settings-tap-grid" id="settingTapGrid" role="group" aria-label="九宫格点击区"></div>
+            <div class="settings-tip-choices settings-tap-choices" id="settingTapChoices" role="radiogroup" hidden></div>
+            <p class="settings-field-description" id="settingTapToTurnHint"></p>
             <button type="button" class="settings-turn-guide-button" id="btnShowTapGuide">查看点击区域</button>
           </div>
           <label class="settings-field settings-checkbox settings-turn-field" data-pdf-inapplicable data-phone-paged-only>
@@ -233,6 +239,21 @@
         </div>
       </section>
       <button type="button" class="settings-more-toggle" id="btnSettingsMore" aria-expanded="false" aria-controls="readerSettingsSheet">更多设置</button>
+      <section class="settings-group" data-settings-group="tips" id="settingsTipsGroup" hidden>
+        <h3 class="settings-group-title">页眉页脚</h3>
+        <div class="settings-group-card">
+          <div class="settings-field settings-indent-field">
+            <div class="settings-indent-segments settings-tips-presets" id="settingReaderTips" role="radiogroup" aria-label="页眉页脚">
+              <button type="button" role="radio" data-tips-preset="default" aria-checked="true">默认</button>
+              <button type="button" role="radio" data-tips-preset="minimal" aria-checked="false">极简</button>
+              <button type="button" role="radio" data-tips-preset="full" aria-checked="false">完整</button>
+              <button type="button" role="radio" data-tips-preset="custom" aria-checked="false">自定义</button>
+            </div>
+            <p class="settings-field-description" id="settingReaderTipsHint"></p>
+          </div>
+          <div class="settings-tips-custom" id="settingReaderTipsCustom" hidden></div>
+        </div>
+      </section>
       <section class="settings-group" data-settings-group="highlight">
         <h3 class="settings-group-title">划线</h3>
         <div class="settings-group-card">
@@ -270,6 +291,17 @@
               <button type="button" role="radio" data-text-indent="2" aria-checked="false" aria-label="2 字">2</button>
               <button type="button" role="radio" data-text-indent="3" aria-checked="false" aria-label="3 字">3</button>
               <button type="button" role="radio" data-text-indent="4" aria-checked="false" aria-label="4 字">4</button>
+            </div>
+          </div>
+          <!-- 字重 of the body text; headings keep their own. Fonts without
+               the weight show the nearest one they have. -->
+          <div class="settings-field settings-indent-field">
+            <span class="settings-field-label" id="settingFontWeightLabel">字重</span>
+            <div class="settings-indent-segments settings-weight-segments" id="settingFontWeight" role="radiogroup" aria-labelledby="settingFontWeightLabel">
+              <button type="button" role="radio" data-font-weight="300" aria-checked="false">细</button>
+              <button type="button" role="radio" data-font-weight="400" aria-checked="true">常规</button>
+              <button type="button" role="radio" data-font-weight="500" aria-checked="false">中</button>
+              <button type="button" role="radio" data-font-weight="600" aria-checked="false">粗</button>
             </div>
           </div>
           <details class="settings-advanced" id="settingsTypographyAdvanced">
@@ -671,6 +703,18 @@
         <button type="button" role="radio" data-mobile-theme="sepia" aria-checked="false"><i class="mobile-swatch" aria-hidden="true"></i>护眼</button>
         <button type="button" role="radio" data-mobile-theme="dark" aria-checked="false"><i class="mobile-swatch" aria-hidden="true"></i>深色</button>
       </div>
+      <label class="mobile-switch-row"><span>日夜跟随系统</span><input type="checkbox" role="switch" id="mobileThemeAuto"></label>
+      <p class="mobile-panel-hint" id="mobileThemeAutoHint" hidden></p>
+      <div class="mobile-field" id="mobileBrightnessField" hidden>
+        <div class="mobile-brightness-head"><span class="mobile-field-label">亮度</span>
+          <label class="mobile-inline-check"><input type="checkbox" id="mobileBrightnessSystem" checked>跟随系统</label></div>
+        <div class="mobile-slider is-brightness">
+          <span aria-hidden="true">☼</span>
+          <input type="range" id="mobileBrightness" min="5" max="100" step="1" value="60" aria-label="亮度">
+          <span class="is-large" aria-hidden="true">☀</span>
+          <output aria-hidden="true">亮度</output>
+        </div>
+      </div>
       <label class="mobile-switch-row"><span>液态玻璃</span><input type="checkbox" role="switch" id="mobileGlassSwitch"></label>
       <div class="mobile-field" id="mobileGlassAmbientField" hidden>
         <span class="mobile-field-label">背景光</span>
@@ -719,13 +763,14 @@
       <button type="button" id="btnMobileSettings" data-mobile-panel-toggle="type" aria-controls="mobilePanelType" aria-expanded="false" aria-label="排版与设置">设置</button>
     </div>
   </nav>
-  <!-- Immersive reading in the Android client: the time, top left, where
-       the hidden status bar was. -->
-  <div class="mobile-reading-clock" id="mobileReadingClock" aria-hidden="true" hidden></div>
-  <!-- Shown while the chrome is hidden: where you are, quietly. -->
-  <div class="mobile-reading-footer" id="mobileReadingFooter" aria-hidden="true" hidden>
-    <span id="mobileReadingFooterChapter"></span>
-    <span id="mobileReadingFooterPercent"></span>
+  <!-- 页眉页脚 (phones): what the page shows at its top and bottom while
+       the chrome is hidden — time, battery, book, chapter, page, progress —
+       in three places each (settings › 页眉页脚). -->
+  <div class="mobile-reading-tips is-header" id="mobileReadingHeader" aria-hidden="true" hidden>
+    <span data-tip-slot="0"></span><span data-tip-slot="1"></span><span data-tip-slot="2"></span>
+  </div>
+  <div class="mobile-reading-footer mobile-reading-tips is-footer" id="mobileReadingFooter" aria-hidden="true" hidden>
+    <span data-tip-slot="0"></span><span data-tip-slot="1"></span><span data-tip-slot="2"></span>
   </div>
 
   <!-- Reader view -->
@@ -801,25 +846,25 @@
   <script src="core/utils.js?v=28"></script>
   <script src="core/api.js?v=35"></script>
   <script src="core/reader-route.js?v=1"></script>
-  <script src="core/glass.js?v=3"></script>
-  <script src="core/user-state.js?v=43"></script>
+  <script src="core/glass.js?v=4"></script>
+  <script src="core/user-state.js?v=47"></script>
   <script src="reader/annotations.js?v=2"></script>
-  <script src="reader/device-profile.js?v=44"></script>
-  <script src="reader/epub.js?v=37"></script>
+  <script src="reader/device-profile.js?v=50"></script>
+  <script src="reader/epub.js?v=39"></script>
   <script src="reader/paragraphs.js?v=1"></script>
   <script src="reader/document.js?v=30"></script>
   <script src="reader/editor.js?v=28"></script>
   <script src="reader/highlights.js?v=41"></script>
   <script src="reader/ai.js?v=4"></script>
   <script src="reader/ai-index-manager.js?v=1"></script>
-  <script src="reader/selection-menu.js?v=7"></script>
+  <script src="reader/selection-menu.js?v=8"></script>
   <script src="reader/pdf-notes-export.js?v=1"></script>
   <script src="reader/actions.js?v=28"></script>
   <script src="reader/notes-panel.js?v=4"></script>
   <script src="reader/progress.js?v=37"></script>
   <script src="reader/bookmarks.js?v=4"></script>
   <script src="reader/pagination.js?v=38"></script>
-  <script src="reader/settings.js?v=44"></script>
+  <script src="reader/settings.js?v=49"></script>
   <script src="reader/jump-back.js?v=1"></script>
   <script src="reader/navigation.js?v=31"></script>
   <script src="reader/pdf-annotation-geometry.js?v=1"></script>
@@ -827,7 +872,7 @@
   <script src="reader/pdf-render-scheduler.js?v=1"></script>
   <script src="reader/pdf-colors.js?v=3"></script>
   <script src="reader/pdf.js?v=24"></script>
-  <script src="reader/lifecycle.js?v=36"></script>
+  <script src="reader/lifecycle.js?v=37"></script>
   <script src="reader/search.js?v=5"></script>
   <script src="shell/drawer.js?v=35"></script>
   <script src="library/reorder.js?v=1"></script>
