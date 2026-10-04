@@ -1338,9 +1338,21 @@ test('mobile PDF text selection still exposes the shared marking actions', async
   });
   await page.goto(APP_PATH);
   await page.locator('.library-book').filter({ hasText: 'e2e-reader' }).click();
-  // A phone shows one page at a time: read from the first.
+  // A phone shows one page at a time (whatever an earlier test saved):
+  // read from the first.
+  // Once the PDF is open (it restores the saved page as it opens).
+  await expect(page.locator('#pdfReaderStatus')).toContainText('4 页');
+  await page.evaluate(() => { state.mobilePdfMode = 'paged'; syncPhonePdfMode(); });
   await expect(page.locator('#pdfPages')).toHaveAttribute('data-phone-paged', 'true');
   await page.evaluate(() => window.pdfReaderController.goToPdfPage(0));
+  await expect.poll(() => page.evaluate(() => window.pdfReaderController.getCurrentPageIndex())).toBe(0);
+  // Switching to page mode re-fits the width (and redraws the text layer):
+  // let it settle before selecting.
+  await expect.poll(async () => {
+    const before = await page.evaluate(() => window.pdfReaderController.getScale());
+    await page.waitForTimeout(250);
+    return before === await page.evaluate(() => window.pdfReaderController.getScale());
+  }).toBe(true);
   const firstPage = page.locator('.pdf-page[data-page-index="0"]');
   await expect(firstPage).toHaveAttribute('data-text-layer-state', 'ready');
   await page.evaluate(() => {

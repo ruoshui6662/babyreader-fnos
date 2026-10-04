@@ -29,6 +29,7 @@ async function openPdfOnPhone(page) {
   // The page fits the width a moment after opening; until then it is wider
   // than the screen and a swipe pans it instead of turning.
   await expect.poll(() => page.evaluate(() => pdfReaderController.phonePagedZoomed())).toBe(false);
+  await expect(page.locator('#pdfPages')).not.toHaveAttribute('data-zoomed', '');
 }
 
 const current = (page) => page.evaluate(() => pdfReaderController.getCurrentPageIndex());

@@ -243,8 +243,9 @@ html[data-reader-surface="mobile"] .pdf-pages[data-phone-paged="true"] > .pdf-pa
 html[data-reader-surface="mobile"] .pdf-pages[data-phone-paged="true"] > .pdf-page { box-shadow: none; }
 /* touch-action is not inherited: the whole page leaves sideways moves to
    turning, until the page is zoomed in and has to pan. */
-html[data-reader-surface="mobile"] body.is-pdf-reader .pdf-pages[data-phone-paged="true"]:not([data-zoomed]),
-html[data-reader-surface="mobile"] body.is-pdf-reader .pdf-pages[data-phone-paged="true"]:not([data-zoomed]) * { touch-action: pan-y; }
+html[data-reader-surface="mobile"] body.is-pdf-reader[data-pdf-paged-touch="turn"] .reader,
+html[data-reader-surface="mobile"] body.is-pdf-reader[data-pdf-paged-touch="turn"] .reader *,
+html[data-reader-surface="mobile"] body.is-pdf-reader[data-pdf-paged-touch="turn"] #pdfPages { touch-action: pan-y; }
 .pdf-page.is-turn-next { animation: zs-pdf-turn-next var(--dur-med) var(--ease-out); }
 .pdf-page.is-turn-previous { animation: zs-pdf-turn-previous var(--dur-med) var(--ease-out); }
 .pdf-page.is-turn-fade { animation: zs-pdf-turn-fade 180ms ease-out; }
