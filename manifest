@@ -1,5 +1,5 @@
 appname=zhenshu
-version=0.0.24
+version=0.0.25
 display_name=枕书
 desc=枕书：飞牛 fnOS 上的私人书房。阅读 EPUB、PDF、MOBI/AZW3、Markdown 和 TXT，支持划线笔记、全文搜索与 AI 问书，阅读进度多端同步。
 source=thirdparty
@@ -13,4 +13,4 @@ desktop_applaunchname=zhenshu.main
 ctl_stop=true
 checkport=false
 disable_authorization_path=false
-changelog=修复手机阅读页顶部和底部出现网格线、与正文颜色不一致的问题：纹理改为整屏一层，细麻改成纤维感、宣纸改成柔和颗粒；开启液态玻璃时，正文下面不再透出背景光；自定义样式的深浅一律按纸色决定。
+changelog=手机开启液态玻璃后，书库、阅读统计、笔记页顶部不再有割裂的横幅：页面从屏幕顶端开始，滚动后才出现柔和的模糊边缘，右上角按钮改为玻璃圆钮；修复阅读设置面板里行距滑块超出边缘；目录侧栏与设置页使用同一种纸色。
