@@ -1,5 +1,5 @@
 appname=zhenshu
-version=0.0.21
+version=0.0.22
 display_name=枕书
 desc=枕书：飞牛 fnOS 上的私人书房。阅读 EPUB、PDF、MOBI/AZW3、Markdown 和 TXT，支持划线笔记、全文搜索与 AI 问书，阅读进度多端同步。
 source=thirdparty
@@ -13,4 +13,4 @@ desktop_applaunchname=zhenshu.main
 ctl_stop=true
 checkport=false
 disable_authorization_path=false
-changelog=手机阅读设置改为平铺面板：底部工具栏为目录、笔记、进度、主题、设置，点进度、主题、设置会在工具栏上方弹出简洁面板（字号、边距、行距滑块，字体、缩进、翻页选项），不再层层套卡片；AI 问书移到右上角菜单。手机上的书库、统计、笔记页去掉了顶部的图标和名称横栏。
+changelog=安卓 App 隐藏状态栏阅读时，页面延伸到屏幕顶端，左上角显示当前时间，呼出的顶栏也从最顶端开始（需安卓 App 0.2.1）。AI 问书回到底部，呼出工具栏时右下角有圆形 AI 按钮。修复手机按页阅读 PDF 时翻页后滑动偶尔失效的问题。
