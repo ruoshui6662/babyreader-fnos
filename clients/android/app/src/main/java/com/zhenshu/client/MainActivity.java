@@ -7,6 +7,7 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.graphics.Color;
+import android.graphics.Insets;
 import android.graphics.Typeface;
 import android.graphics.drawable.GradientDrawable;
 import android.net.Uri;
@@ -35,6 +36,7 @@ import android.webkit.WebView;
 import android.webkit.WebViewClient;
 import android.widget.Button;
 import android.widget.EditText;
+import android.widget.FrameLayout;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
 import android.widget.TextView;
@@ -57,6 +59,10 @@ public class MainActivity extends Activity {
     private static final String APP_PATH = "/app/zhenshu/";
     private static final int FILE_CHOOSER_REQUEST = 1;
 
+    // One root for the whole life of the activity: the setup page or the web
+    // view goes inside it, padded clear of the status bar, navigation bar,
+    // camera cutout and keyboard (Android 15 draws apps edge to edge).
+    private FrameLayout root;
     private WebView web;
     private String server;
     private boolean volumeKeysTurnPages;
@@ -65,6 +71,20 @@ public class MainActivity extends Activity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        root = new FrameLayout(this);
+        root.setBackgroundColor(0xFF141416);
+        root.setOnApplyWindowInsetsListener((view, insets) -> {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                Insets bars = insets.getInsets(WindowInsets.Type.systemBars() | WindowInsets.Type.displayCutout());
+                Insets ime = insets.getInsets(WindowInsets.Type.ime());
+                view.setPadding(bars.left, bars.top, bars.right, Math.max(bars.bottom, ime.bottom));
+                return WindowInsets.CONSUMED;
+            }
+            view.setPadding(insets.getSystemWindowInsetLeft(), insets.getSystemWindowInsetTop(),
+                insets.getSystemWindowInsetRight(), insets.getSystemWindowInsetBottom());
+            return insets.consumeSystemWindowInsets();
+        });
+        setContentView(root);
         server = prefs().getString(KEY_SERVER, null);
         if (server == null) showSetup(null, null);
         else openServer(server);
@@ -163,7 +183,8 @@ public class MainActivity extends Activity {
         scroll.setBackgroundColor(0xFF141416);
         scroll.setFillViewport(true);
         scroll.addView(column);
-        setContentView(scroll);
+        root.removeAllViews();
+        root.addView(scroll);
     }
 
     private GradientDrawable rounded(int color, float radiusDp) {
@@ -201,7 +222,7 @@ public class MainActivity extends Activity {
         settings.setDatabaseEnabled(true);
         settings.setMediaPlaybackRequiresUserGesture(true);
         settings.setSupportZoom(false);
-        settings.setUserAgentString(settings.getUserAgentString() + " ZhenshuAndroid/0.1");
+        settings.setUserAgentString(settings.getUserAgentString() + " ZhenshuAndroid/0.1.1");
         CookieManager.getInstance().setAcceptCookie(true);
 
         web.addJavascriptInterface(new Bridge(), "ZhenshuNative");
@@ -268,7 +289,8 @@ public class MainActivity extends Activity {
             Toast.makeText(this, "已开始下载", Toast.LENGTH_SHORT).show();
         });
 
-        setContentView(web);
+        root.removeAllViews();
+        root.addView(web);
         web.loadUrl(address);
     }
 
@@ -281,7 +303,7 @@ public class MainActivity extends Activity {
         if (web == null) return;
         web.stopLoading();
         web.removeJavascriptInterface("ZhenshuNative");
-        ((ViewGroup) web.getParent()).removeView(web);
+        if (web.getParent() instanceof ViewGroup) ((ViewGroup) web.getParent()).removeView(web);
         web.destroy();
         web = null;
         volumeKeysTurnPages = false;
@@ -303,10 +325,15 @@ public class MainActivity extends Activity {
 
     private void setChrome(boolean dark, boolean immersive, boolean keepOn) {
         int color = dark ? 0xFF141416 : 0xFFF2F3F5;
+        // Edge to edge the bars are see-through: the root behind them sets
+        // their colour. Older versions colour the bars themselves.
+        root.setBackgroundColor(color);
         getWindow().setStatusBarColor(color);
         getWindow().setNavigationBarColor(color);
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-            WindowInsetsController controller = getWindow().getInsetsController();
+            // Through the decor view: the window's own controller is null
+            // until the decor exists.
+            WindowInsetsController controller = getWindow().getDecorView().getWindowInsetsController();
             if (controller != null) {
                 int light = WindowInsetsController.APPEARANCE_LIGHT_STATUS_BARS | WindowInsetsController.APPEARANCE_LIGHT_NAVIGATION_BARS;
                 controller.setSystemBarsAppearance(dark ? 0 : light, light);
@@ -338,7 +365,7 @@ public class MainActivity extends Activity {
 
         @JavascriptInterface
         public String version() {
-            return "0.1.0";
+            return "0.1.1";
         }
 
         @JavascriptInterface
