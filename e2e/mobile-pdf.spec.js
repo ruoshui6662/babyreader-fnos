@@ -23,6 +23,12 @@ async function openPdfOnPhone(page) {
   await page.locator('.library-book').filter({ hasText: 'e2e-columns' }).first().click();
   await expect(page.locator('#pdfPages')).toHaveAttribute('data-phone-paged', 'true');
   await expect(page.locator('.pdf-page.is-current-page')).toHaveCount(1);
+  // Start on the first page whatever an earlier run saved.
+  await page.evaluate(() => pdfReaderController.goToPdfPage(0));
+  await expect.poll(() => page.evaluate(() => pdfReaderController.getCurrentPageIndex())).toBe(0);
+  // The page fits the width a moment after opening; until then it is wider
+  // than the screen and a swipe pans it instead of turning.
+  await expect.poll(() => page.evaluate(() => pdfReaderController.phonePagedZoomed())).toBe(false);
 }
 
 const current = (page) => page.evaluate(() => pdfReaderController.getCurrentPageIndex());

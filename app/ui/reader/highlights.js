@@ -96,6 +96,8 @@ function decorateMobileToolbar() {
     btnMobileTheme: themeIconSvg(state.theme === 'dark' ? 'light' : 'dark'),
     btnMobileSettings: settingsIconSvg()
   };
+  const aiFloat = document.getElementById('btnMobileAiFloat');
+  if (aiFloat && !aiFloat.querySelector('svg')) aiFloat.innerHTML = aiIconSvg();
   for (const [id, svg] of Object.entries(icons)) {
     const button = document.getElementById(id);
     if (!button || button.querySelector('svg')) continue;
