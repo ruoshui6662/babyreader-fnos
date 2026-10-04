@@ -158,7 +158,7 @@ li:first-child .stats-rank-no { color: var(--library-on-accent, #fff); backgroun
 }
 .stats-rank-body, .stats-note-body { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
 .stats-rank-title, .stats-note-title { overflow: hidden; font-size: 14px; font-weight: 600; white-space: nowrap; text-overflow: ellipsis; }
-.stats-progress { display: block; height: 4px; overflow: hidden; background: var(--library-fill, var(--color-fill)); border-radius: 99px; }
+.stats-progress { display: block; height: 8px; overflow: hidden; background: var(--library-fill, var(--color-fill)); border-radius: 99px; }
 .stats-progress i { display: block; height: 100%; background: var(--library-accent, var(--color-accent)); border-radius: 99px; }
 .stats-rank-time { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; font-size: 14px; font-weight: 700; white-space: nowrap; }
 .stats-rank-time small { color: var(--library-text-tertiary, var(--color-text-3)); font-size: 11px; font-weight: 400; }

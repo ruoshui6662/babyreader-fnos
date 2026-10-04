@@ -133,6 +133,7 @@ function syncMobileReadingBar() {
   const slider = document.getElementById('mobileReaderProgress');
   if (slider && document.activeElement !== slider && !slider.dataset.dragging) {
     slider.value = String(Math.round(position.ratio * 1000));
+    slider.style.setProperty('--range-progress', `${position.ratio * 100}%`);
     slider.setAttribute('aria-valuetext', [position.label, percent].filter(Boolean).join(' · '));
   }
   const chapter = document.getElementById('mobileReadingFooterChapter');
@@ -208,6 +209,7 @@ function setupMobileReadingBar() {
     slider.dataset.bound = 'true';
     slider.addEventListener('input', () => {
       slider.dataset.dragging = 'true';
+      slider.style.setProperty('--range-progress', `${Number(slider.value) / 10}%`);
       previewMobileProgress(slider.value);
     });
     slider.addEventListener('change', () => {
