@@ -65,7 +65,7 @@ public class MainActivity extends Activity {
     private static final String MODE_DIRECT = "direct";
     private static final String MODE_WEB = "web";
     private static final String APP_PATH = DirectLogin.APP_PATH;
-    private static final String VERSION = "0.2.1";
+    private static final String VERSION = "0.2.2";
     private static final int FILE_CHOOSER_REQUEST = 1;
     private static final int SETUP_BACKGROUND = 0xFF141416;
 
@@ -374,7 +374,7 @@ public class MainActivity extends Activity {
     private void openServer(String address) {
         server = address;
         destroyWeb();
-        web = new WebView(this);
+        web = new ReaderWebView(this);
         web.setBackgroundColor(SETUP_BACKGROUND);
         WebSettings settings = web.getSettings();
         settings.setJavaScriptEnabled(true);
