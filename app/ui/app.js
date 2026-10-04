@@ -263,6 +263,7 @@ window.appHost = {
     renderToc();
     updateTopbarState();
     openDefaultReaderToc();
+    if (typeof maybeShowTapGuide === 'function') maybeShowTapGuide();
   },
 
   notifySaved({ path, name } = {}) {

@@ -15,7 +15,13 @@ module.exports = defineConfig({
     baseURL: 'http://127.0.0.1:8099',
     trace: 'retain-on-failure',
     screenshot: 'only-on-failure',
-    video: 'retain-on-failure'
+    video: 'retain-on-failure',
+    // Every test starts with fresh storage: mark the phone 点击区域 guide as
+    // seen so it does not cover the page (e2e/mobile-page-turn.spec.js shows it).
+    storageState: {
+      cookies: [],
+      origins: [{ origin: 'http://127.0.0.1:8099', localStorage: [{ name: 'zhenshu.tapGuideSeen', value: '1' }] }]
+    }
   },
   webServer: {
     command: 'node e2e/start-server.js',

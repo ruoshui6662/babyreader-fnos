@@ -227,6 +227,57 @@ function applyPagedOffset(article, left) {
   article.scrollLeft = left;
 }
 
+// Phone page turns (翻页动画). The position (state.pageOffset) changes at
+// once; only the picture catches up. 平移 eases scrollLeft to the new page
+// from wherever it is (also from a page dragged under the finger); 淡入
+// jumps and fades the new page in. A slow first frame gives up and jumps,
+// so a heavy page never turns sluggishly.
+let pageTurnFrame = 0;
+
+function pageTurnStyle() {
+  if (typeof isMobileReaderSurface !== 'function' || !isMobileReaderSurface()) return 'none';
+  if (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) return 'none';
+  return ['slide', 'fade', 'none'].includes(state.pageTurnAnimation) ? state.pageTurnAnimation : 'slide';
+}
+
+function cancelPageTurnAnimation() {
+  if (pageTurnFrame) cancelAnimationFrame(pageTurnFrame);
+  pageTurnFrame = 0;
+}
+
+function animatePagedOffset(article, left, style = pageTurnStyle()) {
+  cancelPageTurnAnimation();
+  const from = article.scrollLeft;
+  state.pageOffset = left;
+  if (style === 'fade') {
+    article.scrollLeft = left;
+    article.animate?.([{ opacity: 0.25 }, { opacity: 1 }], { duration: 180, easing: 'ease-out' });
+    return;
+  }
+  if (style !== 'slide' || Math.abs(from - left) < 1) {
+    article.scrollLeft = left;
+    return;
+  }
+  const duration = 240;
+  let start = 0;
+  let previous = 0;
+  const step = (now) => {
+    if (!start) start = previous = now;
+    // A frame much slower than 60 fps means a heavy page: finish at once.
+    if (now - previous > 80) {
+      article.scrollLeft = left;
+      pageTurnFrame = 0;
+      return;
+    }
+    previous = now;
+    const t = Math.min(1, (now - start) / duration);
+    const eased = 1 - Math.pow(1 - t, 3);
+    article.scrollLeft = from + (left - from) * eased;
+    pageTurnFrame = t < 1 ? requestAnimationFrame(step) : 0;
+  };
+  pageTurnFrame = requestAnimationFrame(step);
+}
+
 function ensurePaginationTailSpacer(article) {
   let spacer = article.querySelector('.pagination-tail-spacer');
   // Rebuild the sentinel on every paged measurement. The content track can
@@ -267,7 +318,8 @@ function pagedLogicalLeft(article, target) {
 function setPageGroup(group, {
   behavior = 'auto',
   save = false,
-  redrawHighlights = false
+  redrawHighlights = false,
+  animate = false
 } = {}) {
   const reader = document.getElementById('reader');
   const article = document.getElementById('article');
@@ -278,7 +330,11 @@ function setPageGroup(group, {
   const left = pageLeftForGroup(nextGroup);
   state.pageGroup = nextGroup;
   state.pageNumber = Math.min(state.pageCount, nextGroup * pageStep() + 1);
-  applyPagedOffset(article, left);
+  if (animate) animatePagedOffset(article, left);
+  else {
+    cancelPageTurnAnimation();
+    applyPagedOffset(article, left);
+  }
   reader.scrollLeft = 0;
   reader.scrollTop = 0;
   updatePaginationControls();
@@ -698,7 +754,7 @@ function navigatePageGroup(delta) {
     }
     return false;
   }
-  return setPageGroup(target, { save: true });
+  return setPageGroup(target, { save: true, animate: true });
 }
 
 function applyContinuousScroll() {

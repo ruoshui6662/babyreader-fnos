@@ -88,12 +88,11 @@ function setupReaderNavigation() {
     }
     const paged = state.contentType === 'epub' && state.effectiveReadingMode !== 'scroll';
     const width = window.innerWidth || reader.clientWidth || 1;
-    if (paged && event.clientX < width / 3) {
-      navigatePageGroup(-1);
-      return;
-    }
-    if (paged && event.clientX > (width * 2) / 3) {
-      navigatePageGroup(1);
+    const side = event.clientX < width / 3 ? -1 : event.clientX > (width * 2) / 3 ? 1 : 0;
+    // 点击下一页 (one hand): either side turns forward; 左右分区: each side
+    // its own way. The middle always shows the chrome.
+    if (paged && side) {
+      navigatePageGroup(state.tapToTurn === 'forward' ? 1 : side);
       return;
     }
     setMobileChromeOpen(true);
@@ -157,7 +156,7 @@ function setupPositionTracking() {
 
   const handleScroll = () => {
     saveTextScroll();
-    if (state.effectiveReadingMode === 'scroll') return;
+    if (state.effectiveReadingMode === 'scroll' || state.pageDragging) return;
     clearTimeout(scrollSnapTimer);
     scrollSnapTimer = setTimeout(() => snapPaginationToNearestGroup({ save: true }), 120);
   };
@@ -168,13 +167,48 @@ function setupPositionTracking() {
   reader.addEventListener('scroll', handleScroll);
   document.getElementById('article')?.addEventListener('scroll', handleScroll);
 
+  // On a phone with 平移, the page follows a horizontal swipe under the
+  // finger; letting go turns (or springs back) from where it is.
+  let pageDrag = null;
+  const swipeAllowed = (event) => event.pointerType === 'mouse' || state.swipeToTurn !== false;
+  const endPageDrag = () => {
+    if (!pageDrag) return;
+    pageDrag = null;
+    state.pageDragging = false;
+  };
+
   reader.addEventListener('pointerdown', (event) => {
     pointerBlocked = event.button !== 0 || isPaginationInteractionTarget(event.target);
     pointerStartX = pointerBlocked ? null : event.clientX;
     pointerStartY = pointerBlocked ? null : event.clientY;
+    endPageDrag();
+  });
+
+  reader.addEventListener('pointermove', (event) => {
+    if (pointerStartX === null || event.pointerType === 'mouse' || state.effectiveReadingMode === 'scroll') return;
+    if (!swipeAllowed(event) || typeof pageTurnStyle !== 'function' || pageTurnStyle() !== 'slide') return;
+    const deltaX = event.clientX - pointerStartX;
+    const deltaY = event.clientY - pointerStartY;
+    const article = document.getElementById('article');
+    if (!pageDrag) {
+      if (Math.abs(deltaX) < 10 || Math.abs(deltaX) <= Math.abs(deltaY)) return;
+      const selection = window.getSelection?.();
+      if (!article || isEpubChapterLoading() || (selection && !selection.isCollapsed)) return;
+      if (typeof cancelPageTurnAnimation === 'function') cancelPageTurnAnimation();
+      pageDrag = { base: state.pageOffset, max: Math.max(0, pageLeftForGroup(state.pageGroupCount - 1)) };
+      state.pageDragging = true;
+    }
+    // Past the first or last page of the chapter the page moves at a third
+    // of the finger's pace: it can be pulled, it will not run away.
+    let left = pageDrag.base - deltaX;
+    if (left < 0) left /= 3;
+    if (left > pageDrag.max) left = pageDrag.max + (left - pageDrag.max) / 3;
+    article.scrollLeft = left;
   });
 
   reader.addEventListener('pointerup', (event) => {
+    const dragged = Boolean(pageDrag);
+    endPageDrag();
     if (pointerBlocked || pointerStartX === null || state.effectiveReadingMode === 'scroll') return;
     const selection = window.getSelection?.();
     if (selection && !selection.isCollapsed) return;
@@ -182,15 +216,27 @@ function setupPositionTracking() {
     const deltaY = event.clientY - pointerStartY;
     pointerStartX = null;
     pointerStartY = null;
-    if (Math.abs(deltaX) < 48 || Math.abs(deltaX) <= Math.abs(deltaY)) {
-      snapPaginationToNearestGroup({ save: true });
+    const article = document.getElementById('article');
+    const settle = () => {
+      if (dragged && article) animatePagedOffset(article, state.pageOffset);
+      else snapPaginationToNearestGroup({ save: true });
+    };
+    if (!swipeAllowed(event) || Math.abs(deltaX) < 48 || Math.abs(deltaX) <= Math.abs(deltaY)) {
+      settle();
       return;
     }
     state.lastMobileSwipeAt = Date.now();
-    navigatePageGroup(deltaX < 0 ? 1 : -1);
+    // Into the next chapter the new chapter replaces the page; at the very
+    // first or last page nothing turns and the page springs back.
+    if (!navigatePageGroup(deltaX < 0 ? 1 : -1)) settle();
   });
 
   reader.addEventListener('pointercancel', () => {
+    if (pageDrag) {
+      const article = document.getElementById('article');
+      if (article) animatePagedOffset(article, state.pageOffset);
+    }
+    endPageDrag();
     pointerStartX = null;
     pointerStartY = null;
     pointerBlocked = false;

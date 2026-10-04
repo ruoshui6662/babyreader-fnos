@@ -38,6 +38,9 @@ function currentUserSettings() {
     pdfPageColors: state.pdfPageColors === 'original' ? 'original' : 'theme',
     liquidGlass: state.liquidGlass === true,
     glassAmbient: state.glassAmbient === 'uniform' ? 'uniform' : 'cover',
+    pageTurnAnimation: ['slide', 'fade', 'none'].includes(state.pageTurnAnimation) ? state.pageTurnAnimation : 'slide',
+    tapToTurn: state.tapToTurn === 'forward' ? 'forward' : 'zones',
+    swipeToTurn: state.swipeToTurn !== false,
     continuousScroll: readingMode === 'scroll',
     tocAutoOpen: state.tocOpen,
     highlightColor: state.highlightColor,
@@ -91,6 +94,9 @@ function applyUserState(userState) {
   state.continuousScroll = state.readingMode === 'scroll';
   state.effectiveReadingMode = state.readingMode;
   state.tocOpen = settings.tocAutoOpen === true;
+  state.pageTurnAnimation = ['slide', 'fade', 'none'].includes(settings.pageTurnAnimation) ? settings.pageTurnAnimation : 'slide';
+  state.tapToTurn = settings.tapToTurn === 'forward' ? 'forward' : 'zones';
+  state.swipeToTurn = settings.swipeToTurn !== false;
   // P0 typography: clamped exactly like the server does, so a hand-edited
   // settings file can never push the layout out of range.
   state.textIndent = normalizeTextIndent(settings.textIndent);

@@ -361,6 +361,54 @@ function setupMobileSettingsSheet() {
   });
 }
 
+// 点击区域 guide: shown over the page the first time a phone pages a book
+// (and from 设置 › 查看点击区域). It names what each part of the page does
+// for the current 点击翻页 choice; any tap dismisses it.
+const TAP_GUIDE_SEEN_KEY = 'zhenshu.tapGuideSeen';
+
+function showTapGuide() {
+  document.getElementById('tapGuide')?.remove();
+  const forward = state.tapToTurn === 'forward';
+  const guide = document.createElement('div');
+  guide.id = 'tapGuide';
+  guide.className = 'tap-guide';
+  guide.setAttribute('role', 'dialog');
+  guide.setAttribute('aria-label', '点击区域');
+  const zones = forward
+    ? [['下一页', ''], ['菜单', '点中间'], ['下一页', '']]
+    : [['上一页', '点左侧'], ['菜单', '点中间'], ['下一页', '点右侧']];
+  for (const [label, where] of zones) {
+    const zone = document.createElement('div');
+    zone.className = 'tap-guide-zone';
+    const name = document.createElement('strong');
+    name.textContent = label;
+    zone.appendChild(name);
+    if (where) {
+      const hint = document.createElement('span');
+      hint.textContent = where;
+      zone.appendChild(hint);
+    }
+    guide.appendChild(zone);
+  }
+  const foot = document.createElement('p');
+  foot.className = 'tap-guide-foot';
+  foot.textContent = `${state.swipeToTurn !== false ? '左右滑动也可以翻页。' : ''}可在 设置 › 阅读 中更改。点一下开始阅读`;
+  guide.appendChild(foot);
+  guide.addEventListener('click', (event) => {
+    event.stopPropagation();
+    guide.remove();
+  });
+  document.body.appendChild(guide);
+  try { localStorage.setItem(TAP_GUIDE_SEEN_KEY, '1'); } catch { /* private mode */ }
+}
+
+function maybeShowTapGuide() {
+  if (!isMobileReaderSurface() || state.contentType !== 'epub' || state.effectiveReadingMode === 'scroll') return;
+  let seen = false;
+  try { seen = localStorage.getItem(TAP_GUIDE_SEEN_KEY) === '1'; } catch { seen = true; }
+  if (!seen) showTapGuide();
+}
+
 // The phone reading drawer (目录 / 书签 / 标记与想法) opens from the left
 // with the open book on top: cover, title, author and how far in.
 function renderReaderDrawerBook() {
