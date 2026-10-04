@@ -793,7 +793,38 @@ function openMobileSub(name) {
   setMobilePanel('sub');
 }
 
+// 划线颜色 on the phone's settings page: four dots instead of a dropdown.
+function setupHighlightColorDots() {
+  const select = document.getElementById('settingHighlightColor');
+  const field = select?.closest('.settings-field');
+  if (!select || !field || field.querySelector('.settings-color-dots')) return;
+  const dots = document.createElement('div');
+  dots.className = 'settings-color-dots';
+  dots.setAttribute('role', 'radiogroup');
+  dots.setAttribute('aria-label', '划线颜色');
+  const sync = () => dots.querySelectorAll('button').forEach((dot) => {
+    dot.setAttribute('aria-checked', String(dot.dataset.color === select.value));
+  });
+  for (const option of select.options) {
+    const dot = document.createElement('button');
+    dot.type = 'button';
+    dot.setAttribute('role', 'radio');
+    dot.dataset.color = option.value;
+    dot.setAttribute('aria-label', option.textContent);
+    dot.addEventListener('click', () => {
+      select.value = option.value;
+      select.dispatchEvent(new Event('change', { bubbles: true }));
+      sync();
+    });
+    dots.appendChild(dot);
+  }
+  select.addEventListener('change', sync);
+  field.appendChild(dots);
+  sync();
+}
+
 function setupMobilePanels() {
+  setupHighlightColorDots();
   const toolbar = document.getElementById('mobileReaderToolbar');
   if (!toolbar || toolbar.dataset.panelsBound) return;
   toolbar.dataset.panelsBound = 'true';
@@ -812,8 +843,10 @@ function setupMobilePanels() {
   document.getElementById('btnMobileMoreSettings')?.addEventListener('click', (event) => {
     setMobilePanel(null);
     openReaderPanel('settings', event.currentTarget);
-    // The full sheet, already expanded.
+    // The full sheet, already expanded, with 自定义 open.
     document.getElementById('readerSettingsSheet')?.classList.add('is-expanded');
+    const advanced = document.getElementById('settingsTypographyAdvanced');
+    if (advanced) advanced.open = true;
     const more = document.getElementById('btnSettingsMore');
     if (more) {
       more.setAttribute('aria-expanded', 'true');

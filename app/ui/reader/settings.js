@@ -462,8 +462,11 @@ function syncVisualSettingsControls() {
     _fontPreviewsLoaded = true;
     for (const name of Object.keys(FONT_STYLESHEETS)) ensureReaderFontStylesheets(name);
     panel.querySelectorAll('[data-font-choice]').forEach((button) => {
+      const face = FONT_STACKS[button.dataset.fontChoice] || '';
       const sample = button.querySelector('.settings-font-sample');
-      if (sample) sample.style.fontFamily = FONT_STACKS[button.dataset.fontChoice] || '';
+      if (sample) sample.style.fontFamily = face;
+      const name = button.querySelector('.settings-font-name');
+      if (name) name.style.fontFamily = face;
     });
   }
   panel.querySelectorAll('[data-theme-choice]').forEach((button) => {
