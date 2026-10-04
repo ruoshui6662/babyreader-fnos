@@ -99,6 +99,9 @@ function setupReaderNavigation() {
 
   reader?.addEventListener('scroll', () => {
     const currentScrollTop = Math.max(0, Number(reader.scrollTop) || 0);
+    // The shelf's top edge: content under the status bar and the top
+    // buttons gets a soft material only once it has scrolled there.
+    document.body.classList.toggle('shelf-scrolled', document.body.classList.contains('is-library') && currentScrollTop > 4);
     const isMobileEpub = isMobileReaderSurface() && state.contentType === 'epub';
     if (isMobileReaderSurface() && typeof syncMobileReadingBar === 'function') syncMobileReadingBar();
 
