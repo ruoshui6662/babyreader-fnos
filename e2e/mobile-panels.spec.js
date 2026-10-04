@@ -5,6 +5,8 @@ const {
   openEpubFixture,
   resetEpubFixtureState,
   resetReaderSettings,
+  openMobileAi,
+  openMobileSettingsSheet,
   showMobileReaderChrome
 } = require('./helpers/reader');
 
@@ -43,17 +45,12 @@ test.describe('Phone panels', () => {
     test(`settings, contents and AI fit a ${width}px phone`, async ({ page }) => {
       await openOnPhone(page, width);
 
-      await showMobileReaderChrome(page);
-      await page.locator('#btnMobileSettings').click();
+      // 设置 › 更多设置: the whole sheet, already expanded.
+      await openMobileSettingsSheet(page);
       const settings = page.locator('#readerSettingsSheet');
-      await expect(settings).toBeVisible();
       await expect(settings.locator('.sheet-grip')).toBeVisible();
-      // The short sheet: appearance and 翻页方式; the rest behind 更多设置.
-      await expect(settings.locator('[data-settings-group="typography"]')).toBeHidden();
-      await expect(settings.locator('[data-reading-mode-choice="double"]')).toHaveAttribute('aria-checked', 'true');
-      await expectNoSideways(page, '#readerSettingsSheet');
-      await page.locator('#btnSettingsMore').click();
       await expect(settings.locator('[data-settings-group="typography"]')).toBeVisible();
+      await expect(settings.locator('[data-reading-mode-choice="double"]')).toHaveAttribute('aria-checked', 'true');
       await expectNoSideways(page, '#readerSettingsSheet');
       await page.goBack();
       await expect(settings).toBeHidden();
@@ -65,8 +62,7 @@ test.describe('Phone panels', () => {
       await page.goBack();
       await expect(page.locator('#readerDrawer')).toBeHidden();
 
-      await showMobileReaderChrome(page);
-      await page.locator('#btnMobileAi').click();
+      await openMobileAi(page);
       const ai = page.locator('#aiModal');
       await expect(ai).toBeVisible();
       await expect(page.locator('#btnAiBookMap')).toBeHidden();
@@ -120,27 +116,54 @@ test.describe('Phone panels', () => {
     await expect(drawer).toBeHidden();
   });
 
-  test('翻页方式 switches between paging and scrolling and 更多设置 collapses on reopen', async ({ page }) => {
+  test('设置 opens a flat 排版 panel; 翻页 › switches paging and scrolling; 主题 and 进度 have their own panels', async ({ page }) => {
     await openOnPhone(page, 390);
     await showMobileReaderChrome(page);
     await page.locator('#btnMobileSettings').click();
-    await page.locator('[data-reading-mode-choice="scroll"]').click();
+    const type = page.locator('#mobilePanelType');
+    await expect(type).toBeVisible();
+    await expect(page.locator('#readerSettingsSheet')).toBeHidden();
+    await expect(page.locator('#btnMobileSettings')).toHaveAttribute('aria-expanded', 'true');
+    await expect(page.locator('#mobileFontSizeValue')).toHaveText('18');
+    await expect(page.locator('#mobileChipTurn')).toHaveText('左右翻页');
+
+    await page.locator('[data-mobile-sub="turn"]').click();
+    await expect(page.locator('#mobileSubTitle')).toHaveText('翻页');
+    await page.locator('#mobileSubBody .mobile-segments button', { hasText: '上下滚动' }).click();
     await expect(page.locator('body')).toHaveAttribute('data-reading-mode', 'scroll');
-    await expect(page.locator('[data-reading-mode-choice="scroll"]')).toHaveAttribute('aria-checked', 'true');
-    await page.locator('#btnSettingsMore').click();
-    await expect(page.locator('#readerSettingsSheet')).toHaveClass(/is-expanded/);
-    await page.locator('[data-reading-mode-choice="double"]').click();
+    await page.locator('#mobileSubBody .mobile-segments button', { hasText: '左右翻页' }).click();
     await expect(page.locator('body')).toHaveAttribute('data-reading-mode', 'double');
-    await page.goBack();
-    await showMobileReaderChrome(page);
-    await page.locator('#btnMobileSettings').click();
-    await expect(page.locator('#readerSettingsSheet')).not.toHaveClass(/is-expanded/);
+    await page.locator('#btnMobileSubBack').click();
+    await expect(type).toBeVisible();
+
+    // A bigger size through the panel's own slider.
+    await page.locator('#mobileFontSize').evaluate((input) => {
+      input.value = '133';
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+      input.dispatchEvent(new Event('change', { bubbles: true }));
+    });
+    await expect(page.locator('#settingFontSizeLabel')).toHaveText('24px');
+    await expect(page.locator('#mobileFontSizeValue')).toHaveText('24');
+
+    await page.locator('#btnMobileTheme').click();
+    await expect(page.locator('#mobilePanelTheme')).toBeVisible();
+    await expect(type).toBeHidden();
+    await page.locator('[data-mobile-theme="sepia"]').click();
+    await expect(page.locator('body')).toHaveClass(/theme-sepia/);
+    await expect(page.locator('[data-mobile-theme="sepia"]')).toHaveAttribute('aria-checked', 'true');
+
+    await page.locator('#btnMobileProgress').click();
+    await expect(page.locator('#mobilePanelProgress')).toBeVisible();
+    await expect(page.locator('#mobileStatPercent')).toHaveText(/^\d+$/);
+    // The same button again closes the panel; the toolbar stays.
+    await page.locator('#btnMobileProgress').click();
+    await expect(page.locator('#mobilePanelProgress')).toBeHidden();
+    await expect(page.locator('#mobileReaderToolbar')).toBeVisible();
   });
 
   test('dragging a sheet down by its grip closes it; a short drag springs back', async ({ page }) => {
     await openOnPhone(page, 390);
-    await showMobileReaderChrome(page);
-    await page.locator('#btnMobileSettings').click();
+    await openMobileSettingsSheet(page);
     const settings = page.locator('#readerSettingsSheet');
     await expect(settings).toBeVisible();
     const drag = (distance) => settings.locator('.sheet-grip').evaluate((grip, dy) => {
@@ -163,6 +186,7 @@ test.describe('Phone panels', () => {
   test('contents marks the current chapter; AI actions live behind ⋯', async ({ page }) => {
     await openOnPhone(page, 390);
     await showMobileReaderChrome(page);
+    await page.locator('#btnMobileProgress').click();
     await page.locator('#btnMobileNextChapter').click();
     await expect(page.locator('#readingProgress')).toContainText('第 2/');
     await showMobileReaderChrome(page);
@@ -170,8 +194,7 @@ test.describe('Phone panels', () => {
     await expect(page.locator('.toc a[aria-current="location"]')).toHaveText('第二章');
     await page.goBack();
 
-    await showMobileReaderChrome(page);
-    await page.locator('#btnMobileAi').click();
+    await openMobileAi(page);
     await page.locator('#btnAiMore').click();
     await expect(page.locator('#aiMoreMenu')).toBeVisible();
     await page.locator('#aiMoreMenu [data-ai-proxy="btnAiConversations"]').click();

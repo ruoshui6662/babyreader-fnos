@@ -23,7 +23,7 @@
   <link rel="stylesheet" href="styles/buttons.css?v=2">
   <link rel="stylesheet" href="styles/glass.css?v=4">
   <link rel="stylesheet" href="styles/shelf-phone.css?v=1">
-  <link rel="stylesheet" href="styles/reader-mobile.css?v=6">
+  <link rel="stylesheet" href="styles/reader-mobile.css?v=7">
 </head>
 <body class="is-welcome">
   <svg class="zs-glass-defs" width="0" height="0" aria-hidden="true" focusable="false">
@@ -647,6 +647,14 @@
   <!-- Phone reading chrome: tap the middle of the page to show or hide it.
        Row 1: previous chapter · progress · next chapter. Row 2: five entries. -->
   <nav class="mobile-reader-toolbar" id="mobileReaderToolbar" hidden aria-label="移动端阅读工具栏">
+    <!-- Phone panels: one flat surface above the toolbar, one job each
+         (进度 / 主题 / 设置). They drive the settings sheet's controls. -->
+    <section class="mobile-panel" id="mobilePanelProgress" data-mobile-panel="progress" hidden aria-label="阅读进度">
+      <div class="mobile-stats">
+        <div><strong><span id="mobileStatPercent">0</span><small>%</small></strong><span>已读</span></div>
+        <div><strong><span id="mobileStatTime">0</span><small id="mobileStatTimeUnit">分钟</small></strong><span>本书阅读</span></div>
+        <div><strong><span id="mobileStatNotes">0</span><small>条</small></strong><span>笔记</span></div>
+      </div>
     <div class="mobile-reader-progress">
       <button type="button" class="mobile-chapter-button" id="btnMobilePreviousChapter" data-reader-action="previousChapter" aria-label="上一章">上一章</button>
       <div class="mobile-progress-track">
@@ -655,12 +663,59 @@
       </div>
       <button type="button" class="mobile-chapter-button" id="btnMobileNextChapter" data-reader-action="nextChapter" aria-label="下一章">下一章</button>
     </div>
+      <p class="mobile-progress-chapter" id="mobileProgressChapter"></p>
+    </section>
+    <section class="mobile-panel" id="mobilePanelTheme" data-mobile-panel="theme" hidden aria-label="主题">
+      <div class="mobile-swatches" role="radiogroup" aria-label="背景">
+        <button type="button" role="radio" data-mobile-theme="light" aria-checked="false"><i class="mobile-swatch" aria-hidden="true"></i>浅色</button>
+        <button type="button" role="radio" data-mobile-theme="sepia" aria-checked="false"><i class="mobile-swatch" aria-hidden="true"></i>护眼</button>
+        <button type="button" role="radio" data-mobile-theme="dark" aria-checked="false"><i class="mobile-swatch" aria-hidden="true"></i>深色</button>
+      </div>
+      <label class="mobile-switch-row"><span>液态玻璃</span><input type="checkbox" role="switch" id="mobileGlassSwitch"></label>
+      <div class="mobile-field" id="mobileGlassAmbientField" hidden>
+        <span class="mobile-field-label">背景光</span>
+        <div class="mobile-segments" id="mobileGlassAmbient"></div>
+      </div>
+    </section>
+    <section class="mobile-panel" id="mobilePanelType" data-mobile-panel="type" hidden aria-label="排版">
+      <div class="mobile-slider is-size" data-mobile-slider="fontSize" data-pdf-inapplicable>
+        <span aria-hidden="true">A</span>
+        <input type="range" id="mobileFontSize" aria-label="字号">
+        <span class="is-large" aria-hidden="true">A</span>
+        <output id="mobileFontSizeValue" aria-hidden="true"></output>
+      </div>
+      <div class="mobile-slider-pair" data-pdf-inapplicable>
+        <div class="mobile-slider" data-mobile-slider="pageMargin">
+          <span aria-hidden="true">小</span><input type="range" id="mobilePageMargin" aria-label="边距"><span aria-hidden="true">大</span>
+          <output aria-hidden="true">边距</output>
+        </div>
+        <div class="mobile-slider" data-mobile-slider="lineHeight">
+          <span aria-hidden="true">紧</span><input type="range" id="mobileLineHeight" aria-label="行距"><span aria-hidden="true">松</span>
+          <output aria-hidden="true">行距</output>
+        </div>
+      </div>
+      <div class="mobile-chips">
+        <button type="button" data-mobile-sub="font" data-pdf-inapplicable><span id="mobileChipFont">字体</span></button>
+        <button type="button" data-mobile-sub="indent" data-pdf-inapplicable><span id="mobileChipIndent">缩进</span></button>
+        <button type="button" data-mobile-sub="turn"><span id="mobileChipTurn">翻页</span></button>
+        <button type="button" id="btnMobileMoreSettings"><span>更多设置</span></button>
+      </div>
+    </section>
+    <section class="mobile-panel" id="mobilePanelSub" data-mobile-panel="sub" hidden>
+      <div class="mobile-sub-head">
+        <button type="button" class="mobile-sub-back" id="btnMobileSubBack" aria-label="返回">
+          <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"></path></svg>
+        </button>
+        <h3 id="mobileSubTitle"></h3>
+      </div>
+      <div class="mobile-sub-body" id="mobileSubBody"></div>
+    </section>
     <div class="mobile-reader-actions">
       <button type="button" id="btnMobileToc" data-reader-action="openToc" data-reader-panel="toc" aria-controls="readerDrawer" aria-expanded="false" aria-label="打开目录">目录</button>
       <button type="button" id="btnMobileNotes" data-reader-action="openNotes" data-reader-panel="notes" aria-controls="readerDrawer" aria-expanded="false" aria-label="打开标记与想法">笔记</button>
-      <button type="button" id="btnMobileAi" data-reader-action="openAi" aria-controls="aiModal" aria-label="打开 AI 问书">AI</button>
-      <button type="button" id="btnMobileTheme" data-reader-action="toggleTheme" aria-label="切换夜间模式">夜间</button>
-      <button type="button" id="btnMobileSettings" data-reader-action="openSettings" data-reader-panel="settings" aria-controls="readerSettingsSheet" aria-expanded="false" aria-label="打开显示设置">设置</button>
+      <button type="button" id="btnMobileProgress" data-mobile-panel-toggle="progress" aria-controls="mobilePanelProgress" aria-expanded="false" aria-label="阅读进度">进度</button>
+      <button type="button" id="btnMobileTheme" data-mobile-panel-toggle="theme" aria-controls="mobilePanelTheme" aria-expanded="false" aria-label="主题与背景">主题</button>
+      <button type="button" id="btnMobileSettings" data-mobile-panel-toggle="type" aria-controls="mobilePanelType" aria-expanded="false" aria-label="排版与设置">设置</button>
     </div>
   </nav>
   <!-- Shown while the chrome is hidden: where you are, quietly. -->
@@ -745,12 +800,12 @@
   <script src="core/glass.js?v=3"></script>
   <script src="core/user-state.js?v=43"></script>
   <script src="reader/annotations.js?v=2"></script>
-  <script src="reader/device-profile.js?v=42"></script>
+  <script src="reader/device-profile.js?v=43"></script>
   <script src="reader/epub.js?v=37"></script>
   <script src="reader/paragraphs.js?v=1"></script>
   <script src="reader/document.js?v=30"></script>
   <script src="reader/editor.js?v=28"></script>
-  <script src="reader/highlights.js?v=39"></script>
+  <script src="reader/highlights.js?v=40"></script>
   <script src="reader/ai.js?v=4"></script>
   <script src="reader/ai-index-manager.js?v=1"></script>
   <script src="reader/selection-menu.js?v=7"></script>

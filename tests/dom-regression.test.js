@@ -4203,17 +4203,18 @@ test('mobile continuous-scroll controls use flow chapter boundaries and a compac
   const document = window.document;
   const toolbar = document.getElementById('mobileReaderToolbar');
 
-  // No floating ⋯ toggle: tapping the page shows the chrome. Row 1 moves
-  // through the book, row 2 holds the five reading entries.
+  // No floating ⋯ toggle: tapping the page shows the chrome. The 进度 panel
+  // moves through the book; the toolbar holds the five reading entries:
+  // two open the drawer, three open a panel above the toolbar.
   assert.equal(document.getElementById('mobileReaderChromeToggle'), null);
   assert.deepEqual(
-    [...toolbar.querySelectorAll('.mobile-reader-progress button')].map((button) => button.dataset.readerAction),
+    [...toolbar.querySelectorAll('#mobilePanelProgress .mobile-reader-progress button')].map((button) => button.dataset.readerAction),
     ['previousChapter', 'nextChapter']
   );
   assert.equal(toolbar.querySelector('.mobile-reader-progress input[type="range"]')?.id, 'mobileReaderProgress');
   assert.deepEqual(
-    [...toolbar.querySelectorAll('.mobile-reader-actions button')].map((button) => button.dataset.readerAction),
-    ['openToc', 'openNotes', 'openAi', 'toggleTheme', 'openSettings']
+    [...toolbar.querySelectorAll('.mobile-reader-actions button')].map((button) => button.dataset.readerAction || `panel:${button.dataset.mobilePanelToggle}`),
+    ['openToc', 'openNotes', 'panel:progress', 'panel:theme', 'panel:type']
   );
   assert.deepEqual(
     [...document.querySelectorAll('.topbar-right .mobile-topbar-action')].map((button) => button.id),

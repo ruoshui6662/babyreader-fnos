@@ -274,7 +274,24 @@ async function showMobileReaderChrome(page) {
   await page.locator('#mobileReaderToolbar').waitFor({ state: 'visible' });
 }
 
+// Phones: 设置 opens the 排版 panel; its 更多设置 chip opens the full sheet.
+async function openMobileSettingsSheet(page) {
+  await showMobileReaderChrome(page);
+  await page.locator('#btnMobileSettings').click();
+  await page.locator('#btnMobileMoreSettings').click();
+  await page.locator('#readerSettingsSheet').waitFor({ state: 'visible' });
+}
+
+// Phones: AI 问书 lives in the reading view's ⋯ menu.
+async function openMobileAi(page) {
+  await showMobileReaderChrome(page);
+  await page.locator('#btnMobileMore').click();
+  await page.locator('#mobileMoreMenu [data-reader-action="openAi"]').click();
+}
+
 module.exports = {
+  openMobileAi,
+  openMobileSettingsSheet,
   showMobileReaderChrome,
   openEpubFixture,
   getEpubFixtureId,

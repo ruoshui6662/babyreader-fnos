@@ -77,12 +77,22 @@ function settingsIconSvg() {
   `;
 }
 
+// 进度: a page with how far in, on the same grid.
+function progressIconSvg() {
+  return `
+    <svg viewBox="0 0 24 24" data-icon="progress" aria-hidden="true" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="12" cy="12" r="8.5"></circle>
+      <path d="M12 3.5a8.5 8.5 0 0 1 8.5 8.5H12Z" fill="currentColor" stroke="none"></path>
+    </svg>
+  `;
+}
+
 // The phone toolbar shows the same icons above its captions (once).
 function decorateMobileToolbar() {
   const icons = {
     btnMobileToc: tocIconSvg(),
     btnMobileNotes: notesIconSvg(),
-    btnMobileAi: aiIconSvg(),
+    btnMobileProgress: progressIconSvg(),
     btnMobileTheme: themeIconSvg(state.theme === 'dark' ? 'light' : 'dark'),
     btnMobileSettings: settingsIconSvg()
   };

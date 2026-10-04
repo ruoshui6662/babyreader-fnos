@@ -254,3 +254,264 @@ html[data-reader-surface="mobile"] body.is-pdf-reader .pdf-pages[data-phone-page
 @media (prefers-reduced-motion: reduce) {
   .pdf-page.is-turn-next, .pdf-page.is-turn-previous, .pdf-page.is-turn-fade { animation: none; }
 }
+
+/* ============================================================
+   Phone reading toolbar and panels (2026-10, round 3). One flat surface:
+   the panel sits on the toolbar, no titles, no cards inside cards. The
+   page above stays visible; tapping it closes everything.
+   ============================================================ */
+html[data-reader-surface="mobile"] body.mobile-reading .mobile-reader-toolbar {
+  gap: 0;
+  padding-top: 4px;
+  background: var(--reader-chrome, var(--surface, #fff));
+  border-top: .5px solid color-mix(in srgb, var(--text) 10%, transparent);
+  border-radius: 18px 18px 0 0;
+  box-shadow: 0 -8px 28px rgba(0, 0, 0, .1);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+html[data-reader-surface="mobile"] body.mobile-reading .mobile-reader-toolbar .mobile-panel[hidden] { display: none; }
+html[data-reader-surface="mobile"] body.mobile-reading .mobile-reader-toolbar .mobile-panel {
+  display: block;
+  padding: 16px 12px 14px;
+  border-bottom: .5px solid color-mix(in srgb, var(--text) 8%, transparent);
+  animation: zs-panel-in var(--dur-fast) var(--ease-out);
+}
+@keyframes zs-panel-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) {
+  html[data-reader-surface="mobile"] body.mobile-reading .mobile-reader-toolbar .mobile-panel { animation: none; }
+}
+html[data-reader-surface="mobile"] body.mobile-reading .mobile-reader-actions button.is-active { color: var(--accent); }
+
+/* Panel buttons are not toolbar buttons: undo the toolbar's column look. */
+html[data-reader-surface="mobile"] body.mobile-reading .mobile-reader-toolbar .mobile-panel button {
+  flex: none;
+  display: inline-flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: center;
+  min-height: 0;
+  gap: 6px;
+  font-size: 13px;
+}
+
+/* 进度 */
+.mobile-stats {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  margin-bottom: 14px;
+  text-align: center;
+}
+.mobile-stats > div { display: grid; gap: 2px; }
+.mobile-stats > div + div { border-left: .5px solid color-mix(in srgb, var(--text) 10%, transparent); }
+.mobile-stats strong { color: var(--text); font-size: 22px; font-weight: 600; font-variant-numeric: tabular-nums; line-height: 1.2; }
+.mobile-stats small { margin-left: 2px; font-size: 12px; font-weight: 500; }
+.mobile-stats > div > span { color: var(--text-dim); font-size: 11px; }
+html[data-reader-surface="mobile"] body.mobile-reading .mobile-panel .mobile-reader-progress { gap: 2px; }
+html[data-reader-surface="mobile"] body.mobile-reading .mobile-panel .mobile-chapter-button { min-height: 36px; padding: 0 6px; }
+.mobile-progress-chapter {
+  margin: 6px 0 0;
+  overflow: hidden;
+  color: var(--text-dim);
+  font-size: 12px;
+  text-align: center;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+/* 主题 */
+.mobile-swatches { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+html[data-reader-surface="mobile"] body.mobile-reading .mobile-panel .mobile-swatches button {
+  flex-direction: column;
+  gap: 6px;
+  padding: 2px 0;
+  color: var(--text-dim);
+  font-size: 12px;
+}
+.mobile-swatch {
+  display: block;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  box-shadow: inset 0 0 0 .5px rgba(0, 0, 0, .14);
+}
+[data-mobile-theme="light"] .mobile-swatch { background: #fff; }
+[data-mobile-theme="sepia"] .mobile-swatch { background: #f4ecd8; }
+[data-mobile-theme="dark"] .mobile-swatch { background: #1c1c1e; box-shadow: inset 0 0 0 .5px rgba(255, 255, 255, .2); }
+html[data-reader-surface="mobile"] body.mobile-reading .mobile-panel .mobile-swatches button[aria-checked="true"] { color: var(--accent); }
+.mobile-swatches button[aria-checked="true"] .mobile-swatch { box-shadow: 0 0 0 2px var(--reader-chrome, #fff), 0 0 0 4px var(--accent); }
+.mobile-switch-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin: 14px 4px 0;
+  color: var(--text);
+  font-size: 14px;
+}
+.mobile-switch-row input {
+  position: relative;
+  width: 44px;
+  height: 26px;
+  margin: 0;
+  appearance: none;
+  background: color-mix(in srgb, var(--text) 16%, transparent);
+  border-radius: 13px;
+  cursor: pointer;
+  transition: background var(--dur-fast) var(--ease-out);
+}
+.mobile-switch-row input::after {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 22px;
+  height: 22px;
+  background: #fff;
+  border-radius: 50%;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, .2);
+  content: '';
+  transition: transform var(--dur-fast) var(--ease-out);
+}
+.mobile-switch-row input:checked { background: var(--accent); }
+.mobile-switch-row input:checked::after { transform: translateX(18px); }
+.mobile-field { margin-top: 14px; }
+.mobile-field[hidden] { display: none; }
+.mobile-field-label { display: block; margin: 0 4px 8px; color: var(--text-dim); font-size: 12px; }
+.mobile-segments {
+  display: flex;
+  gap: 2px;
+  padding: 3px;
+  background: color-mix(in srgb, var(--text) 7%, transparent);
+  border-radius: 12px;
+}
+html[data-reader-surface="mobile"] body.mobile-reading .mobile-panel .mobile-segments button {
+  flex: 1 1 0;
+  min-height: 34px;
+  padding: 0 4px;
+  color: var(--text-dim);
+  border-radius: 9px;
+}
+html[data-reader-surface="mobile"] body.mobile-reading .mobile-panel .mobile-segments button[aria-checked="true"] {
+  color: var(--text);
+  background: var(--reader-chrome, #fff);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, .14);
+}
+
+/* 设置 (排版): capsule sliders whose thumb carries the value or the name. */
+.mobile-slider {
+  --slider-progress: .5;
+  position: relative;
+  display: flex;
+  align-items: center;
+  height: 40px;
+  padding: 0 14px;
+  color: var(--text-dim);
+  font-size: 13px;
+  background: color-mix(in srgb, var(--text) 7%, transparent);
+  border-radius: 20px;
+}
+.mobile-slider[hidden], .mobile-slider-pair[hidden], .mobile-chips button[hidden] { display: none !important; }
+.mobile-slider > span { flex: none; }
+.mobile-slider > span.is-large { font-size: 19px; }
+.mobile-slider input {
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 40px;
+  margin: 0 6px;
+  appearance: none;
+  -webkit-appearance: none;
+  background: transparent;
+  cursor: pointer;
+  touch-action: pan-y;
+}
+.mobile-slider input::-webkit-slider-thumb {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 52px;
+  height: 32px;
+  background: transparent;
+  border: 0;
+}
+.mobile-slider input::-moz-range-thumb { width: 52px; height: 32px; background: transparent; border: 0; }
+/* The visible thumb: a white pill under the native (invisible) one. */
+.mobile-slider output {
+  position: absolute;
+  top: 4px;
+  left: calc(14px + 1ch + 6px + (100% - 28px - 2ch - 12px - 52px) * var(--slider-progress));
+  display: grid;
+  place-items: center;
+  width: 52px;
+  height: 32px;
+  color: var(--text);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+  background: var(--reader-chrome, #fff);
+  border-radius: 16px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, .12), 0 2px 8px rgba(0, 0, 0, .1);
+  pointer-events: none;
+}
+.mobile-slider.is-size > span.is-large ~ output { left: calc(14px + 1ch + 6px + (100% - 28px - 2.6ch - 12px - 52px) * var(--slider-progress)); }
+.mobile-slider-pair { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 12px; }
+.mobile-slider-pair .mobile-slider { padding: 0 10px; font-size: 12px; }
+.mobile-slider-pair .mobile-slider output {
+  left: calc(10px + 1em + 4px + (100% - 20px - 2em - 8px - 48px) * var(--slider-progress));
+  width: 48px;
+  font-size: 12px;
+}
+.mobile-slider-pair .mobile-slider input { margin: 0 4px; }
+.mobile-slider-pair .mobile-slider input::-webkit-slider-thumb { width: 48px; }
+.mobile-chips { display: grid; grid-template-columns: repeat(auto-fit, minmax(0, 1fr)); gap: 8px; margin-top: 12px; }
+html[data-reader-surface="mobile"] body.mobile-reading .mobile-panel .mobile-chips button {
+  min-height: 36px;
+  padding: 0 6px;
+  overflow: hidden;
+  color: var(--text);
+  white-space: nowrap;
+  background: color-mix(in srgb, var(--text) 7%, transparent);
+  border-radius: 18px;
+}
+.mobile-chips button > span { overflow: hidden; text-overflow: ellipsis; }
+.mobile-chips button::after { color: var(--text-dim); content: '›'; }
+
+/* The second level (字体 / 缩进 / 翻页) */
+.mobile-sub-head { display: flex; align-items: center; gap: 4px; margin: -6px 0 4px; }
+.mobile-sub-head h3 { margin: 0; color: var(--text); font-size: 15px; font-weight: 600; }
+html[data-reader-surface="mobile"] body.mobile-reading .mobile-panel .mobile-sub-back { width: 36px; height: 36px; padding: 0; color: var(--text); }
+.mobile-sub-back svg { width: 20px; height: 20px; stroke: currentColor; }
+.mobile-sub-body { max-height: 46dvh; overflow-y: auto; overscroll-behavior: contain; }
+.mobile-sub-body > .mobile-field:first-child { margin-top: 6px; }
+.mobile-choice-list { display: grid; }
+html[data-reader-surface="mobile"] body.mobile-reading .mobile-panel .mobile-choice-list button {
+  justify-content: space-between;
+  min-height: 48px;
+  padding: 0 6px;
+  color: var(--text);
+  font-size: 16px;
+  border-radius: 0;
+}
+.mobile-choice-list button + button { border-top: .5px solid color-mix(in srgb, var(--text) 8%, transparent); }
+.mobile-choice-list button[aria-checked="true"] { color: var(--accent) !important; }
+.mobile-choice-list button[aria-checked="true"]::after { content: '✓'; }
+html[data-reader-surface="mobile"] body.mobile-reading .mobile-panel .mobile-link-button {
+  margin-top: 10px;
+  padding: 6px 4px;
+  color: var(--accent);
+}
+
+/* ============================================================
+   Phone shelf pages: no app banner. 书库, 阅读统计 and 笔记 start with
+   their own large title; 外观 and 深浅色 stay as two quiet icons at the
+   top right, with no bar behind them.
+   ============================================================ */
+html[data-reader-surface="mobile"] body.is-library .topbar {
+  position: absolute;
+  right: 0;
+  left: auto;
+  width: auto;
+  background: transparent !important;
+  border: 0;
+  box-shadow: none !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+html[data-reader-surface="mobile"] body.is-library .topbar .app-mark,
+html[data-reader-surface="mobile"] body.is-library .topbar .app-name { display: none; }

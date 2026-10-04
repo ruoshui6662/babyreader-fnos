@@ -79,6 +79,7 @@ function readerTopInset(reader) {
 // Phone reading chrome: hidden while reading, shown by tapping the middle of
 // the page (top bar + two-row bottom bar overlay the text, nothing reflows).
 function setMobileChromeOpen(open) {
+  if (!open && typeof setMobilePanel === 'function' && activeMobilePanel) setMobilePanel(null);
   _mobileChromeOpen = Boolean(open);
   const hasDocument = Boolean(state.currentPath);
   const reading = isMobileReaderSurface() && hasDocument && !document.body.classList.contains('is-library');
@@ -156,9 +157,6 @@ function syncMobileReadingBar() {
   const theme = document.getElementById('btnMobileTheme');
   if (theme) {
     const dark = state.theme === 'dark';
-    const caption = theme.querySelector('.rail-label');
-    if (caption) caption.textContent = dark ? '日间' : '夜间';
-    theme.setAttribute('aria-label', dark ? '切换日间模式' : '切换夜间模式');
     const icon = theme.querySelector('svg');
     if (icon && typeof themeIconSvg === 'function' && icon.dataset.mode !== (dark ? 'light' : 'dark')) {
       icon.outerHTML = themeIconSvg(dark ? 'light' : 'dark').replace('<svg ', `<svg data-mode="${dark ? 'light' : 'dark'}" `);
@@ -567,6 +565,271 @@ window.zhenshuNative = {
   }
 };
 
+// ---------------------------------------------------------------------------
+// Phone panels (2026-10): 进度 / 主题 / 设置 open one flat panel above the
+// toolbar, WeChat-Reading style; a second level lists 字体 / 缩进 / 翻页.
+// Every control drives the settings sheet's own control, so the logic and
+// saving stay in one place; 更多设置 opens that sheet for the rest.
+let activeMobilePanel = null;
+
+function mobilePanelElement(name) {
+  return document.querySelector(`#mobileReaderToolbar [data-mobile-panel="${name}"]`);
+}
+
+function setMobilePanel(name) {
+  activeMobilePanel = name || null;
+  document.querySelectorAll('#mobileReaderToolbar [data-mobile-panel]').forEach((panel) => {
+    panel.hidden = panel.dataset.mobilePanel !== activeMobilePanel;
+  });
+  const toggleName = activeMobilePanel === 'sub' ? 'type' : activeMobilePanel;
+  document.querySelectorAll('#mobileReaderToolbar [data-mobile-panel-toggle]').forEach((button) => {
+    const on = button.dataset.mobilePanelToggle === toggleName;
+    button.setAttribute('aria-expanded', String(on));
+    button.classList.toggle('is-active', on);
+  });
+  document.getElementById('mobileReaderToolbar')?.classList.toggle('has-panel', Boolean(activeMobilePanel));
+  if (activeMobilePanel === 'progress') syncMobileProgressPanel();
+  if (activeMobilePanel === 'theme') syncMobileThemePanel();
+  if (activeMobilePanel === 'type') syncMobileTypePanel();
+  if (typeof syncNativeClient === 'function') syncNativeClient();
+}
+
+// Each segment mirrors a settings button: its label, whether it is chosen,
+// and a tap that presses the original.
+function mobileProxySegments(sources, onChange) {
+  const row = document.createElement('div');
+  row.className = 'mobile-segments';
+  for (const source of sources) {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.setAttribute('role', 'radio');
+    button.textContent = source.getAttribute('aria-label') || source.textContent.trim();
+    const checked = source.getAttribute('aria-checked') === 'true' || source.getAttribute('aria-pressed') === 'true';
+    button.setAttribute('aria-checked', String(checked));
+    button.addEventListener('click', () => {
+      source.click();
+      onChange?.();
+    });
+    row.appendChild(button);
+  }
+  return row;
+}
+
+function mobileField(label, control) {
+  const field = document.createElement('div');
+  field.className = 'mobile-field';
+  const name = document.createElement('span');
+  name.className = 'mobile-field-label';
+  name.textContent = label;
+  field.append(name, control);
+  return field;
+}
+
+function chosenText(selector, fallback) {
+  const chosen = [...document.querySelectorAll(selector)]
+    .find((button) => button.getAttribute('aria-checked') === 'true' || button.getAttribute('aria-pressed') === 'true');
+  return chosen ? (chosen.querySelector('.settings-font-name')?.textContent || chosen.textContent).trim() : fallback;
+}
+
+async function syncMobileProgressPanel() {
+  const position = typeof mobileReadingPosition === 'function' ? mobileReadingPosition() : { ratio: 0, label: '' };
+  const percent = document.getElementById('mobileStatPercent');
+  if (percent) percent.textContent = String(Math.round(position.ratio * 100));
+  const chapter = document.getElementById('mobileProgressChapter');
+  if (chapter) chapter.textContent = position.label || '';
+  const bookId = state.currentBookId;
+  if (!bookId || !window.browserHost) return;
+  try {
+    const today = new Date();
+    const pad = (value) => String(value).padStart(2, '0');
+    const to = `${today.getFullYear()}-${pad(today.getMonth() + 1)}-${pad(today.getDate())}`;
+    const [time, notes] = await Promise.all([
+      window.browserHost.getReadingTime?.('2000-01-01', to),
+      window.browserHost.getBookNotes?.(bookId)
+    ]);
+    if (state.currentBookId !== bookId) return;
+    const seconds = Object.values(time?.days || {}).reduce((sum, books) => sum + (Number(books?.[bookId]) || 0), 0);
+    const minutes = Math.round(seconds / 60);
+    const timeValue = document.getElementById('mobileStatTime');
+    const timeUnit = document.getElementById('mobileStatTimeUnit');
+    if (timeValue && timeUnit) {
+      const hours = minutes >= 60;
+      timeValue.textContent = hours ? (minutes / 60).toFixed(minutes >= 600 ? 0 : 1).replace(/\.0$/, '') : String(minutes);
+      timeUnit.textContent = hours ? '小时' : '分钟';
+    }
+    const count = document.getElementById('mobileStatNotes');
+    if (count) count.textContent = String(Number(notes?.book?.count) || (notes?.notes?.length ?? 0));
+  } catch { /* offline: the percentage is still right */ }
+}
+
+function syncMobileThemePanel() {
+  document.querySelectorAll('[data-mobile-theme]').forEach((button) => {
+    button.setAttribute('aria-checked', String(button.dataset.mobileTheme === state.theme));
+  });
+  const glass = document.getElementById('mobileGlassSwitch');
+  if (glass) glass.checked = state.liquidGlass === true;
+  const ambientField = document.getElementById('mobileGlassAmbientField');
+  if (ambientField) ambientField.hidden = state.liquidGlass !== true;
+  const ambient = document.getElementById('mobileGlassAmbient');
+  ambient?.replaceWith(Object.assign(mobileProxySegments(document.querySelectorAll('#settingGlassAmbient [data-glass-ambient]'), syncMobileThemePanel), { id: 'mobileGlassAmbient' }));
+}
+
+const MOBILE_SLIDERS = [
+  ['fontSize', 'mobileFontSize', 'settingFontSize'],
+  ['pageMargin', 'mobilePageMargin', 'settingPageMargin'],
+  ['lineHeight', 'mobileLineHeight', 'settingLineHeight']
+];
+
+function syncMobileSlider(key, input, source) {
+  if (!input || !source) return;
+  input.min = source.min;
+  input.max = source.max;
+  input.step = source.step;
+  input.value = source.value;
+  const progress = Math.max(0, Math.min(100, ((Number(source.value) - Number(source.min)) / (Number(source.max) - Number(source.min))) * 100));
+  input.closest('.mobile-slider')?.style.setProperty('--slider-progress', String(progress / 100));
+  if (key === 'fontSize') {
+    const value = document.getElementById('mobileFontSizeValue');
+    if (value && typeof formatTypographySliderValue === 'function') value.textContent = formatTypographySliderValue('fontSize', source.value).replace(/px$/, '');
+  }
+}
+
+function syncMobileTypePanel() {
+  const pdf = state.contentType === 'pdf';
+  document.querySelectorAll('#mobilePanelType [data-pdf-inapplicable]').forEach((element) => { element.hidden = pdf; });
+  for (const [key, id, sourceId] of MOBILE_SLIDERS) {
+    syncMobileSlider(key, document.getElementById(id), document.getElementById(sourceId));
+  }
+  const font = document.getElementById('mobileChipFont');
+  if (font) font.textContent = chosenText('[data-font-choice]', '字体');
+  const indent = document.getElementById('mobileChipIndent');
+  if (indent) {
+    const value = chosenText('#settingTextIndent [data-text-indent]', '');
+    indent.textContent = !value ? '缩进' : value === '原书' ? '原书缩进' : value === '无' ? '首行顶格' : `缩进${value.replace(/\s*字$/, '')}字`;
+  }
+  const turn = document.getElementById('mobileChipTurn');
+  if (turn) {
+    const scroll = pdf ? state.mobilePdfMode === 'scroll' : state.readingMode === 'scroll';
+    turn.textContent = scroll ? '上下滚动' : '左右翻页';
+  }
+}
+
+function openMobileSub(name) {
+  const title = document.getElementById('mobileSubTitle');
+  const body = document.getElementById('mobileSubBody');
+  if (!title || !body) return;
+  body.dataset.sub = name;
+  const rerender = () => openMobileSub(name);
+  body.replaceChildren();
+  if (name === 'font') {
+    title.textContent = '字体';
+    const list = document.createElement('div');
+    list.className = 'mobile-choice-list';
+    for (const source of document.querySelectorAll('[data-font-choice]')) {
+      const row = document.createElement('button');
+      row.type = 'button';
+      row.setAttribute('role', 'radio');
+      row.setAttribute('aria-checked', String(source.getAttribute('aria-pressed') === 'true'));
+      row.textContent = source.querySelector('.settings-font-name')?.textContent || source.textContent.trim();
+      row.style.fontFamily = getComputedStyle(source.querySelector('.settings-font-sample') || source).fontFamily;
+      row.addEventListener('click', () => { source.click(); rerender(); });
+      list.appendChild(row);
+    }
+    body.appendChild(list);
+  } else if (name === 'indent') {
+    title.textContent = '首行缩进';
+    body.appendChild(mobileField('每段开头空出', mobileProxySegments(document.querySelectorAll('#settingTextIndent [data-text-indent]'), rerender)));
+  } else if (name === 'turn') {
+    title.textContent = '翻页';
+    syncSettingsPanel();
+    const pdf = state.contentType === 'pdf';
+    body.appendChild(mobileField('翻页方式', mobileProxySegments(document.querySelectorAll(pdf ? '[data-pdf-phone-mode]' : '[data-reading-mode-choice]'), rerender)));
+    // The rows that only apply to left-right paging follow the sheet.
+    const pagedOnly = !document.querySelector('[data-phone-paged-only]')?.hidden;
+    if (pagedOnly) {
+      body.appendChild(mobileField('翻页动画', mobileProxySegments(document.querySelectorAll('[data-page-turn]'), rerender)));
+      body.appendChild(mobileField('点击翻页', mobileProxySegments(document.querySelectorAll('[data-tap-turn]'), rerender)));
+      const swipeSource = document.getElementById('settingSwipeToTurn');
+      const swipe = document.createElement('label');
+      swipe.className = 'mobile-switch-row';
+      swipe.innerHTML = '<span>左右滑动翻页</span><input type="checkbox" role="switch">';
+      const input = swipe.querySelector('input');
+      input.checked = swipeSource?.checked !== false;
+      input.addEventListener('change', () => {
+        if (!swipeSource) return;
+        swipeSource.checked = input.checked;
+        swipeSource.dispatchEvent(new Event('change', { bubbles: true }));
+      });
+      body.appendChild(swipe);
+      const guide = document.createElement('button');
+      guide.type = 'button';
+      guide.className = 'mobile-link-button';
+      guide.textContent = '查看点击区域';
+      guide.addEventListener('click', () => {
+        setMobileChromeOpen(false);
+        if (typeof showTapGuide === 'function') showTapGuide();
+      });
+      body.appendChild(guide);
+    }
+  }
+  setMobilePanel('sub');
+}
+
+function setupMobilePanels() {
+  const toolbar = document.getElementById('mobileReaderToolbar');
+  if (!toolbar || toolbar.dataset.panelsBound) return;
+  toolbar.dataset.panelsBound = 'true';
+  toolbar.addEventListener('click', (event) => {
+    const toggle = event.target.closest?.('[data-mobile-panel-toggle]');
+    if (toggle) {
+      const name = toggle.dataset.mobilePanelToggle;
+      const current = activeMobilePanel === 'sub' ? 'type' : activeMobilePanel;
+      setMobilePanel(current === name ? null : name);
+      return;
+    }
+    const sub = event.target.closest?.('[data-mobile-sub]');
+    if (sub) openMobileSub(sub.dataset.mobileSub);
+  });
+  document.getElementById('btnMobileSubBack')?.addEventListener('click', () => setMobilePanel('type'));
+  document.getElementById('btnMobileMoreSettings')?.addEventListener('click', (event) => {
+    setMobilePanel(null);
+    openReaderPanel('settings', event.currentTarget);
+    // The full sheet, already expanded.
+    document.getElementById('readerSettingsSheet')?.classList.add('is-expanded');
+    const more = document.getElementById('btnSettingsMore');
+    if (more) {
+      more.setAttribute('aria-expanded', 'true');
+      more.textContent = '收起';
+    }
+  });
+  document.querySelectorAll('[data-mobile-theme]').forEach((button) => {
+    button.addEventListener('click', () => {
+      document.querySelector(`[data-theme-choice="${button.dataset.mobileTheme}"]`)?.click();
+      syncMobileThemePanel();
+    });
+  });
+  document.getElementById('mobileGlassSwitch')?.addEventListener('change', (event) => {
+    const source = document.getElementById('settingLiquidGlass');
+    if (!source) return;
+    source.checked = event.target.checked;
+    source.dispatchEvent(new Event('change', { bubbles: true }));
+    syncMobileThemePanel();
+  });
+  for (const [key, id, sourceId] of MOBILE_SLIDERS) {
+    const input = document.getElementById(id);
+    if (!input) continue;
+    for (const type of ['input', 'change']) {
+      input.addEventListener(type, () => {
+        const source = document.getElementById(sourceId);
+        if (!source) return;
+        source.value = input.value;
+        source.dispatchEvent(new Event(type, { bubbles: true }));
+        syncMobileSlider(key, input, source);
+      });
+    }
+  }
+}
+
 // PDFs on a phone: a page at a time unless 上下滚动 was chosen.
 function syncPhonePdfMode() {
   const pdf = window.pdfReaderController;
@@ -824,6 +1087,7 @@ function setupReaderDeviceProfile() {
   setupMobileSettingsSheet();
   setupMobileSheetGestures();
   setupMobileAiPanel();
+  setupMobilePanels();
   setupNativeClient();
   window.addEventListener('resize', update, { passive: true });
   window.visualViewport?.addEventListener('resize', update, { passive: true });

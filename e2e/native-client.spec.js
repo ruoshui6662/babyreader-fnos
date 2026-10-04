@@ -66,7 +66,7 @@ test('the client is told when reading starts and ends, with the options that app
   if (await page.locator('#readerDrawer').isVisible()) await page.locator('#btnCloseSettings').click();
   await showMobileReaderChrome(page);
   await page.locator('#btnMobileSettings').click();
-  await page.locator('#btnSettingsMore').click();
+  await page.locator('#btnMobileMoreSettings').click();
   const group = page.locator('#settingsNativeGroup');
   await expect(group).toBeVisible();
   await expect(group.locator('#settingNativeServer')).toHaveText('192.168.1.10:5666');
