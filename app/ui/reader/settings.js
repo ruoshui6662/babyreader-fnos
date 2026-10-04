@@ -546,9 +546,13 @@ function syncSettingsPanel() {
   document.querySelectorAll('#settingGlassAmbient [data-glass-ambient]').forEach((button) => {
     button.setAttribute('aria-checked', String(button.dataset.glassAmbient === (state.glassAmbient === 'uniform' ? 'uniform' : 'cover')));
   });
-  // Phone page turning: only for left-right paging on a phone.
-  const phonePaged = typeof isMobileReaderSurface === 'function' && isMobileReaderSurface()
-    && state.readingMode !== 'scroll' && format !== 'pdf';
+  // Phone page turning: only for left-right paging on a phone (EPUB, or a
+  // PDF read a page at a time).
+  const phone = typeof isMobileReaderSurface === 'function' && isMobileReaderSurface();
+  const phonePaged = phone && (format === 'pdf' ? state.mobilePdfMode !== 'scroll' : state.readingMode !== 'scroll');
+  document.querySelectorAll('[data-pdf-phone-mode]').forEach((button) => {
+    button.setAttribute('aria-checked', String(button.dataset.pdfPhoneMode === (state.mobilePdfMode === 'scroll' ? 'scroll' : 'paged')));
+  });
   document.querySelectorAll('#readerPanelSettings [data-phone-paged-only]')
     .forEach((field) => { field.hidden = !phonePaged; });
   const turn = ['slide', 'fade', 'none'].includes(state.pageTurnAnimation) ? state.pageTurnAnimation : 'slide';
@@ -700,6 +704,14 @@ function setupSettingsPanel() {
   document.getElementById('settingGlassAmbient')?.addEventListener('click', (event) => {
     const choice = event.target.closest?.('[data-glass-ambient]');
     if (choice && typeof setGlassAmbient === 'function') setGlassAmbient(choice.dataset.glassAmbient);
+  });
+  document.querySelector('.settings-pdf-phone-modes')?.addEventListener('click', (event) => {
+    const choice = event.target.closest?.('[data-pdf-phone-mode]');
+    if (!choice || choice.dataset.pdfPhoneMode === state.mobilePdfMode) return;
+    state.mobilePdfMode = choice.dataset.pdfPhoneMode === 'scroll' ? 'scroll' : 'paged';
+    if (typeof syncPhonePdfMode === 'function') syncPhonePdfMode();
+    syncSettingsPanel();
+    persistUserSettings();
   });
   document.getElementById('settingPageTurnAnimation')?.addEventListener('click', (event) => {
     const choice = event.target.closest?.('[data-page-turn]');

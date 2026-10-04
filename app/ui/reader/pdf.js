@@ -434,6 +434,11 @@ function createPdfReaderController({
       ? group.pageIndices.at(-1) >= pdfDocument.numPages - 1
       : pageIndex >= (pdfDocument?.numPages || 1) - 1;
     pdfSurface?.setAttribute('data-current-page', String(pageIndex));
+    // Phone page mode shows only the current page (see setPhonePaged).
+    if (previousPageIndex !== null && previousPageIndex !== String(pageIndex)) {
+      pages.get(Number(previousPageIndex))?.classList.remove('is-current-page');
+    }
+    pages.get(pageIndex)?.classList.add('is-current-page');
     if (persist && previousPageIndex !== String(pageIndex) && currentBookId) {
       onPageChange({ bookId: currentBookId, pageIndex, generation });
     }
@@ -1017,6 +1022,56 @@ function createPdfReaderController({
     return true;
   }
 
+  // Phones read a PDF a page at a time (翻页), or as one long scroll
+  // (滚动). In page mode only the current page shows, fitted to the width;
+  // pinching zooms it, and a zoomed page pans instead of turning.
+  function setPhonePaged(on) {
+    const host = pageHost();
+    if (!host) return false;
+    const paged = Boolean(on);
+    if ((host.dataset.phonePaged === 'true') === paged && pdfDocument) return true;
+    const current = Number(surface()?.dataset.currentPage) || 0;
+    if (paged) host.dataset.phonePaged = 'true';
+    else delete host.dataset.phonePaged;
+    if (!pdfDocument) return true;
+    if (paged) layoutPreference = 'single';
+    syncPdfLayout();
+    pages.get(current)?.classList.add('is-current-page');
+    void fitPdfWidth().then(() => {
+      goToPdfPage(current);
+      win.requestAnimationFrame(syncPhoneZoomFlag);
+    });
+    return true;
+  }
+
+  function phonePagedZoomed() {
+    const host = pageHost();
+    return Boolean(host && host.scrollWidth > host.clientWidth + 2);
+  }
+
+  // A page wider than the screen (zoomed in) pans sideways; otherwise a
+  // sideways move belongs to turning the page (CSS: touch-action).
+  function syncPhoneZoomFlag() {
+    const host = pageHost();
+    if (!host) return;
+    host.toggleAttribute('data-zoomed', host.dataset.phonePaged === 'true' && phonePagedZoomed());
+  }
+
+  // A turn in page mode: the new page slides (平移) or fades (淡入) in.
+  function turnPhonePage(direction, style = 'slide') {
+    const before = Number(surface()?.dataset.currentPage) || 0;
+    if (!stepPdfPage(direction)) return false;
+    const page = pages.get(Number(surface()?.dataset.currentPage) || 0);
+    if (page && page !== pages.get(before) && style !== 'none') {
+      const name = style === 'fade' ? 'is-turn-fade' : direction > 0 ? 'is-turn-next' : 'is-turn-previous';
+      page.classList.remove('is-turn-fade', 'is-turn-next', 'is-turn-previous');
+      void page.offsetWidth;
+      page.classList.add(name);
+      page.addEventListener('animationend', () => page.classList.remove(name), { once: true });
+    }
+    return true;
+  }
+
   function goToPageNumber(value) {
     const pageNumber = Number(String(value).trim());
     if (!Number.isInteger(pageNumber) || pageNumber < 1 || pageNumber > (pdfDocument?.numPages || 0)) {
@@ -1082,6 +1137,7 @@ function createPdfReaderController({
     const label = doc.getElementById('pdfZoomValue');
     if (label) label.textContent = `${Math.round(scale * 100)}%`;
     if (mode !== 'auto') announcePdfPosition();
+    win.requestAnimationFrame(syncPhoneZoomFlag);
     return true;
   }
 
@@ -1129,6 +1185,8 @@ function createPdfReaderController({
 
   function setPageFromScroll() {
     if (!pdfDocument || destroyed || scrollGuardActive) return;
+    // One page at a time: scrolling pans the page, it does not change it.
+    if (pageHost()?.dataset.phonePaged === 'true') return;
     const previousPageIndex = Number(surface()?.dataset.currentPage) || 0;
     const readerEl = pageHost();
     const reference = readerEl?.getBoundingClientRect().top || 0;
@@ -1278,7 +1336,12 @@ function createPdfReaderController({
     refreshOutputScale,
     getOutputScaleTarget: targetOutputScale,
     getScale: () => scale,
-    zoomBy: (delta) => setPdfScale(scale + delta)
+    zoomBy: (delta) => setPdfScale(scale + delta),
+    stepPage: stepPdfPage,
+    setPhonePaged,
+    isPhonePaged: () => pageHost()?.dataset.phonePaged === 'true',
+    phonePagedZoomed,
+    turnPhonePage
   };
 }
 

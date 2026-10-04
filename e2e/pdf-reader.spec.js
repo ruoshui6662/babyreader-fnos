@@ -421,6 +421,9 @@ test('PDF text selection keeps canvas glyph appearance and survives page virtual
   await expect(page.locator('#pdfReaderStatus')).toContainText('4 页');
   await expect(page.locator('#pdfReaderStatus')).toBeHidden();
   await expect(page.locator('#pdfPageCount')).toHaveText('/ 4');
+  // Light pages: the selection blends with multiply (dark pages use screen),
+  // whatever theme an earlier test left saved.
+  await page.evaluate(() => applyTheme('light', false));
   await page.evaluate(() => window.pdfReaderController.goToPdfPage(0));
   const firstPage = page.locator('.pdf-page[data-page-index="0"]');
   await expect(firstPage).toHaveAttribute('data-text-layer-state', 'ready');
@@ -1335,6 +1338,9 @@ test('mobile PDF text selection still exposes the shared marking actions', async
   });
   await page.goto(APP_PATH);
   await page.locator('.library-book').filter({ hasText: 'e2e-reader' }).click();
+  // A phone shows one page at a time: read from the first.
+  await expect(page.locator('#pdfPages')).toHaveAttribute('data-phone-paged', 'true');
+  await page.evaluate(() => window.pdfReaderController.goToPdfPage(0));
   const firstPage = page.locator('.pdf-page[data-page-index="0"]');
   await expect(firstPage).toHaveAttribute('data-text-layer-state', 'ready');
   await page.evaluate(() => {
@@ -1361,7 +1367,7 @@ test('mobile PDF text selection still exposes the shared marking actions', async
   expect(bounds.right).toBeLessThanOrEqual(bounds.viewportWidth);
 });
 
-test('PDF controls remain within a narrow mobile viewport and follow the dark theme', async ({ page }) => {
+test('a phone has no desktop PDF toolbar; the page fits the width and follows the dark theme', async ({ page }) => {
   await page.addInitScript(() => {
     Object.defineProperty(Navigator.prototype, 'userAgent', {
       configurable: true,
@@ -1371,28 +1377,24 @@ test('PDF controls remain within a narrow mobile viewport and follow the dark th
   await page.goto(APP_PATH);
   await page.locator('.library-book').filter({ hasText: 'e2e-reader' }).click();
   await expect(page.locator('#pdfReaderSurface')).toBeVisible();
-  await expect(page.locator('#pdfPages canvas').first()).toBeVisible();
+  await expect(page.locator('.pdf-page.is-current-page canvas')).toBeVisible();
   await page.evaluate(() => applyTheme('dark', false));
 
+  await expect(page.locator('.pdf-reader-controls')).toBeHidden();
   const metrics = await page.evaluate(() => {
-    const controls = document.querySelector('.pdf-reader-controls');
     const pages = document.getElementById('pdfPages');
-    const fit = document.getElementById('pdfFitWidth').getBoundingClientRect();
     return {
       mobileProfile: document.documentElement.dataset.readerSurface,
-      controlsBackground: getComputedStyle(controls).backgroundColor,
-      controlsColor: getComputedStyle(controls).color,
       pagesWidth: pages.clientWidth,
       pagesScrollWidth: pages.scrollWidth,
-      fitRight: fit.right,
-      viewportWidth: innerWidth
+      pageWidth: document.querySelector('.pdf-page.is-current-page').getBoundingClientRect().width,
+      stage: getComputedStyle(document.body).backgroundColor
     };
   });
   expect(metrics.mobileProfile).toBe('mobile');
-  expect(metrics.controlsBackground).not.toBe('rgba(0, 0, 0, 0)');
-  expect(metrics.controlsColor).not.toBe('rgba(0, 0, 0, 0)');
   expect(metrics.pagesScrollWidth).toBeLessThanOrEqual(metrics.pagesWidth + 1);
-  expect(metrics.fitRight).toBeLessThanOrEqual(metrics.viewportWidth);
+  expect(metrics.pageWidth).toBeGreaterThan(metrics.pagesWidth - 24);
+  expect(metrics.stage).not.toBe('rgb(255, 255, 255)');
 });
 
 test('mobile PDF zoom keeps the selected page visible without clipping its canvas', async ({ page }) => {
@@ -1404,7 +1406,7 @@ test('mobile PDF zoom keeps the selected page visible without clipping its canva
   });
   await page.goto(APP_PATH);
   await page.locator('.library-book').filter({ hasText: 'e2e-reader' }).click();
-  await expect(page.locator('#pdfPages canvas').first()).toBeVisible();
+  await expect(page.locator('.pdf-page.is-current-page canvas')).toBeVisible();
   await page.evaluate(() => window.pdfReaderController.goToPdfPage(2));
   await page.evaluate(() => window.pdfReaderController.setPdfScale(2));
   await expect.poll(async () => page.locator('.pdf-page[data-page-index="2"] canvas').evaluate((canvas) => canvas.getBoundingClientRect().width))
@@ -1424,7 +1426,7 @@ test('mobile PDF zoom keeps the selected page visible without clipping its canva
   expect(geometry.wrapperWidth).toBeGreaterThanOrEqual(geometry.canvasWidth - 1);
 });
 
-test('mobile PDF toolbar contains both control groups above the document', async ({ page }) => {
+test('on a phone the PDF page starts at the top of the reading area, with no toolbar above it', async ({ page }) => {
   await page.addInitScript(() => {
     Object.defineProperty(Navigator.prototype, 'userAgent', {
       configurable: true,
@@ -1433,16 +1435,15 @@ test('mobile PDF toolbar contains both control groups above the document', async
   });
   await page.goto(APP_PATH);
   await page.locator('.library-book').filter({ hasText: 'e2e-reader' }).click();
-  await expect(page.locator('#pdfPages canvas').first()).toBeVisible();
+  await expect(page.locator('.pdf-page.is-current-page canvas')).toBeVisible();
 
-  const layout = await page.evaluate(() => {
-    const controls = document.querySelector('.pdf-reader-controls').getBoundingClientRect();
-    const lastGroup = document.querySelector('.pdf-reader-controls .pdf-control-group:last-child').getBoundingClientRect();
-    const pages = document.getElementById('pdfPages').getBoundingClientRect();
-    return { controlsBottom: controls.bottom, groupBottom: lastGroup.bottom, pagesTop: pages.top };
-  });
-  expect(layout.controlsBottom).toBeGreaterThanOrEqual(layout.groupBottom - 1);
-  expect(layout.pagesTop).toBeGreaterThanOrEqual(layout.controlsBottom - 1);
+  const layout = await page.evaluate(() => ({
+    toolbarHeight: document.querySelector('.pdf-reader-controls').getBoundingClientRect().height,
+    pagesTop: document.getElementById('pdfPages').getBoundingClientRect().top,
+    surfaceTop: document.getElementById('pdfReaderSurface').getBoundingClientRect().top
+  }));
+  expect(layout.toolbarHeight).toBe(0);
+  expect(layout.pagesTop).toBeLessThanOrEqual(layout.surfaceTop + 1);
 });
 });
 
