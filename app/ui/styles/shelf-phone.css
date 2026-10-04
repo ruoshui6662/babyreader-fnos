@@ -1,0 +1,38 @@
+/* ============================================================
+   Phone shelf (M3, 2026-10-03), after WeChat Reading's app: a 20px side
+   margin, three covers a row with room between them, quieter shadows, the
+   title in two lines and the author as one grey line. Sections (heading and
+   search, 继续阅读, categories, shelf) keep a fixed rhythm between them.
+   Also applies to the 阅读统计 and 笔记 pages, which share the shelf frame.
+   ============================================================ */
+@media (max-width: 679px) {
+  .reader .article.is-library,
+  html[data-reader-surface="mobile"] .reader .article.is-library {
+    padding: 12px 20px calc(40px + env(safe-area-inset-bottom, 0px));
+  }
+
+  .library-header { gap: 12px; margin-bottom: 20px; }
+  .library-header h1 { font-size: 28px; letter-spacing: -.01em; }
+
+  .library-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 28px 22px;
+  }
+  .library-book { gap: 8px; }
+  .library-book-cover,
+  .article .library-view img.library-book-cover { border-radius: 4px; }
+  .library-book-cover {
+    box-shadow: 0 0 0 .5px rgba(0, 0, 0, .06), 0 2px 6px rgba(0, 0, 0, .1);
+  }
+  /* Generated covers: the format is not news on a phone shelf. */
+  .library-book-cover.is-generated .library-cover-format { display: none; }
+  .library-book-metadata { gap: 2px; }
+  .library-book strong { font-size: 13px; line-height: 1.38; }
+  .library-book span,
+  .library-book .library-book-author { font-size: 11px; }
+  .library-book .library-book-author { color: var(--library-text-tertiary, var(--library-text-muted)); }
+
+  /* 继续阅读 and the categories: one gap each, not stacked margins. */
+  .library-recent-reading { margin-bottom: 24px; }
+  .library-category-navigation { margin-bottom: 20px; }
+}

@@ -1736,9 +1736,10 @@ body:not(.toc-open) .toc {
     font-size: 26px;
   }
 
-  html[data-reader-surface="mobile"] .article p,
-  html[data-reader-surface="mobile"] .article ul,
-  html[data-reader-surface="mobile"] .article ol {
+  /* Reading text only: the shelf, stats and notes pages share .article. */
+  html[data-reader-surface="mobile"] .article:not(.is-library) p,
+  html[data-reader-surface="mobile"] .article:not(.is-library) ul,
+  html[data-reader-surface="mobile"] .article:not(.is-library) ol {
     font-size: 17px;
   }
 
