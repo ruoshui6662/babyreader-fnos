@@ -1,5 +1,5 @@
 appname=zhenshu
-version=0.0.19
+version=0.0.20
 display_name=枕书
 desc=枕书：飞牛 fnOS 上的私人书房。阅读 EPUB、PDF、MOBI/AZW3、Markdown 和 TXT，支持划线笔记、全文搜索与 AI 问书，阅读进度多端同步。
 source=thirdparty
@@ -13,4 +13,4 @@ desktop_applaunchname=zhenshu.main
 ctl_stop=true
 checkport=false
 disable_authorization_path=false
-changelog=安卓客户端可以导出笔记了：Markdown 保存到“下载/枕书”，分享图片保存到“相册/枕书”，导出 PDF 时打开系统打印面板，可以另存为 PDF。需要配合安卓客户端 0.1.2 使用。
+changelog=手机阅读 PDF 改为一屏一页，点两侧、滑动或按音量键翻页，去掉了网页版工具栏，也可改为上下滚动。安卓 App 的状态栏和导航栏与页面同色，开启隐藏状态栏后整屏都是书页。配合安卓 App 0.2.0：首页直接用 NAS 地址和访问密码登录，之后保持登录。
