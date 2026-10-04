@@ -15,7 +15,6 @@ body {
   --glass-sheen: rgba(255, 255, 255, .07);
   --glass-shadow: 0 10px 36px rgba(0, 0, 0, .45), 0 1px 3px rgba(0, 0, 0, .4);
   --glass-blur: 16px;
-  --switch-on: #30d158;
 }
 body.theme-light,
 body.theme-sepia {
@@ -26,7 +25,6 @@ body.theme-sepia {
   --glass-edge: rgba(0, 0, 0, .06);
   --glass-sheen: rgba(255, 255, 255, .24);
   --glass-shadow: 0 8px 32px rgba(0, 0, 0, .1), 0 1px 3px rgba(0, 0, 0, .06);
-  --switch-on: #34c759;
 }
 .zs-glass-defs { position: absolute; width: 0; height: 0; overflow: hidden; }
 
@@ -200,7 +198,8 @@ html[data-glass="on"] .glass-menu-segment { background: color-mix(in srgb, var(-
   box-shadow: 0 2px 4px rgba(0, 0, 0, .2);
   transition: transform var(--dur-fast) var(--ease-out);
 }
-.glass-switch:checked { background: var(--switch-on); }
+/* One switch colour across the app: the accent, like the settings switches. */
+.glass-switch:checked { background: var(--library-accent, var(--color-accent)); }
 .glass-switch:checked::before { transform: translateX(18px); }
 .glass-switch:focus-visible { outline: 3px solid color-mix(in srgb, var(--library-accent, var(--color-accent)) 55%, transparent); outline-offset: 2px; }
 
@@ -273,7 +272,8 @@ html[data-glass="on"] body.is-library .shelf-nav {
   border-radius: 22px;
 }
 html[data-glass="on"] body.is-library .shelf-nav-button.is-active {
-  background: color-mix(in srgb, var(--library-accent, var(--color-accent)) 16%, transparent);
+  color: var(--library-accent, var(--color-accent));
+  background: var(--glass-selected);
   box-shadow: inset 0 1px 0 var(--glass-rim-low);
 }
 @media (max-width: 899px) {
@@ -295,7 +295,7 @@ html[data-glass="on"] body.is-library .shelf-nav-button.is-active {
     border-radius: 31px;
   }
   html[data-glass="on"] body.is-library .shelf-nav-button { height: 52px; border-radius: 26px; }
-  html[data-glass="on"] body.is-library .shelf-nav-button.is-active { background: color-mix(in srgb, var(--library-accent, var(--color-accent)) 16%, transparent); }
+  html[data-glass="on"] body.is-library .shelf-nav-button.is-active { background: var(--glass-selected); }
   html[data-glass="on"] body.is-library .reader { bottom: 0; }
   html[data-glass="on"] body.is-library .reader .article.is-library { padding-bottom: calc(110px + env(safe-area-inset-bottom, 0px)); }
 }
@@ -312,7 +312,7 @@ html[data-glass="on"][data-reader-surface="mobile"] body.is-library .shelf-nav {
   border-radius: 31px;
 }
 html[data-glass="on"][data-reader-surface="mobile"] body.is-library .shelf-nav-button { height: 52px; border-radius: 26px; }
-html[data-glass="on"][data-reader-surface="mobile"] body.is-library .shelf-nav-button.is-active { background: color-mix(in srgb, var(--library-accent, var(--color-accent)) 16%, transparent); }
+html[data-glass="on"][data-reader-surface="mobile"] body.is-library .shelf-nav-button.is-active { background: var(--glass-selected); }
 html[data-glass="on"][data-reader-surface="mobile"] body.is-library .reader { bottom: 0; }
 html[data-glass="on"][data-reader-surface="mobile"] .reader .article.is-library { padding-bottom: calc(110px + env(safe-area-inset-bottom, 0px)); }
 /* Bars that sit above the tab bar move up with it. */
@@ -324,16 +324,18 @@ html[data-glass="on"] body.is-library .notes-select-bar { bottom: calc(16px + en
 }
 html[data-glass="on"][data-reader-surface="mobile"] body.is-library .notes-select-bar { bottom: calc(86px + env(safe-area-inset-bottom, 0px)); }
 
-/* Header: search and actions in one glass capsule (desktop). */
+/* Header: search and actions in one capsule (desktop). It scrolls with the
+   page, so it is content: a standard material (a quiet translucent fill and
+   a hairline), not Liquid Glass — HIG keeps glass to the floating layer. */
 @media (min-width: 640px) {
   html[data-glass="on"]:not([data-reader-surface="mobile"]) body.is-library .library-header-actions {
     position: relative;
     isolation: isolate;
     gap: 2px;
     padding: 4px;
-    background: var(--glass-tint);
+    background: var(--glass-standard);
     border-radius: 999px;
-    box-shadow: var(--glass-shadow), inset 0 0 0 .5px var(--glass-edge);
+    box-shadow: inset 0 0 0 .5px var(--glass-hairline);
   }
   html[data-glass="on"]:not([data-reader-surface="mobile"]) body.is-library .library-header-actions .zs-btn {
     --zs-btn-bg-hover: color-mix(in srgb, var(--library-text, var(--color-text)) 8%, transparent);
@@ -350,7 +352,8 @@ html[data-glass="on"][data-reader-surface="mobile"] body.is-library .notes-selec
   }
 }
 
-/* Category chips: one glass capsule; only the current chip is tinted. */
+/* Category chips: one capsule of standard material (content layer, as the
+   header); the current chip has the accent label on a neutral platter. */
 html[data-glass="on"] body.is-library .library-category-navigation {
   position: relative;
   isolation: isolate;
@@ -358,9 +361,13 @@ html[data-glass="on"] body.is-library .library-category-navigation {
   max-width: 100%;
   gap: 2px;
   padding: 4px;
-  background: var(--glass-tint);
+  background: var(--glass-standard);
   border-radius: 999px;
-  box-shadow: var(--glass-shadow), inset 0 0 0 .5px var(--glass-edge);
+  box-shadow: inset 0 0 0 .5px var(--glass-hairline);
+}
+html[data-glass="on"] body.is-library .library-category-navigation .library-organization-card-main[aria-current="page"] {
+  background: var(--library-surface, var(--color-elevated));
+  box-shadow: 0 1px 3px rgba(0, 0, 0, .12);
 }
 html[data-glass="on"] body.is-library .library-category-navigation .library-organization-card-main:not([aria-current="page"]) {
   background: transparent;
@@ -533,3 +540,117 @@ html[data-glass="on"] .reader-sheet :is(.settings-group-card, .reader-drawer-tab
 /* 背景光 in 外观: two choices, laid out like PDF 页面颜色. */
 .settings-glass-ambient-field .settings-indent-segments { grid-template-columns: 1fr 1fr; }
 .settings-glass-ambient-field .settings-field-description { margin: 0; }
+
+
+/* ============================================================
+   液态玻璃 · G6：按 Apple HIG 精修
+   - 选中：强调色给符号与文字，底下是中性托盘（--glass-selected）。
+   - 主要按钮：染色玻璃（强调色底 + 顶部高光 + 淡淡的同色光晕）；
+     普通按钮在玻璃上不带底色，悬停出现中性托盘。
+   - 较大的玻璃（侧边栏）更不透明；内容层控件用标准材质。
+   - 同心圆角：内层圆角 = 外层圆角 − 间距。
+   - 增强对比度：玻璃更不透明、边线更清楚。
+   - 菜单与面板出现时轻微缩放淡入（减少动态效果时关闭）。
+   ============================================================ */
+body {
+  --glass-selected: rgba(255, 255, 255, .12);
+  --glass-standard: rgba(118, 118, 128, .2);
+  --glass-hairline: rgba(255, 255, 255, .1);
+  --glass-tint-large: rgba(40, 40, 46, .6);
+}
+body.theme-light,
+body.theme-sepia {
+  --glass-selected: rgba(0, 0, 0, .07);
+  --glass-standard: rgba(255, 255, 255, .55);
+  --glass-hairline: rgba(0, 0, 0, .08);
+  --glass-tint-large: rgba(255, 255, 255, .62);
+}
+
+/* Larger glass reads more opaque (HIG): the desktop sidebar. */
+@media (min-width: 640px) {
+  html[data-glass="on"]:not([data-reader-surface="mobile"]) body.is-library .shelf-nav {
+    background: var(--glass-tint-large);
+  }
+}
+/* …and turns solid with “reduce transparency”, like every glass surface. */
+@media (min-width: 640px) and (prefers-reduced-transparency: reduce) {
+  html[data-glass="on"]:not([data-reader-surface="mobile"]) body.is-library .shelf-nav {
+    background: var(--glass-tint-dense);
+  }
+}
+
+/* Prominent buttons are tinted glass; secondary ones on glass are clear. */
+html[data-glass="on"] .zs-btn-primary {
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .3), 0 4px 14px color-mix(in srgb, var(--zs-btn-accent) 30%, transparent);
+}
+html[data-glass="on"] :is(.glass-menu, .notes-select-bar, .note-card-dialog, .reader-sheet) .zs-btn-secondary {
+  --zs-btn-bg: transparent;
+  --zs-btn-bg-hover: var(--glass-selected);
+}
+html[data-glass="on"] .note-card-actions .zs-btn-secondary {
+  --zs-btn-bg: var(--glass-selected);
+}
+
+/* Concentric corners: inner radius = outer radius − the gap between them. */
+html[data-glass="on"] .note-card-dialog { border-radius: 28px; }
+html[data-glass="on"] .note-card-dialog .note-card-preview { border-radius: 10px; }
+html[data-glass="on"] .note-card-dialog .note-card-actions .zs-btn { border-radius: 10px; }
+html[data-glass="on"] .reader-sheet { border-radius: 28px; }
+html[data-glass="on"] .reader-sheet :is(.settings-group-card, .reader-drawer-tabs) { border-radius: 12px; }
+html[data-glass="on"] .selection-menu button { border-radius: 10px; }
+html[data-glass="on"] .glass-menu { border-radius: 22px; }
+html[data-glass="on"] .glass-menu-segment { border-radius: 12px; }
+html[data-glass="on"] .glass-menu-segment button { border-radius: 10px; }
+html[data-glass="on"] .custom-select-menu { padding: 5px; border-radius: 14px; }
+html[data-glass="on"] .custom-select-option { border-radius: 9px; }
+html[data-glass="on"][data-reader-surface="mobile"] body.is-library .library-more-menu:not([hidden]) { padding: 6px; border-radius: 18px; }
+html[data-glass="on"][data-reader-surface="mobile"] body.is-library .library-more-menu button { border-radius: 12px; }
+html[data-glass="on"] .notes-select-bar { border-radius: 22px; }
+html[data-glass="on"] .notes-select-bar .zs-btn { border-radius: 999px; }
+
+/* Menus and popovers come in from their trigger: a short scale and fade. */
+@keyframes zs-glass-in {
+  from { opacity: 0; transform: scale(.96); }
+  to { opacity: 1; transform: none; }
+}
+html[data-glass="on"] :is(.glass-menu, .custom-select-menu, body.is-library .library-more-menu):not([hidden]) {
+  transform-origin: top right;
+  animation: zs-glass-in var(--dur-fast) var(--ease-out);
+}
+html[data-glass="on"] .custom-select-menu:not([hidden]) { transform-origin: top center; }
+@media (prefers-reduced-motion: reduce) {
+  html[data-glass="on"] :is(.glass-menu, .custom-select-menu, body.is-library .library-more-menu):not([hidden]) { animation: none; }
+}
+
+/* Increase contrast: glass nearly opaque, edges drawn. */
+@media (prefers-contrast: more) {
+  body {
+    --glass-tint: rgba(36, 36, 40, .9);
+    --glass-tint-dense: rgba(30, 30, 34, .96);
+    --glass-tint-large: rgba(30, 30, 34, .94);
+    --glass-edge: rgba(255, 255, 255, .45);
+    --glass-hairline: rgba(255, 255, 255, .4);
+    --glass-selected: rgba(255, 255, 255, .2);
+  }
+  body.theme-light,
+  body.theme-sepia {
+    --glass-tint: rgba(255, 255, 255, .9);
+    --glass-tint-dense: rgba(255, 255, 255, .97);
+    --glass-tint-large: rgba(255, 255, 255, .95);
+    --glass-edge: rgba(0, 0, 0, .4);
+    --glass-hairline: rgba(0, 0, 0, .35);
+    --glass-selected: rgba(0, 0, 0, .12);
+  }
+  html[data-glass="on"] .selection-menu { background: rgba(20, 20, 22, .97); border-color: rgba(255, 255, 255, .5); }
+  html[data-glass="on"] :is(.zs-glass, body.is-library .shelf-nav, .custom-select-menu, .note-card-dialog, .notes-select-bar, .reader-sheet, .ai-modal, .highlight-editor) {
+    box-shadow: inset 0 0 0 1px var(--glass-edge);
+  }
+}
+
+/* The reader rail follows the same selected look as the shelf: accent
+   symbol and label on a neutral platter. */
+html[data-glass="on"]:not([data-reader-surface="mobile"]) .reader-floating-toolbar button[aria-expanded="true"],
+html[data-glass="on"]:not([data-reader-surface="mobile"]) .reader-floating-toolbar #btnBookmarks[data-bookmark-active="true"] {
+  color: var(--color-accent);
+  background: var(--glass-selected);
+}

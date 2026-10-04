@@ -69,3 +69,8 @@
 
 /* Buttons that share a row stretch evenly. */
 .note-card-actions .zs-btn { flex: 1; }
+
+/* Phones: every button offers at least a 44 × 44 pt target (HIG). */
+html[data-reader-surface="mobile"] .zs-btn { min-height: 44px; }
+html[data-reader-surface="mobile"] .zs-btn-small { min-height: 40px; }
+html[data-reader-surface="mobile"] .zs-btn-icon { width: 44px; height: 44px; }
