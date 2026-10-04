@@ -49,6 +49,7 @@ test('a phone shows one PDF page across the width, without the desktop toolbar; 
   // The phone toolbar's 上一页 / 下一页 (a tap right after a swipe is ignored).
   await page.waitForTimeout(450);
   await showMobileReaderChrome(page);
+  await page.locator('#btnMobileProgress').click();
   await page.locator('#btnMobileNextChapter').click();
   await expect.poll(() => current(page)).toBe(2);
   await page.locator('#btnMobilePreviousChapter').click();
@@ -59,6 +60,7 @@ test('上下滚动 shows the pages as one scroll, and the choice is kept', async
   await openPdfOnPhone(page);
   await showMobileReaderChrome(page);
   await page.locator('#btnMobileSettings').click();
+  await page.locator('#btnMobileMoreSettings').click();
   const modes = page.locator('.settings-pdf-phone-modes');
   await expect(modes).toBeVisible();
   await expect(page.locator('#readerSettingsSheet .settings-pdf-layout-field')).toBeHidden();

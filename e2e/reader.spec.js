@@ -1728,6 +1728,7 @@ test('mobile viewport keeps the reader chrome collapsed until requested', async 
   await showMobileReaderChrome(page);
   await expect(page.locator('#mobileReadingFooter')).toBeHidden();
   await page.locator('#btnMobileSettings').click();
+  await page.locator('#btnMobileMoreSettings').click();
   await expect(page.locator('#readerSettingsSheet')).toBeVisible();
   // Phones default to 左右翻页.
   await expect(page.locator('#settingReadingMode')).toHaveValue('double');

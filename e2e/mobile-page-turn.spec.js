@@ -33,6 +33,7 @@ const pageGroup = (page) => page.evaluate(() => state.pageGroup);
 async function openSettings(page) {
   await showMobileReaderChrome(page);
   await page.locator('#btnMobileSettings').click();
+  await page.locator('#btnMobileMoreSettings').click();
   await expect(page.locator('#readerSettingsSheet')).toBeVisible();
 }
 
