@@ -112,11 +112,107 @@ html[data-reader-surface="mobile"] body.is-library .reader { left: 0; bottom: ca
 /* The organize bar sits above the tab bar. */
 html[data-reader-surface="mobile"] body.is-library .library-manage-bar { bottom: calc(56px + env(safe-area-inset-bottom, 0px)); }
 
-/* 书库文件夹 with nothing wrong: one quiet, foldable line. */
-.library-folders.is-quiet { padding: 10px 14px; }
-.library-folders.is-quiet > summary {
-  color: var(--library-text-muted, var(--color-text-2));
-  font: 13px var(--font-ui);
-  cursor: pointer;
+/* 书库文件夹 (admins): a grouped card in the shelf's own palette — a heading,
+   then one row per folder (name, path below, source and count on the right),
+   separated by hairlines. A one-time notice when healthy; with a problem it
+   stays and explains. The rules are prefixed with .library-view so the
+   article typography the shelf renders inside does not reach them. */
+.library-view .library-folders {
+  margin: 0 0 24px;
+  padding: 14px 16px 6px;
+  color: var(--library-text, var(--color-text));
+  font-family: var(--font-ui);
+  background: var(--library-surface, var(--color-elevated));
+  border: .5px solid var(--library-separator, var(--color-separator));
+  border-radius: 14px;
+  box-shadow: var(--library-card-shadow, none);
 }
-.library-folders.is-quiet[open] > summary { margin-bottom: 8px; }
+.library-view .library-folders.is-problem { padding-bottom: 14px; }
+.library-view .library-folders-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+.library-view .library-folders-heading { min-width: 0; }
+.library-view .library-folders .library-folders-title {
+  margin: 0;
+  padding: 0;
+  font-family: var(--font-ui);
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1.4;
+  letter-spacing: 0;
+  border: 0;
+}
+.library-view .library-folders p.library-folders-sub {
+  margin: 2px 0 0;
+  color: var(--library-text-muted, var(--color-text-2));
+  font-size: 13px;
+  line-height: 1.5;
+  text-indent: 0;
+}
+.library-view .library-folders-dismiss { flex: none; margin: -4px -6px 0 0; color: var(--library-accent, var(--color-accent)); }
+.library-view .library-folders ul { margin: 0; padding: 0; list-style: none; }
+.library-view .library-folders-list { margin-top: 10px; }
+.library-view .library-folders-list li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 4px 16px;
+  margin: 0;
+  padding: 10px 0;
+  border-top: .5px solid var(--library-separator, var(--color-separator));
+}
+.library-view .library-folders-name {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px 8px;
+  min-width: 0;
+}
+.library-view .library-folders-name strong { font-size: 14px; font-weight: 500; line-height: 1.4; }
+.library-view .library-folders-name code {
+  flex-basis: 100%;
+  min-width: 0;
+  padding: 0;
+  color: var(--library-text-muted, var(--color-text-2));
+  font-family: var(--font-ui);
+  font-size: 12px;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+  background: none;
+  border: 0;
+}
+.library-view .library-folders-new {
+  padding: 1px 7px;
+  color: var(--library-accent, var(--color-accent));
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.5;
+  background: color-mix(in srgb, var(--library-accent, var(--color-accent)) 13%, transparent);
+  border-radius: 999px;
+}
+.library-view .library-folders-count {
+  flex: none;
+  color: var(--library-text-muted, var(--color-text-2));
+  font-size: 13px;
+  white-space: nowrap;
+}
+.library-view .library-folders-count.is-warning { color: #d9822b; }
+.library-view .library-folders-skipped { margin-top: 4px; font-size: 13px; }
+.library-view .library-folders-skipped summary { cursor: pointer; color: var(--library-text-muted, var(--color-text-2)); }
+.library-view .library-folders-skipped ul { display: grid; gap: 4px; margin-top: 6px; }
+.library-view .library-folders-skipped li { margin: 0; font-size: 13px; line-height: 1.6; }
+.library-view .library-folders-skipped code { padding: 0; font-family: var(--font-ui); background: none; border: 0; }
+.library-view .library-folders p.library-folders-hint {
+  margin: 8px 0 0;
+  color: var(--library-text-muted, var(--color-text-2));
+  font-size: 13px;
+  line-height: 1.6;
+  text-indent: 0;
+}
+@media (max-width: 639px) {
+  .library-view .library-folders { margin-bottom: 16px; padding: 12px 14px 4px; }
+  .library-view .library-folders-list li { padding: 8px 0; }
+}

@@ -33,14 +33,74 @@ function libraryReadFailure(code, fallback = '') {
   return reasons[code] || fallback || '无法读取';
 }
 
-// Where the books are read from (admins only). Shown when the library is
-// empty, or when a folder or some of its contents could not be read, so the
-// cause is on the page instead of behind SSH.
+// Where the books are read from (admins only). Always shown when the library
+// is empty, or when a folder or some of its contents could not be read, so
+// the cause is on the page instead of behind SSH. With nothing wrong it is a
+// one-time notice: the first time the folders are seen, and again after a scan
+// finds a new folder; it stays for this page load and is gone after a refresh.
 const LIBRARY_FOLDER_SOURCES = Object.freeze({
   accessible: 'fnOS 授权',
   shared: '应用共享文件夹',
   configured: '应用设置'
 });
+const LIBRARY_FOLDERS_SEEN_KEY = 'zhenshu.libraryFoldersSeen';
+// The notice shown during this page load: its folders, and whether dismissed.
+let libraryFoldersNotice = null;
+
+function readSeenLibraryFolders() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(LIBRARY_FOLDERS_SEEN_KEY) || 'null');
+    return Array.isArray(saved) ? saved : null;
+  } catch {
+    return null;
+  }
+}
+
+function saveSeenLibraryFolders(roots) {
+  try { localStorage.setItem(LIBRARY_FOLDERS_SEEN_KEY, JSON.stringify(roots)); } catch { /* private mode */ }
+}
+
+// For a healthy library: the notice to show now, or null.
+function libraryFoldersNoticeFor(scanned) {
+  const roots = scanned.map((folder) => folder.root).sort();
+  const key = roots.join('\n');
+  if (libraryFoldersNotice?.key === key) return libraryFoldersNotice.dismissed ? null : libraryFoldersNotice;
+  const seen = readSeenLibraryFolders();
+  const added = seen ? roots.filter((root) => !seen.includes(root)) : roots;
+  saveSeenLibraryFolders(roots);
+  // A folder taken away is not news: just remember the smaller set.
+  if (!added.length) return null;
+  libraryFoldersNotice = { key, first: !seen, added: new Set(seen ? added : []), dismissed: false };
+  return libraryFoldersNotice;
+}
+
+function libraryFolderName(root) {
+  return String(root || '').split(/[\\/]+/).filter(Boolean).pop() || String(root || '');
+}
+
+function createLibraryFolderRow(root, meta, { warning = false, added = false } = {}) {
+  const item = document.createElement('li');
+  const name = document.createElement('div');
+  name.className = 'library-folders-name';
+  const title = document.createElement('strong');
+  title.textContent = libraryFolderName(root);
+  name.appendChild(title);
+  if (added) {
+    const badge = document.createElement('span');
+    badge.className = 'library-folders-new';
+    badge.textContent = '新增';
+    name.appendChild(badge);
+  }
+  const where = document.createElement('code');
+  where.textContent = root;
+  name.appendChild(where);
+  const count = document.createElement('span');
+  count.className = 'library-folders-count';
+  count.textContent = meta;
+  if (warning) count.classList.add('is-warning');
+  item.append(name, count);
+  return item;
+}
 
 function createLibraryFoldersPanel(library, { empty = false } = {}) {
   const folders = library?.folders;
@@ -48,18 +108,41 @@ function createLibraryFoldersPanel(library, { empty = false } = {}) {
   const scanned = Array.isArray(folders.scanned) ? folders.scanned : [];
   const unavailable = Array.isArray(folders.unavailable) ? folders.unavailable : [];
   const skippedTotal = scanned.reduce((sum, folder) => sum + (Number(folder.skippedCount) || 0), 0);
-  const problem = empty || unavailable.length || skippedTotal;
-  if (!problem && !scanned.length) return null;
+  const problem = Boolean(empty || unavailable.length || skippedTotal);
+  const notice = problem || !scanned.length ? null : libraryFoldersNoticeFor(scanned);
+  if (!problem && !notice) return null;
 
-  // With nothing wrong the panel folds into one line: where the books come
-  // from stays one click away.
-  const panel = document.createElement(problem ? 'section' : 'details');
-  panel.className = problem ? 'library-folders' : 'library-folders is-quiet';
+  const panel = document.createElement('section');
+  panel.className = problem ? 'library-folders is-problem' : 'library-folders is-notice';
   panel.setAttribute('aria-label', '书库文件夹');
-  const title = document.createElement(problem ? 'h2' : 'summary');
+  const head = document.createElement('div');
+  head.className = 'library-folders-head';
+  const heading = document.createElement('div');
+  heading.className = 'library-folders-heading';
+  const title = document.createElement('h2');
   title.className = 'library-folders-title';
-  title.textContent = problem ? '书库文件夹' : `书库文件夹（${scanned.length} 个）`;
-  panel.appendChild(title);
+  title.textContent = notice && !notice.first ? '发现新的书库文件夹' : '书库文件夹';
+  heading.appendChild(title);
+  if (notice) {
+    const books = scanned.reduce((sum, folder) => sum + (Number(folder.bookCount) || 0), 0);
+    const sub = document.createElement('p');
+    sub.className = 'library-folders-sub';
+    sub.textContent = `${scanned.length} 个文件夹，共 ${books} 本书。此提示只显示一次。`;
+    heading.appendChild(sub);
+  }
+  head.appendChild(heading);
+  if (notice) {
+    const dismiss = document.createElement('button');
+    dismiss.type = 'button';
+    dismiss.className = 'zs-btn zs-btn-plain zs-btn-small library-folders-dismiss';
+    dismiss.textContent = '知道了';
+    dismiss.addEventListener('click', () => {
+      notice.dismissed = true;
+      panel.remove();
+    });
+    head.appendChild(dismiss);
+  }
+  panel.appendChild(head);
 
   if (!scanned.length && !unavailable.length) {
     const none = document.createElement('p');
@@ -72,29 +155,19 @@ function createLibraryFoldersPanel(library, { empty = false } = {}) {
   const list = document.createElement('ul');
   list.className = 'library-folders-list';
   for (const folder of scanned) {
-    const item = document.createElement('li');
-    const where = document.createElement('code');
-    where.textContent = folder.root;
-    const count = document.createElement('span');
-    count.className = 'library-folders-count';
     const skipped = Number(folder.skippedCount) || 0;
     const source = LIBRARY_FOLDER_SOURCES[folder.source] || '';
-    count.textContent = `${source ? `${source} · ` : ''}${Number(folder.bookCount) || 0} 本${skipped ? `，${skipped} 项无法读取` : ''}`;
-    if (skipped) count.classList.add('is-warning');
-    item.append(where, count);
-    list.appendChild(item);
+    const meta = `${source ? `${source} · ` : ''}${Number(folder.bookCount) || 0} 本${skipped ? `，${skipped} 项无法读取` : ''}`;
+    list.appendChild(createLibraryFolderRow(folder.root, meta, {
+      warning: Boolean(skipped),
+      added: Boolean(notice?.added.has(folder.root))
+    }));
   }
   for (const folder of unavailable) {
-    const item = document.createElement('li');
-    const where = document.createElement('code');
-    where.textContent = folder.root;
-    const reason = document.createElement('span');
-    reason.className = 'library-folders-count is-warning';
-    reason.textContent = `无法打开：${libraryReadFailure(folder.code, folder.error)}`;
-    item.append(where, reason);
-    list.appendChild(item);
+    list.appendChild(createLibraryFolderRow(folder.root, `无法打开：${libraryReadFailure(folder.code, folder.error)}`, { warning: true }));
   }
   panel.appendChild(list);
+  if (!problem) return panel;
 
   const skippedItems = scanned.flatMap((folder) => (folder.skipped || [])
     .map((entry) => ({ root: folder.root, ...entry })));

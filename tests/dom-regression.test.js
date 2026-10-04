@@ -5869,7 +5869,7 @@ test('phone pagination runs edge to edge with a text inset from the margin slide
   assert.ok(desktop.insetLeft > 0);
 });
 
-test('admins see which library folders were read, with counts and unreadable items', async () => {
+test('admins see which library folders were read, with counts and unreadable items; a healthy library says so once', async () => {
   const { api } = await createReaderDom();
   const panel = api.createLibraryFoldersPanel({
     folders: {
@@ -5881,7 +5881,7 @@ test('admins see which library folders were read, with counts and unreadable ite
     }
   }, { empty: true });
   const text = panel.textContent;
-  assert.match(text, /\/vol1\/@appshare\/zhenshu\/library0 本/);
+  assert.match(text, /library\/vol1\/@appshare\/zhenshu\/library0 本/);
   assert.match(text, /12 本，2 项无法读取/);
   assert.match(text, /无法打开：文件夹不存在/);
   assert.match(text, /无法读取的子文件夹或文件（2）/);
@@ -5889,13 +5889,30 @@ test('admins see which library folders were read, with counts and unreadable ite
   assert.match(text, /旧\/坏\.txt — 磁盘读取出错/);
   assert.match(text, /然后点“重新扫描”/);
 
-  // A healthy library folds the panel into one line that still says where
-  // the books come from; non-admins never get folder data.
-  const quiet = api.createLibraryFoldersPanel({ folders: { scanned: [{ root: '/a', bookCount: 3, skippedCount: 0, skipped: [], source: 'accessible' }], unavailable: [] } });
-  assert.equal(quiet.tagName, 'DETAILS');
-  assert.equal(quiet.open, false);
-  assert.match(quiet.textContent, /书库文件夹（1 个）/);
-  assert.match(quiet.textContent, /fnOS 授权 · 3 本/);
+  // A healthy library: a one-time notice. Shown the first time, kept for the
+  // page load, gone once dismissed; a later page load does not show it.
+  const healthy = { folders: { scanned: [{ root: '/vol1/1000/book', bookCount: 3, skippedCount: 0, skipped: [], source: 'accessible' }], unavailable: [] } };
+  const notice = api.createLibraryFoldersPanel(healthy);
+  assert.equal(notice.classList.contains('is-notice'), true);
+  assert.match(notice.textContent, /书库文件夹1 个文件夹，共 3 本书。此提示只显示一次。/);
+  assert.match(notice.textContent, /book\/vol1\/1000\/bookfnOS 授权 · 3 本/);
+  assert.doesNotMatch(notice.textContent, /其余的书已正常读取/);
+  assert.ok(api.createLibraryFoldersPanel(healthy), 'still shown on a rerender in the same page load');
+  notice.querySelector('.library-folders-dismiss').click();
+  assert.equal(api.createLibraryFoldersPanel(healthy), null);
+  const later = await createReaderDom();
+  later.window.localStorage.setItem('zhenshu.libraryFoldersSeen', JSON.stringify(['/vol1/1000/book']));
+  assert.equal(later.api.createLibraryFoldersPanel(healthy), null);
+  // A scan that finds a new folder shows it again, marking the new one; a
+  // folder taken away is not announced.
+  const grown = { folders: { scanned: [...healthy.folders.scanned, { root: '/vol1/1000/漫画', bookCount: 2, skippedCount: 0, skipped: [], source: 'accessible' }], unavailable: [] } };
+  const added = later.api.createLibraryFoldersPanel(grown);
+  assert.match(added.textContent, /发现新的书库文件夹/);
+  assert.equal(added.querySelectorAll('.library-folders-new').length, 1);
+  assert.match(added.querySelector('.library-folders-new').closest('li').textContent, /漫画/);
+  const shrunk = await createReaderDom();
+  shrunk.window.localStorage.setItem('zhenshu.libraryFoldersSeen', JSON.stringify(['/vol1/1000/book', '/vol1/old']));
+  assert.equal(shrunk.api.createLibraryFoldersPanel(healthy), null);
   assert.equal(api.createLibraryFoldersPanel({ books: [] }, { empty: true }), null);
   // No folder at all: say how to add one.
   assert.match(api.createLibraryFoldersPanel({ folders: { scanned: [], unavailable: [] } }, { empty: true }).textContent, /zhenshu\/library/);

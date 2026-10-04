@@ -516,6 +516,8 @@ test.describe('mobile organization', () => {
     await page.getByRole('button', { name: '整理', exact: true }).click();
     const cards = page.locator('.library-reorder-item');
     const secondId = await cards.nth(1).getAttribute('data-reorder-id');
+    // Bring the covers clear of the tab bar, as a person would scroll to them.
+    await cards.first().evaluate((card) => card.scrollIntoView({ block: 'center' }));
     const from = await cards.first().locator('.library-book-cover').boundingBox();
     const to = await cards.nth(1).boundingBox();
     const client = await page.context().newCDPSession(page);
