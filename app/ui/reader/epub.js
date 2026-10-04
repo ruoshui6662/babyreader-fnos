@@ -625,7 +625,7 @@ function getEpubThemeCss() {
     body {
       font-family: ${FONT_STACKS[state.fontFamily] || FONT_STACKS[DEFAULT_READER_FONT]} !important;
       font-size: ${fontSize} !important;
-      font-weight: 400 !important;
+      font-weight: ${state.fontWeight || 400} !important;
       line-height: ${state.lineHeight} !important;
       max-width: 760px !important;
       margin: 0 auto !important;
@@ -636,7 +636,7 @@ function getEpubThemeCss() {
       color: inherit !important;
       font-family: inherit !important;
       font-size: inherit !important;
-      font-weight: 400 !important;
+      font-weight: ${state.fontWeight || 400} !important;
       letter-spacing: 0 !important;
       box-sizing: border-box !important;
     }

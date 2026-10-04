@@ -34,6 +34,14 @@ function selectionMenuRecentlyDismissed() {
 }
 
 const selectionActions = Object.freeze({
+  more: () => {
+    const session = _activeSelectionSession;
+    const native = typeof nativeClient === 'function' ? nativeClient() : null;
+    if (!session || !native?.processText) return false;
+    closeSelectionMenu({ clearSelection: false });
+    try { native.processText(session.text); } catch { return false; }
+    return true;
+  },
   copy: async () => {
     const session = _activeSelectionSession;
     if (!session) return false;
@@ -142,7 +150,9 @@ function ensureSelectionMenu() {
     ['line', '直线'],
     ['thought', '写想法'],
     ['search', '搜索'],
-    ['ai', '问 AI']
+    ['ai', '问 AI'],
+    // In the Android client: the system's dictionaries, translators, …
+    ['more', '更多…']
   ];
   for (const [action, label] of items) {
     const button = document.createElement('button');

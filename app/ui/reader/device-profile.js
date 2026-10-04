@@ -945,6 +945,7 @@ function openMobileSub(name) {
       list.appendChild(row);
     }
     body.appendChild(list);
+    body.appendChild(mobileField('字重', mobileProxySegments(document.querySelectorAll('#settingFontWeight [data-font-weight]'), rerender)));
   } else if (name === 'indent') {
     title.textContent = '首行缩进';
     body.appendChild(mobileField('每段开头空出', mobileProxySegments(document.querySelectorAll('#settingTextIndent [data-text-indent]'), rerender)));

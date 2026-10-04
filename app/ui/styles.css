@@ -1137,7 +1137,7 @@ html[data-reader-surface="mobile"] .pdf-page-canvas { max-width: 100%; }
 /* --- Reading typography (P0): indent, paragraph rhythm, font family --- */
 .article .epub-chapter {
   font-size: 1.1875rem !important;
-  font-weight: 400 !important;
+  font-weight: var(--reader-font-weight, 400) !important;
   line-height: var(--reader-line-height) !important;
   position: relative;
   z-index: 1;
@@ -1149,7 +1149,8 @@ html[data-reader-surface="mobile"] .pdf-page-canvas { max-width: 100%; }
 .article .epub-chapter section,
 .article .epub-chapter article {
   font-size: 1em !important;
-  font-weight: 400 !important;
+  /* 字重 (settings › 排版). */
+  font-weight: var(--reader-font-weight, 400) !important;
   line-height: var(--reader-line-height) !important;
 }
 

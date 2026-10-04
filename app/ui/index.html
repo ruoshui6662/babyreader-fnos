@@ -14,7 +14,7 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="枕书">
-  <link rel="stylesheet" href="styles.css?v=121">
+  <link rel="stylesheet" href="styles.css?v=122">
   <link rel="stylesheet" href="styles/shelf-nav.css?v=4">
   <link rel="stylesheet" href="styles/stats.css?v=2">
   <link rel="stylesheet" href="styles/notes.css?v=1">
@@ -23,7 +23,7 @@
   <link rel="stylesheet" href="styles/buttons.css?v=2">
   <link rel="stylesheet" href="styles/glass.css?v=4">
   <link rel="stylesheet" href="styles/shelf-phone.css?v=1">
-  <link rel="stylesheet" href="styles/reader-mobile.css?v=19">
+  <link rel="stylesheet" href="styles/reader-mobile.css?v=21">
 </head>
 <body class="is-welcome">
   <svg class="zs-glass-defs" width="0" height="0" aria-hidden="true" focusable="false">
@@ -291,6 +291,17 @@
               <button type="button" role="radio" data-text-indent="2" aria-checked="false" aria-label="2 字">2</button>
               <button type="button" role="radio" data-text-indent="3" aria-checked="false" aria-label="3 字">3</button>
               <button type="button" role="radio" data-text-indent="4" aria-checked="false" aria-label="4 字">4</button>
+            </div>
+          </div>
+          <!-- 字重 of the body text; headings keep their own. Fonts without
+               the weight show the nearest one they have. -->
+          <div class="settings-field settings-indent-field">
+            <span class="settings-field-label" id="settingFontWeightLabel">字重</span>
+            <div class="settings-indent-segments settings-weight-segments" id="settingFontWeight" role="radiogroup" aria-labelledby="settingFontWeightLabel">
+              <button type="button" role="radio" data-font-weight="300" aria-checked="false">细</button>
+              <button type="button" role="radio" data-font-weight="400" aria-checked="true">常规</button>
+              <button type="button" role="radio" data-font-weight="500" aria-checked="false">中</button>
+              <button type="button" role="radio" data-font-weight="600" aria-checked="false">粗</button>
             </div>
           </div>
           <details class="settings-advanced" id="settingsTypographyAdvanced">
@@ -836,24 +847,24 @@
   <script src="core/api.js?v=35"></script>
   <script src="core/reader-route.js?v=1"></script>
   <script src="core/glass.js?v=4"></script>
-  <script src="core/user-state.js?v=46"></script>
+  <script src="core/user-state.js?v=47"></script>
   <script src="reader/annotations.js?v=2"></script>
-  <script src="reader/device-profile.js?v=49"></script>
-  <script src="reader/epub.js?v=38"></script>
+  <script src="reader/device-profile.js?v=50"></script>
+  <script src="reader/epub.js?v=39"></script>
   <script src="reader/paragraphs.js?v=1"></script>
   <script src="reader/document.js?v=30"></script>
   <script src="reader/editor.js?v=28"></script>
   <script src="reader/highlights.js?v=41"></script>
   <script src="reader/ai.js?v=4"></script>
   <script src="reader/ai-index-manager.js?v=1"></script>
-  <script src="reader/selection-menu.js?v=7"></script>
+  <script src="reader/selection-menu.js?v=8"></script>
   <script src="reader/pdf-notes-export.js?v=1"></script>
   <script src="reader/actions.js?v=28"></script>
   <script src="reader/notes-panel.js?v=4"></script>
   <script src="reader/progress.js?v=37"></script>
   <script src="reader/bookmarks.js?v=4"></script>
   <script src="reader/pagination.js?v=38"></script>
-  <script src="reader/settings.js?v=48"></script>
+  <script src="reader/settings.js?v=49"></script>
   <script src="reader/jump-back.js?v=1"></script>
   <script src="reader/navigation.js?v=31"></script>
   <script src="reader/pdf-annotation-geometry.js?v=1"></script>

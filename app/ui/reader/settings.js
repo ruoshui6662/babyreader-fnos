@@ -147,6 +147,7 @@ function applyTypography() {
   document.documentElement.dataset.textIndent = String(indent);
   document.documentElement.style.setProperty('--reader-text-indent', indent === 'book' ? '0em' : `${indent}em`);
   document.documentElement.style.setProperty('--reader-para-spacing', `${state.paragraphSpacing}em`);
+  document.documentElement.style.setProperty('--reader-font-weight', String(state.fontWeight || 400));
   const stack = FONT_STACKS[state.fontFamily] || FONT_STACKS[DEFAULT_READER_FONT];
   ensureReaderFontStylesheets(state.fontFamily);
   document.documentElement.style.setProperty('--reader-font-family', stack);
@@ -578,6 +579,9 @@ function syncSettingsPanel() {
       button.setAttribute('aria-checked', String(button.dataset.textIndent === current));
     });
   }
+  document.querySelectorAll('[data-font-weight]').forEach((button) => {
+    button.setAttribute('aria-checked', String(Number(button.dataset.fontWeight) === (state.fontWeight || 400)));
+  });
   if (paragraphSpacing) {
     paragraphSpacing.value = String(state.paragraphSpacing);
     syncTypographySliderAccessibility('paragraphSpacing', state.paragraphSpacing);
@@ -775,6 +779,14 @@ function setupSettingsPanel() {
     applyTypography();
   });
   resetTypography?.addEventListener('click', resetTypographySettings);
+  document.getElementById('settingFontWeight')?.addEventListener('click', (event) => {
+    const choice = event.target.closest?.('[data-font-weight]');
+    if (!choice) return;
+    state.fontWeight = Number(choice.dataset.fontWeight) || 400;
+    applyTypography();
+    syncSettingsPanel();
+    persistUserSettings();
+  });
   document.getElementById('btnFontSmaller')?.addEventListener('click', () => stepFontSize(-1));
   document.getElementById('btnFontLarger')?.addEventListener('click', () => stepFontSize(1));
   const settingsPanel = document.getElementById('readerPanelSettings');

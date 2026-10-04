@@ -2994,8 +2994,10 @@ test('selection session opens a bounded seven-action menu and rejects outside se
   const menu = window.document.getElementById('selectionMenu');
   assert.ok(menu);
   assert.equal(menu.hidden, false);
-  // Seven desktop actions plus the phone's one-tap “划线”.
-  assert.equal(menu.querySelectorAll('[data-selection-action]').length, 8);
+  // Seven desktop actions, the phone's one-tap “划线”, and 更多… (shown
+  // only inside the Android client).
+  assert.equal(menu.querySelectorAll('[data-selection-action]').length, 9);
+  assert.ok(menu.querySelector('[data-selection-action="more"]'));
   assert.ok(menu.querySelector('[data-selection-action="highlight"]'));
   assert.ok(menu.querySelector('[data-selection-action="search"]'), 'selection can be searched in the book');
   assert.ok(Number.parseFloat(menu.style.left) >= 8);

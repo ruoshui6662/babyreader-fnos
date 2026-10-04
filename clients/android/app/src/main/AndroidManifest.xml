@@ -9,6 +9,14 @@
         android:maxSdkVersion="28" />
 
     <!-- The NAS is usually reached over plain HTTP on the home network. -->
+    <!-- Android 11+: see the apps that take selected text (更多…). -->
+    <queries>
+        <intent>
+            <action android:name="android.intent.action.PROCESS_TEXT" />
+            <data android:mimeType="text/plain" />
+        </intent>
+    </queries>
+
     <application
         android:allowBackup="false"
         android:icon="@mipmap/ic_launcher"

@@ -67,7 +67,7 @@ public class MainActivity extends Activity {
     private static final String MODE_DIRECT = "direct";
     private static final String MODE_WEB = "web";
     private static final String APP_PATH = DirectLogin.APP_PATH;
-    private static final String VERSION = "0.2.4";
+    private static final String VERSION = "0.2.5";
     private static final int FILE_CHOOSER_REQUEST = 1;
     private static final int SETUP_BACKGROUND = 0xFF141416;
 
@@ -625,6 +625,29 @@ public class MainActivity extends Activity {
                     ? WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE
                     : Math.max(0.05f, Math.min(1f, level));
                 getWindow().setAttributes(attributes);
+            });
+        }
+
+        /**
+         * 更多… on a selection: offer the text to the apps that process text
+         * (dictionaries, translators); with none installed, the share sheet.
+         */
+        @JavascriptInterface
+        public void processText(String text) {
+            if (!trusted() || text == null || text.isEmpty()) return;
+            runOnUiThread(() -> {
+                Intent process = new Intent(Intent.ACTION_PROCESS_TEXT)
+                    .setType("text/plain")
+                    .putExtra(Intent.EXTRA_PROCESS_TEXT, text)
+                    .putExtra(Intent.EXTRA_PROCESS_TEXT_READONLY, true);
+                Intent target = getPackageManager().queryIntentActivities(process, 0).isEmpty()
+                    ? new Intent(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_TEXT, text)
+                    : process;
+                try {
+                    startActivity(Intent.createChooser(target, "处理选中的文字"));
+                } catch (ActivityNotFoundException ignored) {
+                    Toast.makeText(MainActivity.this, "没有可以处理文字的应用", Toast.LENGTH_SHORT).show();
+                }
             });
         }
 

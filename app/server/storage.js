@@ -441,6 +441,10 @@ class UserStorage {
         // (older half steps round to the nearest).
         textIndent: normalizeTextIndentSetting(settings.textIndent,
           normalizeTextIndentSetting(state.settings.textIndent, 2)),
+        // 字重 of the body text: 300 / 400 / 500 / 600.
+        fontWeight: [300, 400, 500, 600].includes(settings.fontWeight)
+          ? settings.fontWeight
+          : [300, 400, 500, 600].includes(state.settings.fontWeight) ? state.settings.fontWeight : 400,
         paragraphSpacing: Number.isFinite(settings.paragraphSpacing)
           ? Math.max(0.4, Math.min(3, Math.round(settings.paragraphSpacing * 10) / 10))
           : Number.isFinite(state.settings.paragraphSpacing) ? state.settings.paragraphSpacing : 1.1,
