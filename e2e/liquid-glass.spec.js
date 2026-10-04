@@ -303,5 +303,49 @@ test.describe('液态玻璃', () => {
     expect(await page.locator('.reader').evaluate((reader) => getComputedStyle(reader).backgroundImage)).toBe('none');
     expect(await page.locator('#article').evaluate((article) => getComputedStyle(article).backgroundColor)).toBe(paper);
   });
+
+  test('G6 HIG: selected items are an accent label on a neutral platter; increase contrast makes glass solid', async ({ page }) => {
+    await page.setViewportSize({ width: 1280, height: 860 });
+    await page.goto(APP_PATH);
+    await resetEpubFixtureState(page);
+    await setSettings(page, { theme: 'light', liquidGlass: true });
+    await page.goto(APP_PATH);
+    const active = page.locator('#shelfNav .shelf-nav-button.is-active');
+    const look = await active.evaluate((button) => {
+      const style = getComputedStyle(button);
+      const probe = document.createElement('i');
+      probe.style.color = 'var(--library-accent)';
+      document.body.appendChild(probe);
+      const accent = getComputedStyle(probe).color;
+      probe.remove();
+      return { color: style.color, background: style.backgroundColor, accent };
+    });
+    expect(look.color).toBe(look.accent);
+    // Neutral: the platter is a grey (equal channels), not tinted with the accent.
+    const channels = look.background.match(/[\d.]+/g).slice(0, 3).map(Number);
+    expect(new Set(channels).size).toBe(1);
+
+    const cdp = await page.context().newCDPSession(page);
+    await cdp.send('Emulation.setEmulatedMedia', { features: [{ name: 'prefers-contrast', value: 'more' }] });
+    const alpha = await page.locator('#shelfNav').evaluate((nav) => Number((getComputedStyle(nav).backgroundColor.match(/[\d.]+/g) || [])[3] ?? 1));
+    expect(alpha).toBeGreaterThanOrEqual(0.9);
+  });
+
+  test('G6 HIG: buttons on phones offer a 44 pt target', async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.addInitScript(() => {
+      Object.defineProperty(navigator, 'userAgent', { configurable: true, get: () => 'Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 Chrome/120 Mobile Safari/537.36' });
+    });
+    await page.goto(APP_PATH);
+    await resetEpubFixtureState(page);
+    const bookId = await page.evaluate(async () => {
+      const library = await window.browserHost.getLibrary();
+      return library.books.find((book) => book.title === 'E2E EPUB').id;
+    });
+    await page.goto(`${APP_PATH}?view=notes&doc=${bookId}`);
+    await page.waitForSelector('.notes-doc-actions .zs-btn');
+    const heights = await page.locator('.notes-doc-actions .zs-btn').evaluateAll((buttons) => buttons.map((button) => button.getBoundingClientRect().height));
+    for (const height of heights) expect(height).toBeGreaterThanOrEqual(44);
+  });
 });
 
