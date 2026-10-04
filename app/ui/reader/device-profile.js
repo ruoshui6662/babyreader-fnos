@@ -402,11 +402,68 @@ function syncNativeClient() {
   } catch { /* an older shell */ }
 }
 
+// Files the page makes (notes as Markdown, share pictures) are blob URLs
+// clicked through a download link; a WebView cannot download those. In the
+// client every such link hands its file to the shell, which saves it to
+// 下载/枕书 (pictures to 相册/枕书).
+function blobToBase64(blob) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result).replace(/^data:[^,]*,/, ''));
+    reader.onerror = () => reject(reader.error);
+    reader.readAsDataURL(blob);
+  });
+}
+
+async function saveBlobInNativeClient(blob, name) {
+  const native = nativeClient();
+  let where = '';
+  try {
+    where = native.saveFile(name, blob.type || 'application/octet-stream', await blobToBase64(blob)) || '';
+  } catch { /* an older shell */ }
+  if (typeof showHighlightHint === 'function') {
+    showHighlightHint(where ? `已保存到 ${where}` : '保存失败，请允许枕书保存文件后重试');
+  }
+}
+
+function installNativeDownloads() {
+  const native = nativeClient();
+  if (!native?.saveFile || window.__zhenshuNativeDownloads) return;
+  window.__zhenshuNativeDownloads = true;
+  // Remember each blob by its URL: callers may revoke the URL right after
+  // the click, before the file could be read back from it.
+  const blobs = new Map();
+  const createObjectURL = URL.createObjectURL.bind(URL);
+  URL.createObjectURL = (object) => {
+    const url = createObjectURL(object);
+    if (object instanceof Blob) {
+      blobs.set(url, object);
+      setTimeout(() => blobs.delete(url), 120000);
+    }
+    return url;
+  };
+  const download = (link) => {
+    const blob = link.hasAttribute('download') ? blobs.get(link.href) : null;
+    if (!blob) return false;
+    void saveBlobInNativeClient(blob, link.getAttribute('download') || 'download');
+    return true;
+  };
+  const click = HTMLAnchorElement.prototype.click;
+  HTMLAnchorElement.prototype.click = function clickInNativeClient() {
+    if (!download(this)) click.call(this);
+  };
+  document.addEventListener('click', (event) => {
+    const link = event.target?.closest?.('a[download]');
+    if (link && download(link)) event.preventDefault();
+  }, true);
+}
+
 function setupNativeClient() {
   const native = nativeClient();
   document.documentElement.toggleAttribute('data-native-client', Boolean(native));
   const group = document.getElementById('settingsNativeGroup');
   if (!native || !group) return;
+  installNativeDownloads();
   group.hidden = false;
   const prefs = nativePrefs();
   for (const [id, key] of [['settingNativeVolumeKeys', 'volumeKeys'], ['settingNativeKeepOn', 'keepOn'], ['settingNativeImmersive', 'immersive']]) {
