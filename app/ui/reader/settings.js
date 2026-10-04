@@ -486,6 +486,7 @@ function syncVisualSettingsControls() {
 }
 
 function syncSettingsPanel() {
+  if (typeof syncNativeClient === 'function') syncNativeClient();
   const settingsPanel = document.getElementById('readerPanelSettings');
   const format = state.contentType === 'pdf' ? 'pdf' : 'reflow';
   if (settingsPanel && settingsPanel.dataset.contentFormat !== format) {

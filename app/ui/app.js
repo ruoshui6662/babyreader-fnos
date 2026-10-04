@@ -264,6 +264,7 @@ window.appHost = {
     updateTopbarState();
     openDefaultReaderToc();
     if (typeof maybeShowTapGuide === 'function') maybeShowTapGuide();
+    if (typeof syncNativeClient === 'function') syncNativeClient();
   },
 
   notifySaved({ path, name } = {}) {

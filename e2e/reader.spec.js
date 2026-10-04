@@ -753,9 +753,10 @@ test('settings drawer presents grouped controls and a selected segmented tab', a
 
   await page.locator('#btnSettings').click();
   await expect(page.locator('#readerSettingsSheet')).toBeVisible();
-  await expect(page.locator('.settings-group')).toHaveCount(4);
-  await expect(page.locator('.settings-group-card')).toHaveCount(4);
-  await expect(page.locator('.settings-group-title').allTextContents()).resolves.toEqual([
+  // 手机客户端 (the Android client's group) stays hidden in a browser.
+  await expect(page.locator('.settings-group:not([hidden])')).toHaveCount(4);
+  await expect(page.locator('.settings-group:not([hidden]) .settings-group-card')).toHaveCount(4);
+  await expect(page.locator('.settings-group:not([hidden]) .settings-group-title').allTextContents()).resolves.toEqual([
     '外观', '阅读', '划线', '排版'
   ]);
   await expect(page.locator('#readerDrawer .reader-drawer-tabs [role="tab"]')).toHaveCount(3);

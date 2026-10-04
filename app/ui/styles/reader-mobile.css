@@ -204,3 +204,22 @@ html[data-reader-surface="mobile"] body.is-epub.paged-reading .reader * { touch-
 @media (prefers-reduced-motion: reduce) {
   .tap-guide { animation: none; }
 }
+
+/* Android client settings (shown only inside the client). The short phone
+   sheet keeps them behind 更多设置. */
+html[data-reader-surface="mobile"] #readerSettingsSheet:not(.is-expanded) [data-settings-group="client"] { display: none !important; }
+.settings-native-server {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.settings-native-server-value {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  color: var(--ui-secondary-label);
+  font-size: 13px;
+}
+.settings-native-server-value .settings-turn-guide-button { margin: 0; }
