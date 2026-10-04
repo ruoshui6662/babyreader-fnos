@@ -439,6 +439,8 @@ function createPdfReaderController({
       pages.get(Number(previousPageIndex))?.classList.remove('is-current-page');
     }
     pages.get(pageIndex)?.classList.add('is-current-page');
+    // Another page may be wider or narrower than the screen.
+    win.requestAnimationFrame?.(syncPhoneZoomFlag);
     if (persist && previousPageIndex !== String(pageIndex) && currentBookId) {
       onPageChange({ bookId: currentBookId, pageIndex, generation });
     }
@@ -1033,20 +1035,28 @@ function createPdfReaderController({
     const current = Number(surface()?.dataset.currentPage) || 0;
     if (paged) host.dataset.phonePaged = 'true';
     else delete host.dataset.phonePaged;
+    syncPhoneZoomFlag();
     if (!pdfDocument) return true;
     if (paged) layoutPreference = 'single';
     syncPdfLayout();
     pages.get(current)?.classList.add('is-current-page');
     void fitPdfWidth().then(() => {
-      goToPdfPage(current);
+      // The page current now: the reader may have moved on meanwhile.
+      goToPdfPage(Number(surface()?.dataset.currentPage) || 0);
       win.requestAnimationFrame(syncPhoneZoomFlag);
     });
     return true;
   }
 
+  // Zoomed in: the page is wider than the screen. Its own layout width,
+  // not the scroll width, which a page-turn slide (a transform) inflates.
   function phonePagedZoomed() {
     const host = pageHost();
-    return Boolean(host && host.scrollWidth > host.clientWidth + 2);
+    const current = pages.get(Number(surface()?.dataset.currentPage) || 0);
+    if (!host || !current) return false;
+    const style = win.getComputedStyle(host);
+    const room = host.clientWidth - (Number.parseFloat(style.paddingLeft) || 0) - (Number.parseFloat(style.paddingRight) || 0);
+    return current.offsetWidth > room + 2;
   }
 
   // A page wider than the screen (zoomed in) pans sideways; otherwise a
@@ -1054,7 +1064,13 @@ function createPdfReaderController({
   function syncPhoneZoomFlag() {
     const host = pageHost();
     if (!host) return;
-    host.toggleAttribute('data-zoomed', host.dataset.phonePaged === 'true' && phonePagedZoomed());
+    const paged = host.dataset.phonePaged === 'true';
+    const zoomed = paged && phonePagedZoomed();
+    host.toggleAttribute('data-zoomed', zoomed);
+    // The whole reading area, not only the page: a turning page slides,
+    // and a touch can land beside it.
+    if (paged) doc.body.dataset.pdfPagedTouch = zoomed ? 'pan' : 'turn';
+    else delete doc.body.dataset.pdfPagedTouch;
   }
 
   // A turn in page mode: the new page slides (平移) or fades (淡入) in.
@@ -1108,6 +1124,7 @@ function createPdfReaderController({
       const label = doc.getElementById('pdfZoomValue');
       if (label) label.textContent = `${Math.round(scale * 100)}%`;
       if (mode !== 'auto') announcePdfPosition();
+      win.requestAnimationFrame(syncPhoneZoomFlag);
       return true;
     }
 

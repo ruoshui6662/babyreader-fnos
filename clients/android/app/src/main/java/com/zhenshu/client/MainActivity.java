@@ -65,7 +65,7 @@ public class MainActivity extends Activity {
     private static final String MODE_DIRECT = "direct";
     private static final String MODE_WEB = "web";
     private static final String APP_PATH = DirectLogin.APP_PATH;
-    private static final String VERSION = "0.2.0";
+    private static final String VERSION = "0.2.1";
     private static final int FILE_CHOOSER_REQUEST = 1;
     private static final int SETUP_BACKGROUND = 0xFF141416;
 
@@ -77,6 +77,10 @@ public class MainActivity extends Activity {
     private View topStrip;
     private View bottomStrip;
     private boolean immersive;
+    // Immersive reading draws the page under the camera cutout; the page
+    // is told how tall that band is (CSS --app-safe-top) to keep text and
+    // its clock clear of it.
+    private float safeTopDp;
 
     private WebView web;
     private String server;
@@ -97,6 +101,11 @@ public class MainActivity extends Activity {
             WebView.setWebContentsDebuggingEnabled(true);
         }
         secrets = new SecretStore(prefs());
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+            WindowManager.LayoutParams attributes = getWindow().getAttributes();
+            attributes.layoutInDisplayCutoutMode = WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES;
+            getWindow().setAttributes(attributes);
+        }
         buildWindow();
         server = prefs().getString(KEY_SERVER, null);
         // Clients before 0.2 kept a fnOS web address without a mode.
@@ -138,10 +147,14 @@ public class MainActivity extends Activity {
                 bottom = insets.getSystemWindowInsetBottom();
                 keyboard = 0;
             }
+            // Status bar hidden while reading: the page itself fills the top
+            // band (it knows the band's height); otherwise the strip does.
+            int topMargin = immersive ? 0 : top;
+            pushSafeTop(immersive ? top / getResources().getDisplayMetrics().density : 0);
             FrameLayout.LayoutParams contentParams = (FrameLayout.LayoutParams) content.getLayoutParams();
-            contentParams.setMargins(left, top, right, Math.max(bottom, keyboard));
+            contentParams.setMargins(left, topMargin, right, Math.max(bottom, keyboard));
             content.setLayoutParams(contentParams);
-            topStrip.getLayoutParams().height = top;
+            topStrip.getLayoutParams().height = topMargin;
             topStrip.requestLayout();
             bottomStrip.getLayoutParams().height = bottom;
             bottomStrip.requestLayout();
@@ -409,6 +422,12 @@ public class MainActivity extends Activity {
                 lastUrl = url;
             }
 
+            // A loaded page starts without the band's height: tell it again.
+            @Override
+            public void onPageFinished(WebView view, String url) {
+                pushSafeTop(safeTopDp);
+            }
+
             @Override
             public void onReceivedError(WebView view, WebResourceRequest request, WebResourceError error) {
                 if (request.isForMainFrame()) {
@@ -482,6 +501,12 @@ public class MainActivity extends Activity {
         return luminance > 0.6;
     }
 
+    private void pushSafeTop(float dp) {
+        safeTopDp = dp;
+        if (web == null) return;
+        web.evaluateJavascript("document.documentElement.style.setProperty('--app-safe-top','" + Math.round(dp) + "px')", null);
+    }
+
     private void setStripColors(int top, int bottom) {
         topStrip.setBackgroundColor(top);
         bottomStrip.setBackgroundColor(bottom);
@@ -493,7 +518,9 @@ public class MainActivity extends Activity {
 
     /** The bars take the page's colours; icons stay readable on them. */
     private void setSystemBars(int top, int bottom, boolean hideStatusBar, boolean keepOn) {
+        boolean changed = immersive != hideStatusBar;
         immersive = hideStatusBar;
+        if (changed) root.requestApplyInsets();
         setStripColors(top, bottom);
         boolean lightTop = isLight(top);
         boolean lightBottom = isLight(bottom);

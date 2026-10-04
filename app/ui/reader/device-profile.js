@@ -423,6 +423,7 @@ let nativeScreenFrame = 0;
 function syncNativeClient() {
   const native = nativeClient();
   if (!native?.setReading && !native?.setScreen) return;
+  syncReadingClock();
   cancelAnimationFrame(nativeScreenFrame);
   nativeScreenFrame = requestAnimationFrame(() => {
     const prefs = nativePrefs();
@@ -494,6 +495,23 @@ function installNativeDownloads() {
     const link = event.target?.closest?.('a[download]');
     if (link && download(link)) event.preventDefault();
   }, true);
+}
+
+let readingClockTimer = 0;
+function syncReadingClock() {
+  const clock = document.getElementById('mobileReadingClock');
+  if (!clock) return;
+  const on = Boolean(nativeClient()) && nativePrefs().immersive === true && nativeReading() && isMobileReaderSurface();
+  document.documentElement.toggleAttribute('data-reading-clock', on);
+  clock.hidden = !on;
+  clearInterval(readingClockTimer);
+  if (!on) return;
+  const tick = () => {
+    const now = new Date();
+    clock.textContent = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+  };
+  tick();
+  readingClockTimer = setInterval(tick, 15000);
 }
 
 function setupNativeClient() {

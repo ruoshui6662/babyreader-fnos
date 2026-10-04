@@ -243,8 +243,9 @@ html[data-reader-surface="mobile"] .pdf-pages[data-phone-paged="true"] > .pdf-pa
 html[data-reader-surface="mobile"] .pdf-pages[data-phone-paged="true"] > .pdf-page { box-shadow: none; }
 /* touch-action is not inherited: the whole page leaves sideways moves to
    turning, until the page is zoomed in and has to pan. */
-html[data-reader-surface="mobile"] body.is-pdf-reader .pdf-pages[data-phone-paged="true"]:not([data-zoomed]),
-html[data-reader-surface="mobile"] body.is-pdf-reader .pdf-pages[data-phone-paged="true"]:not([data-zoomed]) * { touch-action: pan-y; }
+html[data-reader-surface="mobile"] body.is-pdf-reader[data-pdf-paged-touch="turn"] .reader,
+html[data-reader-surface="mobile"] body.is-pdf-reader[data-pdf-paged-touch="turn"] .reader *,
+html[data-reader-surface="mobile"] body.is-pdf-reader[data-pdf-paged-touch="turn"] #pdfPages { touch-action: pan-y; }
 .pdf-page.is-turn-next { animation: zs-pdf-turn-next var(--dur-med) var(--ease-out); }
 .pdf-page.is-turn-previous { animation: zs-pdf-turn-previous var(--dur-med) var(--ease-out); }
 .pdf-page.is-turn-fade { animation: zs-pdf-turn-fade 180ms ease-out; }
@@ -515,3 +516,49 @@ html[data-reader-surface="mobile"] body.is-library .topbar {
 }
 html[data-reader-surface="mobile"] body.is-library .topbar .app-mark,
 html[data-reader-surface="mobile"] body.is-library .topbar .app-name { display: none; }
+
+/* ============================================================
+   Immersive reading in the Android client (round 4): the page runs to the
+   very top; the camera band holds the time at the top left, and the text
+   starts below it. The top bar, when shown, starts at the very top too.
+   ============================================================ */
+.mobile-reading-clock { display: none; }
+html[data-reading-clock][data-reader-surface="mobile"] body.mobile-reading {
+  --reading-top: max(26px, env(safe-area-inset-top, 0px), var(--app-safe-top, 0px));
+}
+html[data-reading-clock][data-reader-surface="mobile"] body.mobile-reading .mobile-reading-clock:not([hidden]) {
+  position: fixed;
+  top: 0;
+  left: calc(20px + env(safe-area-inset-left, 0px));
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  height: var(--reading-top);
+  color: var(--text-dim);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  pointer-events: none;
+}
+html[data-reading-clock][data-reader-surface="mobile"] body.mobile-reading[data-mobile-chrome="open"] .mobile-reading-clock { visibility: hidden; }
+html[data-reading-clock][data-reader-surface="mobile"] body.mobile-reading .reader { top: var(--reading-top); }
+
+/* AI: a round button above the toolbar's right end, one tap away. */
+.mobile-ai-float { display: none; }
+html[data-reader-surface="mobile"] body.mobile-reading .mobile-reader-toolbar .mobile-ai-float {
+  position: absolute;
+  right: calc(16px + env(safe-area-inset-right, 0px));
+  bottom: calc(100% + 14px);
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 52px;
+  height: 52px;
+  min-height: 0;
+  padding: 0;
+  color: #fff;
+  background: rgba(60, 60, 64, .82);
+  border-radius: 50%;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, .22);
+}
+html[data-reader-surface="mobile"] body.mobile-reading .mobile-reader-toolbar .mobile-ai-float svg { width: 24px; height: 24px; }
+html[data-reader-surface="mobile"] body.mobile-reading .mobile-reader-toolbar.has-panel .mobile-ai-float { display: none; }

@@ -132,6 +132,37 @@ test('files the page makes are handed to the client, even when the link is revok
   await expect(page.locator('#notesPrintFrame')).toHaveCount(0);
 });
 
+test('immersive reading in the client: the page runs to the top, the time sits top left, AI floats above the toolbar', async ({ page }) => {
+  await openInClient(page);
+  await page.evaluate(() => localStorage.setItem('zhenshu.client', JSON.stringify({ immersive: true, keepOn: true, volumeKeys: true })));
+  await openEpubFixture(page);
+  if (await page.locator('#readerDrawer').isVisible()) await page.locator('#btnCloseSettings').click();
+  // The shell reports the camera band's height.
+  await page.evaluate(() => document.documentElement.style.setProperty('--app-safe-top', '40px'));
+  await expect(page.locator('html')).toHaveAttribute('data-reading-clock', '');
+  const clock = page.locator('#mobileReadingClock');
+  await expect(clock).toBeVisible();
+  await expect(clock).toHaveText(/^\d{2}:\d{2}$/);
+  const layout = await page.evaluate(() => ({
+    clock: document.getElementById('mobileReadingClock').getBoundingClientRect().toJSON(),
+    readerTop: getComputedStyle(document.getElementById('reader')).top
+  }));
+  expect(layout.clock.top).toBe(0);
+  expect(layout.clock.height).toBe(40);
+  expect(layout.clock.left).toBeLessThan(40);
+  // The reading area eases into place.
+  await expect.poll(() => page.evaluate(() => getComputedStyle(document.getElementById('reader')).top)).toBe('40px');
+
+  // The chrome hides the clock; its top bar starts at the very top.
+  await showMobileReaderChrome(page);
+  await expect(clock).toBeHidden();
+  // It slides in from above.
+  await expect.poll(async () => Math.round((await page.locator('.reader-shell-nav').boundingBox()).y)).toBe(0);
+  await expect(page.locator('#btnMobileAiFloat')).toBeVisible();
+  await page.locator('#btnMobileAiFloat').click();
+  await expect(page.locator('#aiModal')).toBeVisible();
+});
+
 test('in a browser there is no client group', async ({ page }) => {
   await page.goto(APP_PATH);
   await expect(page.locator('html')).not.toHaveAttribute('data-native-client', '');
