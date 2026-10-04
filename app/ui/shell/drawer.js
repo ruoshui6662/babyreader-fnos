@@ -277,6 +277,7 @@ function openReaderPanel(panelName, trigger = document.activeElement) {
       tab.tabIndex = selected ? 0 : -1;
     });
     if (title) title.textContent = panelConfig.title;
+    if (typeof renderReaderDrawerBook === 'function') renderReaderDrawerBook();
     if (panelName === 'toc' && typeof revealCurrentTocEntry === 'function') {
       requestAnimationFrame(() => revealCurrentTocEntry());
     }

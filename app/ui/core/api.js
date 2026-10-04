@@ -253,6 +253,8 @@ window.browserHost = {
 
   async openBook(book) {
     if (typeof setGlassAmbientBook === 'function') setGlassAmbientBook(book);
+    // The phone reading drawer shows the open book on top.
+    state.currentBookInfo = { id: book.id, title: book.title || '', author: book.author || '', coverUrl: book.coverUrl || null };
     if (book.type === 'pdf') {
       return window.appHost.receiveDocument({
         path: book.relativePath,

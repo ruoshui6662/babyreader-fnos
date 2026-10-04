@@ -361,16 +361,94 @@ function setupMobileSettingsSheet() {
   });
 }
 
+// The phone reading drawer (目录 / 书签 / 标记与想法) opens from the left
+// with the open book on top: cover, title, author and how far in.
+function renderReaderDrawerBook() {
+  const drawer = document.getElementById('readerDrawer');
+  if (!drawer) return;
+  let block = drawer.querySelector('.reader-drawer-book');
+  if (!block) {
+    block = document.createElement('div');
+    block.className = 'reader-drawer-book';
+    block.innerHTML = '<div class="reader-drawer-book-cover"></div>'
+      + '<div class="reader-drawer-book-text"><div class="reader-drawer-book-title"></div>'
+      + '<div class="reader-drawer-book-meta"></div></div>';
+    drawer.querySelector('.reader-drawer-tabs')?.before(block);
+  }
+  const info = state.currentBookInfo?.id === state.currentBookId ? state.currentBookInfo : null;
+  const cover = block.querySelector('.reader-drawer-book-cover');
+  const coverUrl = info?.coverUrl || '';
+  if (cover.dataset.src !== coverUrl) {
+    cover.dataset.src = coverUrl;
+    cover.replaceChildren();
+    if (coverUrl) {
+      const image = document.createElement('img');
+      image.alt = '';
+      image.decoding = 'async';
+      image.src = coverUrl;
+      image.addEventListener('error', () => image.remove(), { once: true });
+      cover.appendChild(image);
+    }
+  }
+  block.querySelector('.reader-drawer-book-title').textContent = info?.title || state.currentName || '';
+  const percent = typeof mobileReadingPosition === 'function'
+    ? `已读 ${Math.round(mobileReadingPosition().ratio * 100)}%` : '';
+  block.querySelector('.reader-drawer-book-meta').textContent = [info?.author, percent].filter(Boolean).join(' · ');
+}
+
+// Swiping the drawer to the left closes it; a short swipe springs back.
+// Vertical moves are left to the list's own scrolling.
+function setupMobileDrawerSwipe() {
+  const drawer = document.getElementById('readerDrawer');
+  if (!drawer || drawer.dataset.drawerSwipe) return;
+  drawer.dataset.drawerSwipe = 'true';
+  let start = null;
+  let dragging = false;
+  const reset = () => {
+    drawer.style.transform = '';
+    drawer.style.transition = '';
+    drawer.classList.remove('is-dragging');
+    start = null;
+    dragging = false;
+  };
+  drawer.addEventListener('pointerdown', (event) => {
+    if (!isMobileReaderSurface() || event.pointerType === 'mouse') return;
+    start = { x: event.clientX, y: event.clientY, id: event.pointerId };
+  });
+  drawer.addEventListener('pointermove', (event) => {
+    if (!start || event.pointerId !== start.id) return;
+    const dx = event.clientX - start.x;
+    const dy = event.clientY - start.y;
+    if (!dragging) {
+      if (Math.abs(dy) > 10 && Math.abs(dy) > Math.abs(dx)) { start = null; return; }
+      if (dx > -10 || Math.abs(dx) < Math.abs(dy)) return;
+      dragging = true;
+      drawer.classList.add('is-dragging');
+      drawer.style.transition = 'none';
+    }
+    drawer.style.transform = `translateX(${Math.min(0, dx)}px)`;
+  });
+  drawer.addEventListener('pointerup', (event) => {
+    if (!start || event.pointerId !== start.id) return;
+    const dx = event.clientX - start.x;
+    const wasDragging = dragging;
+    reset();
+    if (wasDragging && dx < -Math.min(80, drawer.offsetWidth * 0.25)) closeReaderPanel();
+  });
+  drawer.addEventListener('pointercancel', reset);
+}
+
 // Every bottom sheet on a phone gets a grip; dragging the grip or header
-// down closes the sheet, a short drag springs back.
+// down closes the sheet, a short drag springs back. (The reading drawer
+// opens from the left instead: setupMobileDrawerSwipe.)
 const MOBILE_SHEETS = [
-  ['readerDrawer', () => closeReaderPanel()],
   ['readerSettingsSheet', () => closeReaderPanel()],
   ['readerSearchSheet', () => closeReaderPanel()],
   ['aiModal', () => closeAiModal()]
 ];
 
 function setupMobileSheetGestures() {
+  setupMobileDrawerSwipe();
   for (const [id, close] of MOBILE_SHEETS) {
     const sheet = document.getElementById(id);
     if (!sheet || sheet.dataset.sheetGesture) continue;

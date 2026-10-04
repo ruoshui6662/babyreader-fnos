@@ -78,6 +78,48 @@ test.describe('Phone panels', () => {
     });
   }
 
+  test('目录 / 书签 / 标记与想法 open as a left drawer with the book on top; tap outside or swipe left closes it', async ({ page }) => {
+    await openOnPhone(page, 390);
+    await showMobileReaderChrome(page);
+    await page.locator('#btnMobileToc').click();
+    const drawer = page.locator('#readerDrawer');
+    await expect(drawer).toBeVisible();
+    await page.waitForTimeout(400); // the slide-in
+    const box = await drawer.boundingBox();
+    expect(Math.round(box.x)).toBe(0);
+    expect(Math.round(box.y)).toBe(0);
+    expect(Math.round(box.height)).toBe(844);
+    expect(box.width).toBeLessThan(390 * 0.86);
+    await expect(drawer.locator('.sheet-grip')).toBeHidden();
+    await expect(drawer.locator('.reader-drawer-book-title')).toHaveText('E2E EPUB');
+    await expect(drawer.locator('.reader-drawer-book-meta')).toContainText(/已读 \d+%/);
+    await expect(drawer.locator('#tocList a').first()).toBeVisible();
+    for (const tab of ['#drawerTabToc', '#drawerTabBookmarks', '#drawerTabNotes']) {
+      expect(await page.locator(tab).evaluate((button) => button.scrollWidth <= button.clientWidth)).toBe(true);
+    }
+    await expectNoSideways(page, '#readerDrawer');
+
+    // Tap outside closes it.
+    await page.mouse.click(380, 400);
+    await expect(drawer).toBeHidden();
+
+    // A swipe to the left closes it; a short one springs back.
+    await showMobileReaderChrome(page);
+    await page.locator('#btnMobileToc').click();
+    await page.waitForTimeout(400);
+    const client = await page.context().newCDPSession(page);
+    const swipe = async (xs) => {
+      await client.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x: 250, y: 500 }] });
+      for (const x of xs) await client.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x, y: 504 }] });
+      await client.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+    };
+    await swipe([235, 220]);
+    await expect(drawer).toBeVisible();
+    await expect(drawer).toHaveCSS('transform', 'none');
+    await swipe([230, 200, 160, 120]);
+    await expect(drawer).toBeHidden();
+  });
+
   test('翻页方式 switches between paging and scrolling and 更多设置 collapses on reopen', async ({ page }) => {
     await openOnPhone(page, 390);
     await showMobileReaderChrome(page);
