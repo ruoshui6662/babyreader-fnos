@@ -545,6 +545,27 @@ function syncSettingsPanel() {
   document.querySelectorAll('#settingGlassAmbient [data-glass-ambient]').forEach((button) => {
     button.setAttribute('aria-checked', String(button.dataset.glassAmbient === (state.glassAmbient === 'uniform' ? 'uniform' : 'cover')));
   });
+  // Phone page turning: only for left-right paging on a phone.
+  const phonePaged = typeof isMobileReaderSurface === 'function' && isMobileReaderSurface()
+    && state.readingMode !== 'scroll' && format !== 'pdf';
+  document.querySelectorAll('#readerPanelSettings [data-phone-paged-only]')
+    .forEach((field) => { field.hidden = !phonePaged; });
+  const turn = ['slide', 'fade', 'none'].includes(state.pageTurnAnimation) ? state.pageTurnAnimation : 'slide';
+  document.querySelectorAll('[data-page-turn]').forEach((button) => {
+    button.setAttribute('aria-checked', String(button.dataset.pageTurn === turn));
+  });
+  const tap = state.tapToTurn === 'forward' ? 'forward' : 'zones';
+  document.querySelectorAll('[data-tap-turn]').forEach((button) => {
+    button.setAttribute('aria-checked', String(button.dataset.tapTurn === tap));
+  });
+  const tapHint = document.getElementById('settingTapToTurnHint');
+  if (tapHint) {
+    tapHint.textContent = tap === 'forward'
+      ? '点屏幕任意位置下一页（适合单手），点中间呼出菜单；向右滑回到上一页。'
+      : '点左侧上一页，点右侧下一页，点中间呼出菜单。';
+  }
+  const swipe = document.getElementById('settingSwipeToTurn');
+  if (swipe) swipe.checked = state.swipeToTurn !== false;
   const pdfPageColors = String(state.pdfPageColors === 'original' ? 'original' : 'theme');
   document.querySelectorAll('[data-pdf-page-colors]').forEach((button) => {
     button.setAttribute('aria-checked', String(button.dataset.pdfPageColors === pdfPageColors));
@@ -678,6 +699,28 @@ function setupSettingsPanel() {
   document.getElementById('settingGlassAmbient')?.addEventListener('click', (event) => {
     const choice = event.target.closest?.('[data-glass-ambient]');
     if (choice && typeof setGlassAmbient === 'function') setGlassAmbient(choice.dataset.glassAmbient);
+  });
+  document.getElementById('settingPageTurnAnimation')?.addEventListener('click', (event) => {
+    const choice = event.target.closest?.('[data-page-turn]');
+    if (!choice || choice.dataset.pageTurn === state.pageTurnAnimation) return;
+    state.pageTurnAnimation = choice.dataset.pageTurn;
+    syncSettingsPanel();
+    persistUserSettings();
+  });
+  document.getElementById('settingTapToTurn')?.addEventListener('click', (event) => {
+    const choice = event.target.closest?.('[data-tap-turn]');
+    if (!choice || choice.dataset.tapTurn === state.tapToTurn) return;
+    state.tapToTurn = choice.dataset.tapTurn === 'forward' ? 'forward' : 'zones';
+    syncSettingsPanel();
+    persistUserSettings();
+  });
+  document.getElementById('settingSwipeToTurn')?.addEventListener('change', (event) => {
+    state.swipeToTurn = event.target.checked;
+    persistUserSettings();
+  });
+  document.getElementById('btnShowTapGuide')?.addEventListener('click', () => {
+    closeReaderPanel();
+    if (typeof showTapGuide === 'function') showTapGuide();
   });
   document.getElementById('settingPdfPageColors')?.addEventListener('click', (event) => {
     const choice = event.target.closest?.('[data-pdf-page-colors]');

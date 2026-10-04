@@ -14,14 +14,16 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="枕书">
-  <link rel="stylesheet" href="styles.css?v=118">
+  <link rel="stylesheet" href="styles.css?v=120">
   <link rel="stylesheet" href="styles/shelf-nav.css?v=4">
-  <link rel="stylesheet" href="styles/stats.css?v=1">
+  <link rel="stylesheet" href="styles/stats.css?v=2">
   <link rel="stylesheet" href="styles/notes.css?v=1">
   <link rel="stylesheet" href="styles/note-card.css?v=1">
   <link rel="stylesheet" href="styles/shelf-menus.css?v=1">
   <link rel="stylesheet" href="styles/buttons.css?v=2">
   <link rel="stylesheet" href="styles/glass.css?v=4">
+  <link rel="stylesheet" href="styles/shelf-phone.css?v=1">
+  <link rel="stylesheet" href="styles/reader-mobile.css?v=3">
 </head>
 <body class="is-welcome">
   <svg class="zs-glass-defs" width="0" height="0" aria-hidden="true" focusable="false">
@@ -172,6 +174,28 @@
             <button type="button" role="radio" data-reading-mode-choice="double" aria-checked="false">左右翻页</button>
             <button type="button" role="radio" data-reading-mode-choice="scroll" aria-checked="false">上下滚动</button>
           </div>
+          <!-- Phone page turning (left-right paging only). -->
+          <div class="settings-field settings-indent-field settings-turn-field" data-pdf-inapplicable data-phone-paged-only>
+            <span class="settings-field-label" id="settingPageTurnLabel">翻页动画</span>
+            <div class="settings-indent-segments settings-turn-segments" id="settingPageTurnAnimation" role="radiogroup" aria-labelledby="settingPageTurnLabel">
+              <button type="button" role="radio" data-page-turn="slide" aria-checked="true">平移</button>
+              <button type="button" role="radio" data-page-turn="fade" aria-checked="false">淡入</button>
+              <button type="button" role="radio" data-page-turn="none" aria-checked="false">无</button>
+            </div>
+          </div>
+          <div class="settings-field settings-indent-field settings-turn-field" data-pdf-inapplicable data-phone-paged-only>
+            <span class="settings-field-label" id="settingTapToTurnLabel">点击翻页</span>
+            <div class="settings-indent-segments settings-turn-segments" id="settingTapToTurn" role="radiogroup" aria-labelledby="settingTapToTurnLabel">
+              <button type="button" role="radio" data-tap-turn="zones" aria-checked="true">左右分区</button>
+              <button type="button" role="radio" data-tap-turn="forward" aria-checked="false">点击下一页</button>
+            </div>
+            <p class="settings-field-description" id="settingTapToTurnHint">点左侧上一页，点右侧下一页，点中间呼出菜单。</p>
+            <button type="button" class="settings-turn-guide-button" id="btnShowTapGuide">查看点击区域</button>
+          </div>
+          <label class="settings-field settings-checkbox settings-turn-field" data-pdf-inapplicable data-phone-paged-only>
+            <input id="settingSwipeToTurn" type="checkbox" role="switch" checked>
+            <span>左右滑动翻页</span>
+          </label>
           <label class="settings-field settings-reading-mode-field" data-pdf-inapplicable>
             <span>阅读模式</span>
             <select id="settingReadingMode">
@@ -689,12 +713,12 @@
   <script src="lib/marked.min.js"></script>
   <script src="core/state.js?v=37"></script>
   <script src="core/utils.js?v=28"></script>
-  <script src="core/api.js?v=34"></script>
+  <script src="core/api.js?v=35"></script>
   <script src="core/reader-route.js?v=1"></script>
   <script src="core/glass.js?v=3"></script>
-  <script src="core/user-state.js?v=41"></script>
+  <script src="core/user-state.js?v=42"></script>
   <script src="reader/annotations.js?v=2"></script>
-  <script src="reader/device-profile.js?v=34"></script>
+  <script src="reader/device-profile.js?v=37"></script>
   <script src="reader/epub.js?v=37"></script>
   <script src="reader/paragraphs.js?v=1"></script>
   <script src="reader/document.js?v=30"></script>
@@ -708,8 +732,8 @@
   <script src="reader/notes-panel.js?v=4"></script>
   <script src="reader/progress.js?v=37"></script>
   <script src="reader/bookmarks.js?v=4"></script>
-  <script src="reader/pagination.js?v=37"></script>
-  <script src="reader/settings.js?v=41"></script>
+  <script src="reader/pagination.js?v=38"></script>
+  <script src="reader/settings.js?v=42"></script>
   <script src="reader/jump-back.js?v=1"></script>
   <script src="reader/navigation.js?v=31"></script>
   <script src="reader/pdf-annotation-geometry.js?v=1"></script>
@@ -717,9 +741,9 @@
   <script src="reader/pdf-render-scheduler.js?v=1"></script>
   <script src="reader/pdf-colors.js?v=3"></script>
   <script src="reader/pdf.js?v=18"></script>
-  <script src="reader/lifecycle.js?v=34"></script>
+  <script src="reader/lifecycle.js?v=35"></script>
   <script src="reader/search.js?v=5"></script>
-  <script src="shell/drawer.js?v=33"></script>
+  <script src="shell/drawer.js?v=34"></script>
   <script src="library/reorder.js?v=1"></script>
   <script src="library/pdf-covers.js?v=1"></script>
   <script src="library/import.js?v=2"></script>
@@ -731,6 +755,6 @@
   <script src="library/notes-page.js?v=7"></script>
   <script src="library/view.js?v=43"></script>
   <script src="reader/reading-timer.js?v=1"></script>
-  <script src="app.js?v=42"></script>
+  <script src="app.js?v=43"></script>
 </body>
 </html>

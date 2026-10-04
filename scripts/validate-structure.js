@@ -113,6 +113,8 @@ const requiredFiles = [
   'app/ui/styles/shelf-menus.css',
   'app/ui/styles/buttons.css',
   'app/ui/styles/glass.css',
+  'app/ui/styles/reader-mobile.css',
+  'app/ui/styles/shelf-phone.css',
   'app/ui/vendor/pdfjs/UPSTREAM.md',
   'app/ui/vendor/pdfjs/LICENSE',
   'app/ui/vendor/pdfjs/build/pdf.mjs',

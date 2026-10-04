@@ -330,6 +330,17 @@ class UserStorage {
         glassAmbient: ['cover', 'uniform'].includes(settings.glassAmbient)
           ? settings.glassAmbient
           : ['cover', 'uniform'].includes(state.settings.glassAmbient) ? state.settings.glassAmbient : 'cover',
+        // Phone page turning: the turn's animation, what a tap on the page
+        // does, and whether a horizontal swipe turns the page.
+        pageTurnAnimation: ['slide', 'fade', 'none'].includes(settings.pageTurnAnimation)
+          ? settings.pageTurnAnimation
+          : ['slide', 'fade', 'none'].includes(state.settings.pageTurnAnimation) ? state.settings.pageTurnAnimation : 'slide',
+        tapToTurn: ['zones', 'forward'].includes(settings.tapToTurn)
+          ? settings.tapToTurn
+          : ['zones', 'forward'].includes(state.settings.tapToTurn) ? state.settings.tapToTurn : 'zones',
+        swipeToTurn: typeof settings.swipeToTurn === 'boolean'
+          ? settings.swipeToTurn
+          : state.settings.swipeToTurn !== false,
         // Opt-in: opening a book shows the text, not the contents panel.
         // Replaces tocOpen, which every save wrote as true.
         tocAutoOpen: settings.tocAutoOpen === true,
