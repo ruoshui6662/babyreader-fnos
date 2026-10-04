@@ -775,6 +775,10 @@ function themeIconSvg(nextTheme) {
 }
 
 function applyTheme(theme, persist = true) {
+  // An own style (阅读样式) decides the base: its paper's lightness, however
+  // the theme was saved (another device, an older setting).
+  const own = typeof activeReaderStyle === 'function' ? activeReaderStyle() : null;
+  if (own && typeof hexLuminance === 'function') theme = hexLuminance(own.bg) > 0.5 ? 'light' : 'dark';
   state.theme = ['dark', 'light', 'sepia'].includes(theme) ? theme : 'dark';
   document.body.classList.toggle('theme-light', state.theme === 'light');
   document.body.classList.toggle('theme-sepia', state.theme === 'sepia');
