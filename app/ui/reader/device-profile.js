@@ -93,6 +93,7 @@ function setMobileChromeOpen(open) {
   if (!isOpen) closeMobileMoreMenu();
   if (isOpen || reading) syncMobileReadingBar();
   return isOpen;
+  if (typeof syncNativeClient === 'function') syncNativeClient();
 }
 
 function closeMobileMoreMenu() {
@@ -389,17 +390,56 @@ function nativeReading() {
   return Boolean(state.currentPath) && !document.body.classList.contains('is-library');
 }
 
-// Tells the shell what the screen is: reading or not, dark or light, and
-// the options that apply while reading.
+// The colour actually showing at a screen edge, as opaque rgb(): the
+// backgrounds under that point composited from the page up (bars are often
+// translucent, and CSS may report color(srgb …) forms). The shell paints the
+// status-bar and navigation-bar strips with it, so page and bars read as one.
+let edgeColorCanvas = null;
+function screenEdgeColor(y) {
+  const layers = [];
+  for (let element = document.elementFromPoint(Math.round(window.innerWidth / 2), y); element; element = element.parentElement) {
+    const color = getComputedStyle(element).backgroundColor;
+    if (color && color !== 'transparent') layers.push(color);
+  }
+  layers.push(getComputedStyle(document.body).backgroundColor, getComputedStyle(document.documentElement).backgroundColor);
+  edgeColorCanvas ||= document.createElement('canvas');
+  edgeColorCanvas.width = edgeColorCanvas.height = 1;
+  const context = edgeColorCanvas.getContext('2d', { willReadFrequently: true });
+  context.globalCompositeOperation = 'source-over';
+  context.fillStyle = '#141416';
+  context.fillRect(0, 0, 1, 1);
+  // Bottom layer first: the page, then each element above it.
+  for (const color of layers.reverse()) {
+    context.fillStyle = '#000';
+    context.fillStyle = color;
+    context.fillRect(0, 0, 1, 1);
+  }
+  const [r, g, b] = context.getImageData(0, 0, 1, 1).data;
+  return `rgb(${r}, ${g}, ${b})`;
+}
+
+// Tells the shell what the screen is: reading or not, the colours at its
+// top and bottom, and the options that apply while reading. Measured after
+// the next frame, once the page has settled.
+let nativeScreenFrame = 0;
 function syncNativeClient() {
   const native = nativeClient();
-  if (!native?.setReading) return;
-  const prefs = nativePrefs();
-  // Reading: the reading theme; the shelf: its own (dark unless light/sepia).
-  const dark = nativeReading() ? state.theme === 'dark' : !document.body.matches('.theme-light, .theme-sepia');
-  try {
-    native.setReading(nativeReading(), dark, prefs.immersive === true, prefs.keepOn !== false, prefs.volumeKeys !== false);
-  } catch { /* an older shell */ }
+  if (!native?.setReading && !native?.setScreen) return;
+  cancelAnimationFrame(nativeScreenFrame);
+  nativeScreenFrame = requestAnimationFrame(() => {
+    const prefs = nativePrefs();
+    const reading = nativeReading();
+    try {
+      if (native.setScreen) {
+        native.setScreen(reading, screenEdgeColor(1), screenEdgeColor(window.innerHeight - 2),
+          prefs.immersive === true, prefs.keepOn !== false, prefs.volumeKeys !== false);
+      } else {
+        // Shells before 0.2: dark or light only.
+        const dark = reading ? state.theme === 'dark' : !document.body.matches('.theme-light, .theme-sepia');
+        native.setReading(reading, dark, prefs.immersive === true, prefs.keepOn !== false, prefs.volumeKeys !== false);
+      }
+    } catch { /* an older shell */ }
+  });
 }
 
 // Files the page makes (notes as Markdown, share pictures) are blob URLs
@@ -489,9 +529,9 @@ function setupNativeClient() {
 window.zhenshuNative = {
   // Volume keys: a page in 左右翻页, a screen's height when scrolling.
   turn(direction) {
-    if (!nativeReading() || state.contentType === 'pdf') return false;
-    if (document.getElementById('tapGuide')) return false;
+    if (!nativeReading() || document.getElementById('tapGuide')) return false;
     const step = direction < 0 ? -1 : 1;
+    if (state.contentType === 'pdf') return turnPhonePdfPage(step);
     if (state.effectiveReadingMode === 'scroll') {
       const reader = document.getElementById('reader');
       reader?.scrollBy({ top: step * Math.round((reader.clientHeight || 600) * 0.9) });
@@ -526,6 +566,23 @@ window.zhenshuNative = {
     return false;
   }
 };
+
+// PDFs on a phone: a page at a time unless 上下滚动 was chosen.
+function syncPhonePdfMode() {
+  const pdf = window.pdfReaderController;
+  if (state.contentType !== 'pdf' || !pdf?.setPhonePaged) return;
+  pdf.setPhonePaged(isMobileReaderSurface() && state.mobilePdfMode !== 'scroll');
+}
+
+// One PDF page back or forward: page mode animates the turn; scrolling
+// mode (and desktop) just goes to the page.
+function turnPhonePdfPage(direction) {
+  const pdf = window.pdfReaderController;
+  if (!pdf) return false;
+  if (!pdf.isPhonePaged?.()) return pdf.stepPage?.(direction) ?? false;
+  const style = typeof pageTurnStyle === 'function' ? pageTurnStyle() : 'none';
+  return pdf.turnPhonePage(direction, style);
+}
 
 // 点击区域 guide: shown over the page the first time a phone pages a book
 // (and from 设置 › 查看点击区域). It names what each part of the page does
@@ -569,7 +626,11 @@ function showTapGuide() {
 }
 
 function maybeShowTapGuide() {
-  if (!isMobileReaderSurface() || state.contentType !== 'epub' || state.effectiveReadingMode === 'scroll') return;
+  if (!isMobileReaderSurface()) return;
+  const paged = state.contentType === 'pdf'
+    ? window.pdfReaderController?.isPhonePaged?.()
+    : state.contentType === 'epub' && state.effectiveReadingMode !== 'scroll';
+  if (!paged) return;
   let seen = false;
   try { seen = localStorage.getItem(TAP_GUIDE_SEEN_KEY) === '1'; } catch { seen = true; }
   if (!seen) showTapGuide();

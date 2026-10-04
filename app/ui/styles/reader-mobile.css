@@ -223,3 +223,34 @@ html[data-reader-surface="mobile"] #readerSettingsSheet:not(.is-expanded) [data-
   font-size: 13px;
 }
 .settings-native-server-value .settings-turn-guide-button { margin: 0; }
+
+/* ============================================================
+   PDFs on a phone (round 2): no desktop toolbar (pages, zoom, 适宽); the
+   phone's own bars carry 上一页 / 下一页 and the position. In page mode
+   (翻页) one page fills the width; the others are not shown.
+   ============================================================ */
+html[data-reader-surface="mobile"] body.is-pdf-reader .pdf-reader-controls { display: none !important; }
+html[data-reader-surface="mobile"] #readerSettingsSheet .settings-pdf-layout-field { display: none !important; }
+.settings-pdf-phone-modes { display: none; }
+html[data-reader-surface="mobile"] #readerSettingsSheet .settings-pdf-phone-modes:not([hidden]) { display: grid; }
+html[data-reader-surface="mobile"] .pdf-pages[data-phone-paged="true"] {
+  justify-content: safe center;
+  gap: 0;
+  padding: 0;
+  overflow: auto;
+}
+html[data-reader-surface="mobile"] .pdf-pages[data-phone-paged="true"] > .pdf-page:not(.is-current-page) { display: none; }
+html[data-reader-surface="mobile"] .pdf-pages[data-phone-paged="true"] > .pdf-page { box-shadow: none; }
+/* touch-action is not inherited: the whole page leaves sideways moves to
+   turning, until the page is zoomed in and has to pan. */
+html[data-reader-surface="mobile"] body.is-pdf-reader .pdf-pages[data-phone-paged="true"]:not([data-zoomed]),
+html[data-reader-surface="mobile"] body.is-pdf-reader .pdf-pages[data-phone-paged="true"]:not([data-zoomed]) * { touch-action: pan-y; }
+.pdf-page.is-turn-next { animation: zs-pdf-turn-next var(--dur-med) var(--ease-out); }
+.pdf-page.is-turn-previous { animation: zs-pdf-turn-previous var(--dur-med) var(--ease-out); }
+.pdf-page.is-turn-fade { animation: zs-pdf-turn-fade 180ms ease-out; }
+@keyframes zs-pdf-turn-next { from { opacity: .4; transform: translateX(28%); } to { opacity: 1; transform: none; } }
+@keyframes zs-pdf-turn-previous { from { opacity: .4; transform: translateX(-28%); } to { opacity: 1; transform: none; } }
+@keyframes zs-pdf-turn-fade { from { opacity: .25; } to { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) {
+  .pdf-page.is-turn-next, .pdf-page.is-turn-previous, .pdf-page.is-turn-fade { animation: none; }
+}

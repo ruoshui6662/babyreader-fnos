@@ -25,6 +25,7 @@ async function openInClient(page) {
       version: () => '0.1.0',
       server: () => '192.168.1.10:5666',
       setReading: (...args) => window.__native.push(['setReading', ...args]),
+      setScreen: (...args) => window.__native.push(['setScreen', ...args]),
       changeServer: () => window.__native.push(['changeServer']),
       saveFile: (name, mime, base64) => {
         window.__native.push(['saveFile', name, mime, base64]);
@@ -39,17 +40,28 @@ async function openInClient(page) {
   await page.reload({ waitUntil: 'load' });
 }
 
-const lastReading = (page) => page.evaluate(() => window.__native.filter((call) => call[0] === 'setReading').at(-1));
+// [reading, topColor, bottomColor, hideStatusBar, keepOn, volumeKeys]
+const lastReading = (page) => page.evaluate(() => window.__native.filter((call) => call[0] === 'setScreen').at(-1)?.slice(1));
 
 test('the client is told when reading starts and ends, with the options that apply while reading', async ({ page }) => {
   await openInClient(page);
   await expect(page.locator('html')).toHaveAttribute('data-native-client', '');
   // The shelf: not reading.
-  expect((await lastReading(page)).slice(1, 2)).toEqual([false]);
+  await expect.poll(async () => (await lastReading(page))?.[0]).toBe(false);
 
   await openEpubFixture(page);
-  // Reading, dark theme; defaults: no immersive, screen on, volume keys.
-  await expect.poll(() => lastReading(page)).toEqual(['setReading', true, true, false, true, true]);
+  // Reading; defaults: status bar shown, screen on, volume keys. The bar
+  // colours are the page's own at the top and bottom edge.
+  await expect.poll(async () => (await lastReading(page))?.[0]).toBe(true);
+  const [, top, bottom, ...options] = await lastReading(page);
+  expect(options).toEqual([false, true, true]);
+  const edges = await page.evaluate(() => [screenEdgeColor(1), screenEdgeColor(window.innerHeight - 2)]);
+  expect([top, bottom]).toEqual(edges);
+  expect(top).toMatch(/^rgb/);
+
+  // A light theme: the bars follow the page.
+  await page.evaluate(() => { state.theme = 'light'; applyTheme?.(); document.body.classList.add('theme-light'); syncNativeClient(); });
+  await expect.poll(async () => (await lastReading(page))?.[1]).not.toBe(top);
 
   if (await page.locator('#readerDrawer').isVisible()) await page.locator('#btnCloseSettings').click();
   await showMobileReaderChrome(page);
@@ -60,7 +72,7 @@ test('the client is told when reading starts and ends, with the options that app
   await expect(group.locator('#settingNativeServer')).toHaveText('192.168.1.10:5666');
   await group.locator('#settingNativeImmersive').click();
   await group.locator('#settingNativeVolumeKeys').click();
-  await expect.poll(() => lastReading(page)).toEqual(['setReading', true, true, true, true, false]);
+  await expect.poll(async () => (await lastReading(page))?.slice(3)).toEqual([true, true, false]);
   expect(await page.evaluate(() => JSON.parse(localStorage.getItem('zhenshu.client'))))
     .toMatchObject({ immersive: true, volumeKeys: false });
   await group.locator('#btnNativeChangeServer').click();
@@ -86,7 +98,7 @@ test('the back key closes what is open, then leaves the book, then lets the shel
 
   expect(await page.evaluate(() => window.zhenshuNative.back())).toBe(true);
   await expect(page.locator('.library-view h1')).toHaveText('书库');
-  await expect.poll(async () => (await lastReading(page))[1]).toBe(false);
+  await expect.poll(async () => (await lastReading(page))?.[0]).toBe(false);
   expect(await page.evaluate(() => window.zhenshuNative.back())).toBe(false);
   expect(await page.evaluate(() => window.zhenshuNative.turn(1))).toBe(false);
 });

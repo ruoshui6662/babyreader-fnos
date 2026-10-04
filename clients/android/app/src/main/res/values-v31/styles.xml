@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Android 12+: the launch splash in the app's own dark, not white. -->
+    <style name="AppTheme" parent="android:Theme.Material.NoActionBar">
+        <item name="android:windowBackground">#141416</item>
+        <item name="android:statusBarColor">#141416</item>
+        <item name="android:navigationBarColor">#141416</item>
+        <item name="android:windowSplashScreenBackground">#141416</item>
+        <item name="android:windowSplashScreenIconBackgroundColor">#141416</item>
+    </style>
+</resources>

@@ -314,6 +314,10 @@ class UserStorage {
         mobileReadingMode: ['paged', 'scroll'].includes(settings.mobileReadingMode)
           ? settings.mobileReadingMode
           : ['paged', 'scroll'].includes(state.settings.mobileReadingMode) ? state.settings.mobileReadingMode : 'paged',
+        // Phones read PDFs a page at a time unless they chose to scroll.
+        mobilePdfMode: ['paged', 'scroll'].includes(settings.mobilePdfMode)
+          ? settings.mobilePdfMode
+          : ['paged', 'scroll'].includes(state.settings.mobilePdfMode) ? state.settings.mobilePdfMode : 'paged',
         pdfLayoutMode: allowedPdfLayoutModes.has(settings.pdfLayoutMode)
           ? settings.pdfLayoutMode
           : allowedPdfLayoutModes.has(state.settings.pdfLayoutMode)

@@ -86,13 +86,16 @@ function setupReaderNavigation() {
       closeMobileChrome();
       return;
     }
-    const paged = state.contentType === 'epub' && state.effectiveReadingMode !== 'scroll';
+    const pdfPaged = state.contentType === 'pdf' && window.pdfReaderController?.isPhonePaged?.();
+    const paged = pdfPaged || state.contentType === 'epub' && state.effectiveReadingMode !== 'scroll';
     const width = window.innerWidth || reader.clientWidth || 1;
     const side = event.clientX < width / 3 ? -1 : event.clientX > (width * 2) / 3 ? 1 : 0;
     // 点击下一页 (one hand): either side turns forward; 左右分区: each side
     // its own way. The middle always shows the chrome.
     if (paged && side) {
-      navigatePageGroup(state.tapToTurn === 'forward' ? 1 : side);
+      const direction = state.tapToTurn === 'forward' ? 1 : side;
+      if (pdfPaged) turnPhonePdfPage(direction);
+      else navigatePageGroup(direction);
       return;
     }
     setMobileChromeOpen(true);
@@ -209,6 +212,20 @@ function setupPositionTracking() {
   reader.addEventListener('pointerup', (event) => {
     const dragged = Boolean(pageDrag);
     endPageDrag();
+    // PDFs on a phone: a swipe turns the page unless the page is zoomed in
+    // (then it pans).
+    if (state.contentType === 'pdf') {
+      const pdf = window.pdfReaderController;
+      if (pointerBlocked || pointerStartX === null || event.pointerType === 'mouse' || !pdf?.isPhonePaged?.()) return;
+      const deltaX = event.clientX - pointerStartX;
+      const deltaY = event.clientY - pointerStartY;
+      pointerStartX = null;
+      pointerStartY = null;
+      if (state.swipeToTurn === false || pdf.phonePagedZoomed() || Math.abs(deltaX) < 48 || Math.abs(deltaX) <= Math.abs(deltaY)) return;
+      state.lastMobileSwipeAt = Date.now();
+      turnPhonePdfPage(deltaX < 0 ? 1 : -1);
+      return;
+    }
     if (pointerBlocked || pointerStartX === null || state.effectiveReadingMode === 'scroll') return;
     const selection = window.getSelection?.();
     if (selection && !selection.isCollapsed) return;

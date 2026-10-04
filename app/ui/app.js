@@ -210,6 +210,7 @@ window.appHost = {
       renderArticle();
       try {
         await pdfReaderController.openPdf(bookId, contentUrl, savedPosition());
+        if (typeof syncPhonePdfMode === 'function') syncPhonePdfMode();
         try {
           await refreshPdfAnnotations(bookId);
         } catch (error) {
