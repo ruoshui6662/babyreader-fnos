@@ -1,5 +1,5 @@
 appname=zhenshu
-version=0.0.15
+version=0.0.16
 display_name=枕书
 desc=枕书：飞牛 fnOS 上的私人书房。阅读 EPUB、PDF、MOBI/AZW3、Markdown 和 TXT，支持划线笔记、全文搜索与 AI 问书，阅读进度多端同步。
 source=thirdparty
@@ -13,4 +13,4 @@ desktop_applaunchname=zhenshu.main
 ctl_stop=true
 checkport=false
 disable_authorization_path=false
-changelog=修复：在 fnOS 中取消文件夹授权后，其中的书仍可能被扫描和阅读。现在每次启动应用都以 fnOS 当前的授权为准；书库只显示当前授权文件夹里的书，取消授权后立即消失。书库顶部可展开“书库文件夹”，查看每个文件夹的来源与书数。
+changelog=“书库文件夹”在书库正常时改为一次性提示：首次和扫描发现新文件夹时显示（标“新增”），点“知道了”或刷新后消失；有无法读取的文件夹或文件时仍一直显示。样式改为与书库一致的卡片，显示文件夹名、路径、来源与书数。
