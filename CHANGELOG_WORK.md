@@ -1,6 +1,6 @@
 # Working Change Log
 
-## 平台接口与安卓客户端（未发布）2026-10-03
+## 枕书 v0.0.18 2026-10-03 — 安卓客户端支持
 
 - 内部：服务端从运行环境获取的信息（当前用户、可读的书库文件夹、数据与设置目录）统一收进 `app/server/platform/`。飞牛的实现与以前完全相同；另预留一个通用实现（通过 `ZHENSHU_PLATFORM=generic` 启用，书库文件夹来自 `ZHENSHU_LIBRARY_ROOTS`），供以后做 Docker 版使用，目前不发布。
 - 安卓客户端（`clients/android/`）：一个轻量外壳，首次打开填写 NAS 地址，之后从 NAS 加载枕书页面，并用飞牛账号登录。

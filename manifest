@@ -1,5 +1,5 @@
 appname=zhenshu
-version=0.0.17
+version=0.0.18
 display_name=枕书
 desc=枕书：飞牛 fnOS 上的私人书房。阅读 EPUB、PDF、MOBI/AZW3、Markdown 和 TXT，支持划线笔记、全文搜索与 AI 问书，阅读进度多端同步。
 source=thirdparty
@@ -13,4 +13,4 @@ desktop_applaunchname=zhenshu.main
 ctl_stop=true
 checkport=false
 disable_authorization_path=false
-changelog=手机阅读体验：目录、书签和笔记改为从左侧滑出，顶部显示书籍信息；翻页新增平移、淡入动画，平移时页面跟随手指移动；可选左右分区或点击下一页，滑动翻页可以关闭，首次阅读会提示各点击区域的作用。手机书库参照微信读书重新排版，边距和间距更舒展。设置滑块与进度条加粗。
+changelog=支持枕书安卓客户端：在客户端里阅读时可用音量键翻页、保持屏幕常亮、隐藏状态栏，返回键先关闭面板再退出书籍；这些选项在阅读设置“更多设置”中的“手机客户端”分组里调整。内部整理：运行环境相关的代码统一收进平台接口，为以后的 Docker 版做准备。
