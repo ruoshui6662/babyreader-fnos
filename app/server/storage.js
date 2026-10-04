@@ -33,6 +33,50 @@ const MAX_BOOKMARK_LOCATOR_ANCHOR_LENGTH = 512;
 const MAX_BOOKMARK_PDF_PAGE_COUNT = 10000;
 
 
+// 阅读样式 (phone and desktop): own paper and ink colours, at most four.
+const READER_STYLE_TEXTURES = new Set(['none', 'linen', 'paper']);
+const HEX_COLOR = /^#[0-9a-f]{6}$/i;
+function normalizeReaderStyleList(list) {
+  if (!Array.isArray(list)) return null;
+  const seen = new Set();
+  const styles = [];
+  for (const item of list) {
+    if (styles.length >= 4 || !item || typeof item !== 'object') continue;
+    const id = String(item.id || '');
+    if (!/^[a-z0-9]{1,12}$/.test(id) || seen.has(id) || !HEX_COLOR.test(item.bg) || !HEX_COLOR.test(item.ink)) continue;
+    seen.add(id);
+    styles.push({
+      id,
+      name: String(item.name || '').slice(0, 12),
+      bg: item.bg.toLowerCase(),
+      ink: item.ink.toLowerCase(),
+      texture: READER_STYLE_TEXTURES.has(item.texture) ? item.texture : 'none'
+    });
+  }
+  return styles;
+}
+function normalizeStyleKey(value, styles, fallback) {
+  if (['light', 'sepia', 'dark'].includes(value)) return value;
+  if (typeof value === 'string' && value.startsWith('custom:') && styles.some((style) => `custom:${style.id}` === value)) return value;
+  return fallback;
+}
+function normalizeReaderStyles(settings, previous) {
+  const readerStyles = normalizeReaderStyleList(settings.readerStyles)
+    ?? normalizeReaderStyleList(previous.readerStyles) ?? [];
+  const chosen = settings.readerStyle !== undefined ? settings.readerStyle : previous.readerStyle;
+  const readerStyle = typeof chosen === 'string' && readerStyles.some((style) => style.id === chosen) ? chosen : null;
+  const auto = settings.themeAuto && typeof settings.themeAuto === 'object' ? settings.themeAuto : previous.themeAuto || {};
+  return {
+    readerStyles,
+    readerStyle,
+    themeAuto: {
+      enabled: auto.enabled === true,
+      day: normalizeStyleKey(auto.day, readerStyles, 'light'),
+      night: normalizeStyleKey(auto.night, readerStyles, 'dark')
+    }
+  };
+}
+
 // 九宫格点击区 (phone reading): what a tap in each ninth of the page does.
 const TAP_ZONE_ACTIONS = new Set(['prev', 'next', 'menu', 'toc', 'bookmark', 'none']);
 const TAP_ZONE_PRESETS = new Set(['sides', 'forward', 'rows', 'custom']);
@@ -346,6 +390,9 @@ class UserStorage {
         mobileReadingMode: ['paged', 'scroll'].includes(settings.mobileReadingMode)
           ? settings.mobileReadingMode
           : ['paged', 'scroll'].includes(state.settings.mobileReadingMode) ? state.settings.mobileReadingMode : 'paged',
+        // 阅读样式: up to four own papers (paper, ink, texture), the one in
+        // use, and day/night following the system.
+        ...normalizeReaderStyles(settings, state.settings),
         // 页眉页脚: what the phone shows at the top and bottom of the page.
         readerTips: normalizeReaderTips(settings.readerTips, state.settings.readerTips),
         // Phones read PDFs a page at a time unless they chose to scroll.

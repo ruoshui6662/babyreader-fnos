@@ -41,6 +41,9 @@ function currentUserSettings() {
     pageTurnAnimation: ['slide', 'fade', 'none'].includes(state.pageTurnAnimation) ? state.pageTurnAnimation : 'slide',
     mobilePdfMode: state.mobilePdfMode === 'scroll' ? 'scroll' : 'paged',
     readerTips: state.readerTips || { preset: 'default' },
+    readerStyles: state.readerStyles || [],
+    readerStyle: state.readerStyle || null,
+    themeAuto: state.themeAuto || { enabled: false, day: 'light', night: 'dark' },
     tapZones: state.tapZones || { preset: 'sides' },
     // Older pages and clients read tapToTurn.
     tapToTurn: state.tapZones?.preset === 'forward' ? 'forward' : 'zones',
@@ -101,6 +104,10 @@ function applyUserState(userState) {
   state.pageTurnAnimation = ['slide', 'fade', 'none'].includes(settings.pageTurnAnimation) ? settings.pageTurnAnimation : 'slide';
   state.mobilePdfMode = settings.mobilePdfMode === 'scroll' ? 'scroll' : 'paged';
   state.readerTips = settings.readerTips && typeof settings.readerTips === 'object' ? settings.readerTips : { preset: 'default' };
+  state.readerStyles = Array.isArray(settings.readerStyles) ? settings.readerStyles : [];
+  state.readerStyle = state.readerStyles.some((style) => style.id === settings.readerStyle) ? settings.readerStyle : null;
+  state.themeAuto = settings.themeAuto && typeof settings.themeAuto === 'object'
+    ? settings.themeAuto : { enabled: false, day: 'light', night: 'dark' };
   state.tapZones = settings.tapZones && typeof settings.tapZones === 'object'
     ? settings.tapZones
     : { preset: settings.tapToTurn === 'forward' ? 'forward' : 'sides' };
@@ -114,6 +121,7 @@ function applyUserState(userState) {
   state.fontFamily = FONT_STACKS[settings.readerFont] ? settings.readerFont : DEFAULT_READER_FONT;
 
   applyTheme(state.theme, false);
+  if (typeof applyThemeAuto === 'function') applyThemeAuto({ persist: false });
   if (typeof applyGlass === 'function') applyGlass();
   applyZoom();
   applyTypography();

@@ -568,6 +568,19 @@ function flattenToc(items, depth = 0) {
 }
 
 function themeColors() {
+  const own = typeof activeReaderStyle === 'function' ? activeReaderStyle() : null;
+  if (own) {
+    return {
+      bg: own.bg,
+      text: own.ink,
+      textMuted: `color-mix(in srgb, ${own.ink} 60%, ${own.bg})`,
+      textStrong: own.ink,
+      accent: own.ink,
+      surface: own.bg,
+      selectionBg: '#75B7F0',
+      selectionText: '#102B45'
+    };
+  }
   if (state.theme === 'light') {
     return {
       bg: '#FCF8F1',
@@ -784,6 +797,8 @@ function applyTheme(theme, persist = true) {
   if (typeof paintGlassAmbient === 'function') paintGlassAmbient();
   const themeColor = document.querySelector('meta[name="theme-color"]');
   if (themeColor) themeColor.content = { light: '#F2F3F5', sepia: '#E9E0CC', dark: '#141416' }[state.theme] || '#141416';
+  // An own style (阅读样式) paints over the built-in theme it is based on.
+  if (typeof paintReaderStyle === 'function') paintReaderStyle();
 
   applyEpubTheme();
 }
@@ -792,6 +807,7 @@ function toggleTheme() {
   // Any light-class background (浅色 / 护眼米黄) collapses to 深色, and 深色
   // opens 浅色. Without this the button claimed "切换深色模式" while actually
   // landing back on 浅色 whenever a sepia book was open.
+  state.readerStyle = null;
   applyTheme(state.theme === 'dark' ? 'light' : 'dark');
 }
 

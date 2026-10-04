@@ -331,6 +331,7 @@ function ensureLibraryAppearanceMenu() {
   theme.addEventListener('click', (event) => {
     const choice = event.target.closest?.('[data-theme-choice]');
     if (!choice || typeof applyTheme !== 'function') return;
+    state.readerStyle = null;
     applyTheme(choice.dataset.themeChoice);
     paintGlassAmbient();
     if (typeof syncSettingsPanel === 'function') syncSettingsPanel();

@@ -431,6 +431,7 @@ function syncNativeClient() {
       if (native.setScreen) {
         native.setScreen(reading, screenEdgeColor(1), screenEdgeColor(window.innerHeight - 2),
           prefs.immersive === true, prefs.keepOn !== false, prefs.volumeKeys !== false);
+        native.setBrightness?.(reading && Number(prefs.brightness) > 0 ? Number(prefs.brightness) : -1);
       } else {
         // Shells before 0.2: dark or light only.
         const dark = reading ? state.theme === 'dark' : !document.body.matches('.theme-light, .theme-sepia');
@@ -814,9 +815,66 @@ async function syncMobileProgressPanel() {
 }
 
 function syncMobileThemePanel() {
+  const ownId = state.readerStyle;
   document.querySelectorAll('[data-mobile-theme]').forEach((button) => {
-    button.setAttribute('aria-checked', String(button.dataset.mobileTheme === state.theme));
+    button.setAttribute('aria-checked', String(!ownId && button.dataset.mobileTheme === state.theme));
   });
+  const swatches = document.querySelector('#mobilePanelTheme .mobile-swatches');
+  if (swatches) {
+    swatches.querySelectorAll('[data-mobile-own-style], .mobile-swatch-add').forEach((element) => element.remove());
+    for (const style of state.readerStyles || []) {
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.setAttribute('role', 'radio');
+      button.dataset.mobileOwnStyle = style.id;
+      button.setAttribute('aria-checked', String(ownId === style.id));
+      button.innerHTML = '<i class="mobile-swatch" aria-hidden="true"></i>';
+      const swatch = button.firstChild;
+      swatch.style.background = style.bg;
+      swatch.style.color = style.ink;
+      swatch.textContent = '文';
+      button.append(style.name);
+      // A second tap on the chosen one edits it.
+      button.addEventListener('click', () => {
+        if (state.readerStyle === style.id) openReaderStyleEditor(style.id);
+        else {
+          chooseReaderStyle(`custom:${style.id}`);
+          syncMobileThemePanel();
+        }
+      });
+      swatches.appendChild(button);
+    }
+    if ((state.readerStyles || []).length < 4) {
+      const add = document.createElement('button');
+      add.type = 'button';
+      add.className = 'mobile-swatch-add';
+      add.setAttribute('aria-label', '新建样式');
+      add.innerHTML = '<i class="mobile-swatch" aria-hidden="true">+</i>新建';
+      add.addEventListener('click', () => openReaderStyleEditor(null));
+      swatches.appendChild(add);
+    }
+  }
+  const auto = document.getElementById('mobileThemeAuto');
+  if (auto) auto.checked = state.themeAuto?.enabled === true;
+  const autoHint = document.getElementById('mobileThemeAutoHint');
+  if (autoHint) {
+    autoHint.hidden = state.themeAuto?.enabled !== true;
+    autoHint.textContent = `日间用“${styleKeyLabel(state.themeAuto?.day || 'light')}”，夜间用“${styleKeyLabel(state.themeAuto?.night || 'dark')}”；选一个样式，就设为当前时段的样式。`;
+  }
+  const brightness = document.getElementById('mobileBrightnessField');
+  if (brightness) {
+    const native = nativeClient();
+    brightness.hidden = !native?.setBrightness;
+    const prefs = nativePrefs();
+    const input = document.getElementById('mobileBrightness');
+    const system = document.getElementById('mobileBrightnessSystem');
+    if (system) system.checked = !(Number(prefs.brightness) > 0);
+    if (input) {
+      input.value = String(Math.round((Number(prefs.brightness) > 0 ? prefs.brightness : 0.6) * 100));
+      input.disabled = !(Number(prefs.brightness) > 0);
+      input.closest('.mobile-slider')?.style.setProperty('--slider-progress', String((Number(input.value) - 5) / 95));
+    }
+  }
   const glass = document.getElementById('mobileGlassSwitch');
   if (glass) glass.checked = state.liquidGlass === true;
   const ambientField = document.getElementById('mobileGlassAmbientField');
@@ -972,7 +1030,11 @@ function setupMobilePanels() {
     const sub = event.target.closest?.('[data-mobile-sub]');
     if (sub) openMobileSub(sub.dataset.mobileSub);
   });
-  document.getElementById('btnMobileSubBack')?.addEventListener('click', () => setMobilePanel('type'));
+  document.getElementById('btnMobileSubBack')?.addEventListener('click', (event) => {
+    const to = event.currentTarget.dataset.returnTo || 'type';
+    delete event.currentTarget.dataset.returnTo;
+    setMobilePanel(to);
+  });
   document.getElementById('btnMobileMoreSettings')?.addEventListener('click', (event) => {
     setMobilePanel(null);
     openReaderPanel('settings', event.currentTarget);
@@ -988,9 +1050,24 @@ function setupMobilePanels() {
   });
   document.querySelectorAll('[data-mobile-theme]').forEach((button) => {
     button.addEventListener('click', () => {
-      document.querySelector(`[data-theme-choice="${button.dataset.mobileTheme}"]`)?.click();
+      chooseReaderStyle(button.dataset.mobileTheme);
       syncMobileThemePanel();
     });
+  });
+  document.getElementById('mobileThemeAuto')?.addEventListener('change', (event) => {
+    setThemeAuto(event.target.checked);
+    syncMobileThemePanel();
+  });
+  const brightness = document.getElementById('mobileBrightness');
+  brightness?.addEventListener('input', () => {
+    saveNativePrefs({ ...nativePrefs(), brightness: Math.max(0.05, Number(brightness.value) / 100) });
+    brightness.closest('.mobile-slider')?.style.setProperty('--slider-progress', String((Number(brightness.value) - 5) / 95));
+    syncNativeClient();
+  });
+  document.getElementById('mobileBrightnessSystem')?.addEventListener('change', (event) => {
+    saveNativePrefs({ ...nativePrefs(), brightness: event.target.checked ? null : 0.6 });
+    syncMobileThemePanel();
+    syncNativeClient();
   });
   document.getElementById('mobileGlassSwitch')?.addEventListener('change', (event) => {
     const source = document.getElementById('settingLiquidGlass');
@@ -1029,6 +1106,213 @@ function turnPhonePdfPage(direction) {
   if (!pdf.isPhonePaged?.()) return pdf.stepPage?.(direction) ?? false;
   const style = typeof pageTurnStyle === 'function' ? pageTurnStyle() : 'none';
   return pdf.turnPhonePage(direction, style);
+}
+
+// ---------------------------------------------------------------------------
+// 阅读样式 (R4): own papers — a paper colour, an ink colour and a texture —
+// beside the built-in 浅色 / 护眼 / 深色; the chrome follows the built-in
+// theme with the same lightness. Day and night can follow the system.
+const READER_STYLE_PAPERS = Object.freeze([
+  ['象牙', '#f7f1e3'], ['素白', '#fafaf7'], ['竹青', '#e3ede0'], ['雾蓝', '#e2e9ef'],
+  ['杏粉', '#f4e7e2'], ['夜墨', '#1b1d20'], ['墨绿', '#16211c'], ['深褐', '#251f19']
+]);
+const READER_STYLE_INKS = Object.freeze([
+  ['墨', '#2b2b2b'], ['褐', '#3e3226'], ['黛', '#2f3a45'], ['月白', '#ddd8cf'], ['米', '#c9c1b1'], ['青', '#bccbb8']
+]);
+const READER_STYLE_TEXTURES = Object.freeze([['none', '无'], ['linen', '细麻'], ['paper', '宣纸']]);
+
+function hexLuminance(hex) {
+  const value = /^#([0-9a-f]{6})$/i.exec(hex || '')?.[1];
+  if (!value) return 1;
+  const [r, g, b] = [0, 2, 4].map((offset) => parseInt(value.slice(offset, offset + 2), 16) / 255);
+  return 0.299 * r + 0.587 * g + 0.114 * b;
+}
+
+function activeReaderStyle() {
+  return state.readerStyle ? (state.readerStyles || []).find((style) => style.id === state.readerStyle) || null : null;
+}
+
+// Called at the end of applyTheme: paint the own style over the base theme,
+// or take it off.
+function paintReaderStyle() {
+  const style = activeReaderStyle();
+  const body = document.body;
+  const names = ['--color-bg', '--color-elevated', '--color-bar', '--color-fill', '--color-text', '--color-text-2',
+    '--color-text-3', '--color-separator', '--reader-stage', '--reader-chrome', '--surface-alt'];
+  if (!style) {
+    for (const name of names) body.style.removeProperty(name);
+    delete body.dataset.readerStyle;
+    delete body.dataset.paperTexture;
+    return;
+  }
+  const mix = (amount) => `color-mix(in srgb, ${style.ink} ${amount}%, ${style.bg})`;
+  const values = {
+    '--color-bg': style.bg,
+    '--color-elevated': mix(4),
+    '--color-bar': `color-mix(in srgb, ${style.bg} 90%, transparent)`,
+    '--color-fill': `color-mix(in srgb, ${style.ink} 10%, transparent)`,
+    '--color-text': style.ink,
+    '--color-text-2': `color-mix(in srgb, ${style.ink} 62%, transparent)`,
+    '--color-text-3': `color-mix(in srgb, ${style.ink} 36%, transparent)`,
+    '--color-separator': mix(14),
+    // A phone's page is the screen: no stage around it.
+    '--reader-stage': isMobileReaderSurface() ? style.bg : mix(5),
+    '--reader-chrome': mix(3),
+    '--surface-alt': mix(6)
+  };
+  for (const [name, value] of Object.entries(values)) body.style.setProperty(name, value);
+  body.dataset.readerStyle = style.id;
+  body.dataset.paperTexture = style.texture || 'none';
+}
+
+// Use a style: 'light' / 'sepia' / 'dark' or 'custom:<id>'. With 跟随系统
+// on, it becomes the style for the current time of day.
+function chooseReaderStyle(key, { persist = true } = {}) {
+  const own = typeof key === 'string' && key.startsWith('custom:')
+    ? (state.readerStyles || []).find((style) => `custom:${style.id}` === key) : null;
+  state.readerStyle = own ? own.id : null;
+  const base = own ? (hexLuminance(own.bg) > 0.5 ? 'light' : 'dark') : key;
+  if (state.themeAuto?.enabled) {
+    const night = window.matchMedia?.('(prefers-color-scheme: dark)').matches;
+    state.themeAuto = { ...state.themeAuto, [night ? 'night' : 'day']: own ? `custom:${own.id}` : key };
+  }
+  applyTheme(base, persist);
+  syncSettingsPanel();
+  if (persist) persistUserSettings();
+}
+
+// 跟随系统: day and night styles switch with the system's light/dark mode.
+let themeAutoQuery = null;
+function applyThemeAuto({ persist = false } = {}) {
+  if (!state.themeAuto?.enabled) return;
+  const night = window.matchMedia?.('(prefers-color-scheme: dark)').matches;
+  const key = night ? state.themeAuto.night : state.themeAuto.day;
+  const own = String(key || '').startsWith('custom:')
+    ? (state.readerStyles || []).find((style) => `custom:${style.id}` === key) : null;
+  state.readerStyle = own ? own.id : null;
+  applyTheme(own ? (hexLuminance(own.bg) > 0.5 ? 'light' : 'dark') : (key || (night ? 'dark' : 'light')), false);
+  if (persist) persistUserSettings();
+  if (!themeAutoQuery && window.matchMedia) {
+    themeAutoQuery = window.matchMedia('(prefers-color-scheme: dark)');
+    themeAutoQuery.addEventListener?.('change', () => {
+      if (!state.themeAuto?.enabled) return;
+      applyThemeAuto({ persist: false });
+      syncSettingsPanel();
+    });
+  }
+}
+
+function setThemeAuto(enabled) {
+  const night = window.matchMedia?.('(prefers-color-scheme: dark)').matches;
+  const current = state.readerStyle ? `custom:${state.readerStyle}` : state.theme;
+  const previous = state.themeAuto || { day: 'light', night: 'dark' };
+  // The style in use becomes this time of day's style.
+  state.themeAuto = { ...previous, enabled, [night ? 'night' : 'day']: current };
+  if (enabled) applyThemeAuto({ persist: false });
+  syncSettingsPanel();
+  persistUserSettings();
+}
+
+function styleKeyLabel(key) {
+  if (key === 'light') return '浅色';
+  if (key === 'sepia') return '护眼';
+  if (key === 'dark') return '深色';
+  const own = (state.readerStyles || []).find((style) => `custom:${style.id}` === key);
+  return own?.name || '自定义';
+}
+
+// The style editor (second level of 主题): paper, ink, texture, delete.
+function openReaderStyleEditor(id) {
+  let style = (state.readerStyles || []).find((item) => item.id === id);
+  if (!style) {
+    if ((state.readerStyles || []).length >= 4) return;
+    const number = (state.readerStyles || []).length + 1;
+    style = { id: `s${Date.now().toString(36).slice(-6)}`, name: `我的样式 ${number}`, bg: '#f7f1e3', ink: '#3e3226', texture: 'none' };
+    state.readerStyles = [...(state.readerStyles || []), style];
+  }
+  const update = (changes) => {
+    style = { ...style, ...changes };
+    state.readerStyles = state.readerStyles.map((item) => (item.id === style.id ? style : item));
+    chooseReaderStyle(`custom:${style.id}`);
+    render();
+  };
+  const title = document.getElementById('mobileSubTitle');
+  const body = document.getElementById('mobileSubBody');
+  const back = document.getElementById('btnMobileSubBack');
+  if (!title || !body) return;
+  if (back) back.dataset.returnTo = 'theme';
+  const dotRow = (choices, current, key) => {
+    const row = document.createElement('div');
+    row.className = 'mobile-color-row';
+    row.setAttribute('role', 'radiogroup');
+    for (const [name, value] of choices) {
+      const dot = document.createElement('button');
+      dot.type = 'button';
+      dot.setAttribute('role', 'radio');
+      dot.setAttribute('aria-label', name);
+      dot.title = name;
+      dot.style.background = value;
+      dot.setAttribute('aria-checked', String(current === value));
+      dot.addEventListener('click', () => {
+        const changes = { [key]: value };
+        // A paper and its ink stay readable: a dark paper takes a light ink.
+        if (key === 'bg' && Math.abs(hexLuminance(value) - hexLuminance(style.ink)) < 0.45) {
+          changes.ink = hexLuminance(value) > 0.5 ? '#3e3226' : '#ddd8cf';
+        }
+        update(changes);
+      });
+      row.appendChild(dot);
+    }
+    return row;
+  };
+  const render = () => {
+    title.textContent = style.name;
+    body.replaceChildren();
+    const preview = document.createElement('p');
+    preview.className = 'mobile-style-preview';
+    preview.dataset.texture = style.texture;
+    preview.style.background = style.bg;
+    preview.style.color = style.ink;
+    preview.textContent = '山中何事？松花酿酒，春水煎茶。';
+    body.appendChild(preview);
+    body.appendChild(mobileField('纸色', dotRow(READER_STYLE_PAPERS, style.bg, 'bg')));
+    body.appendChild(mobileField('字色', dotRow(READER_STYLE_INKS, style.ink, 'ink')));
+    const textures = document.createElement('div');
+    textures.className = 'mobile-segments';
+    for (const [value, name] of READER_STYLE_TEXTURES) {
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.setAttribute('role', 'radio');
+      button.textContent = name;
+      button.setAttribute('aria-checked', String(style.texture === value));
+      button.addEventListener('click', () => update({ texture: value }));
+      textures.appendChild(button);
+    }
+    body.appendChild(mobileField('纹理', textures));
+    const remove = document.createElement('button');
+    remove.type = 'button';
+    remove.className = 'mobile-link-button is-destructive';
+    remove.textContent = '删除这个样式';
+    remove.addEventListener('click', () => {
+      state.readerStyles = state.readerStyles.filter((item) => item.id !== style.id);
+      if (state.themeAuto) {
+        for (const time of ['day', 'night']) {
+          if (state.themeAuto[time] === `custom:${style.id}`) state.themeAuto = { ...state.themeAuto, [time]: time === 'day' ? 'light' : 'dark' };
+        }
+      }
+      chooseReaderStyle(hexLuminance(style.bg) > 0.5 ? 'light' : 'dark');
+      setMobilePanel('theme');
+    });
+    body.appendChild(remove);
+  };
+  render();
+  setMobilePanel('sub');
+  // The editor belongs to 主题, not 设置.
+  document.querySelectorAll('#mobileReaderToolbar [data-mobile-panel-toggle]').forEach((button) => {
+    const on = button.dataset.mobilePanelToggle === 'theme';
+    button.setAttribute('aria-expanded', String(on));
+    button.classList.toggle('is-active', on);
+  });
 }
 
 // ---------------------------------------------------------------------------

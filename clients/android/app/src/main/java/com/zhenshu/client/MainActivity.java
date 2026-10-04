@@ -67,7 +67,7 @@ public class MainActivity extends Activity {
     private static final String MODE_DIRECT = "direct";
     private static final String MODE_WEB = "web";
     private static final String APP_PATH = DirectLogin.APP_PATH;
-    private static final String VERSION = "0.2.3";
+    private static final String VERSION = "0.2.4";
     private static final int FILE_CHOOSER_REQUEST = 1;
     private static final int SETUP_BACKGROUND = 0xFF141416;
 
@@ -610,6 +610,22 @@ public class MainActivity extends Activity {
         public void setReading(boolean reading, boolean dark, boolean hideStatusBar, boolean keepOn, boolean volumeKeys) {
             String color = dark ? "#141416" : "#F2F3F5";
             setScreen(reading, color, color, hideStatusBar, keepOn, volumeKeys);
+        }
+
+        /**
+         * The reading window's brightness, 0.05–1; below 0 hands it back to
+         * the system. Only this window: the system setting is not touched.
+         */
+        @JavascriptInterface
+        public void setBrightness(float level) {
+            if (!trusted()) return;
+            runOnUiThread(() -> {
+                WindowManager.LayoutParams attributes = getWindow().getAttributes();
+                attributes.screenBrightness = level < 0
+                    ? WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE
+                    : Math.max(0.05f, Math.min(1f, level));
+                getWindow().setAttributes(attributes);
+            });
         }
 
         /** Battery level in percent for the page's 页眉页脚; -1 when unknown. */

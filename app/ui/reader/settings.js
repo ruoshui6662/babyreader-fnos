@@ -470,7 +470,7 @@ function syncVisualSettingsControls() {
     });
   }
   panel.querySelectorAll('[data-theme-choice]').forEach((button) => {
-    button.setAttribute('aria-pressed', String(button.dataset.themeChoice === state.theme));
+    button.setAttribute('aria-pressed', String(!state.readerStyle && button.dataset.themeChoice === state.theme));
   });
   panel.querySelectorAll('[data-font-choice]').forEach((button) => {
     button.setAttribute('aria-pressed', String(button.dataset.fontChoice === state.fontFamily));
@@ -663,6 +663,8 @@ function setupSettingsPanel() {
   const paragraphSpacing = document.getElementById('settingParagraphSpacing');
   const resetTypography = document.getElementById('btnResetTypography');
   theme?.addEventListener('change', () => {
+    // A built-in theme replaces an own style.
+    state.readerStyle = null;
     applyTheme(theme.value, false);
     syncSettingsPanel();
     persistUserSettings();
