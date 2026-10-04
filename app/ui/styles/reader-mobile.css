@@ -24,7 +24,13 @@ html[data-reader-surface="mobile"] #readerDrawer {
   touch-action: pan-y;
   animation: zs-drawer-in var(--dur-med) var(--ease-out);
 }
-html[data-glass="on"][data-reader-surface="mobile"] #readerDrawer { border-radius: 0 24px 24px 0; }
+html[data-glass="on"][data-reader-surface="mobile"] #readerDrawer {
+  /* The same paper as the settings page that rises from the bottom: both
+     are full-height panels that hold content, so they share one material.
+     Dense glass over the dimmed page read as a grey slab beside it. */
+  background: color-mix(in srgb, var(--reader-chrome, var(--ui-bg)) 94%, transparent);
+  border-radius: 0 24px 24px 0;
+}
 @keyframes zs-drawer-in {
   from { transform: translateX(-100%); }
   to { transform: none; }
@@ -453,7 +459,7 @@ html[data-reader-surface="mobile"] body.mobile-reading .mobile-panel .mobile-seg
   pointer-events: none;
 }
 .mobile-slider.is-size > span.is-large ~ output { left: calc(14px + 1ch + 6px + (100% - 28px - 2.6ch - 12px - 52px) * var(--slider-progress)); }
-.mobile-slider-pair { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 12px; }
+.mobile-slider-pair { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin-top: 12px; }
 .mobile-slider-pair .mobile-slider { padding: 0 10px; font-size: 12px; }
 .mobile-slider-pair .mobile-slider output {
   left: calc(10px + 1em + 4px + (100% - 20px - 2em - 8px - 48px) * var(--slider-progress));
@@ -518,6 +524,59 @@ html[data-reader-surface="mobile"] body.is-library .topbar {
 }
 html[data-reader-surface="mobile"] body.is-library .topbar .app-mark,
 html[data-reader-surface="mobile"] body.is-library .topbar .app-name { display: none; }
+
+/* One surface from the top edge down. The shelf scrolls under the status
+   bar and the two buttons instead of starting below them, so the page (and,
+   with liquid glass, its light) is a single sheet: no band of another
+   background above it. As with a large-title page on iOS, the bar has no
+   material at rest; once the shelf has scrolled under it, a soft edge
+   appears behind the buttons. */
+html[data-reader-surface="mobile"] body.is-library .reader { top: 0; }
+html[data-reader-surface="mobile"] body.is-library .reader .article.is-library {
+  padding-top: calc(var(--topbar-h) + 12px);
+}
+html[data-reader-surface="mobile"] body.is-library::after {
+  position: fixed;
+  top: 0;
+  right: 0;
+  left: 0;
+  z-index: 99;
+  height: calc(var(--topbar-h) + 10px);
+  content: '';
+  pointer-events: none;
+  background: linear-gradient(to bottom, color-mix(in srgb, var(--library-stage) 94%, transparent) 50%, transparent);
+  opacity: 0;
+  transition: opacity var(--dur-fast) var(--ease-out);
+}
+html[data-reader-surface="mobile"] body.is-library.shelf-scrolled::after { opacity: 1; }
+/* Glass: the edge is a progressive blur rather than a fade to paint. */
+html[data-glass="on"][data-reader-surface="mobile"] body.is-library::after {
+  background: linear-gradient(to bottom, color-mix(in srgb, var(--library-stage) 78%, transparent), transparent);
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
+  -webkit-mask: linear-gradient(to bottom, #000 45%, transparent);
+  mask: linear-gradient(to bottom, #000 45%, transparent);
+}
+/* The light rises out of the page rather than starting at its very edge:
+   the client paints the status bar strip with the page's plain colour, and
+   the two meet without a seam. */
+html[data-glass="on"][data-reader-surface="mobile"] body.is-library .reader .article.is-library::before {
+  -webkit-mask: linear-gradient(to bottom, transparent, #000 160px, #000 70%, transparent);
+  mask: linear-gradient(to bottom, transparent, #000 160px, #000 70%, transparent);
+}
+/* The two top buttons line up with ⋯ below them, a breath apart. */
+html[data-reader-surface="mobile"] body.is-library .topbar { padding-right: 14px; }
+html[data-reader-surface="mobile"] body.is-library .topbar .library-appearance-toggle { margin-right: 8px; }
+/* With glass they are the same small glass circles as ⋯. */
+html[data-glass="on"][data-reader-surface="mobile"] body.is-library .topbar :is(.library-appearance-toggle, .library-theme-toggle) {
+  color: var(--library-text, var(--color-text));
+  background: var(--glass-tint);
+  border: 0;
+  border-radius: 50%;
+  box-shadow: var(--glass-shadow), inset 0 0 0 .5px var(--glass-edge);
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(1.9);
+  backdrop-filter: blur(var(--glass-blur)) saturate(1.9);
+}
 
 /* ============================================================
    页眉页脚 (R2): the page's own status lines. The header takes the band at
