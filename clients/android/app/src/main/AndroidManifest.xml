@@ -2,6 +2,11 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
     <uses-permission android:name="android.permission.INTERNET" />
+    <!-- Saving notes and pictures to the public folders on Android 8–9 only;
+         later versions save through MediaStore without a permission. -->
+    <uses-permission
+        android:name="android.permission.WRITE_EXTERNAL_STORAGE"
+        android:maxSdkVersion="28" />
 
     <!-- The NAS is usually reached over plain HTTP on the home network. -->
     <application

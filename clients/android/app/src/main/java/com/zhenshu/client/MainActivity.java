@@ -6,6 +6,7 @@ import android.content.ActivityNotFoundException;
 import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
+import android.content.pm.ApplicationInfo;
 import android.graphics.Color;
 import android.graphics.Insets;
 import android.graphics.Typeface;
@@ -67,10 +68,16 @@ public class MainActivity extends Activity {
     private String server;
     private boolean volumeKeysTurnPages;
     private ValueCallback<Uri[]> pendingFileChooser;
+    private final Exports exports = new Exports(this);
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        // Debug builds only: lets Chrome DevTools (and the emulator tests)
+        // inspect the page. Release builds stay closed.
+        if ((getApplicationInfo().flags & ApplicationInfo.FLAG_DEBUGGABLE) != 0) {
+            WebView.setWebContentsDebuggingEnabled(true);
+        }
         root = new FrameLayout(this);
         root.setBackgroundColor(0xFF141416);
         root.setOnApplyWindowInsetsListener((view, insets) -> {
@@ -222,7 +229,7 @@ public class MainActivity extends Activity {
         settings.setDatabaseEnabled(true);
         settings.setMediaPlaybackRequiresUserGesture(true);
         settings.setSupportZoom(false);
-        settings.setUserAgentString(settings.getUserAgentString() + " ZhenshuAndroid/0.1.1");
+        settings.setUserAgentString(settings.getUserAgentString() + " ZhenshuAndroid/0.1.2");
         CookieManager.getInstance().setAcceptCookie(true);
 
         web.addJavascriptInterface(new Bridge(), "ZhenshuNative");
@@ -275,10 +282,8 @@ public class MainActivity extends Activity {
             }
         });
         web.setDownloadListener((url, userAgent, contentDisposition, mimeType, length) -> {
-            if (!url.startsWith("http")) {
-                Toast.makeText(this, "这个文件需要在浏览器中导出", Toast.LENGTH_LONG).show();
-                return;
-            }
+            // The page saves its own blob files through saveFile.
+            if (!url.startsWith("http")) return;
             DownloadManager.Request request = new DownloadManager.Request(Uri.parse(url));
             request.addRequestHeader("Cookie", CookieManager.getInstance().getCookie(url));
             request.addRequestHeader("User-Agent", userAgent);
@@ -365,7 +370,7 @@ public class MainActivity extends Activity {
 
         @JavascriptInterface
         public String version() {
-            return "0.1.1";
+            return "0.1.2";
         }
 
         @JavascriptInterface
@@ -381,6 +386,20 @@ public class MainActivity extends Activity {
                 volumeKeysTurnPages = reading && volumeKeys;
                 setChrome(dark, reading && immersive, reading && keepOn);
             });
+        }
+
+        /** Saves a file the page made (notes, pictures); returns where. */
+        @JavascriptInterface
+        public String saveFile(String name, String mime, String base64) {
+            if (!trusted()) return "";
+            return exports.save(name, mime, base64);
+        }
+
+        /** Prints the page's HTML through the system panel (另存为 PDF). */
+        @JavascriptInterface
+        public void printHtml(String html, String title) {
+            if (!trusted()) return;
+            exports.print(html, title, server);
         }
 
         @JavascriptInterface

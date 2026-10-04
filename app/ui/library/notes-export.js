@@ -227,6 +227,13 @@ function exportNotesMarkdown(documents, { all = false } = {}) {
  * “另存为 PDF”. Waits for the fonts and cover so the first page is complete.
  */
 async function printNotesPdf(documents, { all = false } = {}) {
+  // The Android client has no print dialog in its web view: the system
+  // print panel takes the same page.
+  const native = typeof nativeClient === 'function' ? nativeClient() : null;
+  if (native?.printHtml) {
+    native.printHtml(notesPrintHtml(documents, { all }), notesExportFileName(documents, { all }).replace(/\.md$/i, ''));
+    return;
+  }
   document.getElementById('notesPrintFrame')?.remove();
   const frame = document.createElement('iframe');
   frame.id = 'notesPrintFrame';

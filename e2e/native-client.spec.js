@@ -25,7 +25,12 @@ async function openInClient(page) {
       version: () => '0.1.0',
       server: () => '192.168.1.10:5666',
       setReading: (...args) => window.__native.push(['setReading', ...args]),
-      changeServer: () => window.__native.push(['changeServer'])
+      changeServer: () => window.__native.push(['changeServer']),
+      saveFile: (name, mime, base64) => {
+        window.__native.push(['saveFile', name, mime, base64]);
+        return `下载/枕书/${name}`;
+      },
+      printHtml: (html, title) => window.__native.push(['printHtml', html.length, title])
     };
   });
   await page.goto(APP_PATH);
@@ -84,6 +89,35 @@ test('the back key closes what is open, then leaves the book, then lets the shel
   await expect.poll(async () => (await lastReading(page))[1]).toBe(false);
   expect(await page.evaluate(() => window.zhenshuNative.back())).toBe(false);
   expect(await page.evaluate(() => window.zhenshuNative.turn(1))).toBe(false);
+});
+
+test('files the page makes are handed to the client, even when the link is revoked at once; PDF goes to the print panel', async ({ page }) => {
+  await openInClient(page);
+  await page.evaluate(() => {
+    // Markdown export (notes page) and the reader's pattern: a detached
+    // link whose URL is revoked right after the click.
+    downloadNotesFile('# 笔记\n第一条', '读书笔记.md', 'text/markdown;charset=utf-8');
+    const url = URL.createObjectURL(new Blob(['划线'], { type: 'text/markdown' }));
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = '划线.md';
+    link.click();
+    URL.revokeObjectURL(url);
+  });
+  await expect.poll(() => page.evaluate(() => window.__native.filter((call) => call[0] === 'saveFile').length)).toBe(2);
+  const saved = await page.evaluate(() => window.__native.filter((call) => call[0] === 'saveFile')
+    .map(([, name, mime, base64]) => [name, mime, new TextDecoder().decode(Uint8Array.from(atob(base64), (c) => c.charCodeAt(0)))]));
+  expect(saved).toEqual([
+    ['读书笔记.md', 'text/markdown;charset=utf-8', '# 笔记\n第一条'],
+    ['划线.md', 'text/markdown', '划线']
+  ]);
+  await expect(page.locator('#readerFeedback')).toContainText('已保存到 下载/枕书/');
+
+  await page.evaluate(() => printNotesPdf([], { all: true }));
+  const printed = await page.evaluate(() => window.__native.find((call) => call[0] === 'printHtml'));
+  expect(printed[1]).toBeGreaterThan(100);
+  expect(printed[2]).toMatch(/^全部读书笔记-\d{8}$/);
+  await expect(page.locator('#notesPrintFrame')).toHaveCount(0);
 });
 
 test('in a browser there is no client group', async ({ page }) => {
