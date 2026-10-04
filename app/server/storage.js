@@ -33,6 +33,23 @@ const MAX_BOOKMARK_LOCATOR_ANCHOR_LENGTH = 512;
 const MAX_BOOKMARK_PDF_PAGE_COUNT = 10000;
 
 
+// 九宫格点击区 (phone reading): what a tap in each ninth of the page does.
+const TAP_ZONE_ACTIONS = new Set(['prev', 'next', 'menu', 'toc', 'bookmark', 'none']);
+const TAP_ZONE_PRESETS = new Set(['sides', 'forward', 'rows', 'custom']);
+function normalizeTapZones(value, tapToTurn, previous, previousTapToTurn) {
+  const valid = (zones) => zones && typeof zones === 'object' && TAP_ZONE_PRESETS.has(zones.preset);
+  const source = valid(value) ? value : ['zones', 'forward'].includes(tapToTurn) ? null : valid(previous) ? previous : null;
+  if (!source) {
+    const legacy = ['zones', 'forward'].includes(tapToTurn) ? tapToTurn : previousTapToTurn;
+    return { preset: legacy === 'forward' ? 'forward' : 'sides' };
+  }
+  if (source.preset !== 'custom') return { preset: source.preset };
+  const zones = Array.from({ length: 9 }, (_, index) => (TAP_ZONE_ACTIONS.has(source.zones?.[index]) ? source.zones[index] : 'none'));
+  // The menu must stay reachable somewhere.
+  if (!zones.includes('menu')) zones[4] = 'menu';
+  return { preset: 'custom', zones };
+}
+
 // 页眉页脚 (phone reading): a preset, or each of the six places chosen.
 const READER_TIP_ITEMS = new Set(['none', 'time', 'battery', 'book', 'chapter', 'page', 'progress']);
 const READER_TIP_PRESETS = new Set(['default', 'minimal', 'full', 'custom']);
@@ -356,6 +373,9 @@ class UserStorage {
         pageTurnAnimation: ['slide', 'fade', 'none'].includes(settings.pageTurnAnimation)
           ? settings.pageTurnAnimation
           : ['slide', 'fade', 'none'].includes(state.settings.pageTurnAnimation) ? state.settings.pageTurnAnimation : 'slide',
+        // 九宫格点击区: a preset or nine actions; older clients still send
+        // tapToTurn, which picks the matching preset.
+        tapZones: normalizeTapZones(settings.tapZones, settings.tapToTurn, state.settings.tapZones, state.settings.tapToTurn),
         tapToTurn: ['zones', 'forward'].includes(settings.tapToTurn)
           ? settings.tapToTurn
           : ['zones', 'forward'].includes(state.settings.tapToTurn) ? state.settings.tapToTurn : 'zones',

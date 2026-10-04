@@ -563,16 +563,7 @@ function syncSettingsPanel() {
   document.querySelectorAll('[data-page-turn]').forEach((button) => {
     button.setAttribute('aria-checked', String(button.dataset.pageTurn === turn));
   });
-  const tap = state.tapToTurn === 'forward' ? 'forward' : 'zones';
-  document.querySelectorAll('[data-tap-turn]').forEach((button) => {
-    button.setAttribute('aria-checked', String(button.dataset.tapTurn === tap));
-  });
-  const tapHint = document.getElementById('settingTapToTurnHint');
-  if (tapHint) {
-    tapHint.textContent = tap === 'forward'
-      ? '点屏幕任意位置下一页（适合单手），点中间呼出菜单；向右滑回到上一页。'
-      : '点左侧上一页，点右侧下一页，点中间呼出菜单。';
-  }
+  if (typeof syncTapZoneSettings === 'function') syncTapZoneSettings();
   const swipe = document.getElementById('settingSwipeToTurn');
   if (swipe) swipe.checked = state.swipeToTurn !== false;
   const pdfPageColors = String(state.pdfPageColors === 'original' ? 'original' : 'theme');
@@ -725,11 +716,9 @@ function setupSettingsPanel() {
     persistUserSettings();
   });
   document.getElementById('settingTapToTurn')?.addEventListener('click', (event) => {
-    const choice = event.target.closest?.('[data-tap-turn]');
-    if (!choice || choice.dataset.tapTurn === state.tapToTurn) return;
-    state.tapToTurn = choice.dataset.tapTurn === 'forward' ? 'forward' : 'zones';
-    syncSettingsPanel();
-    persistUserSettings();
+    const choice = event.target.closest?.('[data-tap-preset]');
+    if (!choice || typeof setTapZonePreset !== 'function') return;
+    setTapZonePreset(choice.dataset.tapPreset);
   });
   document.getElementById('settingSwipeToTurn')?.addEventListener('change', (event) => {
     state.swipeToTurn = event.target.checked;

@@ -899,7 +899,7 @@ function openMobileSub(name) {
     const pagedOnly = !document.querySelector('[data-phone-paged-only]')?.hidden;
     if (pagedOnly) {
       body.appendChild(mobileField('翻页动画', mobileProxySegments(document.querySelectorAll('[data-page-turn]'), rerender)));
-      body.appendChild(mobileField('点击翻页', mobileProxySegments(document.querySelectorAll('[data-tap-turn]'), rerender)));
+      body.appendChild(mobileField('点击区域', mobileProxySegments(document.querySelectorAll('[data-tap-preset]'), rerender)));
       const swipeSource = document.getElementById('settingSwipeToTurn');
       const swipe = document.createElement('label');
       swipe.className = 'mobile-switch-row';
@@ -1031,6 +1031,114 @@ function turnPhonePdfPage(direction) {
   return pdf.turnPhonePage(direction, style);
 }
 
+// ---------------------------------------------------------------------------
+// 九宫格点击区 (R3): the page in nine parts, each with an action.
+const TAP_ZONE_PRESETS = Object.freeze({
+  sides: ['prev', 'menu', 'next', 'prev', 'menu', 'next', 'prev', 'menu', 'next'],
+  forward: ['next', 'menu', 'next', 'next', 'menu', 'next', 'next', 'menu', 'next'],
+  rows: ['prev', 'prev', 'prev', 'prev', 'menu', 'next', 'next', 'next', 'next']
+});
+const TAP_ZONE_LABELS = Object.freeze({
+  prev: '上一页', next: '下一页', menu: '菜单', toc: '目录', bookmark: '书签', none: '无'
+});
+const TAP_ZONE_HINTS = Object.freeze({
+  sides: '点左侧上一页，点右侧下一页，点中间呼出菜单。',
+  forward: '点两侧都是下一页，适合单手；点中间呼出菜单，向右滑回到上一页。',
+  rows: '点上方上一页，点下方下一页，点正中呼出菜单。',
+  custom: '点一格，再在下面选择它的动作。'
+});
+let tapZoneEditing = 4;
+
+function tapZonePreset() {
+  const preset = state.tapZones?.preset;
+  return preset in TAP_ZONE_PRESETS || preset === 'custom' ? preset : 'sides';
+}
+
+function tapZoneActions() {
+  const preset = tapZonePreset();
+  if (preset !== 'custom') return TAP_ZONE_PRESETS[preset];
+  const zones = Array.from({ length: 9 }, (_, index) => (state.tapZones?.zones?.[index] in TAP_ZONE_LABELS ? state.tapZones.zones[index] : 'none'));
+  if (!zones.includes('menu')) zones[4] = 'menu';
+  return zones;
+}
+
+// The action for a tap at (x, y) on a phone's page.
+function tapZoneActionAt(x, y) {
+  const col = Math.min(2, Math.max(0, Math.floor((x / (window.innerWidth || 1)) * 3)));
+  const row = Math.min(2, Math.max(0, Math.floor((y / (window.innerHeight || 1)) * 3)));
+  return tapZoneActions()[row * 3 + col];
+}
+
+function runTapZoneAction(action, pdfPaged) {
+  if (action === 'prev' || action === 'next') {
+    const direction = action === 'next' ? 1 : -1;
+    if (pdfPaged) turnPhonePdfPage(direction);
+    else navigatePageGroup(direction);
+  } else if (action === 'menu') {
+    setMobileChromeOpen(true);
+  } else if (action === 'toc') {
+    openReaderPanel('toc');
+  } else if (action === 'bookmark' && typeof toggleCurrentBookmark === 'function') {
+    void toggleCurrentBookmark();
+  }
+}
+
+function setTapZonePreset(preset) {
+  if (!(preset in TAP_ZONE_PRESETS) && preset !== 'custom') return;
+  // 自定义 starts from what is set now.
+  state.tapZones = preset === 'custom' ? { preset, zones: [...tapZoneActions()] } : { preset };
+  syncTapZoneSettings();
+  persistUserSettings();
+}
+
+function syncTapZoneSettings() {
+  const preset = tapZonePreset();
+  const zones = tapZoneActions();
+  document.querySelectorAll('[data-tap-preset]').forEach((button) => {
+    button.setAttribute('aria-checked', String(button.dataset.tapPreset === preset));
+  });
+  const hint = document.getElementById('settingTapToTurnHint');
+  if (hint) hint.textContent = TAP_ZONE_HINTS[preset];
+  const grid = document.getElementById('settingTapGrid');
+  const choices = document.getElementById('settingTapChoices');
+  if (!grid || !choices) return;
+  const custom = preset === 'custom';
+  grid.classList.toggle('is-editable', custom);
+  grid.replaceChildren(...zones.map((action, index) => {
+    const cell = document.createElement('button');
+    cell.type = 'button';
+    cell.dataset.tapZone = String(index);
+    cell.dataset.action = action;
+    cell.textContent = TAP_ZONE_LABELS[action];
+    cell.disabled = !custom;
+    cell.setAttribute('aria-pressed', String(custom && index === tapZoneEditing));
+    cell.addEventListener('click', () => {
+      tapZoneEditing = index;
+      syncTapZoneSettings();
+    });
+    return cell;
+  }));
+  choices.hidden = !custom;
+  if (!custom) return;
+  choices.setAttribute('aria-label', `第 ${tapZoneEditing + 1} 格的动作`);
+  choices.replaceChildren(...Object.keys(TAP_ZONE_LABELS).map((action) => {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.setAttribute('role', 'radio');
+    button.dataset.tapAction = action;
+    button.textContent = TAP_ZONE_LABELS[action];
+    button.setAttribute('aria-checked', String(zones[tapZoneEditing] === action));
+    button.addEventListener('click', () => {
+      const next = [...tapZoneActions()];
+      next[tapZoneEditing] = action;
+      state.tapZones = { preset: 'custom', zones: next };
+      syncTapZoneSettings();
+      persistUserSettings();
+    });
+    return button;
+  }));
+}
+
 // 点击区域 guide: shown over the page the first time a phone pages a book
 // (and from 设置 › 查看点击区域). It names what each part of the page does
 // for the current 点击翻页 choice; any tap dismisses it.
@@ -1038,31 +1146,30 @@ const TAP_GUIDE_SEEN_KEY = 'zhenshu.tapGuideSeen';
 
 function showTapGuide() {
   document.getElementById('tapGuide')?.remove();
-  const forward = state.tapToTurn === 'forward';
+  const zones = tapZoneActions();
   const guide = document.createElement('div');
   guide.id = 'tapGuide';
   guide.className = 'tap-guide';
   guide.setAttribute('role', 'dialog');
   guide.setAttribute('aria-label', '点击区域');
-  const zones = forward
-    ? [['下一页', ''], ['菜单', '点中间'], ['下一页', '']]
-    : [['上一页', '点左侧'], ['菜单', '点中间'], ['下一页', '点右侧']];
-  for (const [label, where] of zones) {
+  zones.forEach((action, index) => {
     const zone = document.createElement('div');
-    zone.className = 'tap-guide-zone';
-    const name = document.createElement('strong');
-    name.textContent = label;
-    zone.appendChild(name);
-    if (where) {
-      const hint = document.createElement('span');
-      hint.textContent = where;
-      zone.appendChild(hint);
+    zone.className = `tap-guide-zone is-${action}`;
+    // Neighbouring parts that do the same read as one area.
+    const col = index % 3;
+    const row = Math.floor(index / 3);
+    if (col < 2 && zones[index + 1] === action) zone.classList.add('joins-right');
+    if (row < 2 && zones[index + 3] === action) zone.classList.add('joins-below');
+    if (action !== 'none') {
+      const name = document.createElement('strong');
+      name.textContent = TAP_ZONE_LABELS[action];
+      zone.appendChild(name);
     }
     guide.appendChild(zone);
-  }
+  });
   const foot = document.createElement('p');
   foot.className = 'tap-guide-foot';
-  foot.textContent = `${state.swipeToTurn !== false ? '左右滑动也可以翻页。' : ''}可在 设置 › 阅读 中更改。点一下开始阅读`;
+  foot.textContent = `${state.swipeToTurn !== false ? '左右滑动也可以翻页。' : ''}可在 设置 › 更多设置 › 阅读 中更改。点一下开始阅读`;
   guide.appendChild(foot);
   guide.addEventListener('click', (event) => {
     event.stopPropagation();

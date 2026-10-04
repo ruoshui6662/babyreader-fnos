@@ -106,6 +106,7 @@ async function resetReaderSettings(page) {
         mobilePdfMode: 'paged',
         readerTips: { preset: 'default' },
         tapToTurn: 'zones',
+        tapZones: { preset: 'sides' },
         swipeToTurn: true,
         continuousScroll: true,
         tocAutoOpen: true,

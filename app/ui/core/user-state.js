@@ -41,7 +41,9 @@ function currentUserSettings() {
     pageTurnAnimation: ['slide', 'fade', 'none'].includes(state.pageTurnAnimation) ? state.pageTurnAnimation : 'slide',
     mobilePdfMode: state.mobilePdfMode === 'scroll' ? 'scroll' : 'paged',
     readerTips: state.readerTips || { preset: 'default' },
-    tapToTurn: state.tapToTurn === 'forward' ? 'forward' : 'zones',
+    tapZones: state.tapZones || { preset: 'sides' },
+    // Older pages and clients read tapToTurn.
+    tapToTurn: state.tapZones?.preset === 'forward' ? 'forward' : 'zones',
     swipeToTurn: state.swipeToTurn !== false,
     continuousScroll: readingMode === 'scroll',
     tocAutoOpen: state.tocOpen,
@@ -99,7 +101,9 @@ function applyUserState(userState) {
   state.pageTurnAnimation = ['slide', 'fade', 'none'].includes(settings.pageTurnAnimation) ? settings.pageTurnAnimation : 'slide';
   state.mobilePdfMode = settings.mobilePdfMode === 'scroll' ? 'scroll' : 'paged';
   state.readerTips = settings.readerTips && typeof settings.readerTips === 'object' ? settings.readerTips : { preset: 'default' };
-  state.tapToTurn = settings.tapToTurn === 'forward' ? 'forward' : 'zones';
+  state.tapZones = settings.tapZones && typeof settings.tapZones === 'object'
+    ? settings.tapZones
+    : { preset: settings.tapToTurn === 'forward' ? 'forward' : 'sides' };
   state.swipeToTurn = settings.swipeToTurn !== false;
   // P0 typography: clamped exactly like the server does, so a hand-edited
   // settings file can never push the layout out of range.
