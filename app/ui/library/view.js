@@ -383,6 +383,7 @@ function prepareLibrarySurface() {
   state.currentBookId = null;
   state.currentPath = null;
   state.currentName = null;
+  if (typeof syncNativeClient === 'function') syncNativeClient();
   clearTimeout(_fileNameFlashTimeout);
   const fileName = document.getElementById('fileName');
   if (fileName) {

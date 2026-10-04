@@ -45,7 +45,7 @@ const { decodeBookText } = require('./text-encoding');
 const { buildReadingStats } = require('./reading-stats-summary');
 const { buildBookNotes, buildNotesSummary, searchNotes } = require('./notes');
 const { epubTocForBook } = require('./epub-toc');
-const { readFnOSAuthorizedRoots, writeFnOSAuthorizedRoots, fnOSAuthorizationRevision } = require('./fnos-roots-config');
+const { createPlatform } = require('./platform');
 const { createDirectAccess } = require('./direct-access');
 const { buildAnswerPayload, gatherEvidence, planQuestion, MAP_ROOT_ID, TYPE_LABELS } = require('./ai-answer-pipeline');
 const { createBookMapStore } = require('./ai-book-map-store');
@@ -75,9 +75,12 @@ const {
 const APP_PREFIX = '/app/zhenshu';
 const APP_ROOT = path.resolve(__dirname, '..');
 const UI_ROOT = path.join(APP_ROOT, 'ui');
-const DATA_ROOT = path.resolve(process.env.TRIM_PKGVAR || path.join(APP_ROOT, '..', '.runtime', 'var'));
-const CONFIG_ROOT = path.resolve(process.env.TRIM_PKGETC || path.join(APP_ROOT, '..', '.runtime', 'etc'));
-const SOCKET_PATH = process.env.ZHENSHU_SOCKET || path.resolve(process.env.TRIM_APPDEST || path.join(APP_ROOT, '..'), 'app.sock');
+// The host (fnOS by default): folders, who is signed in, which book folders
+// may be read. See platform/index.js.
+const platform = createPlatform({ appRoot: APP_ROOT });
+const DATA_ROOT = platform.paths.data;
+const CONFIG_ROOT = platform.paths.config;
+const SOCKET_PATH = platform.paths.socket;
 const MAX_JSON_BYTES = 2 * 1024 * 1024;
 // Provisional per-response ceiling; Task 0 device benchmarks may lower it.
 const MAX_PDF_RANGE_BYTES = 8 * 1024 * 1024;
@@ -1134,17 +1137,7 @@ async function prepareBookSummary(book, userId, question, config) {
 }
 
 function gatewayUser(request) {
-  let uid = request.headers['x-trim-userid'];
-  let username = request.headers['x-trim-username'];
-  let isAdmin = request.headers['x-trim-isadmin'] === 'true';
-
-  if (!uid && process.env.NODE_ENV === 'development') {
-    uid = process.env.ZHENSHU_DEV_UID || 'development';
-    username = process.env.ZHENSHU_DEV_USERNAME || 'development';
-    isAdmin = true;
-  }
-  if (!uid) throw Object.assign(new Error('Missing authenticated fnOS user context'), { statusCode: 401 });
-  return { uid: String(uid), username: String(username || ''), isAdmin };
+  return platform.identify(request);
 }
 
 async function readJsonBody(request) {
@@ -1317,15 +1310,14 @@ function ensureExactOrder(order, expected, message = 'Invalid organization order
 }
 
 async function loadConfiguration() {
-  const revision = fnOSAuthorizationRevision(CONFIG_ROOT);
+  const revision = platform.rootsRevision(CONFIG_ROOT);
   const config = await readJson(path.join(CONFIG_ROOT, 'settings.json'), { libraryRoots: [] });
   const configured = Array.isArray(config.libraryRoots) ? config.libraryRoots : [];
-  const fnOSAuthorized = readFnOSAuthorizedRoots(CONFIG_ROOT, process.env.TRIM_DATA_ACCESSIBLE_PATHS);
-  const fnOSShared = parseFnOSPathList(process.env.TRIM_DATA_SHARE_PATHS);
+  const { accessibleRoots, sharedRoots } = platform.libraryRoots(CONFIG_ROOT);
   rootDiagnostics = await resolveLibraryRoots({
     configuredRoots: configured,
-    accessibleRoots: fnOSAuthorized,
-    sharedRoots: fnOSShared
+    accessibleRoots,
+    sharedRoots
   });
   authorizedRoots = rootDiagnostics.authorizedRoots.slice();
   authorizationRevision = revision;
@@ -1340,7 +1332,7 @@ async function loadConfiguration() {
 }
 
 async function refreshAuthorizationIfChanged() {
-  if (authorizationRevision !== fnOSAuthorizationRevision(CONFIG_ROOT)) await loadConfiguration();
+  if (authorizationRevision !== platform.rootsRevision(CONFIG_ROOT)) await loadConfiguration();
 }
 
 async function findBook(bookId, options = {}) {
@@ -2543,15 +2535,11 @@ async function handleRequest(request, response) {
   }
 }
 
-// fnOS hands the app its current folder authorization when it starts it.
-// That is the truth at start: rewrite the private snapshot from it, so a
-// folder taken away while a change callback was missed (or failed) does not
-// stay readable. Only when fnOS set the variable (empty means “no folders”);
-// cmd/main says so in ZHENSHU_FNOS_ACCESSIBLE_AT_START.
+// The host's folder grant at start-up (on fnOS: the start-time
+// authorization replaces a stale snapshot; see platform/fnos.js).
 function syncFnOSAuthorizationAtStart() {
-  if (process.env.ZHENSHU_FNOS_ACCESSIBLE_AT_START !== '1') return;
   try {
-    writeFnOSAuthorizedRoots(CONFIG_ROOT, process.env.TRIM_DATA_ACCESSIBLE_PATHS || '');
+    platform.syncAtStart(CONFIG_ROOT);
   } catch (error) {
     recordError(error, { operation: 'sync-fnos-authorization' });
   }

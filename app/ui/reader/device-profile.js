@@ -361,6 +361,115 @@ function setupMobileSettingsSheet() {
   });
 }
 
+// ---------------------------------------------------------------------------
+// Android client (clients/android). The shell exposes window.ZhenshuNative;
+// the page answers it through window.zhenshuNative: back() for the back key
+// (close what is open, then leave the book) and turn() for the volume keys.
+// Its options live on this device only.
+const NATIVE_PREFS_KEY = 'zhenshu.client';
+const NATIVE_DEFAULTS = Object.freeze({ volumeKeys: true, keepOn: true, immersive: false });
+
+function nativeClient() {
+  return typeof window.ZhenshuNative === 'object' && window.ZhenshuNative ? window.ZhenshuNative : null;
+}
+
+function nativePrefs() {
+  try {
+    return { ...NATIVE_DEFAULTS, ...JSON.parse(localStorage.getItem(NATIVE_PREFS_KEY) || '{}') };
+  } catch {
+    return { ...NATIVE_DEFAULTS };
+  }
+}
+
+function saveNativePrefs(prefs) {
+  try { localStorage.setItem(NATIVE_PREFS_KEY, JSON.stringify(prefs)); } catch { /* private mode */ }
+}
+
+function nativeReading() {
+  return Boolean(state.currentPath) && !document.body.classList.contains('is-library');
+}
+
+// Tells the shell what the screen is: reading or not, dark or light, and
+// the options that apply while reading.
+function syncNativeClient() {
+  const native = nativeClient();
+  if (!native?.setReading) return;
+  const prefs = nativePrefs();
+  // Reading: the reading theme; the shelf: its own (dark unless light/sepia).
+  const dark = nativeReading() ? state.theme === 'dark' : !document.body.matches('.theme-light, .theme-sepia');
+  try {
+    native.setReading(nativeReading(), dark, prefs.immersive === true, prefs.keepOn !== false, prefs.volumeKeys !== false);
+  } catch { /* an older shell */ }
+}
+
+function setupNativeClient() {
+  const native = nativeClient();
+  document.documentElement.toggleAttribute('data-native-client', Boolean(native));
+  const group = document.getElementById('settingsNativeGroup');
+  if (!native || !group) return;
+  group.hidden = false;
+  const prefs = nativePrefs();
+  for (const [id, key] of [['settingNativeVolumeKeys', 'volumeKeys'], ['settingNativeKeepOn', 'keepOn'], ['settingNativeImmersive', 'immersive']]) {
+    const input = document.getElementById(id);
+    if (!input || input.dataset.bound) continue;
+    input.dataset.bound = 'true';
+    input.checked = prefs[key] === true;
+    input.addEventListener('change', () => {
+      saveNativePrefs({ ...nativePrefs(), [key]: input.checked });
+      syncNativeClient();
+    });
+  }
+  const serverLabel = document.getElementById('settingNativeServer');
+  try { if (serverLabel) serverLabel.textContent = native.server?.() || ''; } catch { /* older shell */ }
+  const change = document.getElementById('btnNativeChangeServer');
+  if (change && !change.dataset.bound) {
+    change.dataset.bound = 'true';
+    change.addEventListener('click', () => native.changeServer?.());
+  }
+  syncNativeClient();
+}
+
+window.zhenshuNative = {
+  // Volume keys: a page in 左右翻页, a screen's height when scrolling.
+  turn(direction) {
+    if (!nativeReading() || state.contentType === 'pdf') return false;
+    if (document.getElementById('tapGuide')) return false;
+    const step = direction < 0 ? -1 : 1;
+    if (state.effectiveReadingMode === 'scroll') {
+      const reader = document.getElementById('reader');
+      reader?.scrollBy({ top: step * Math.round((reader.clientHeight || 600) * 0.9) });
+      return true;
+    }
+    return navigatePageGroup(step) !== false;
+  },
+  // The back key: the topmost thing closes first; in the library the shell
+  // decides (history, or leaving the app).
+  back() {
+    const guide = document.getElementById('tapGuide');
+    if (guide) {
+      guide.remove();
+      return true;
+    }
+    if (document.getElementById('aiModal')?.hidden === false && typeof closeAiModal === 'function') {
+      closeAiModal();
+      return true;
+    }
+    if (typeof activeReaderSurface !== 'undefined' && activeReaderSurface) {
+      closeReaderPanel();
+      return true;
+    }
+    if (isMobileChromeOpen()) {
+      setMobileChromeOpen(false);
+      return true;
+    }
+    if (nativeReading() && typeof returnToLibrary === 'function') {
+      void returnToLibrary();
+      return true;
+    }
+    return false;
+  }
+};
+
 // 点击区域 guide: shown over the page the first time a phone pages a book
 // (and from 设置 › 查看点击区域). It names what each part of the page does
 // for the current 点击翻页 choice; any tap dismisses it.
@@ -597,6 +706,7 @@ function setupReaderDeviceProfile() {
   setupMobileSettingsSheet();
   setupMobileSheetGestures();
   setupMobileAiPanel();
+  setupNativeClient();
   window.addEventListener('resize', update, { passive: true });
   window.visualViewport?.addEventListener('resize', update, { passive: true });
   window.screen?.orientation?.addEventListener?.('change', update, { passive: true });

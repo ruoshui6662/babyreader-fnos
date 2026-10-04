@@ -23,7 +23,7 @@
   <link rel="stylesheet" href="styles/buttons.css?v=2">
   <link rel="stylesheet" href="styles/glass.css?v=4">
   <link rel="stylesheet" href="styles/shelf-phone.css?v=1">
-  <link rel="stylesheet" href="styles/reader-mobile.css?v=3">
+  <link rel="stylesheet" href="styles/reader-mobile.css?v=4">
 </head>
 <body class="is-welcome">
   <svg class="zs-glass-defs" width="0" height="0" aria-hidden="true" focusable="false">
@@ -307,6 +307,29 @@
             </span>
           </label>
           </details>
+        </div>
+      </section>
+      <!-- Only inside the Android client (clients/android). -->
+      <section class="settings-group" data-settings-group="client" id="settingsNativeGroup" hidden>
+        <h3 class="settings-group-title">手机客户端</h3>
+        <div class="settings-group-card">
+          <label class="settings-field settings-checkbox">
+            <input id="settingNativeVolumeKeys" type="checkbox" role="switch">
+            <span>音量键翻页</span>
+          </label>
+          <label class="settings-field settings-checkbox">
+            <input id="settingNativeKeepOn" type="checkbox" role="switch">
+            <span>阅读时屏幕常亮</span>
+          </label>
+          <label class="settings-field settings-checkbox">
+            <input id="settingNativeImmersive" type="checkbox" role="switch">
+            <span>阅读时隐藏状态栏</span>
+          </label>
+          <div class="settings-field settings-native-server">
+            <span>连接的 NAS</span>
+            <span class="settings-native-server-value"><span id="settingNativeServer"></span>
+              <button type="button" class="settings-turn-guide-button" id="btnNativeChangeServer">更换</button></span>
+          </div>
         </div>
       </section>
       <p class="settings-user" id="settingsUser"></p>
@@ -718,7 +741,7 @@
   <script src="core/glass.js?v=3"></script>
   <script src="core/user-state.js?v=42"></script>
   <script src="reader/annotations.js?v=2"></script>
-  <script src="reader/device-profile.js?v=37"></script>
+  <script src="reader/device-profile.js?v=38"></script>
   <script src="reader/epub.js?v=37"></script>
   <script src="reader/paragraphs.js?v=1"></script>
   <script src="reader/document.js?v=30"></script>
@@ -733,7 +756,7 @@
   <script src="reader/progress.js?v=37"></script>
   <script src="reader/bookmarks.js?v=4"></script>
   <script src="reader/pagination.js?v=38"></script>
-  <script src="reader/settings.js?v=42"></script>
+  <script src="reader/settings.js?v=43"></script>
   <script src="reader/jump-back.js?v=1"></script>
   <script src="reader/navigation.js?v=31"></script>
   <script src="reader/pdf-annotation-geometry.js?v=1"></script>
@@ -753,8 +776,8 @@
   <script src="library/note-card.js?v=3"></script>
   <script src="library/notes-export.js?v=1"></script>
   <script src="library/notes-page.js?v=7"></script>
-  <script src="library/view.js?v=43"></script>
+  <script src="library/view.js?v=44"></script>
   <script src="reader/reading-timer.js?v=1"></script>
-  <script src="app.js?v=43"></script>
+  <script src="app.js?v=44"></script>
 </body>
 </html>
