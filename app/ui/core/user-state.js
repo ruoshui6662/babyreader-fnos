@@ -222,7 +222,10 @@ function savePosition(value, { keepalive = false } = {}) {
   const bookId = state.currentBookId;
   const progress = {
     locator: JSON.stringify(value),
-    percentage: Number.isFinite(value.percentage) ? value.percentage : null
+    percentage: Number.isFinite(value.percentage) ? value.percentage : null,
+    // EPUB percentages are of the whole book (earlier ones were of the
+    // current chapter); the server repairs a 已读完 that came from those.
+    ...(value.type === 'semantic-position' ? { basis: 'book' } : {})
   };
   const previous = currentServerBookState();
   state.userState.books[bookId] = {

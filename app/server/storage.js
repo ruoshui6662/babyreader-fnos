@@ -477,10 +477,19 @@ class UserStorage {
         ? Math.max(0, Math.min(1, progress.percentage))
         : null;
       const now = new Date().toISOString();
+      // EPUB progress used to be saved as the share of the current chapter,
+      // so the end of any chapter could mark a book finished. The first
+      // whole-book save repairs that once: still short of the end means it
+      // was not finished.
+      const repairing = progress.basis === 'book' && previous.progressBasis !== 'book';
+      const { finishedAt: earlierFinish, ...rest } = previous;
+      const keepFinish = earlierFinish && !(repairing && percentage !== null && percentage < FINISHED_PROGRESS);
       state.books[bookId] = {
-        ...previous,
+        ...rest,
+        ...(keepFinish ? { finishedAt: earlierFinish } : {}),
         // The first time a book reaches the end is when it was finished.
-        ...(!previous.finishedAt && percentage !== null && percentage >= FINISHED_PROGRESS ? { finishedAt: now } : {}),
+        ...(!keepFinish && percentage !== null && percentage >= FINISHED_PROGRESS ? { finishedAt: now } : {}),
+        ...(progress.basis === 'book' ? { progressBasis: 'book' } : {}),
         progress: {
           locator: String(progress.locator || '').slice(0, 4096),
           percentage,

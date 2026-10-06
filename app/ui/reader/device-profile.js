@@ -170,7 +170,8 @@ function previewMobileProgress(value) {
   let label = '';
   if (state.contentType === 'epub') {
     const count = Math.max(1, state.epubChapterCount || state.chapterPaths?.length || 1);
-    label = mobileChapterLabel(Math.min(count - 1, Math.floor(ratio * count)));
+    label = mobileChapterLabel(typeof epubChapterAtFraction === 'function'
+      ? epubChapterAtFraction(ratio, count) : Math.min(count - 1, Math.floor(ratio * count)));
   } else if (state.contentType === 'pdf') {
     const pages = Math.max(1, window.pdfReaderController?.getPageCount?.() || 1);
     label = `第 ${Math.round(ratio * (pages - 1)) + 1} 页`;
@@ -188,7 +189,8 @@ function commitMobileProgress(value) {
   if (bubble) bubble.hidden = true;
   if (state.contentType === 'epub') {
     const count = Math.max(1, state.epubChapterCount || state.chapterPaths?.length || 1);
-    const target = Math.min(count - 1, Math.floor(ratio * count));
+    const target = typeof epubChapterAtFraction === 'function'
+      ? epubChapterAtFraction(ratio, count) : Math.min(count - 1, Math.floor(ratio * count));
     if (target !== state.currentChapterIndex && typeof navigateToEpubChapter === 'function') {
       navigateToEpubChapter(target, { page: 1, reason: 'mobile-progress' });
     }
@@ -461,7 +463,8 @@ async function saveBlobInNativeClient(blob, name) {
     where = native.saveFile(name, blob.type || 'application/octet-stream', await blobToBase64(blob)) || '';
   } catch { /* an older shell */ }
   if (typeof showHighlightHint === 'function') {
-    showHighlightHint(where ? `已保存到 ${where}` : '保存失败，请允许枕书保存文件后重试');
+    // The folder is what one looks for; the file name made two lines.
+    showHighlightHint(where ? `已保存到 ${String(where).replace(/[^/]*$/, '')}` : '保存失败，请允许枕书保存文件后重试');
   }
 }
 
