@@ -226,29 +226,8 @@ function createLibraryScanButton() {
   scanButton.type = 'button';
   scanButton.className = 'zs-btn zs-btn-secondary library-scan-button';
   scanButton.textContent = '重新扫描';
-  scanButton.addEventListener('click', async () => {
-    scanButton.disabled = true;
-    scanButton.textContent = '扫描中…';
-    const scanStatus = scanButton.closest('.library-view')?.querySelector('.library-scan-status');
-    if (scanStatus) {
-      scanStatus.textContent = '正在读取授权目录…';
-      scanStatus.hidden = false;
-    }
-    try {
-      const scanned = await window.browserHost.scanLibrary();
-      markNextLibraryScanResult();
-      if (typeof renderLibraryWithOrganization === 'function') await renderLibraryWithOrganization(scanned);
-      else renderLibrary(scanned);
-    } catch (error) {
-      if (scanStatus) {
-        scanStatus.textContent = '读取失败：请检查 fnOS 应用权限后重试。';
-        scanStatus.hidden = false;
-      }
-      showHighlightHint(error.message || '重新扫描失败');
-      scanButton.disabled = false;
-      scanButton.textContent = '重新扫描';
-    }
-  });
+  scanButton.addEventListener('click', () => runLibraryScanFromButton(
+    scanButton, scanButton.closest('.library-view')?.querySelector('.library-scan-status')));
   return scanButton;
 }
 

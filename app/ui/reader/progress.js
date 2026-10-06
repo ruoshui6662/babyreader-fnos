@@ -35,6 +35,57 @@ function chapterScrollPercentage(reader) {
   return Math.max(0, Math.min(1, reader.scrollTop / range));
 }
 
+// Each chapter's share of the book, by the size of its text in the archive
+// (a long chapter is a larger part of the book than a two-line one); equal
+// shares when the sizes are not known. Measured once per opened book.
+function epubChapterWeights() {
+  const archive = state.epubArchive;
+  if (!archive || !Array.isArray(archive.spine) || !archive.spine.length) return null;
+  if (archive.chapterWeights) return archive.chapterWeights;
+  const sizes = archive.spine.map((chapter) => {
+    try {
+      const file = typeof getZipFile === 'function' ? getZipFile(archive.zip, chapter.fullPath) : archive.zip?.file?.(chapter.fullPath);
+      return Number(file?._data?.uncompressedSize);
+    } catch {
+      return NaN;
+    }
+  });
+  const known = sizes.every((size) => Number.isFinite(size) && size > 0);
+  // A floor, so a cover or title page still counts for a little.
+  const weights = known ? sizes.map((size) => Math.max(size, 1024)) : sizes.map(() => 1);
+  const starts = [];
+  let total = 0;
+  for (const weight of weights) {
+    starts.push(total);
+    total += weight;
+  }
+  archive.chapterWeights = { weights, starts, total };
+  return archive.chapterWeights;
+}
+
+// Where in the whole book (0..1) a point `within` (0..1) of chapter
+// `chapterIndex` is.
+function epubBookFraction(chapterIndex, within, chapterCount) {
+  const fraction = Math.max(0, Math.min(1, Number(within) || 0));
+  const weights = epubChapterWeights();
+  if (!weights || !Number.isInteger(chapterIndex) || chapterIndex < 0 || chapterIndex >= weights.weights.length) {
+    return Math.max(0, Math.min(1, (chapterIndex + fraction) / Math.max(1, chapterCount)));
+  }
+  return Math.max(0, Math.min(1, (weights.starts[chapterIndex] + weights.weights[chapterIndex] * fraction) / weights.total));
+}
+
+// The chapter at a point of the whole book (the progress slider).
+function epubChapterAtFraction(ratio, chapterCount) {
+  const count = Math.max(1, chapterCount);
+  const weights = epubChapterWeights();
+  const target = Math.max(0, Math.min(1, Number(ratio) || 0));
+  if (!weights) return Math.min(count - 1, Math.floor(target * count));
+  const point = target * weights.total;
+  let index = 0;
+  while (index < weights.weights.length - 1 && weights.starts[index + 1] <= point) index += 1;
+  return index;
+}
+
 function currentReadingLocator(reader) {
   const chapters = [...document.querySelectorAll('#article .epub-chapter')];
   const chapterCount = state.epubArchive ? Math.max(1, state.epubChapterCount) : Math.max(1, chapters.length);
@@ -79,9 +130,16 @@ function currentReadingLocator(reader) {
     ? Math.max(0, Math.min(chapterCount - 1, state.epubChapterIndex))
     : Math.max(0, chapters.indexOf(chapter));
   const chapterPercentage = paged ? null : chapterScrollPercentage(reader);
+  // Progress through the whole book. A chapter-at-a-time (archive) EPUB
+  // pages through one chapter, so its page fraction is placed within that
+  // chapter's share of the book; saving the bare page fraction made every
+  // chapter's end read as nearly 100% (and marked the book finished).
+  const pageFraction = Math.max(0, Math.min(1, (state.pageNumber - 1) / pageRange));
   const percentage = paged
-    ? Math.max(0, Math.min(1, (state.pageNumber - 1) / pageRange))
-    : Math.max(0, Math.min(1, (chapterIndex + chapterPercentage) / chapterCount));
+    ? state.epubArchive ? epubBookFraction(chapterIndex, pageFraction, chapterCount) : pageFraction
+    : state.epubArchive
+      ? epubBookFraction(chapterIndex, chapterPercentage, chapterCount)
+      : Math.max(0, Math.min(1, (chapterIndex + chapterPercentage) / chapterCount));
 
   return {
     version: 2,
@@ -149,9 +207,11 @@ function updateReadingProgress(options = {}) {
   const pageFraction = Math.max(0, Math.min(1, (state.pageNumber - 1) / Math.max(1, state.pageCount - 1)));
   const percentage = paged
     ? state.epubArchive
-      ? Math.max(0, Math.min(1, (chapterIndex + pageFraction) / chapterCount))
+      ? epubBookFraction(chapterIndex, pageFraction, chapterCount)
       : pageFraction
-    : Math.max(0, Math.min(1, (chapterIndex + chapterPercentage) / chapterCount));
+    : state.epubArchive
+      ? epubBookFraction(chapterIndex, chapterPercentage, chapterCount)
+      : Math.max(0, Math.min(1, (chapterIndex + chapterPercentage) / chapterCount));
   progress.textContent = `第 ${chapterIndex + 1}/${chapterCount} 章 · ${Math.round(percentage * 100)}%`;
   state.readingPercentage = percentage;
   if (typeof syncMobileReadingBar === 'function') syncMobileReadingBar();

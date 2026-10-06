@@ -176,8 +176,8 @@ function queueHighlightSave() {
   _highlightSaveChain = _highlightSaveChain.catch(() => {}).then(async () => {
     // Persist the captured book snapshot even if navigation switched books or
     // returned to the library while this serialized write was pending.
+    // A saved note shows itself on the page; only a failure is announced.
     await window.browserHost.saveHighlights(highlights, bookId);
-    if (revision === _highlightSaveRevision) showHighlightHint('批注已保存');
   }).catch((error) => {
     console.error('保存划线失败', { bookId, revision, error });
     showHighlightHint(`批注保存失败：${error.message || '未知错误'}`);
@@ -302,24 +302,45 @@ function flashFileName(message, duration = 1600) {
 
 let readerFeedbackTimer = null;
 
+// A short message in a capsule at the bottom. It is a popover, so it shows
+// in the top layer above any open dialog (the note card's dialog covered it
+// before, and a saved picture went unannounced). Messages about a failure
+// stay until closed; the rest fade after a few seconds.
+function hideReaderFeedback(feedback) {
+  feedback.hidden = true;
+  try { if (feedback.matches(':popover-open')) feedback.hidePopover(); } catch { /* no popover support */ }
+}
+
 function showHighlightHint(message, { persistent = /失败|错误|无法|超时|重试/.test(String(message)) } = {}) {
   let feedback = document.getElementById('readerFeedback');
   if (!feedback) {
     feedback = document.createElement('div');
     feedback.id = 'readerFeedback';
     feedback.className = 'reader-feedback';
+    if (typeof feedback.showPopover === 'function') feedback.setAttribute('popover', 'manual');
     const text = document.createElement('span');
     text.setAttribute('role', 'status');
     text.setAttribute('aria-live', 'polite');
     const close = document.createElement('button');
     close.type = 'button';
+    close.className = 'reader-feedback-close';
+    close.setAttribute('aria-label', '关闭');
+    close.title = '关闭';
     close.textContent = '关闭';
-    close.addEventListener('click', () => { feedback.hidden = true; });
+    close.addEventListener('click', () => hideReaderFeedback(feedback));
     feedback.append(text, close);
     document.body.appendChild(feedback);
   }
   clearTimeout(readerFeedbackTimer);
   feedback.querySelector('span').textContent = String(message || '');
+  feedback.dataset.persistent = String(Boolean(persistent));
   feedback.hidden = false;
-  if (!persistent) readerFeedbackTimer = setTimeout(() => { feedback.hidden = true; }, 5000);
+  if (typeof feedback.showPopover === 'function') {
+    try {
+      // Shown again, so it is above a dialog opened since.
+      if (feedback.matches(':popover-open')) feedback.hidePopover();
+      feedback.showPopover();
+    } catch { /* not connected yet, or no popover support */ }
+  }
+  if (!persistent) readerFeedbackTimer = setTimeout(() => hideReaderFeedback(feedback), 3200);
 }

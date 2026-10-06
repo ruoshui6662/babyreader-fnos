@@ -514,47 +514,73 @@ test('UX search is nonmodal and does not trap keyboard focus', async () => {
   await window.happyDOM.close();
 });
 
-test('library rescan shows safe progress and outcome feedback', async () => {
+test('library rescan shows its progress in the ring, then the outcome', async () => {
   const { window } = await createReaderDom();
   const renderLibrary = window.__zhenshuTest.renderLibrary;
+  const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
   const book = { id: 'a'.repeat(64), title: '授权目录中的书', type: 'txt' };
   let resolveScan;
+  let active = true;
   window.browserHost.scanLibrary = () => new Promise((resolve) => {
     resolveScan = resolve;
+  });
+  window.browserHost.getScanStatus = async () => ({
+    active,
+    status: active ? 'running' : 'completed',
+    progress: { phase: 'indexing', discovered: 4, processed: 3, total: 4, indexed: 2, reused: 1, errors: 0 },
+    result: active ? null : { discoveredCount: 4, indexedCount: 2, reusedCount: 1, errorCount: 1 }
   });
 
   renderLibrary({ books: [book] });
   const article = window.document.getElementById('article');
   const button = article.querySelector('.library-scan-button');
+  const indicator = window.document.getElementById('libraryScanIndicator');
   assert.ok(button);
+  assert.equal(indicator.hidden, true);
   button.click();
-  await new Promise((resolve) => setTimeout(resolve, 0));
+  await wait(0);
   assert.equal(button.disabled, true);
-  assert.equal(button.textContent, '正在读取授权目录…');
-  assert.match(article.querySelector('.library-scan-status')?.textContent || '', /正在读取授权目录/);
+  assert.equal(button.textContent, '扫描中…');
+  assert.equal(indicator.hidden, false);
+  assert.equal(indicator.dataset.state, 'discovering');
+  // No progress text on the page itself.
+  assert.equal(article.querySelector('.library-scan-status').hidden, true);
 
+  await wait(800);
+  assert.equal(indicator.dataset.state, 'indexing');
+  assert.equal(indicator.style.getPropertyValue('--scan-percent'), '75');
+  assert.equal(indicator.querySelector('.library-scan-popover-title').textContent, '正在读取书籍 3 / 4');
+  assert.match(indicator.querySelector('.library-scan-ring').getAttribute('aria-label'), /新增 2 · 已有 1/);
+  indicator.querySelector('.library-scan-ring').click();
+  assert.equal(indicator.querySelector('.library-scan-popover').hidden, false);
+
+  active = false;
   resolveScan({
     books: [book],
     scan: { discoveredCount: 4, indexedCount: 2, reusedCount: 1, errorCount: 1 }
   });
-  await new Promise((resolve) => setTimeout(resolve, 0));
+  await wait(900);
+  assert.equal(indicator.dataset.state, 'done');
+  assert.equal(indicator.querySelector('.library-scan-popover-title').textContent, '扫描完成');
+  // Books that could not be read stay on the page, where they need attention.
   assert.match(article.textContent, /发现 4 项/);
-  assert.match(article.textContent, /新增 2 本/);
-  assert.match(article.textContent, /复用 1 本/);
   assert.match(article.textContent, /1 项未能读取/);
   assert.doesNotMatch(article.textContent, /root|path|\/var\/|[A-Z]:\\/i);
 
   window.browserHost.scanLibrary = async () => {
     throw new Error('/var/apps/zhenshu/custom-library permission denied');
   };
+  window.browserHost.getScanStatus = async () => ({ active: false, status: 'failed' });
   renderLibrary({ books: [book] });
   const failedButton = article.querySelector('.library-scan-button');
   failedButton.click();
-  await new Promise((resolve) => setTimeout(resolve, 0));
+  await wait(900);
   assert.equal(failedButton.disabled, false);
   assert.equal(failedButton.textContent, '重新扫描');
+  assert.equal(indicator.dataset.state, 'failed');
   assert.match(article.querySelector('.library-scan-status')?.textContent || '', /检查 fnOS 应用权限后重试/);
   assert.doesNotMatch(article.textContent, /permission denied|\/var\/|root|path/i);
+  await window.happyDOM.close();
 });
 
 test('opening a MOBI book waits through server-side preparation and then receives the derived EPUB', async () => {

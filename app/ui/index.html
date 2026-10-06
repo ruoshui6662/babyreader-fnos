@@ -14,14 +14,15 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="枕书">
-  <link rel="stylesheet" href="styles.css?v=123">
+  <link rel="stylesheet" href="styles.css?v=125">
   <link rel="stylesheet" href="styles/shelf-nav.css?v=4">
   <link rel="stylesheet" href="styles/stats.css?v=2">
   <link rel="stylesheet" href="styles/notes.css?v=1">
-  <link rel="stylesheet" href="styles/note-card.css?v=1">
+  <link rel="stylesheet" href="styles/note-card.css?v=2">
   <link rel="stylesheet" href="styles/shelf-menus.css?v=1">
   <link rel="stylesheet" href="styles/buttons.css?v=2">
   <link rel="stylesheet" href="styles/glass.css?v=5">
+  <link rel="stylesheet" href="styles/scan-progress.css?v=1">
   <link rel="stylesheet" href="styles/shelf-phone.css?v=2">
   <link rel="stylesheet" href="styles/reader-mobile.css?v=23">
 </head>
@@ -55,6 +56,18 @@
       </button>
     </div>
     <div class="topbar-right">
+      <!-- Library scan progress (library/view.js): shown only while a scan
+           runs and for a moment after; hover or tap for the details. -->
+      <div class="library-scan-indicator" id="libraryScanIndicator" hidden>
+        <button class="reader-nav-button library-scan-ring" id="btnLibraryScanRing" type="button" aria-expanded="false" aria-controls="libraryScanPopover" aria-label="书库扫描进度">
+          <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke-linecap="round" stroke-linejoin="round"><circle class="library-scan-ring-track" cx="12" cy="12" r="8.5"></circle><circle class="library-scan-ring-bar" cx="12" cy="12" r="8.5" pathLength="100"></circle><path class="library-scan-ring-done" d="m8.6 12.2 2.3 2.3 4.5-4.8"></path><path class="library-scan-ring-fail" d="M12 8.2v4.3M12 15.7v.1"></path></svg>
+        </button>
+        <div class="library-scan-popover" id="libraryScanPopover" role="status" aria-live="polite" hidden>
+          <strong class="library-scan-popover-title"></strong>
+          <span class="library-scan-popover-meter"><span></span></span>
+          <p class="library-scan-popover-detail"></p>
+        </div>
+      </div>
       <button class="reader-nav-button library-appearance-toggle" id="btnLibraryAppearance" type="button" aria-haspopup="dialog" aria-expanded="false" aria-controls="libraryAppearanceMenu" aria-label="外观" title="外观">
         <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3a9 9 0 1 0 0 18c1.1 0 1.7-.8 1.7-1.7 0-.5-.2-.9-.5-1.2-.3-.3-.5-.7-.5-1.2 0-.9.8-1.7 1.7-1.7H16a5 5 0 0 0 5-5c0-4-4-7.2-9-7.2z"></path><circle cx="7.5" cy="11" r="1"></circle><circle cx="10" cy="7" r="1"></circle><circle cx="14.5" cy="7" r="1"></circle></svg>
       </button>
@@ -647,25 +660,39 @@
       <button type="button" class="ui-close" id="btnCloseHighlightEditor" aria-label="关闭写想法">关闭</button>
     </div>
     <blockquote class="highlight-editor-text" id="highlightEditorText"></blockquote>
-    <label class="highlight-editor-field">
+    <div class="highlight-editor-choices">
+      <div class="highlight-editor-styles" role="radiogroup" aria-label="标记样式">
+        <button type="button" role="radio" data-editor-style="none" aria-checked="false"><i aria-hidden="true">文</i>不标记</button>
+        <button type="button" role="radio" data-editor-style="marker" aria-checked="false"><i aria-hidden="true">文</i>马克笔</button>
+        <button type="button" role="radio" data-editor-style="line" aria-checked="false"><i aria-hidden="true">文</i>直线</button>
+        <button type="button" role="radio" data-editor-style="wave" aria-checked="false"><i aria-hidden="true">文</i>波浪线</button>
+      </div>
+      <div class="highlight-editor-colors" role="radiogroup" aria-label="颜色">
+        <button type="button" role="radio" data-editor-color="yellow" aria-checked="false" aria-label="黄色" title="黄色"></button>
+        <button type="button" role="radio" data-editor-color="green" aria-checked="false" aria-label="绿色" title="绿色"></button>
+        <button type="button" role="radio" data-editor-color="blue" aria-checked="false" aria-label="蓝色" title="蓝色"></button>
+        <button type="button" role="radio" data-editor-color="pink" aria-checked="false" aria-label="粉色" title="粉色"></button>
+      </div>
+    </div>
+    <label class="highlight-editor-field highlight-editor-native">
       <span>颜色</span>
-      <select id="highlightEditorColor">
+      <select id="highlightEditorColor" tabindex="-1">
         <option value="yellow">黄色</option>
         <option value="green">绿色</option>
         <option value="blue">蓝色</option>
         <option value="pink">粉色</option>
       </select>
     </label>
-    <label class="highlight-editor-field">
+    <label class="highlight-editor-field highlight-editor-native">
       <span>标记样式</span>
-      <select id="highlightEditorStyle">
+      <select id="highlightEditorStyle" tabindex="-1">
         <option value="none">不标记</option>
         <option value="marker">马克笔</option>
         <option value="wave">波浪线</option>
         <option value="line">直线</option>
       </select>
     </label>
-    <label class="highlight-editor-field">
+    <label class="highlight-editor-field highlight-editor-thought">
       <span>想法</span>
       <textarea id="highlightEditorThought" rows="4" maxlength="4000" placeholder="写下你的想法"></textarea>
     </label>
@@ -847,21 +874,21 @@
   <script src="core/api.js?v=35"></script>
   <script src="core/reader-route.js?v=1"></script>
   <script src="core/glass.js?v=4"></script>
-  <script src="core/user-state.js?v=47"></script>
+  <script src="core/user-state.js?v=48"></script>
   <script src="reader/annotations.js?v=2"></script>
-  <script src="reader/device-profile.js?v=50"></script>
+  <script src="reader/device-profile.js?v=51"></script>
   <script src="reader/epub.js?v=40"></script>
   <script src="reader/paragraphs.js?v=1"></script>
   <script src="reader/document.js?v=30"></script>
   <script src="reader/editor.js?v=28"></script>
-  <script src="reader/highlights.js?v=41"></script>
+  <script src="reader/highlights.js?v=42"></script>
   <script src="reader/ai.js?v=4"></script>
   <script src="reader/ai-index-manager.js?v=1"></script>
   <script src="reader/selection-menu.js?v=8"></script>
   <script src="reader/pdf-notes-export.js?v=1"></script>
-  <script src="reader/actions.js?v=28"></script>
+  <script src="reader/actions.js?v=30"></script>
   <script src="reader/notes-panel.js?v=4"></script>
-  <script src="reader/progress.js?v=37"></script>
+  <script src="reader/progress.js?v=38"></script>
   <script src="reader/bookmarks.js?v=4"></script>
   <script src="reader/pagination.js?v=38"></script>
   <script src="reader/settings.js?v=49"></script>
@@ -878,13 +905,13 @@
   <script src="library/reorder.js?v=1"></script>
   <script src="library/pdf-covers.js?v=1"></script>
   <script src="library/import.js?v=2"></script>
-  <script src="library/organization.js?v=22"></script>
+  <script src="library/organization.js?v=23"></script>
   <script src="library/shelf-nav.js?v=2"></script>
   <script src="library/stats-page.js?v=3"></script>
   <script src="library/note-card.js?v=3"></script>
   <script src="library/notes-export.js?v=2"></script>
   <script src="library/notes-page.js?v=7"></script>
-  <script src="library/view.js?v=44"></script>
+  <script src="library/view.js?v=45"></script>
   <script src="reader/reading-timer.js?v=1"></script>
   <script src="app.js?v=45"></script>
 </body>

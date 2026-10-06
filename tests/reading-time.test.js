@@ -86,3 +86,22 @@ test('a book records when it was first read to the end', async (t) => {
   await store.updateProgress('reader_1', BOOK_A, { locator: '{}', percentage: 1 });
   assert.equal((await store.getState('reader_1')).books[BOOK_A].finishedAt, finished);
 });
+
+test('the first whole-book EPUB save clears a 已读完 that came from a chapter end, once', async (t) => {
+  const store = await storage(t);
+  // Old client: the end of chapter 1 saved as 99%.
+  await store.updateProgress('reader_1', BOOK_A, { locator: '{}', percentage: 0.99 });
+  assert.ok((await store.getState('reader_1')).books[BOOK_A].finishedAt);
+  // New client, same place: 8% of the book. Not finished after all.
+  await store.updateProgress('reader_1', BOOK_A, { locator: '{}', percentage: 0.08, basis: 'book' });
+  let book = (await store.getState('reader_1')).books[BOOK_A];
+  assert.equal(book.finishedAt, undefined);
+  assert.equal(book.progressBasis, 'book');
+  // From then on a real finish is kept, even when the book is reopened at the start.
+  await store.updateProgress('reader_1', BOOK_A, { locator: '{}', percentage: 1, basis: 'book' });
+  const finished = (await store.getState('reader_1')).books[BOOK_A].finishedAt;
+  assert.ok(finished);
+  await store.updateProgress('reader_1', BOOK_A, { locator: '{}', percentage: 0.01, basis: 'book' });
+  book = (await store.getState('reader_1')).books[BOOK_A];
+  assert.equal(book.finishedAt, finished);
+});

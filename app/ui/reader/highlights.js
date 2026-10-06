@@ -556,6 +556,38 @@ let _highlightEditorReturnFocus = null;
 let _highlightEditorBaseline = '';
 let _highlightEditorSaving = false;
 
+// The editor's style row and colour dots mirror its two selects, which
+// stay the source of truth (saving and the tests read them). The quote
+// above previews the mark as chosen.
+function syncHighlightEditorChoices() {
+  const editor = document.getElementById('highlightEditor');
+  const color = document.getElementById('highlightEditorColor')?.value || 'yellow';
+  const style = document.getElementById('highlightEditorStyle')?.value || 'marker';
+  if (!editor) return;
+  // The quote's text in a <mark>, so the preview marks the words, not the box.
+  const quote = document.getElementById('highlightEditorText');
+  if (quote && !quote.querySelector('mark')) {
+    const mark = document.createElement('mark');
+    mark.textContent = quote.textContent;
+    quote.replaceChildren(mark);
+  }
+  editor.dataset.markColor = color;
+  editor.dataset.markStyle = style;
+  for (const button of editor.querySelectorAll('[data-editor-color]')) {
+    button.setAttribute('aria-checked', String(button.dataset.editorColor === color));
+  }
+  for (const button of editor.querySelectorAll('[data-editor-style]')) {
+    button.setAttribute('aria-checked', String(button.dataset.editorStyle === style));
+  }
+}
+
+function chooseHighlightEditorValue(selectId, value) {
+  const select = document.getElementById(selectId);
+  if (!select || select.value === value) return;
+  select.value = value;
+  select.dispatchEvent(new Event('change', { bubbles: true }));
+}
+
 function highlightEditorSnapshot() {
   return JSON.stringify(['highlightEditorThought', 'highlightEditorColor', 'highlightEditorStyle']
     .map((id) => document.getElementById(id)?.value || ''));
@@ -620,6 +652,7 @@ function openHighlightEditor(id) {
     : 'marker';
   if (typeof syncCustomSelectValue === 'function') syncCustomSelectValue(color);
   if (typeof syncCustomSelectValue === 'function') syncCustomSelectValue(style);
+  syncHighlightEditorChoices();
   thought.value = String(highlight.thought || highlight.note || '');
   _highlightEditorBaseline = highlightEditorSnapshot();
   if (deleteButton) deleteButton.hidden = false;
@@ -656,6 +689,7 @@ function openThoughtComposer(session) {
   style.value = 'none';
   if (typeof syncCustomSelectValue === 'function') syncCustomSelectValue(color);
   if (typeof syncCustomSelectValue === 'function') syncCustomSelectValue(style);
+  syncHighlightEditorChoices();
   thought.value = '';
   _highlightEditorBaseline = highlightEditorSnapshot();
   if (deleteButton) deleteButton.hidden = true;
@@ -857,6 +891,19 @@ function setupHighlightEditor() {
   document.getElementById('btnCloseHighlightEditor')?.addEventListener('click', () => closeHighlightEditor());
   document.getElementById('btnSaveHighlight')?.addEventListener('click', saveActiveHighlightEdits);
   document.getElementById('btnDeleteHighlight')?.addEventListener('click', deleteActiveHighlight);
+  for (const id of ['highlightEditorColor', 'highlightEditorStyle']) {
+    document.getElementById(id)?.addEventListener('change', syncHighlightEditorChoices);
+  }
+  editor.addEventListener('click', (event) => {
+    const colorButton = event.target.closest?.('[data-editor-color]');
+    const styleButton = event.target.closest?.('[data-editor-style]');
+    if (colorButton) {
+      chooseHighlightEditorValue('highlightEditorColor', colorButton.dataset.editorColor);
+      // Picking a colour for a thought without a mark gives it one.
+      if (document.getElementById('highlightEditorStyle')?.value === 'none') chooseHighlightEditorValue('highlightEditorStyle', 'marker');
+    }
+    if (styleButton) chooseHighlightEditorValue('highlightEditorStyle', styleButton.dataset.editorStyle);
+  });
   document.getElementById('btnHighlightCard')?.addEventListener('click', () => {
     const id = _activeHighlightEditorId;
     const bookId = _activeHighlightEditorBookId;
