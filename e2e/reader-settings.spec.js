@@ -37,7 +37,7 @@ async function openEpubWithSettings(page) {
 }
 
 test('every bundled font ships with its SIL OFL license', async ({ page }) => {
-  for (const folder of ['noto-serif-sc', 'lxgw-wenkai', 'zhuque-fangsong', 'literata']) {
+  for (const folder of ['noto-serif-sc', 'noto-sans-sc', 'lxgw-wenkai', 'zhuque-fangsong', 'literata']) {
     const license = await page.request.get(`${APP_PATH}vendor/fonts/${folder}/LICENSE`);
     expect(license.ok(), folder).toBeTruthy();
     expect(await license.text(), folder).toContain('SIL Open Font License');

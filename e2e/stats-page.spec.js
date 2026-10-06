@@ -13,7 +13,9 @@ function localDate(offsetDays = 0) {
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
 }
 
-// Reading time for the last 20 days over three books, and two notes.
+// Reading time for 20 days up to today over three books, and two notes.
+// Today is included so the current week always has reading in it, even on
+// a Monday.
 async function seed(page) {
   await page.goto(APP_PATH);
   await resetEpubFixtureState(page);
@@ -26,7 +28,6 @@ async function seed(page) {
       const seconds = Math.round(((index * 37 + rank * 53) % 50 + 10) * 60 / (rank + 1));
       entries.push({ date, bookId: book.id, seconds });
     }));
-    // Only the first 20 days; then today's reading is whatever the page adds.
     await window.browserHost.saveReadingTime(entries);
     const epub = books[0];
     const now = Date.now();
@@ -39,7 +40,7 @@ async function seed(page) {
       ] })
     });
     return books.map((book) => book.id);
-  }, { dates: Array.from({ length: 20 }, (_, index) => localDate(index + 1)) });
+  }, { dates: Array.from({ length: 20 }, (_, index) => localDate(index)) });
 }
 
 test.describe('阅读统计', () => {

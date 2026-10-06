@@ -359,7 +359,10 @@ class UserStorage {
       const allowedHighlightColors = new Set(['yellow', 'green', 'blue', 'pink']);
       // Body font stacks are keyed, not free-form: the client owns the actual
       // font-family strings, the server only accepts known keys.
-      const allowedReaderFonts = new Set(['source-serif', 'wenkai', 'fangsong', 'sans', 'songti']);
+      const allowedReaderFonts = new Set(['source-serif', 'wenkai', 'fangsong', 'source-sans', 'sans']);
+      // 系统宋体 ('songti') was retired: phones have no 宋体, so it looked
+      // like 系统黑体. A saved choice of it becomes the bundled 宋体.
+      const readerFontKey = (value) => (value === 'songti' ? 'source-serif' : value);
       // 'single' is no longer a user-selectable mode: legacy values migrate to
       // 'double'. It survives only as the client's narrow-window fallback.
       const allowedReadingModes = new Set(['scroll', 'double']);
@@ -450,9 +453,9 @@ class UserStorage {
           : Number.isFinite(state.settings.paragraphSpacing) ? state.settings.paragraphSpacing : 1.1,
         // Replaces fontFamily, which every save wrote as 'sans' (the old
         // default), so it could not tell a real choice apart.
-        readerFont: allowedReaderFonts.has(settings.readerFont)
-          ? settings.readerFont
-          : allowedReaderFonts.has(state.settings.readerFont) ? state.settings.readerFont : 'source-serif',
+        readerFont: allowedReaderFonts.has(readerFontKey(settings.readerFont))
+          ? readerFontKey(settings.readerFont)
+          : allowedReaderFonts.has(readerFontKey(state.settings.readerFont)) ? readerFontKey(state.settings.readerFont) : 'source-serif',
         updatedAt: new Date().toISOString()
       };
       state.settings = { ...state.settings, ...next };

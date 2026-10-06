@@ -28,9 +28,6 @@
   .library-book-cover.is-generated .library-cover-format { display: none; }
   .library-book-metadata { gap: 2px; }
   .library-book strong { font-size: 13px; line-height: 1.38; }
-  .library-book span,
-  .library-book .library-book-author { font-size: 11px; }
-  .library-book .library-book-author { color: var(--library-text-tertiary, var(--library-text-muted)); }
 
   /* 继续阅读 and the categories: one gap each, not stacked margins. */
   .library-recent-reading { margin-bottom: 24px; }
