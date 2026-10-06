@@ -3825,10 +3825,6 @@ body.paged-reading .epub-chapter:first-of-type {
   border-bottom: 2px solid currentColor;
 }
 
-.article .br-highlight-box[data-annotation-style="wave"] {
-  color: currentColor;
-}
-
 .article .br-highlight-wave {
   position: absolute;
   left: 0;

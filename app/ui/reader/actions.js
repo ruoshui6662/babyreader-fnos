@@ -176,8 +176,8 @@ function queueHighlightSave() {
   _highlightSaveChain = _highlightSaveChain.catch(() => {}).then(async () => {
     // Persist the captured book snapshot even if navigation switched books or
     // returned to the library while this serialized write was pending.
+    // A saved note shows itself on the page; only a failure is announced.
     await window.browserHost.saveHighlights(highlights, bookId);
-    if (revision === _highlightSaveRevision) showHighlightHint('批注已保存');
   }).catch((error) => {
     console.error('保存划线失败', { bookId, revision, error });
     showHighlightHint(`批注保存失败：${error.message || '未知错误'}`);

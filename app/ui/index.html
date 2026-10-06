@@ -14,11 +14,11 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="枕书">
-  <link rel="stylesheet" href="styles.css?v=123">
+  <link rel="stylesheet" href="styles.css?v=124">
   <link rel="stylesheet" href="styles/shelf-nav.css?v=4">
   <link rel="stylesheet" href="styles/stats.css?v=2">
   <link rel="stylesheet" href="styles/notes.css?v=1">
-  <link rel="stylesheet" href="styles/note-card.css?v=1">
+  <link rel="stylesheet" href="styles/note-card.css?v=2">
   <link rel="stylesheet" href="styles/shelf-menus.css?v=1">
   <link rel="stylesheet" href="styles/buttons.css?v=2">
   <link rel="stylesheet" href="styles/glass.css?v=5">
@@ -660,25 +660,39 @@
       <button type="button" class="ui-close" id="btnCloseHighlightEditor" aria-label="关闭写想法">关闭</button>
     </div>
     <blockquote class="highlight-editor-text" id="highlightEditorText"></blockquote>
-    <label class="highlight-editor-field">
+    <div class="highlight-editor-choices">
+      <div class="highlight-editor-styles" role="radiogroup" aria-label="标记样式">
+        <button type="button" role="radio" data-editor-style="none" aria-checked="false"><i aria-hidden="true">文</i>不标记</button>
+        <button type="button" role="radio" data-editor-style="marker" aria-checked="false"><i aria-hidden="true">文</i>马克笔</button>
+        <button type="button" role="radio" data-editor-style="line" aria-checked="false"><i aria-hidden="true">文</i>直线</button>
+        <button type="button" role="radio" data-editor-style="wave" aria-checked="false"><i aria-hidden="true">文</i>波浪线</button>
+      </div>
+      <div class="highlight-editor-colors" role="radiogroup" aria-label="颜色">
+        <button type="button" role="radio" data-editor-color="yellow" aria-checked="false" aria-label="黄色" title="黄色"></button>
+        <button type="button" role="radio" data-editor-color="green" aria-checked="false" aria-label="绿色" title="绿色"></button>
+        <button type="button" role="radio" data-editor-color="blue" aria-checked="false" aria-label="蓝色" title="蓝色"></button>
+        <button type="button" role="radio" data-editor-color="pink" aria-checked="false" aria-label="粉色" title="粉色"></button>
+      </div>
+    </div>
+    <label class="highlight-editor-field highlight-editor-native">
       <span>颜色</span>
-      <select id="highlightEditorColor">
+      <select id="highlightEditorColor" tabindex="-1">
         <option value="yellow">黄色</option>
         <option value="green">绿色</option>
         <option value="blue">蓝色</option>
         <option value="pink">粉色</option>
       </select>
     </label>
-    <label class="highlight-editor-field">
+    <label class="highlight-editor-field highlight-editor-native">
       <span>标记样式</span>
-      <select id="highlightEditorStyle">
+      <select id="highlightEditorStyle" tabindex="-1">
         <option value="none">不标记</option>
         <option value="marker">马克笔</option>
         <option value="wave">波浪线</option>
         <option value="line">直线</option>
       </select>
     </label>
-    <label class="highlight-editor-field">
+    <label class="highlight-editor-field highlight-editor-thought">
       <span>想法</span>
       <textarea id="highlightEditorThought" rows="4" maxlength="4000" placeholder="写下你的想法"></textarea>
     </label>
@@ -867,12 +881,12 @@
   <script src="reader/paragraphs.js?v=1"></script>
   <script src="reader/document.js?v=30"></script>
   <script src="reader/editor.js?v=28"></script>
-  <script src="reader/highlights.js?v=41"></script>
+  <script src="reader/highlights.js?v=42"></script>
   <script src="reader/ai.js?v=4"></script>
   <script src="reader/ai-index-manager.js?v=1"></script>
   <script src="reader/selection-menu.js?v=8"></script>
   <script src="reader/pdf-notes-export.js?v=1"></script>
-  <script src="reader/actions.js?v=28"></script>
+  <script src="reader/actions.js?v=29"></script>
   <script src="reader/notes-panel.js?v=4"></script>
   <script src="reader/progress.js?v=37"></script>
   <script src="reader/bookmarks.js?v=4"></script>
