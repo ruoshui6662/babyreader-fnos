@@ -7994,6 +7994,7 @@ button.ui-close,
 /* 选区菜单（2026-10 移动端）：桌面保留三种样式按钮与颜色；手机只显示单行
    “划线 · 写想法 · 复制 · 问 AI · 搜索”，划线后再弹出划线气泡改颜色和样式。 */
 .selection-menu [data-selection-action="highlight"] { display: none; }
+.selection-menu [data-selection-action="extend"][hidden] { display: none !important; }
 html[data-reader-surface="mobile"] .selection-menu:not(.annotation-menu) {
   flex-wrap: nowrap;
   gap: 0;
@@ -8005,6 +8006,7 @@ html[data-reader-surface="mobile"] .selection-menu [data-selection-action="thoug
 html[data-reader-surface="mobile"] .selection-menu [data-selection-action="copy"] { order: 3; }
 html[data-reader-surface="mobile"] .selection-menu [data-selection-action="ai"] { order: 4; }
 html[data-reader-surface="mobile"] .selection-menu [data-selection-action="search"] { order: 5; }
+html[data-reader-surface="mobile"] .selection-menu [data-selection-action="extend"] { order: 6; }
 html[data-reader-surface="mobile"] .selection-menu [data-selection-action="marker"],
 html[data-reader-surface="mobile"] .selection-menu [data-selection-action="wave"],
 html[data-reader-surface="mobile"] .selection-menu [data-selection-action="line"],

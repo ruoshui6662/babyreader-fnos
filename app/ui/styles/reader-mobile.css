@@ -611,6 +611,32 @@ html[data-reader-surface="mobile"] body.mobile-reading .mobile-reading-tips:not(
 .mobile-reading-tips > span:nth-child(3) { text-align: right; }
 html[data-reader-surface="mobile"] body.mobile-reading .mobile-reading-footer span:first-child { flex: none; }
 
+/* Selecting while reading: only the book's own words can be chosen, so a
+   finger dragged past the last line cannot reach the toolbar, the header or
+   the footer. Fields that take typing stay selectable. The selection tint
+   is the theme's accent, light enough to read through. */
+html[data-reader-surface="mobile"] body.mobile-reading {
+  -webkit-user-select: none;
+  user-select: none;
+}
+html[data-reader-surface="mobile"] body.mobile-reading #article .epub-chapter,
+html[data-reader-surface="mobile"] body.mobile-reading #article .epub-chapter *,
+html[data-reader-surface="mobile"] body.mobile-reading .pdf-page-text-layer,
+html[data-reader-surface="mobile"] body.mobile-reading .pdf-page-text-layer *,
+html[data-reader-surface="mobile"] body.mobile-reading :is(input, textarea, [contenteditable="true"]) {
+  -webkit-user-select: text;
+  user-select: text;
+}
+html[data-reader-surface="mobile"] body.mobile-reading #article .highlight-layer,
+html[data-reader-surface="mobile"] body.mobile-reading #article .highlight-layer * {
+  -webkit-user-select: none;
+  user-select: none;
+}
+html[data-reader-surface="mobile"] body.mobile-reading #article .epub-chapter ::selection {
+  color: inherit;
+  background: color-mix(in srgb, var(--zs-accent, #0a84ff) 26%, transparent);
+}
+
 /* AI: a round button above the toolbar's right end, one tap away. */
 .mobile-ai-float { display: none; }
 html[data-reader-surface="mobile"] body.mobile-reading .mobile-reader-toolbar .mobile-ai-float {

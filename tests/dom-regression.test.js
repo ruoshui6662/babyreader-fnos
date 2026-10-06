@@ -2996,7 +2996,7 @@ test('notes panel contract exposes whole-book filters and safe list rendering', 
   assert.match(notesSource, /textContent/);
 });
 
-test('selection session opens a bounded seven-action menu and rejects outside selections', async () => {
+test('selection session opens a bounded menu and rejects outside selections', async () => {
   const { window, api } = await createReaderDom();
   const article = window.document.getElementById('article');
   const chapter = window.document.createElement('section');
@@ -3022,7 +3022,9 @@ test('selection session opens a bounded seven-action menu and rejects outside se
   assert.equal(menu.hidden, false);
   // Seven desktop actions, the phone's one-tap “划线”, and 更多… (shown
   // only inside the Android client).
-  assert.equal(menu.querySelectorAll('[data-selection-action]').length, 9);
+  assert.equal(menu.querySelectorAll('[data-selection-action]').length, 10);
+  // 续选下页 is offered only on the last line of a paged page.
+  assert.equal(menu.querySelector('[data-selection-action="extend"]').hidden, true);
   assert.ok(menu.querySelector('[data-selection-action="more"]'));
   assert.ok(menu.querySelector('[data-selection-action="highlight"]'));
   assert.ok(menu.querySelector('[data-selection-action="search"]'), 'selection can be searched in the book');
