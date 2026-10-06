@@ -398,6 +398,11 @@ class UserStorage {
         ...normalizeReaderStyles(settings, state.settings),
         // 页眉页脚: what the phone shows at the top and bottom of the page.
         readerTips: normalizeReaderTips(settings.readerTips, state.settings.readerTips),
+        // The shelf: the books last read first (WeChat Reading), or the
+        // order arranged by hand.
+        shelfSort: ['recent', 'custom'].includes(settings.shelfSort)
+          ? settings.shelfSort
+          : ['recent', 'custom'].includes(state.settings.shelfSort) ? state.settings.shelfSort : 'recent',
         // Phones read PDFs a page at a time unless they chose to scroll.
         mobilePdfMode: ['paged', 'scroll'].includes(settings.mobilePdfMode)
           ? settings.mobilePdfMode
@@ -497,6 +502,19 @@ class UserStorage {
         }
       };
       return state.books[bookId].progress;
+    });
+  }
+
+  // When a book was last opened: the shelf puts the books last read first,
+  // and opening one counts even before a page is turned.
+  async markBookOpened(uid, bookId) {
+    if (!/^[a-f0-9]{64}$/.test(String(bookId || ''))) {
+      throw new Error('Invalid book ID');
+    }
+    return this.mutateUserState(uid, async (state) => {
+      const openedAt = new Date().toISOString();
+      state.books[bookId] = { ...(state.books[bookId] || { highlights: [] }), openedAt };
+      return { openedAt };
     });
   }
 

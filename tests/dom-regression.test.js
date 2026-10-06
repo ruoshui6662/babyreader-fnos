@@ -1004,7 +1004,7 @@ test('library organize mode still accepts cover drags but ignores its category s
   await window.happyDOM.close();
 });
 
-test('UX shelf exposes last-read book without changing manual order', async () => {
+test('UX shelf puts the last-read book first; 自定义 keeps the manual order', async () => {
   const { window, api } = await createReaderDom();
   const books = [
     { id: 'a'.repeat(64), title: '第一本', type: 'txt' },
@@ -1026,7 +1026,14 @@ test('UX shelf exposes last-read book without changing manual order', async () =
   assert.match(recent?.textContent || '', /42%/);
   assert.equal(window.document.querySelector('.library-continue-button'), null);
   assert.ok(recent.compareDocumentPosition(window.document.querySelector('.library-grid')) & window.Node.DOCUMENT_POSITION_FOLLOWING);
-  assert.deepEqual([...window.document.querySelectorAll('.library-grid .library-book strong')].map((item) => item.textContent), ['第一本', '第二本']);
+  const shelf = () => [...window.document.querySelectorAll('.library-grid .library-book strong')].map((item) => item.textContent);
+  // 最近阅读 (the default): the book read comes first, unread ones after it.
+  assert.deepEqual(shelf(), ['第二本', '第一本']);
+  // 自定义: the order arranged by hand.
+  window.document.querySelector('.library-sort-button').click();
+  assert.equal(api.state.shelfSort, 'custom');
+  assert.deepEqual(shelf(), ['第一本', '第二本']);
+  assert.equal(window.document.querySelector('.library-sort-button').textContent, '排序：自定义');
   await window.happyDOM.close();
 });
 
@@ -1133,7 +1140,7 @@ test('library root actions follow create, rescan, and organize order on one tool
   };
   api.renderLibrary({ books: [book], features: { libraryOrganization: true }, organization });
   const actions = window.document.querySelector('.library-organization-view[data-library-mode="flat"] .library-header-actions');
-  assert.deepEqual([...actions.querySelectorAll('button')].map((button) => button.textContent), ['新建分类', '重新扫描', '整理']);
+  assert.deepEqual([...actions.querySelectorAll('button')].map((button) => button.textContent), ['新建分类', '重新扫描', '排序：最近阅读', '整理']);
   assert.ok(actions.querySelector('.library-filter'));
   await window.happyDOM.close();
 });
@@ -2996,7 +3003,7 @@ test('notes panel contract exposes whole-book filters and safe list rendering', 
   assert.match(notesSource, /textContent/);
 });
 
-test('selection session opens a bounded seven-action menu and rejects outside selections', async () => {
+test('selection session opens a bounded menu and rejects outside selections', async () => {
   const { window, api } = await createReaderDom();
   const article = window.document.getElementById('article');
   const chapter = window.document.createElement('section');
@@ -3022,7 +3029,9 @@ test('selection session opens a bounded seven-action menu and rejects outside se
   assert.equal(menu.hidden, false);
   // Seven desktop actions, the phone's one-tap “划线”, and 更多… (shown
   // only inside the Android client).
-  assert.equal(menu.querySelectorAll('[data-selection-action]').length, 9);
+  assert.equal(menu.querySelectorAll('[data-selection-action]').length, 10);
+  // 续选下页 is offered only on the last line of a paged page.
+  assert.equal(menu.querySelector('[data-selection-action="extend"]').hidden, true);
   assert.ok(menu.querySelector('[data-selection-action="more"]'));
   assert.ok(menu.querySelector('[data-selection-action="highlight"]'));
   assert.ok(menu.querySelector('[data-selection-action="search"]'), 'selection can be searched in the book');
@@ -5668,10 +5677,10 @@ test('the import button appears only for admins with import enabled, in the agre
   const labels = () => [...window.document.querySelectorAll('.library-header-actions button')].map((button) => button.textContent);
 
   api.renderLibrary({ books: [book], features: { libraryOrganization: true }, organization: importOrganization([book]) });
-  assert.deepEqual(labels(), ['新建分类', '重新扫描', '整理'], 'unchanged without the feature');
+  assert.deepEqual(labels(), ['新建分类', '重新扫描', '排序：最近阅读', '整理'], 'unchanged without the feature');
 
   api.renderLibrary({ books: [book], features: { libraryOrganization: true, bookImport: true }, organization: importOrganization([book]) });
-  assert.deepEqual(labels(), ['新建分类', '导入', '重新扫描', '整理']);
+  assert.deepEqual(labels(), ['新建分类', '导入', '重新扫描', '排序：最近阅读', '整理']);
   assert.equal(window.document.querySelector('.library-view').dataset.importDrop, 'true');
 
   const collectionId = '11111111-1111-4111-8111-111111111111';
@@ -5680,7 +5689,7 @@ test('the import button appears only for admins with import enabled, in the agre
     books: [book], features: { libraryOrganization: true, bookImport: true },
     organization: importOrganization([book], [{ id: collectionId, name: '小说' }])
   });
-  assert.deepEqual(labels(), ['重新扫描', '添加书籍', '新建分类', '导入', '整理']);
+  assert.deepEqual(labels(), ['重新扫描', '添加书籍', '新建分类', '排序：最近阅读', '导入', '整理']);
 
   window.history.replaceState({}, '');
   api.renderLibrary({ books: [book], features: { libraryOrganization: false, bookImport: true } });

@@ -664,6 +664,11 @@ test('settings validation clamps font size and normalizes supported values', asy
   assert.equal(valid.readerFont, 'wenkai');
   assert.equal(valid.theme, 'sepia');
 
+  // The shelf: last read first unless arranged by hand.
+  assert.equal((await storage.updateSettings('reader_1', {})).shelfSort, 'recent');
+  assert.equal((await storage.updateSettings('reader_1', { shelfSort: 'custom' })).shelfSort, 'custom');
+  assert.equal((await storage.updateSettings('reader_1', { shelfSort: 'random' })).shelfSort, 'custom');
+
   // 思源黑体 is a choice; the retired 系统宋体 becomes the bundled 宋体.
   assert.equal((await storage.updateSettings('reader_1', { readerFont: 'source-sans' })).readerFont, 'source-sans');
   assert.equal((await storage.updateSettings('reader_1', { readerFont: 'songti' })).readerFont, 'source-serif');

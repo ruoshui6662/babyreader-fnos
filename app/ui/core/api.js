@@ -253,6 +253,13 @@ window.browserHost = {
 
   async openBook(book) {
     if (typeof setGlassAmbientBook === 'function') setGlassAmbientBook(book);
+    // The shelf puts the book last opened first (here at once, on the
+    // server for the other devices); a failure here never stops reading.
+    if (book?.id && state.userState?.books) {
+      const openedAt = new Date().toISOString();
+      state.userState.books[book.id] = { ...(state.userState.books[book.id] || {}), openedAt };
+      apiRequest(`/books/${encodeURIComponent(book.id)}/opened`, { method: 'POST' }).catch(() => {});
+    }
     // The phone reading drawer shows the open book on top.
     state.currentBookInfo = { id: book.id, title: book.title || '', author: book.author || '', coverUrl: book.coverUrl || null };
     if (book.type === 'pdf') {

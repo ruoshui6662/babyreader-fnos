@@ -1920,6 +1920,12 @@ async function handleApi(request, response, pathname, searchParams = new URLSear
     }
   }
 
+  const openedMatch = pathname.match(new RegExp(`^${APP_PREFIX}/api/books/([a-f0-9]{64})/opened$`));
+  if (request.method === 'POST' && openedMatch) {
+    await findBook(openedMatch[1]);
+    return sendJson(response, 200, await storage.markBookOpened(user.uid, openedMatch[1]));
+  }
+
   const progressMatch = pathname.match(new RegExp(`^${APP_PREFIX}/api/books/([a-f0-9]{64})/progress$`));
   if (request.method === 'PUT' && progressMatch) {
     await findBook(progressMatch[1]);

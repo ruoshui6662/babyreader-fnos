@@ -105,6 +105,7 @@ async function resetReaderSettings(page) {
         pageTurnAnimation: 'slide',
         mobilePdfMode: 'paged',
         readerTips: { preset: 'default' },
+        shelfSort: 'recent',
         readerStyles: [],
         readerStyle: null,
         themeAuto: { enabled: false, day: 'light', night: 'dark' },

@@ -105,3 +105,13 @@ test('the first whole-book EPUB save clears a 已读完 that came from a chapter
   book = (await store.getState('reader_1')).books[BOOK_A];
   assert.equal(book.finishedAt, finished);
 });
+
+test('opening a book records when, for the shelf, without touching its progress', async (t) => {
+  const store = await storage(t);
+  await store.updateProgress('reader_1', BOOK_A, { locator: '{"page":3}', percentage: 0.3 });
+  const { openedAt } = await store.markBookOpened('reader_1', BOOK_A);
+  const book = (await store.getState('reader_1')).books[BOOK_A];
+  assert.equal(book.openedAt, openedAt);
+  assert.equal(book.progress.percentage, 0.3);
+  await assert.rejects(store.markBookOpened('reader_1', 'nope'), /Invalid book ID/);
+});

@@ -69,6 +69,7 @@ const selectionActions = Object.freeze({
     showHighlightHint('问 AI 将在下一阶段开放');
     return false;
   },
+  extend: () => continueSelectionOnNextPage(),
   // Find the selected words elsewhere in the book (WeChat Reading / Apple Books).
   search: () => {
     const query = normalizedSelectionText(_activeSelectionSession?.text).slice(0, 80);
@@ -83,12 +84,162 @@ const selectionActions = Object.freeze({
   }
 });
 
+// ---------------------------------------------------------------------------
+// Selecting on a paged page. The book is laid out as columns side by side
+// and only the current page's columns are visible; the rest of the chapter
+// is still in the document. A finger dragged past the last line used to
+// reach that hidden text (or the toolbar below it): the selection jumped
+// to a whole run of invisible pages and could not be marked. Here the part
+// beyond the visible page is cut off, and going on to the next page is an
+// explicit step: 续选下页 turns the page, a tap ends the selection there.
+// ---------------------------------------------------------------------------
+let _selectionExtension = null;
+
+function pagedEpubVisibleRect() {
+  if (state.contentType !== 'epub' || state.effectiveReadingMode === 'scroll') return null;
+  const article = document.getElementById('article');
+  const rect = article?.getBoundingClientRect?.();
+  return rect && rect.width > 0 && rect.height > 0 ? rect : null;
+}
+
+function caretAtPoint(x, y) {
+  if (document.caretRangeFromPoint) {
+    const range = document.caretRangeFromPoint(x, y);
+    return range ? { node: range.startContainer, offset: range.startOffset } : null;
+  }
+  const position = document.caretPositionFromPoint?.(x, y);
+  return position ? { node: position.offsetNode, offset: position.offset } : null;
+}
+
+function caretInChapterText(caret) {
+  const element = caret?.node?.nodeType === Node.ELEMENT_NODE ? caret.node : caret?.node?.parentElement;
+  return Boolean(element?.closest?.('#article .epub-chapter') && !element.closest('.highlight-layer'));
+}
+
+// The last place on the visible page a selection can end: found from the
+// bottom-right corner of the page upwards.
+function lastVisibleCaret(visible) {
+  for (let y = visible.bottom - 6; y > visible.top + 8; y -= 8) {
+    const caret = caretAtPoint(visible.right - 6, y);
+    if (caret && caretInChapterText(caret)) return caret;
+  }
+  return null;
+}
+
+// Cuts off whatever part of a selection lies beyond the visible page (in
+// reading direction). Returns the range, trimmed or as it was.
+function trimRangeToVisiblePage(range) {
+  const visible = pagedEpubVisibleRect();
+  if (!visible || !range) return range;
+  const rects = [...range.getClientRects()].filter((rect) => rect.width > 0 || rect.height > 0);
+  if (!rects.some((rect) => rect.left >= visible.right - 1)) return range;
+  const caret = lastVisibleCaret(visible);
+  if (!caret) return range;
+  try {
+    if (range.comparePoint(caret.node, caret.offset) !== 0) return range;
+    const trimmed = range.cloneRange();
+    trimmed.setEnd(caret.node, caret.offset);
+    return trimmed.collapsed ? range : trimmed;
+  } catch {
+    return range;
+  }
+}
+
+// The part of a range on screen: the menu goes next to it.
+function visibleRectsOfRange(range) {
+  const width = window.innerWidth;
+  const height = window.visualViewport?.height || window.innerHeight;
+  return [...range.getClientRects()].filter((rect) => (rect.width || rect.height)
+    && rect.right > 0 && rect.left < width && rect.bottom > 0 && rect.top < height);
+}
+
+// Does the selection end on the last line of the page, with more of this
+// chapter on the next page? Then it may go on there.
+function selectionCanContinue(range) {
+  const visible = pagedEpubVisibleRect();
+  if (!visible || !range || isPdfSession(range)) return false;
+  if (!(state.pageGroup < Math.max(0, (state.pageGroupCount || 1) - 1))) return false;
+  const rects = visibleRectsOfRange(range);
+  const last = rects[rects.length - 1];
+  if (!last) return false;
+  const line = Math.max(16, last.height);
+  if (visible.bottom - last.bottom > line * 2.2) return false;
+  // On a two-page spread only the right-hand page's last lines count.
+  const columns = typeof pageStep === 'function' ? pageStep() : 1;
+  return columns < 2 || last.left >= visible.left + visible.width / 2;
+}
+
+function isPdfSession(range) {
+  const node = range?.startContainer;
+  const element = node?.nodeType === Node.ELEMENT_NODE ? node : node?.parentElement;
+  return Boolean(element?.closest?.('.pdf-page'));
+}
+
+// Where a tap ends a continued selection: at the end of the clause it falls
+// in (the next punctuation mark), so a finger need not hit the last word.
+const CLAUSE_END = /[，。！？；：、,.!?;:…）」』”’】》]/;
+function clauseEndAfter(caret) {
+  if (caret.node.nodeType !== Node.TEXT_NODE) return caret;
+  const text = caret.node.nodeValue || '';
+  for (let index = caret.offset; index < Math.min(text.length, caret.offset + 48); index += 1) {
+    if (CLAUSE_END.test(text[index])) {
+      let end = index + 1;
+      while (end < text.length && CLAUSE_END.test(text[end])) end += 1;
+      return { node: caret.node, offset: end };
+    }
+  }
+  return { node: caret.node, offset: Math.min(text.length, caret.offset + 1) };
+}
+
+function continueSelectionOnNextPage() {
+  const session = _activeSelectionSession;
+  if (!session?.range || typeof setPageGroup !== 'function') return false;
+  _selectionExtension = { start: session.range.cloneRange(), at: Date.now() };
+  closeSelectionMenu({ clearSelection: false, restoreFocus: false });
+  setPageGroup(state.pageGroup + 1, { animate: true, redrawHighlights: true });
+  showHighlightHint('点一下要选到的位置');
+  return true;
+}
+
+// A tap while continuing: the selection runs from where it began to the
+// end of the clause tapped. A tap outside the text gives up.
+function finishSelectionExtension(event) {
+  const extension = _selectionExtension;
+  _selectionExtension = null;
+  if (!extension || Date.now() - extension.at > 120000) return false;
+  const caret = caretAtPoint(event.clientX, event.clientY);
+  if (!caret || !caretInChapterText(caret)) return false;
+  const end = clauseEndAfter(caret);
+  const range = extension.start.cloneRange();
+  try {
+    if (extension.start.comparePoint(end.node, end.offset) < 0) return false;
+    range.setEnd(end.node, end.offset);
+  } catch {
+    return false;
+  }
+  if (range.collapsed) return false;
+  const selection = window.getSelection?.();
+  selection?.removeAllRanges();
+  selection?.addRange(range);
+  return showSelectionMenuForRange(range, range.toString());
+}
+
 function normalizedSelectionText(value) {
   return String(value || '').replace(/\s+/g, ' ').trim();
 }
 
 function selectionAnchorForRange(range) {
   try {
+    // A selection continued from an earlier page is partly off screen: the
+    // menu goes by the part that can be seen.
+    const visible = visibleRectsOfRange(range);
+    if (visible.length) {
+      const top = Math.min(...visible.map((rect) => rect.top));
+      const bottom = Math.max(...visible.map((rect) => rect.bottom));
+      const left = Math.min(...visible.map((rect) => rect.left));
+      const right = Math.max(...visible.map((rect) => rect.right));
+      return { left: (left + right) / 2, top, bottom };
+    }
     const rect = range.getBoundingClientRect();
     if (rect && (rect.width || rect.height)) {
       return {
@@ -111,14 +262,22 @@ function captureSelectionSession(selection = window.getSelection?.()) {
   }
 
   const article = document.getElementById('article');
-  const range = selection.getRangeAt(0);
+  const selected = selection.getRangeAt(0);
+  const range = trimRangeToVisiblePage(selected);
+  if (range !== selected) {
+    try { selection.setBaseAndExtent(range.startContainer, range.startOffset, range.endContainer, range.endOffset); } catch { /* keep the selection as it is */ }
+  }
   const common = range.commonAncestorContainer;
   const commonElement = common.nodeType === Node.ELEMENT_NODE ? common : common.parentElement;
   const chapter = commonElement?.closest?.('.epub-chapter');
   if (!article || !commonElement || !article.contains(commonElement) || !chapter) return null;
 
-  const rawText = normalizedSelectionText(selection.toString());
-  if (!rawText || rawText.length > 4000) return null;
+  const rawText = normalizedSelectionText(range.toString());
+  if (!rawText) return null;
+  if (rawText.length > 4000) {
+    showHighlightHint('选中的文字超过 4000 字，请缩小选区');
+    return null;
+  }
 
   const locator = serializeDomRange(range, rawText);
   if (!locator) return null;
@@ -151,6 +310,8 @@ function ensureSelectionMenu() {
     ['thought', '写想法'],
     ['search', '搜索'],
     ['ai', '问 AI'],
+    // On the last line of a page: go on selecting on the next one.
+    ['extend', '续选下页'],
     // In the Android client: the system's dictionaries, translators, …
     ['more', '更多…']
   ];
@@ -266,6 +427,12 @@ function openSelectionMenu(session) {
     hint.textContent = unavailableReason;
     hint.hidden = !unavailableReason;
   }
+  const extend = menu.querySelector('[data-selection-action="extend"]');
+  if (extend) extend.hidden = !(session.format !== 'pdf' && selectionCanContinue(session.range));
+  // The page, not the reading chrome, while choosing words: the toolbar
+  // would sit where the menu goes.
+  if (isPhoneReader() && typeof isMobileChromeOpen === 'function' && isMobileChromeOpen()
+      && typeof setMobileChromeOpen === 'function') setMobileChromeOpen(false);
   menu.hidden = false;
   menu.querySelectorAll('[data-selection-color]').forEach((item) => item.setAttribute('aria-pressed', String(item.dataset.selectionColor === state.highlightColor)));
   positionSelectionMenu(session);
@@ -576,6 +743,19 @@ function setupSelectionMenu() {
   document.addEventListener('pointerup', release, true);
   document.addEventListener('pointercancel', release, true);
 
+  document.addEventListener('click', (event) => {
+    if (!_selectionExtension) return;
+    if (_selectionMenu?.contains(event.target)) return;
+    if (!event.target?.closest?.('#reader')) {
+      _selectionExtension = null;
+      showHighlightHint('已取消续选');
+      return;
+    }
+    event.preventDefault();
+    event.stopPropagation();
+    if (!finishSelectionExtension(event)) showHighlightHint('已取消续选');
+  }, true);
+
   let settleTimer = null;
   document.addEventListener('selectionchange', () => {
     clearTimeout(settleTimer);
@@ -586,6 +766,9 @@ function setupSelectionMenu() {
         if (_activeSelectionSession) closeSelectionMenu({ clearSelection: false, restoreFocus: false });
         return;
       }
+      // Continuing on the next page: the earlier selection is still in the
+      // document; the tap decides, not this change.
+      if (_selectionExtension) return;
       if (!selectionInsideReader(selection)) return;
       const session = captureSelectionSession(selection);
       if (session) openSelectionMenu(session);
@@ -647,5 +830,7 @@ window.__zhenshuSelectionMenuApi = {
   openSelectionMenu,
   setupSelectionMenu,
   showSelectionMenuForCurrentSelection,
-  closeSelectionMenu
+  closeSelectionMenu,
+  trimRangeToVisiblePage,
+  clauseEndAfter
 };

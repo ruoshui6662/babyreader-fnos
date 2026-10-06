@@ -676,7 +676,11 @@ function renderFlatLibrary(library, { organizationEnabled = false } = {}) {
     const grid = document.createElement('div');
     grid.className = 'library-grid';
     grid.dataset.librarySlot = 'book-grid';
-    for (const book of validBooks) {
+    const byId = new Map(validBooks.map((book) => [book.id, book]));
+    const shelf = typeof libraryShelfOrder === 'function'
+      ? libraryShelfOrder(validBooks.map((book) => book.id)).map((id) => byId.get(id))
+      : validBooks;
+    for (const book of shelf) {
       const button = typeof createLibraryBookCard === 'function'
         ? createLibraryBookCard(book)
         : null;
