@@ -3,14 +3,20 @@
 const crypto = require('node:crypto');
 const fs = require('node:fs/promises');
 const path = require('node:path');
-const { resolveAuthorizedPath, isPathInside } = require('./security');
-const { safeUnzip } = require('./zip');
+const { resolveAuthorizedPath } = require('./security');
+const { openZipFile, safeUnzip } = require('./zip');
 const { decodeBookText } = require('./text-encoding');
 const { MOBI_EXTENSIONS, readMobiMetadata } = require('./mobi-format');
 
 const SUPPORTED_EXTENSIONS = new Set(['.epub', '.md', '.markdown', '.txt', '.pdf']);
 const MAX_TEXT_BYTES = 32 * 1024 * 1024;
 const MAX_PDF_HEADER_BYTES = 1024;
+// Markdown takes its title from front matter or the first heading, both near
+// the top; the rest of the file is not needed to list it.
+const MARKDOWN_HEAD_BYTES = 256 * 1024;
+// Books indexed at once. Most of the work is waiting on the disk (a NAS
+// array), so a few reads in flight keep it busy without flooding it.
+const SCAN_CONCURRENCY = 6;
 
 async function validatePdfHeader(filePath) {
   const handle = await fs.open(filePath, 'r');
@@ -121,21 +127,19 @@ function extractTextMetadata(fileName, content) {
   return { title: title.slice(0, 500), author: author.slice(0, 500) };
 }
 
-function extractEpubMetadata(buffer) {
-  const files = safeUnzip(buffer);
-  const decoder = new TextDecoder('utf-8', { fatal: false });
-  const container = files['META-INF/container.xml'];
-  if (!container) throw new Error('EPUB container.xml is missing');
-
-  const containerXml = decoder.decode(container);
+function epubPackagePath(containerBytes) {
+  if (!containerBytes) throw new Error('EPUB container.xml is missing');
+  const containerXml = new TextDecoder('utf-8', { fatal: false }).decode(containerBytes);
   const rootfile = containerXml.match(/<rootfile\b[^>]*full-path\s*=\s*(?:"([^"]+)"|'([^']+)')/i);
   if (!rootfile) throw new Error('EPUB package path is missing');
+  return normalizeZipPath(rootfile[1] ?? rootfile[2]);
+}
 
-  const opfPath = normalizeZipPath(rootfile[1] ?? rootfile[2]);
-  const opfBytes = files[opfPath];
+// Title, author and the like from the package document, and where its cover
+// image is inside the archive.
+function epubPackageMetadata(opfPath, opfBytes) {
   if (!opfBytes) throw new Error('EPUB package document is missing');
-
-  const opf = decoder.decode(opfBytes);
+  const opf = new TextDecoder('utf-8', { fatal: false }).decode(opfBytes);
   const opfDirectory = opfPath.includes('/') ? opfPath.slice(0, opfPath.lastIndexOf('/') + 1) : '';
   let coverPath = '';
 
@@ -153,17 +157,40 @@ function extractEpubMetadata(buffer) {
     }
   }
 
-  const cover = coverPath && files[coverPath]
-    ? { bytes: Buffer.from(files[coverPath]), extension: path.extname(coverPath).toLowerCase() || '.bin' }
-    : null;
-
   return {
     title: xmlValue(opf, 'dc:title'),
     author: xmlValue(opf, 'dc:creator'),
     language: xmlValue(opf, 'dc:language'),
     publisher: xmlValue(opf, 'dc:publisher'),
-    cover
+    coverPath
   };
+}
+
+function epubCover(coverPath, bytes) {
+  return coverPath && bytes
+    ? { bytes: Buffer.from(bytes), extension: path.extname(coverPath).toLowerCase() || '.bin' }
+    : null;
+}
+
+function extractEpubMetadata(buffer) {
+  const files = safeUnzip(buffer);
+  const opfPath = epubPackagePath(files['META-INF/container.xml']);
+  const { coverPath, ...metadata } = epubPackageMetadata(opfPath, files[opfPath]);
+  return { ...metadata, cover: epubCover(coverPath, coverPath && files[coverPath]) };
+}
+
+// The same metadata, read from the file entry by entry: the container, the
+// package document and the cover image, nothing else. A scan of a large
+// library no longer reads and inflates every page of every book.
+async function readEpubMetadata(filePath) {
+  const zip = await openZipFile(filePath);
+  try {
+    const opfPath = epubPackagePath(await zip.read('META-INF/container.xml'));
+    const { coverPath, ...metadata } = epubPackageMetadata(opfPath, await zip.read(opfPath));
+    return { ...metadata, cover: epubCover(coverPath, coverPath ? await zip.read(coverPath) : null) };
+  } finally {
+    await zip.close();
+  }
 }
 
 // NAS housekeeping folders (thumbnails, recycle bins, metadata) never hold
@@ -178,7 +205,12 @@ const MAX_SKIPPED_REPORTED = 20;
 // One unreadable folder or file is skipped and reported; it no longer drops
 // every book in the library folder. Only the folder itself being unreadable
 // fails the folder.
-async function collectFiles(root, { mobiEnabled = false } = {}) {
+//
+// Each entry's type comes from the directory listing itself; only an entry
+// whose type the file system does not report is looked up separately. The
+// folders walked are real paths and links are skipped, so every file found
+// is inside the library folder without resolving it again.
+async function collectFiles(root, { mobiEnabled = false, onFound = null } = {}) {
   const realRoot = await fs.realpath(root);
   const output = [];
   const skipped = [];
@@ -201,28 +233,32 @@ async function collectFiles(root, { mobiEnabled = false } = {}) {
       return;
     }
     for (const entry of entries) {
+      if (entry.isSymbolicLink()) continue;
       const candidate = path.join(directory, entry.name);
-      if (entry.isDirectory() && SYSTEM_DIRECTORY.test(entry.name)) continue;
-      let stat;
-      let realCandidate;
-      try {
-        stat = await fs.lstat(candidate);
-        if (stat.isSymbolicLink()) continue;
-        realCandidate = await fs.realpath(candidate);
-      } catch (error) {
-        skip(candidate, error);
-        continue;
+      let isDirectory = entry.isDirectory();
+      let isFile = entry.isFile();
+      if (!isDirectory && !isFile) {
+        try {
+          const stat = await fs.lstat(candidate);
+          if (stat.isSymbolicLink()) continue;
+          isDirectory = stat.isDirectory();
+          isFile = stat.isFile();
+        } catch (error) {
+          skip(candidate, error);
+          continue;
+        }
       }
-      if (!isPathInside(realRoot, realCandidate)) continue;
-      if (stat.isDirectory()) {
-        await walk(realCandidate);
-      } else if (stat.isFile() && SUPPORTED_EXTENSIONS.has(path.extname(entry.name).toLowerCase())) {
-        output.push(realCandidate);
-      } else if (stat.isFile() && MOBI_EXTENSIONS.has(path.extname(entry.name).toLowerCase())) {
-        if (mobiEnabled) output.push(realCandidate);
+      if (isDirectory) {
+        if (SYSTEM_DIRECTORY.test(entry.name)) continue;
+        await walk(candidate);
+      } else if (isFile && SUPPORTED_EXTENSIONS.has(path.extname(entry.name).toLowerCase())) {
+        output.push(candidate);
+      } else if (isFile && MOBI_EXTENSIONS.has(path.extname(entry.name).toLowerCase())) {
+        if (mobiEnabled) output.push(candidate);
         else hiddenMobiCount += 1;
       }
     }
+    if (onFound) onFound(output.length);
   }
 
   await walk(realRoot, true);
@@ -237,8 +273,10 @@ function bookType(extension) {
   return 'markdown';
 }
 
-async function writeCover(coverDirectory, id, cover) {
-  const oldCovers = await fs.readdir(coverDirectory).catch(() => []);
+// coverNames, when given, is this book's part of the cover folder's listing,
+// taken once for a whole scan (a listing per book made large libraries slow).
+async function writeCover(coverDirectory, id, cover, coverNames = null) {
+  const oldCovers = coverNames || await fs.readdir(coverDirectory).catch(() => []);
   await Promise.all(oldCovers
     .filter((name) => name.startsWith(id))
     .map((name) => fs.rm(path.join(coverDirectory, name), { force: true })));
@@ -248,10 +286,34 @@ async function writeCover(coverDirectory, id, cover) {
   return `/app/zhenshu/api/books/${id}/cover`;
 }
 
+async function readHead(filePath, length) {
+  const handle = await fs.open(filePath, 'r');
+  try {
+    const buffer = Buffer.alloc(length);
+    const { bytesRead } = await handle.read(buffer, 0, length, 0);
+    return buffer.subarray(0, bytesRead);
+  } finally {
+    await handle.close();
+  }
+}
+
+// Runs task(item, index) over items with at most `limit` at a time.
+async function forEachLimited(items, limit, task) {
+  let next = 0;
+  const worker = async () => {
+    while (next < items.length) {
+      const index = next;
+      next += 1;
+      await task(items[index], index);
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker));
+}
+
 // Indexes one authorized file. Shared by full scans and single-book imports so
 // both produce identical catalog entries.
 // Returns { kind: 'reused'|'indexed'|'error', book } or { kind: 'drm', relativePath }.
-async function indexBookFile({ filePath, realRoot, validRoots, coverDirectory = null, previousById = new Map() }) {
+async function indexBookFile({ filePath, realRoot, validRoots, coverDirectory = null, previousById = new Map(), coverNames = null }) {
   const relativePath = path.relative(realRoot, filePath).split(path.sep).join('/');
   const safeSourceRootId = sourceRootId(realRoot);
   const safeSourcePathSegments = sourcePathSegments(relativePath);
@@ -288,9 +350,8 @@ async function indexBookFile({ filePath, realRoot, validRoots, coverDirectory = 
       await validatePdfHeader(safePath);
       metadata = { title: path.basename(safePath, extension), author: '' };
     } else if (extension === '.epub') {
-      const bytes = await fs.readFile(safePath);
-      metadata = extractEpubMetadata(bytes);
-      if (coverDirectory) coverUrl = await writeCover(coverDirectory, id, metadata.cover);
+      metadata = await readEpubMetadata(safePath);
+      if (coverDirectory) coverUrl = await writeCover(coverDirectory, id, metadata.cover, coverNames ? coverNames.get(id) || [] : null);
     } else if (MOBI_EXTENSIONS.has(extension)) {
       // Metadata only: the PDB table, record 0 and the cover record.
       metadata = await readMobiMetadata(safePath);
@@ -298,10 +359,14 @@ async function indexBookFile({ filePath, realRoot, validRoots, coverDirectory = 
       // counting it as an error would mark the whole library unhealthy
       // and block category editing and index cleanup.
       if (metadata.drm) return { kind: 'drm', relativePath };
-      if (coverDirectory) coverUrl = await writeCover(coverDirectory, id, metadata.cover);
+      if (coverDirectory) coverUrl = await writeCover(coverDirectory, id, metadata.cover, coverNames ? coverNames.get(id) || [] : null);
     } else {
       if (stat.size > MAX_TEXT_BYTES) throw new Error('Text document exceeds size limit');
-      metadata = extractTextMetadata(safePath, decodeBookText(await fs.readFile(safePath)).text);
+      // A TXT book is listed under its file name, so its text is not read
+      // here at all; Markdown needs only its first part.
+      metadata = extension === '.txt'
+        ? extractTextMetadata(safePath, '')
+        : extractTextMetadata(safePath, decodeBookText(await readHead(safePath, MARKDOWN_HEAD_BYTES)).text);
     }
 
     return {
@@ -346,7 +411,17 @@ async function scanLibrary(authorizedRoots, options = {}) {
   const previousBooks = Array.isArray(options.previousIndex?.books) ? options.previousIndex.books : [];
   const previousById = new Map(previousBooks.filter((book) => book?.id).map((book) => [book.id, book]));
   const mobiEnabled = options.mobiEnabled === true;
+  const onProgress = typeof options.onProgress === 'function' ? options.onProgress : null;
   if (coverDirectory) await fs.mkdir(coverDirectory, { recursive: true, mode: 0o700 });
+  // The cover folder's listing, by book: taken once for the whole scan.
+  const coverNames = coverDirectory ? new Map() : null;
+  if (coverDirectory) {
+    for (const name of await fs.readdir(coverDirectory).catch(() => [])) {
+      const id = name.slice(0, 64);
+      if (!coverNames.has(id)) coverNames.set(id, []);
+      coverNames.get(id).push(name);
+    }
+  }
 
   const books = [];
   const rootErrors = [];
@@ -368,17 +443,29 @@ async function scanLibrary(authorizedRoots, options = {}) {
     }
   }
 
+  // Progress, for the scan indicator: first the folders are walked to find
+  // the books (the total is not known yet), then each book is read.
+  const progress = { phase: 'discovering', discovered: 0, processed: 0, total: 0, indexed: 0, reused: 0, errors: 0 };
+  const report = () => { if (onProgress) onProgress({ ...progress }); };
+  report();
+
+  const found = [];
   for (const configuredRoot of validRoots) {
     let discovered;
     try {
       const root = await resolveAuthorizedPath(configuredRoot, validRoots, { allowDirectory: true });
-      discovered = await collectFiles(root, { mobiEnabled });
+      const before = progress.discovered;
+      discovered = await collectFiles(root, {
+        mobiEnabled,
+        onFound: (count) => { progress.discovered = before + count; report(); }
+      });
     } catch (error) {
       rootErrors.push({ root: String(configuredRoot), error: String(error.message || error) });
       continue;
     }
 
     discoveredCount += discovered.files.length;
+    progress.discovered = discoveredCount;
     hiddenMobiCount += discovered.hiddenMobiCount;
     skippedCount += discovered.skippedCount;
     const rootSummary = {
@@ -388,20 +475,39 @@ async function scanLibrary(authorizedRoots, options = {}) {
       skipped: discovered.skipped
     };
     roots.push(rootSummary);
-    for (const filePath of discovered.files) {
-      const outcome = await indexBookFile({
-        filePath, realRoot: discovered.realRoot, validRoots, coverDirectory, previousById
-      });
-      if (outcome.kind === 'drm') {
-        drmProtected.push({ relativePath: outcome.relativePath });
-        continue;
-      }
-      books.push(outcome.book);
-      if (!outcome.book?.error) rootSummary.bookCount += 1;
-      if (outcome.kind === 'reused') reusedCount += 1;
-      if (outcome.kind === 'indexed') indexedCount += 1;
-    }
+    for (const filePath of discovered.files) found.push({ filePath, realRoot: discovered.realRoot, rootSummary });
   }
+
+  progress.phase = 'indexing';
+  progress.total = found.length;
+  report();
+  // Several books at once; each result goes back to its own slot, so the
+  // catalog does not depend on which read finished first.
+  const outcomes = new Array(found.length);
+  await forEachLimited(found, SCAN_CONCURRENCY, async ({ filePath, realRoot }, index) => {
+    const outcome = await indexBookFile({
+      filePath, realRoot, validRoots, coverDirectory, previousById, coverNames
+    });
+    outcomes[index] = outcome;
+    progress.processed += 1;
+    if (outcome.kind === 'reused') progress.reused += 1;
+    else if (outcome.kind === 'indexed') progress.indexed += 1;
+    else if (outcome.kind === 'error') progress.errors += 1;
+    report();
+  });
+  found.forEach(({ rootSummary }, index) => {
+    const outcome = outcomes[index];
+    if (outcome.kind === 'drm') {
+      drmProtected.push({ relativePath: outcome.relativePath });
+      return;
+    }
+    books.push(outcome.book);
+    if (!outcome.book?.error) rootSummary.bookCount += 1;
+    if (outcome.kind === 'reused') reusedCount += 1;
+    if (outcome.kind === 'indexed') indexedCount += 1;
+  });
+  progress.phase = 'finishing';
+  report();
 
   books.sort((left, right) => String(left.title || left.relativePath).localeCompare(String(right.title || right.relativePath), 'zh-CN'));
   const activeIds = new Set(books.filter((book) => book.id && !book.error).map((book) => book.id));
@@ -438,6 +544,7 @@ module.exports = {
   SUPPORTED_EXTENSIONS,
   extractEpubMetadata,
   extractTextMetadata,
+  readEpubMetadata,
   fingerprintBook,
   indexBookFile,
   sourcePathSegments,

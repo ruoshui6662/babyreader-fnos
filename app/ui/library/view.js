@@ -198,11 +198,6 @@ function createLibraryFoldersPanel(library, { empty = false } = {}) {
 }
 
 const libraryFilterQueries = new Map();
-let showNextLibraryScanResult = false;
-
-function markNextLibraryScanResult() {
-  showNextLibraryScanResult = true;
-}
 
 function createLibraryScanStatus(scan) {
   const status = document.createElement('p');
@@ -210,11 +205,212 @@ function createLibraryScanStatus(scan) {
   status.setAttribute('role', 'status');
   status.setAttribute('aria-live', 'polite');
   status.textContent = formatLibraryScanStatus(scan);
-  status.hidden = !status.textContent || !(showNextLibraryScanResult
-    || scan?.status === 'running' || scan?.status === 'failed' || Number(scan?.errorCount) > 0
-    || Number(scan?.skippedCount) > 0);
-  showNextLibraryScanResult = false;
+  // Only what needs attention stays on the page (a failure, books that
+  // could not be read, skipped folders); progress and a clean result are in
+  // the ring at the top right.
+  status.hidden = !status.textContent || scan?.status === 'running' || !(scan?.status === 'failed'
+    || Number(scan?.errorCount) > 0 || Number(scan?.skippedCount) > 0);
   return status;
+}
+
+// ---------------------------------------------------------------------------
+// Scan progress: a small ring at the top right while the library is scanned.
+// Hover (or tap) shows what it is doing; when the scan ends it turns into a
+// check mark for a moment, or stays as “!” after a failure. It follows the
+// server's scan state, so a scan started elsewhere, or one that outlasts its
+// request (a gateway may give up on a long request), still shows and ends
+// with the shelf refreshed.
+// ---------------------------------------------------------------------------
+const LIBRARY_SCAN_POLL_MS = 700;
+const LIBRARY_SCAN_DONE_MS = 4000;
+let libraryScanWatch = null;
+let libraryScanHideTimer = 0;
+
+function libraryScanNumber(value) {
+  return Number.isFinite(Number(value)) ? Math.max(0, Math.round(Number(value))).toLocaleString('zh-CN') : '0';
+}
+
+// { state, title, detail, percent } for the ring and its popover.
+function describeLibraryScan(scanState) {
+  const progress = scanState?.progress || {};
+  const count = libraryScanNumber;
+  if (scanState?.active || scanState?.status === 'running') {
+    if (progress.phase === 'indexing' && Number(progress.total) > 0) {
+      const percent = Math.min(100, Math.round((Number(progress.processed) / Number(progress.total)) * 100));
+      const errors = Number(progress.errors) ? ` · ${count(progress.errors)} 本未能读取` : '';
+      return {
+        state: 'indexing',
+        title: `正在读取书籍 ${count(progress.processed)} / ${count(progress.total)}`,
+        detail: `新增 ${count(progress.indexed)} · 已有 ${count(progress.reused)}${errors}`,
+        percent
+      };
+    }
+    if (progress.phase === 'finishing') return { state: 'finishing', title: '正在整理书库', detail: `共 ${count(progress.total)} 本`, percent: 100 };
+    return {
+      state: 'discovering',
+      title: '正在查找书籍',
+      detail: Number(progress.discovered) ? `已发现 ${count(progress.discovered)} 本` : '正在读取授权的文件夹',
+      percent: null
+    };
+  }
+  if (scanState?.status === 'failed') {
+    return { state: 'failed', title: '扫描失败', detail: '请检查 fnOS 应用权限后重试。', percent: null };
+  }
+  const result = scanState?.result || {};
+  const errors = Number(result.errorCount) ? ` · ${count(result.errorCount)} 项未能读取` : '';
+  return {
+    state: 'done',
+    title: '扫描完成',
+    detail: `共 ${count(result.discoveredCount)} 本 · 新增 ${count(result.indexedCount)} · 已有 ${count(result.reusedCount)}${errors}`,
+    percent: 100
+  };
+}
+
+function renderLibraryScanIndicator(scanState) {
+  const indicator = document.getElementById('libraryScanIndicator');
+  if (!indicator) return;
+  const view = describeLibraryScan(scanState);
+  clearTimeout(libraryScanHideTimer);
+  indicator.hidden = false;
+  indicator.dataset.state = view.state;
+  indicator.style.setProperty('--scan-percent', String(view.percent ?? 0));
+  const ring = indicator.querySelector('.library-scan-ring');
+  ring.setAttribute('aria-label', `${view.title}。${view.detail}`);
+  indicator.querySelector('.library-scan-popover-title').textContent = view.title;
+  indicator.querySelector('.library-scan-popover-detail').textContent = view.detail;
+  const meter = indicator.querySelector('.library-scan-popover-meter');
+  meter.hidden = view.percent === null || view.state === 'done';
+  if (view.state === 'done') {
+    libraryScanHideTimer = setTimeout(() => {
+      if (indicator.dataset.open === 'true') return;
+      indicator.hidden = true;
+    }, LIBRARY_SCAN_DONE_MS);
+  }
+}
+
+function setLibraryScanPopoverOpen(open) {
+  const indicator = document.getElementById('libraryScanIndicator');
+  if (!indicator) return;
+  indicator.dataset.open = String(open);
+  indicator.querySelector('.library-scan-popover').hidden = !open;
+  indicator.querySelector('.library-scan-ring').setAttribute('aria-expanded', String(open));
+  if (!open && indicator.dataset.state === 'done') {
+    clearTimeout(libraryScanHideTimer);
+    libraryScanHideTimer = setTimeout(() => { indicator.hidden = true; }, 1200);
+  }
+}
+
+function setupLibraryScanIndicator() {
+  const indicator = document.getElementById('libraryScanIndicator');
+  if (!indicator || indicator.dataset.ready) return;
+  indicator.dataset.ready = 'true';
+  const ring = indicator.querySelector('.library-scan-ring');
+  let pinned = false;
+  const hoverable = () => window.matchMedia?.('(hover: hover) and (pointer: fine)').matches;
+  indicator.addEventListener('mouseenter', () => { if (hoverable()) setLibraryScanPopoverOpen(true); });
+  indicator.addEventListener('mouseleave', () => { if (hoverable() && !pinned) setLibraryScanPopoverOpen(false); });
+  ring.addEventListener('click', (event) => {
+    event.stopPropagation();
+    pinned = !(pinned && indicator.dataset.open === 'true');
+    setLibraryScanPopoverOpen(pinned);
+    // After a failure the ring stays until it has been looked at.
+    if (!pinned && indicator.dataset.state === 'failed') indicator.hidden = true;
+  });
+  document.addEventListener('pointerdown', (event) => {
+    if (indicator.dataset.open === 'true' && !indicator.contains(event.target)) {
+      pinned = false;
+      setLibraryScanPopoverOpen(false);
+    }
+  }, true);
+}
+
+// Follows the server's scan until it ends; resolves with its last state.
+// One watcher at a time: a second call shares the first.
+function watchLibraryScan(initial = null) {
+  if (libraryScanWatch) return libraryScanWatch;
+  setupLibraryScanIndicator();
+  renderLibraryScanIndicator(initial || { active: true, status: 'running', progress: { phase: 'discovering' } });
+  libraryScanWatch = (async () => {
+    let last = initial;
+    let failures = 0;
+    for (;;) {
+      await new Promise((resolve) => setTimeout(resolve, LIBRARY_SCAN_POLL_MS));
+      try {
+        last = await window.browserHost.getScanStatus();
+        failures = 0;
+      } catch {
+        failures += 1;
+        if (failures >= 5) {
+          last = { active: false, status: 'failed' };
+          break;
+        }
+        continue;
+      }
+      if (!last?.active) break;
+      renderLibraryScanIndicator(last);
+    }
+    renderLibraryScanIndicator(last);
+    return last;
+  })().finally(() => { libraryScanWatch = null; });
+  return libraryScanWatch;
+}
+
+// A scan already running when the shelf is shown (started by another admin,
+// or before a reload): show it, and refresh the shelf when it ends.
+function followRunningLibraryScan(library) {
+  if (!library?.scanState?.active || libraryScanWatch) return;
+  if (typeof window.browserHost?.getScanStatus !== 'function') return;
+  void watchLibraryScan(library.scanState).then(async (final) => {
+    if (final?.status === 'failed' || !document.body.classList.contains('is-library')) return;
+    try {
+      const next = await window.browserHost.getLibrary();
+      if (typeof renderLibraryWithOrganization === 'function') await renderLibraryWithOrganization(next);
+      else renderLibrary(next);
+    } catch { /* the next visit shows it */ }
+  });
+}
+
+// 重新扫描, for the flat shelf and the organized one alike. The request runs
+// the scan; the ring follows its progress meanwhile. If the request itself
+// fails while the scan went on (a timeout on a long scan), the finished
+// library is fetched instead of reporting a failure.
+async function runLibraryScanFromButton(button, scanStatus = null) {
+  button.disabled = true;
+  button.textContent = '扫描中…';
+  if (scanStatus) scanStatus.hidden = true;
+  const watching = typeof window.browserHost.getScanStatus === 'function' ? watchLibraryScan() : null;
+  let scanned = null;
+  let failure = null;
+  try {
+    scanned = await window.browserHost.scanLibrary();
+  } catch (error) {
+    failure = error;
+  }
+  const final = watching ? await watching : null;
+  if (!scanned && final && final.status !== 'failed') {
+    try {
+      scanned = await window.browserHost.getLibrary();
+      failure = null;
+    } catch { /* keep the first failure */ }
+  }
+  if (scanned) {
+    if (!watching) renderLibraryScanIndicator({ active: false, status: 'completed', result: scanned.scan || {} });
+    if (typeof renderLibraryWithOrganization === 'function') await renderLibraryWithOrganization(scanned);
+    else renderLibrary(scanned);
+    return;
+  }
+  renderLibraryScanIndicator({ active: false, status: 'failed' });
+  if (scanStatus) {
+    scanStatus.textContent = '读取失败：请检查 fnOS 应用权限后重试。';
+    scanStatus.hidden = false;
+  }
+  if (typeof showHighlightHint === 'function') {
+    showHighlightHint(failure?.message && !/\/|\\|permission|denied/i.test(failure.message)
+      ? failure.message
+      : '读取失败，请检查 fnOS 应用权限后重试。');
+  }
+  button.disabled = false;
+  button.textContent = '重新扫描';
 }
 
 function setupLibraryFilter(shell) {
@@ -350,6 +546,7 @@ function createLibraryHiddenPdfNotice(library) {
 }
 
 function renderLibrary(library) {
+  followRunningLibraryScan(library);
   const organizationEnabled = library?.features?.libraryOrganization === true;
   const organizationRenderer = typeof window !== 'undefined'
     && typeof window.renderLibraryOrganization === 'function'
@@ -438,26 +635,7 @@ function renderFlatLibrary(library, { organizationEnabled = false } = {}) {
   scanButton.className = 'zs-btn zs-btn-secondary library-scan-button';
   scanButton.textContent = '重新扫描';
   const scanStatus = createLibraryScanStatus(library?.scan);
-  scanButton.addEventListener('click', async () => {
-    scanButton.disabled = true;
-    scanButton.textContent = '正在读取授权目录…';
-    scanStatus.textContent = '正在读取授权目录…';
-    scanStatus.hidden = false;
-    try {
-      const scanned = await window.browserHost.scanLibrary();
-      markNextLibraryScanResult();
-      if (typeof renderLibraryWithOrganization === 'function') await renderLibraryWithOrganization(scanned);
-      else renderLibrary(scanned);
-    } catch (error) {
-      scanStatus.textContent = '读取失败：请检查 fnOS 应用权限后重试。';
-      scanStatus.hidden = false;
-      if (typeof showHighlightHint === 'function') {
-        showHighlightHint('读取失败，请检查 fnOS 应用权限后重试。');
-      }
-      scanButton.disabled = false;
-      scanButton.textContent = '重新扫描';
-    }
-  });
+  scanButton.addEventListener('click', () => runLibraryScanFromButton(scanButton, scanStatus));
   const actions = document.createElement('div');
   actions.className = 'library-header-actions';
   actions.dataset.librarySlot = 'header-actions';

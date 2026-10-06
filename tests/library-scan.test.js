@@ -63,3 +63,63 @@ test('an empty library folder is listed with zero books', async (t) => {
   const index = await scanLibrary([root]);
   assert.deepEqual(index.scan.roots, [{ root: await fs.realpath(root), bookCount: 0, skippedCount: 0, skipped: [] }]);
 });
+
+// An EPUB with a cover and a long body: the scan reads the container, the
+// package document and the cover, and the result matches a full unpack.
+function coverEpub(title) {
+  const { zipSync, strToU8 } = require('fflate');
+  return Buffer.from(zipSync({
+    mimetype: [strToU8('application/epub+zip'), { level: 0 }],
+    'META-INF/container.xml': strToU8('<?xml version="1.0"?><container version="1.0" xmlns="urn:oasis:names:tc:opendocument:xmlns:container"><rootfiles><rootfile full-path="OEBPS/content.opf" media-type="application/oebps-package+xml"/></rootfiles></container>'),
+    'OEBPS/content.opf': strToU8(`<?xml version="1.0"?><package xmlns="http://www.idpf.org/2007/opf" version="3.0"><metadata xmlns:dc="http://purl.org/dc/elements/1.1/"><dc:title>${title}</dc:title><dc:creator>作者甲</dc:creator><dc:language>zh</dc:language><meta name="cover" content="cover"/></metadata><manifest><item id="cover" href="images/cover.png" media-type="image/png"/><item id="c" href="c.xhtml" media-type="application/xhtml+xml"/></manifest><spine><itemref idref="c"/></spine></package>`),
+    'OEBPS/images/cover.png': [new Uint8Array([137, 80, 78, 71, 1, 2, 3, 4]), { level: 0 }],
+    'OEBPS/c.xhtml': strToU8(`<html xmlns="http://www.w3.org/1999/xhtml"><body>${Array.from({ length: 3000 }, (_, index) => `<p>第 ${index} 段，${(index * 7919) % 10007}。</p>`).join('')}</body></html>`)
+  }));
+}
+
+test('EPUB metadata read entry by entry matches a full unpack', async (t) => {
+  const { extractEpubMetadata, readEpubMetadata } = require('../app/server/library');
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'zhenshu-epub-meta-'));
+  t.after(() => fs.rm(root, { recursive: true, force: true }));
+  const file = path.join(root, '书.epub');
+  const bytes = coverEpub('山海');
+  await fs.writeFile(file, bytes);
+  const full = extractEpubMetadata(bytes);
+  const partial = await readEpubMetadata(file);
+  assert.deepEqual(partial, full);
+  assert.equal(partial.title, '山海');
+  assert.equal(partial.cover.extension, '.png');
+  // Not an archive: the same kind of error as before.
+  await fs.writeFile(path.join(root, '坏.epub'), 'not a zip');
+  await assert.rejects(readEpubMetadata(path.join(root, '坏.epub')), /ZIP/);
+});
+
+test('a scan reports its progress: finding books, then reading each, then finishing', async (t) => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'zhenshu-progress-'));
+  t.after(() => fs.rm(root, { recursive: true, force: true }));
+  await fs.mkdir(path.join(root, '甲'));
+  for (let index = 0; index < 9; index += 1) {
+    await fs.writeFile(path.join(root, '甲', `第${index}本.txt`), '正文');
+  }
+  await fs.writeFile(path.join(root, '封面书.epub'), coverEpub('封面书'));
+  const covers = path.join(root, '..', `${path.basename(root)}-covers`);
+  t.after(() => fs.rm(covers, { recursive: true, force: true }));
+
+  const seen = [];
+  const index = await scanLibrary([root], { coverDirectory: covers, onProgress: (progress) => seen.push(progress) });
+  assert.equal(index.books.length, 10);
+  assert.equal(seen[0].phase, 'discovering');
+  const indexing = seen.filter((progress) => progress.phase === 'indexing');
+  assert.equal(indexing[0].total, 10);
+  assert.equal(indexing.at(-1).processed, 10);
+  assert.equal(indexing.at(-1).indexed, 10);
+  assert.equal(seen.at(-1).phase, 'finishing');
+  assert.ok(index.books.find((book) => book.title === '封面书').coverUrl);
+
+  // A second scan reuses every book and keeps the cover.
+  const again = [];
+  const second = await scanLibrary([root], { coverDirectory: covers, previousIndex: index, onProgress: (progress) => again.push(progress) });
+  assert.equal(again.filter((progress) => progress.phase === 'indexing').at(-1).reused, 10);
+  assert.equal(second.scan.reusedCount, 10);
+  assert.ok((await fs.readdir(covers)).length === 1);
+});

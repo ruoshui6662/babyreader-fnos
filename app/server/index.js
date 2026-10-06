@@ -372,7 +372,8 @@ async function runLibraryScan() {
     startedAt,
     completedAt: null,
     error: null,
-    result: null
+    result: null,
+    progress: null
   };
 
   activeScan = withLibraryLock(async () => {
@@ -382,7 +383,11 @@ async function runLibraryScan() {
       const index = await scanLibrary(authorizedRoots, {
         coverDirectory: path.join(DATA_ROOT, 'covers'),
         previousIndex,
-        mobiEnabled: mobiReaderEnabled()
+        mobiEnabled: mobiReaderEnabled(),
+        // Read by GET /library/scan/status while the scan runs.
+        onProgress: (progress) => {
+          if (scanState.startedAt === startedAt) scanState = { ...scanState, progress };
+        }
       });
       await storage.saveLibraryIndex(index);
       if (isHealthyLibraryIndex(index) && rootDiagnostics.rejectedRoots.length === 0) {
