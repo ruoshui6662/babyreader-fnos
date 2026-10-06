@@ -1,5 +1,5 @@
 appname=zhenshu
-version=0.0.27
+version=0.0.28
 display_name=枕书
 desc=枕书：飞牛 fnOS 上的私人书房。阅读 EPUB、PDF、MOBI/AZW3、Markdown 和 TXT，支持划线笔记、全文搜索与 AI 问书，阅读进度多端同步。
 source=thirdparty
@@ -13,4 +13,4 @@ desktop_applaunchname=zhenshu.main
 ctl_stop=true
 checkport=false
 disable_authorization_path=false
-changelog=书库扫描大幅提速，右上角新增扫描进度圆环；修复 EPUB 阅读进度按章节计算、读完一章就接近 100% 并误记已读完的问题；修复波浪线显示为黑色；批注编辑框和提示条重新设计，手机保存卡片后有提示。
+changelog=修复手机划线时选区变成一大片、延伸到工具栏、无法划线的问题；新增跨页划线（续选下页）；书架默认按最近阅读排列，刚读的书排在第一个，可切换为自定义排序。
