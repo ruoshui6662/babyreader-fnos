@@ -89,6 +89,33 @@ function createLibraryCover(book) {
   return cover;
 }
 
+// When a book was last read: opened, or its progress saved as it is read.
+function libraryBookLastRead(bookId) {
+  const book = state.userState?.books?.[bookId];
+  const times = [book?.openedAt, book?.progress?.updatedAt]
+    .map((value) => Date.parse(value || ''))
+    .filter(Number.isFinite);
+  return times.length ? Math.max(...times) : 0;
+}
+
+// 最近阅读 (the default, as in WeChat Reading): books read come first, the
+// last one read at the front; books not yet opened keep their order after
+// them. 自定义 keeps the order arranged by hand. Returns a reordering of
+// the same ids, so a drag on the shelf can still be saved from it.
+function libraryShelfOrder(order) {
+  if (state.shelfSort === 'custom') return order;
+  const read = order.filter((id) => libraryBookLastRead(id) > 0)
+    .sort((left, right) => libraryBookLastRead(right) - libraryBookLastRead(left));
+  if (!read.length) return order;
+  const readIds = new Set(read);
+  return [...read, ...order.filter((id) => !readIds.has(id))];
+}
+
+function setLibraryShelfSort(sort) {
+  state.shelfSort = sort === 'custom' ? 'custom' : 'recent';
+  if (typeof persistUserSettings === 'function') persistUserSettings();
+}
+
 function createLibraryBookCard(book, { open = true } = {}) {
   const button = document.createElement('button');
   button.type = 'button';
@@ -248,6 +275,12 @@ function moveLibraryOrderItem(library, scope, order, fromIndex, toIndex, focusId
 async function commitLibraryOrganizationOrder(library, scope, order, focusId = null) {
   const shell = document.querySelector('.library-organization-view');
   if (shell?.inert) return;
+  // Moving a book by hand means the order is now the reader's own; the
+  // shelf keeps it instead of putting the last read first again.
+  if (scope !== 'collections' && state.shelfSort !== 'custom') {
+    setLibraryShelfSort('custom');
+    showHighlightHint('书架已改为自定义排序');
+  }
   if (shell) shell.inert = true;
   try {
     const next = await window.browserHost.reorderLibraryOrganization(
@@ -1053,6 +1086,19 @@ function renderLibraryOrganization(library) {
     createButton.addEventListener('click', () => showLibraryCollectionForm(shell, library));
     actions.insertBefore(createButton, actions.querySelector(isDetail ? '.library-mode-button' : '.library-scan-button'));
   }
+  {
+    const sortButton = document.createElement('button');
+    sortButton.type = 'button';
+    sortButton.className = 'zs-btn zs-btn-secondary library-sort-button';
+    sortButton.textContent = state.shelfSort === 'custom' ? '排序：自定义' : '排序：最近阅读';
+    sortButton.setAttribute('aria-label', `${sortButton.textContent}，点按切换`);
+    sortButton.addEventListener('click', () => {
+      setLibraryShelfSort(state.shelfSort === 'custom' ? 'recent' : 'custom');
+      showHighlightHint(state.shelfSort === 'custom' ? '书架按自定义顺序排列' : '书架按最近阅读排列');
+      renderLibraryOrganization(library);
+    });
+    actions.insertBefore(sortButton, actions.querySelector('.library-mode-button'));
+  }
   // Phones have no room for the edit / delete marks on the chips outside
   // 整理; the open category's ⋯ menu offers them instead.
   if (collection && isPhoneLibrary() && !manage) {
@@ -1152,13 +1198,14 @@ function renderLibraryOrganization(library) {
   const order = isDetail
     ? libraryOrderForRoute(organization, route)
     : organization.allBookOrder || organization.books.map((book) => book.id);
-  const books = order.map((id) => byId.get(id)).filter(Boolean);
+  const shelfOrder = libraryShelfOrder(order);
+  const books = shelfOrder.map((id) => byId.get(id)).filter(Boolean);
   const scope = collection ? collection.id : route.mode === 'unassigned' ? 'unassigned' : 'all';
   // Category chips scope everything below them, including Continue Reading.
   const recentCard = createLibraryRecentCard(books);
   if (recentCard) booksSection.appendChild(recentCard);
   booksSection.appendChild(books.length
-    ? libraryOrganizationBookGrid(books, { library, scope, order })
+    ? libraryOrganizationBookGrid(books, { library, scope, order: shelfOrder })
     : collection
       ? makeLibraryOrganizationEmpty('这个分类还没有书', isPhoneLibrary()
         ? '点右上角 ⋯ 里的“添加书籍”，或在书库长按书籍“移动到分类”。'

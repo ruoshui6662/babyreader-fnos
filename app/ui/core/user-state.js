@@ -41,6 +41,7 @@ function currentUserSettings() {
     pageTurnAnimation: ['slide', 'fade', 'none'].includes(state.pageTurnAnimation) ? state.pageTurnAnimation : 'slide',
     mobilePdfMode: state.mobilePdfMode === 'scroll' ? 'scroll' : 'paged',
     readerTips: state.readerTips || { preset: 'default' },
+    shelfSort: state.shelfSort === 'custom' ? 'custom' : 'recent',
     fontWeight: [300, 400, 500, 600].includes(state.fontWeight) ? state.fontWeight : 400,
     readerStyles: state.readerStyles || [],
     readerStyle: state.readerStyle || null,
@@ -105,6 +106,7 @@ function applyUserState(userState) {
   state.pageTurnAnimation = ['slide', 'fade', 'none'].includes(settings.pageTurnAnimation) ? settings.pageTurnAnimation : 'slide';
   state.mobilePdfMode = settings.mobilePdfMode === 'scroll' ? 'scroll' : 'paged';
   state.readerTips = settings.readerTips && typeof settings.readerTips === 'object' ? settings.readerTips : { preset: 'default' };
+  state.shelfSort = settings.shelfSort === 'custom' ? 'custom' : 'recent';
   state.fontWeight = [300, 400, 500, 600].includes(settings.fontWeight) ? settings.fontWeight : 400;
   state.readerStyles = Array.isArray(settings.readerStyles) ? settings.readerStyles : [];
   state.readerStyle = state.readerStyles.some((style) => style.id === settings.readerStyle) ? settings.readerStyle : null;
