@@ -335,7 +335,7 @@ test('library card metadata stays compact and still opens a selected book', asyn
 
   await expect(page.locator('.library-book strong').first()).toHaveCSS('font-size', '13px');
   await expect(page.locator('.library-book strong').first()).toHaveCSS('-webkit-line-clamp', '2');
-  await expect(page.locator('.library-book .library-book-author').first()).toHaveCSS('font-size', '12px');
+  await expect(page.locator('.library-book .library-book-author')).toHaveCount(0);
 
   await page.locator('.library-book').filter({ hasText: 'E2E Markdown' }).click();
   await expect(page.locator('#fileName')).toHaveText('E2E Markdown');
@@ -720,7 +720,7 @@ test('settings drawer changes theme and typography in a real browser', async ({ 
   await page.locator('#settingTheme').selectOption('sepia');
   await expect(page.locator('body')).toHaveClass(/theme-sepia/);
 
-  await page.locator('#settingFontFamily').selectOption('songti');
+  await page.locator('#settingFontFamily').selectOption('source-sans');
   const settingsSaved = page.waitForResponse((response) =>
     response.url().endsWith('/api/settings')
       && response.request().method() === 'PUT'
@@ -731,7 +731,7 @@ test('settings drawer changes theme and typography in a real browser', async ({ 
 
   await expect(page.locator('html')).toHaveCSS(
     '--reader-font-family',
-    /SimSun|STSong|Songti SC|宋体|serif/
+    /Noto Sans SC/
   );
   await expect(page.locator('html')).toHaveCSS('--reader-text-indent', '1em');
 
@@ -743,7 +743,7 @@ test('settings drawer changes theme and typography in a real browser', async ({ 
   await expect(page.locator('#article h1')).toContainText('E2E Reader');
   await page.locator('#btnSettings').click();
   await expect(page.locator('#settingTheme')).toHaveValue('sepia');
-  await expect(page.locator('#settingFontFamily')).toHaveValue('songti');
+  await expect(page.locator('#settingFontFamily')).toHaveValue('source-sans');
   await expect(page.locator('#settingTextIndent [data-text-indent="1"]')).toHaveAttribute('aria-checked', 'true');
   await expect(page.locator('body')).toHaveClass(/theme-sepia/);
 });

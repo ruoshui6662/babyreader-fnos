@@ -47,7 +47,7 @@ test('a MOBI book shows its format and opens as a readable book', async ({ page 
   await page.goto(APP_PATH);
   const card = page.locator('.library-book').filter({ hasText: TITLE });
   await expect(card).toBeVisible();
-  await expect(card.locator('.library-book-author')).toHaveText('Playwright');
+  await expect(card).toHaveAttribute('aria-label', /Playwright/);
   await openKindleBook(page);
 });
 

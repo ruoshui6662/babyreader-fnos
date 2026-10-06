@@ -663,6 +663,10 @@ test('settings validation clamps font size and normalizes supported values', asy
   assert.equal((await storage.updateSettings('reader_1', { textIndent: -3 })).textIndent, 0);
   assert.equal(valid.readerFont, 'wenkai');
   assert.equal(valid.theme, 'sepia');
+
+  // 思源黑体 is a choice; the retired 系统宋体 becomes the bundled 宋体.
+  assert.equal((await storage.updateSettings('reader_1', { readerFont: 'source-sans' })).readerFont, 'source-sans');
+  assert.equal((await storage.updateSettings('reader_1', { readerFont: 'songti' })).readerFont, 'source-serif');
 });
 
 test('PDF layout settings are whitelisted and isolated per user without changing EPUB mode', async (t) => {

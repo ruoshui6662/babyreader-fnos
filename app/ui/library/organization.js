@@ -106,28 +106,14 @@ function createLibraryBookCard(book, { open = true } = {}) {
   const name = document.createElement('strong');
   name.textContent = libraryBookTitle(book);
   metadata.appendChild(name);
-  // Only the author: a format in its place appeared just for books without
-  // one (mostly PDFs) and said nothing the cover does not.
-  const detail = book.author || '';
+  // The title alone under the cover: authors of every length made the rows
+  // ragged, and a percentage on its own line was noise. Both stay in the
+  // accessible name, and the author in the tooltip.
   const percent = libraryBookProgressPercent(book);
-  if (detail || percent !== null) {
-    const line = document.createElement('span');
-    line.className = 'library-book-detail';
-    const text = document.createElement('span');
-    text.className = 'library-book-author';
-    text.textContent = detail;
-    line.appendChild(text);
-    if (percent !== null) {
-      const progress = document.createElement('span');
-      progress.className = 'library-book-progress';
-      progress.textContent = percent >= 100 ? '已读完' : `${percent}%`;
-      line.appendChild(progress);
-    }
-    metadata.appendChild(line);
-  }
+  if (book.author) button.title = `${libraryBookTitle(book)} · ${book.author}`;
   button.appendChild(metadata);
-  if (percent !== null) {
-    button.setAttribute('aria-label', `${libraryBookTitle(book)}${book.author ? `，${book.author}` : ''}，已读 ${percent}%`);
+  if (book.author || percent !== null) {
+    button.setAttribute('aria-label', `${libraryBookTitle(book)}${book.author ? `，${book.author}` : ''}${percent !== null ? `，已读 ${percent}%` : ''}`);
   }
   if (open) {
     attachLibraryBookLongPress(button, book);
@@ -823,6 +809,16 @@ function makeLibraryOrganizationCard({ id = null, title, count, onOpen, onDelete
   return card;
 }
 
+// The chip row scrolls sideways; the open category (a new one is last) is
+// brought into view, so a category beyond the first few is never hidden.
+function revealLibraryCategoryChip(navigation) {
+  const chip = navigation?.querySelector('[aria-current="page"]')?.closest('.library-organization-card');
+  if (!chip || navigation.scrollWidth <= navigation.clientWidth) return;
+  const left = chip.offsetLeft - navigation.offsetLeft;
+  const target = left - (navigation.clientWidth - chip.offsetWidth) / 2;
+  navigation.scrollLeft = Math.max(0, Math.min(target, navigation.scrollWidth - navigation.clientWidth));
+}
+
 function libraryOrganizationBookOrigin(organization, bookId) {
   const collectionId = organization?.bookAssignments?.[bookId];
   if (!collectionId) return '未分类';
@@ -1066,13 +1062,32 @@ function renderLibraryOrganization(library) {
     });
     actions.append(createLibraryScanButton(), manageButton);
   }
-  if (!isDetail) {
+  // 新建分类 is offered inside a category too: creating one opens it, and
+  // the next one should not need a trip back to 我的书籍 first.
+  {
     const createButton = document.createElement('button');
     createButton.type = 'button';
-    createButton.className = 'zs-btn zs-btn-secondary library-create-button';
+    // Inside a category 添加书籍 is that view's create action; this one
+    // follows it.
+    createButton.className = `zs-btn zs-btn-secondary library-new-collection-button${isDetail ? '' : ' library-create-button'}`;
     createButton.textContent = '新建分类';
     createButton.addEventListener('click', () => showLibraryCollectionForm(shell, library));
-    actions.insertBefore(createButton, actions.querySelector('.library-scan-button'));
+    actions.insertBefore(createButton, actions.querySelector(isDetail ? '.library-mode-button' : '.library-scan-button'));
+  }
+  // Phones have no room for the edit / delete marks on the chips outside
+  // 整理; the open category's ⋯ menu offers them instead.
+  if (collection && isPhoneLibrary() && !manage) {
+    const renameButton = document.createElement('button');
+    renameButton.type = 'button';
+    renameButton.className = 'zs-btn zs-btn-secondary library-rename-collection-button';
+    renameButton.textContent = '重命名分类';
+    renameButton.addEventListener('click', () => showLibraryCollectionRenameForm(shell, library, collection, renameButton));
+    const deleteButton = document.createElement('button');
+    deleteButton.type = 'button';
+    deleteButton.className = 'zs-btn zs-btn-secondary library-delete-collection-button';
+    deleteButton.textContent = '删除分类';
+    deleteButton.addEventListener('click', () => deleteLibraryCollectionFromView(library, collection, deleteButton));
+    actions.append(renameButton, deleteButton);
   }
   // Import sits beside the other library actions for admins only; inside a
   // collection it files new books into that collection.
@@ -1174,6 +1189,7 @@ function renderLibraryOrganization(library) {
         : makeLibraryOrganizationEmpty('书库还是空的', '在 fnOS 中授权书库目录后，EPUB、PDF、MOBI/AZW3、Markdown 和 TXT 会出现在这里。'));
   shell.appendChild(booksSection);
   article.appendChild(shell);
+  revealLibraryCategoryChip(navigation);
   setupLibraryFilter(shell);
   if (typeof setupLibraryImportDrop === 'function') setupLibraryImportDrop(shell, library, importContext);
   return true;
@@ -1477,7 +1493,7 @@ function showLibraryCollectionForm(shell, library) {
   cancel.textContent = '取消';
   const close = () => {
     form.remove();
-    shell.querySelector('.library-create-button')?.focus({ preventScroll: true });
+    shell.querySelector('.library-new-collection-button')?.focus({ preventScroll: true });
   };
   cancel.addEventListener('click', close);
   form.addEventListener('keydown', (event) => {

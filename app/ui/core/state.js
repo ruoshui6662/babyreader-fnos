@@ -63,17 +63,18 @@ const state = {
 const API_PREFIX = '/app/zhenshu/api';
 
 // Body-font choices. Every stack ends in a generic family so a missing CJK
-// serif degrades to the platform's own 宋体-class face instead of a blank.
-// Bundled fonts (app/ui/vendor/fonts, all SIL OFL 1.1) look the same on every
-// device; the two system stacks only name fonts already on the reader's
-// device, so nothing is redistributed for them. Literata leads the serif
+// face degrades to the platform's own instead of a blank. Bundled fonts
+// (app/ui/vendor/fonts, all SIL OFL 1.1) look the same on every device; the
+// one system stack only names fonts already on the reader's device, so
+// nothing is redistributed for it. (系统宋体 was dropped: phones have no
+// 宋体, so it fell back to the same face as 系统黑体.) Literata leads the serif
 // stacks for Latin text; it has no CJK glyphs, so Chinese falls through.
 const FONT_STACKS = Object.freeze({
   'source-serif': '"Literata", "Noto Serif SC", "Source Han Serif SC", "Songti SC", "SimSun", serif',
   'wenkai': '"LXGW WenKai", "Literata", "KaiTi", "STKaiti", serif',
   'fangsong': '"Literata", "Zhuque Fangsong", "FangSong", "STFangsong", serif',
-  'sans': '-apple-system, "PingFang SC", "Helvetica Neue", "Noto Sans SC", "Microsoft YaHei", sans-serif',
-  'songti': '"SimSun", "STSong", "Songti SC", "宋体", serif'
+  'source-sans': '"Noto Sans SC", "Source Han Sans SC", "PingFang SC", "Microsoft YaHei", sans-serif',
+  'sans': '-apple-system, "PingFang SC", "Helvetica Neue", "Noto Sans SC", "Microsoft YaHei", sans-serif'
 });
 const DEFAULT_READER_FONT = 'source-serif';
 // Stylesheets each reading font needs (vendor/fonts/<folder>/font.css).
@@ -81,6 +82,6 @@ const FONT_STYLESHEETS = Object.freeze({
   'source-serif': ['literata', 'noto-serif-sc'],
   'wenkai': ['lxgw-wenkai', 'literata'],
   'fangsong': ['literata', 'zhuque-fangsong'],
-  'sans': [],
-  'songti': []
+  'source-sans': ['noto-sans-sc'],
+  'sans': []
 });

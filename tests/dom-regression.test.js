@@ -5654,7 +5654,7 @@ test('the import button appears only for admins with import enabled, in the agre
     books: [book], features: { libraryOrganization: true, bookImport: true },
     organization: importOrganization([book], [{ id: collectionId, name: '小说' }])
   });
-  assert.deepEqual(labels(), ['重新扫描', '添加书籍', '导入', '整理']);
+  assert.deepEqual(labels(), ['重新扫描', '添加书籍', '新建分类', '导入', '整理']);
 
   window.history.replaceState({}, '');
   api.renderLibrary({ books: [book], features: { libraryOrganization: false, bookImport: true } });
@@ -5921,14 +5921,16 @@ test('admins see which library folders were read, with counts and unreadable ite
   assert.match(api.createLibraryFoldersPanel({ folders: { scanned: [], unavailable: [] } }, { empty: true }).textContent, /zhenshu\/library/);
 });
 
-test('book cards show the author only; a book without one shows no format in its place', async () => {
+test('book cards show the title only; the author stays in the name and tooltip', async () => {
   const { window, api } = await createReaderDom();
   const pdf = { id: 'c'.repeat(64), title: '论文', type: 'pdf' };
   const epub = { id: 'd'.repeat(64), title: '剑来', author: '烽火戏诸侯', type: 'epub' };
   api.renderLibrary({ books: [pdf, epub], features: { libraryOrganization: false } });
-  const detail = (id) => window.document.querySelector(`.library-book[data-book-id="${id}"] .library-book-detail`);
-  assert.equal(detail(pdf.id), null);
-  assert.equal(detail(epub.id).textContent, '烽火戏诸侯');
+  const card = (id) => window.document.querySelector(`.library-book[data-book-id="${id}"]`);
+  assert.equal(card(epub.id).querySelector('.library-book-metadata').textContent, '剑来');
+  assert.equal(card(pdf.id).querySelector('.library-book-metadata').textContent, '论文');
+  assert.equal(card(epub.id).getAttribute('aria-label'), '剑来，烽火戏诸侯');
+  assert.equal(card(epub.id).title, '剑来 · 烽火戏诸侯');
   await window.happyDOM.close();
 });
 

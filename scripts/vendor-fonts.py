@@ -1,13 +1,14 @@
 #!/usr/bin/env python3
 """Vendor the bundled reading fonts into app/ui/vendor/fonts/.
 
-All four fonts are SIL OFL 1.1 without Reserved Font Names, so subsetting and
+All five fonts are SIL OFL 1.1 without Reserved Font Names, so subsetting and
 converting them to woff2 under their original family names is permitted, and
 they may be redistributed with 枕书 (including commercially). Each
 family keeps its license file next to its files.
 
 Sources (staged with npm/curl into STAGING; nothing is fetched here):
   - Noto Serif SC (思源宋体)   @fontsource/noto-serif-sc@5.3.0, weight 400
+  - Noto Sans SC (思源黑体)    @fontsource/noto-sans-sc@5.3.0, weight 400
   - LXGW WenKai (霞鹜文楷)     lxgw-wenkai-webfont@1.7.0 (font v1.250), regular
   - Zhuque Fangsong (朱雀仿宋) github.com/TrionesType/zhuque release v0.212,
                                split here with fontTools into the same
@@ -16,7 +17,9 @@ Sources (staged with npm/curl into STAGING; nothing is fetched here):
   - Literata                   @fontsource/literata@5.3.0, latin + latin-ext,
                                weights 400 and 700
 
-Usage: python scripts/vendor-fonts.py <STAGING>
+Usage: python scripts/vendor-fonts.py <STAGING> [FOLDER]
+  With FOLDER (e.g. noto-sans-sc) only that family is regenerated, so
+  STAGING needs only its package.
   STAGING holds node_modules/ (from `npm install` of the packages above) and
   zhuque/ZhuqueFangsong-Regular.ttf + zhuque/LICENSE.txt.
 Requires: fonttools, brotli.
@@ -116,15 +119,25 @@ def split_family(ttf, ranges, folder, family):
 
 
 def main():
-    if len(sys.argv) != 2:
+    if len(sys.argv) not in (2, 3):
         sys.exit(__doc__)
     staging = Path(sys.argv[1]).resolve()
     modules = staging / 'node_modules'
-    if OUT.exists():
+    only = sys.argv[2] if len(sys.argv) == 3 else None
+    if only:
+        shutil.rmtree(OUT / only, ignore_errors=True)
+    elif OUT.exists():
         shutil.rmtree(OUT)
-    OUT.mkdir(parents=True)
+    OUT.mkdir(parents=True, exist_ok=True)
 
     sections = []  # (folder, title, blocks)
+    if only == 'noto-sans-sc' or not only:
+        sans_css = modules / '@fontsource' / 'noto-sans-sc' / '400.css'
+        sections.append(('noto-sans-sc', 'Noto Sans SC (思源黑体) — OFL 1.1', copy_family(sans_css, 'noto-sans-sc')))
+        shutil.copy2(modules / '@fontsource' / 'noto-sans-sc' / 'LICENSE', OUT / 'noto-sans-sc' / 'LICENSE')
+    if only:
+        write_sections(sections)
+        return
     noto_css = modules / '@fontsource' / 'noto-serif-sc' / '400.css'
     sections.append(('noto-serif-sc', 'Noto Serif SC (思源宋体) — OFL 1.1', copy_family(noto_css, 'noto-serif-sc')))
     shutil.copy2(modules / '@fontsource' / 'noto-serif-sc' / 'LICENSE', OUT / 'noto-serif-sc' / 'LICENSE')
@@ -146,6 +159,10 @@ def main():
     sections.append(('literata', 'Literata — OFL 1.1', literata))
     shutil.copy2(modules / '@fontsource' / 'literata' / 'LICENSE', OUT / 'literata' / 'LICENSE')
 
+    write_sections(sections)
+
+
+def write_sections(sections):
     # One stylesheet per family, next to its files: the reader links only the
     # family in use, and unicode-range slices mean a book only downloads the
     # characters it contains.
